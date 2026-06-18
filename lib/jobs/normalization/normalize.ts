@@ -596,12 +596,12 @@ function applyHaikuEnrichment(
     ...canonical.sections.about_role.items,
     ...canonical.sections.other.items,
   ]
-  // Same sparse-section fallback as the deterministic path: scan the clean
-  // description when the heading parser produced little to chew on.
-  const sectionCharCount = sectionSkillItems.reduce((sum, item) => sum + item.length, 0)
-  const descriptionFallback =
-    sectionCharCount < 200 ? nextColumns.description ?? canonical.descriptions.clean ?? "" : ""
-  const sectionSkillSource = [...sectionSkillItems, descriptionFallback]
+  // Keep the clean description in the evidence set so modern AI platform terms
+  // do not disappear when upstream section headings are partial or malformed.
+  const sectionSkillSource = [
+    ...sectionSkillItems,
+    nextColumns.description ?? canonical.descriptions.clean ?? "",
+  ]
     .filter(Boolean)
     .join("\n")
   const skillsFromSections = normalizeSkillList(extractSkillsFromText(sectionSkillSource), 24)
@@ -861,16 +861,10 @@ function normalizeFromCoreInput(input: {
     ...sections.other.items,
   ]
 
-  // Fallback: when the heading parser couldn't bucket much (sparse sections),
-  // scan the raw description. The taxonomy regex requires word-boundary-like
-  // context, and ambiguous aliases (Rust, ML, Go) are already gated behind
-  // requiresPattern, so footer/sidebar noise rarely false-positives.
-  const sectionCharCount = sectionSkillItems.reduce((sum, item) => sum + item.length, 0)
-  const SECTION_FALLBACK_THRESHOLD = 200
-  const descriptionFallback =
-    sectionCharCount < SECTION_FALLBACK_THRESHOLD ? nextColumns.description ?? "" : ""
-
-  const skillSource = [cleanedTitle, ...sectionSkillItems, descriptionFallback]
+  // Include the clean description alongside section buckets. Ambiguous aliases
+  // (Rust, ML, Go) remain gated in the taxonomy, while boilerplate is stripped
+  // before extraction.
+  const skillSource = [cleanedTitle, ...sectionSkillItems, nextColumns.description ?? ""]
     .filter(Boolean)
     .join("\n")
   const extractedSkills = extractSkillsFromText(skillSource).slice(0, 24)

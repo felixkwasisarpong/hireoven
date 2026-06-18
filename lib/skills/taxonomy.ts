@@ -46,6 +46,9 @@ const NLP_SIGNAL_RE =
 const COMPUTER_VISION_SIGNAL_RE =
   /\b(?:computer vision|cv\s+(?:model|engineer|pipeline|experience|techniques?)|image\s+(?:classification|detection|segmentation|recognition)|object detection|opencv|yolo)\b/i
 
+const TEMPORAL_SIGNAL_RE =
+  /(^|[^a-z0-9])(?:Temporal|temporal\.io|temporal\s+(?:workflow|workflows|orchestration|cloud|sdk|server)|langgraph\s*\/\s*temporal|temporal\s*\/\s*orchestration)([^a-z0-9]|$)/
+
 const AGILE_SIGNAL_RE =
   /\b(?:scrum|kanban|sprint planning|agile\s+(?:methodolog(?:y|ies)|frameworks?|project management|software development|delivery|ceremon(?:y|ies)|practices?))\b/i
 
@@ -133,6 +136,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Redshift",    aliases: ["redshift", "amazon redshift"] },
   { label: "SQLite",      aliases: ["sqlite"] },
   { label: "Databricks",  aliases: ["databricks"] },
+  { label: "Vector Databases", aliases: ["vector database", "vector databases", "vector db", "vector dbs", "vector store", "vector stores"] },
 
   // ─── Cloud & DevOps ───────────────────────────────────────────────────────
   { label: "AWS",          aliases: ["aws", "amazon web services"] },
@@ -156,6 +160,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "DevOps",       aliases: ["devops"] },
   { label: "Site Reliability Engineering", aliases: ["site reliability engineering", "site reliability engineer", "sre"] },
   { label: "Platform Engineering",         aliases: ["platform engineering", "platform engineer"] },
+  { label: "Temporal",     aliases: ["temporal.io", "temporal workflow", "temporal workflows"], patterns: [TEMPORAL_SIGNAL_RE], requiresPattern: true },
 
   // ─── APIs & Integration ───────────────────────────────────────────────────
   // Bare "api"/"apis" matched every backend JD that merely mentions APIs.
@@ -189,6 +194,11 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Computer Vision",   aliases: ["computer vision", "cv"], patterns: [COMPUTER_VISION_SIGNAL_RE], requiresPattern: false },
   { label: "LLMs",              aliases: ["llm", "llms", "large language models", "generative ai", "gen ai"] },
   { label: "RAG",               aliases: ["rag", "retrieval-augmented generation", "retrieval augmented generation"] },
+  { label: "Agentic AI",         aliases: ["agentic ai", "agentic ai systems", "agentic systems", "ai agents", "tool-using agents", "tool using agents"] },
+  { label: "LLMOps",            aliases: ["llmops", "llm ops", "llm operations", "llm workloads", "production llm", "production llms"] },
+  { label: "MLOps",             aliases: ["mlops", "ml ops", "ml operations", "production ml", "production machine learning"] },
+  { label: "LangGraph",         aliases: ["langgraph"] },
+  { label: "AI Orchestration",  aliases: ["ai orchestration", "orchestration frameworks", "agent orchestration", "llm orchestration", "workflow orchestration"] },
   { label: "Statistics",        aliases: ["statistics", "statistical analysis", "statistical modeling"] },
   { label: "A/B Testing",       aliases: ["a/b testing", "a/b test", "experimentation", "hypothesis testing"] },
 
@@ -200,7 +210,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // Bare "compliance" matched the compliance *team/requirement* ("partner with
   // security and compliance") on technical roles. Require a specific framework
   // or qualified phrase so it only fires when compliance is the actual skill.
-  { label: "Compliance",          aliases: ["regulatory compliance", "compliance framework", "compliance program", "soc 2", "sox", "hipaa", "gdpr", "ccpa", "pci", "iso 27001"] },
+  { label: "Compliance",          aliases: ["regulatory compliance", "compliance framework", "compliance program", "soc 2", "soc-2", "soc2", "sox", "hipaa", "gdpr", "ccpa", "pci", "iso 27001"] },
 
   // ─── Design & UX ─────────────────────────────────────────────────────────
   { label: "Figma",              aliases: ["figma"] },
@@ -663,6 +673,7 @@ const DATABASE_SKILLS = new Set([
   "Redshift",
   "SQLite",
   "Databricks",
+  "Vector Databases",
 ])
 
 const DEVOPS_SKILLS = new Set([
@@ -686,6 +697,7 @@ const DEVOPS_SKILLS = new Set([
   "DevOps",
   "Site Reliability Engineering",
   "Platform Engineering",
+  "Temporal",
 ])
 
 const AI_ML_SKILLS = new Set([
@@ -697,6 +709,12 @@ const AI_ML_SKILLS = new Set([
   "NLP",
   "Computer Vision",
   "LLMs",
+  "RAG",
+  "Agentic AI",
+  "LLMOps",
+  "MLOps",
+  "LangGraph",
+  "AI Orchestration",
 ])
 
 const DATA_SKILLS = new Set([
@@ -1152,6 +1170,9 @@ export const SKILL_FAMILIES: Record<string, string[]> = {
   stream_processing: ["Apache Spark", "Kafka", "Spark"],
   ci_cd:             ["Jenkins", "GitHub Actions", "GitLab CI", "CircleCI", "CI/CD"],
   ml_framework:      ["PyTorch", "TensorFlow", "scikit-learn"],
+  ai_agents:         ["Agentic AI", "LangGraph", "Temporal", "AI Orchestration"],
+  llm_platform:      ["LLMs", "RAG", "LLMOps", "Vector Databases"],
+  ml_platform:       ["Machine Learning", "MLOps", "LLMOps"],
   api_style:         ["REST", "GraphQL", "gRPC", "API Development"],
   data_warehouse:    ["Snowflake", "BigQuery", "Redshift", "Databricks"],
   iac_tool:          ["Terraform", "CloudFormation", "Pulumi"],

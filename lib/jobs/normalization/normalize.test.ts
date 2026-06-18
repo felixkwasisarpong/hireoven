@@ -1,13 +1,48 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { extractCanonicalSections } from "@/lib/jobs/normalization/sections"
-import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization/normalize"
+import {
+  normalizeCrawlerJobForPersistence,
+  normalizePersistedJobRecord,
+} from "@/lib/jobs/normalization/normalize"
 import { resolveJobCardView } from "@/lib/jobs/normalization/read-model"
 import { extractSkillsFromText } from "@/lib/jobs/text-normalizer"
 import {
   adaptRawCrawlerJob,
   detectSourceAdapter,
 } from "@/lib/jobs/normalization/source-adapters"
+
+const WEEKDAY_FOUNDING_APPLIED_AI_ENGINEER_DESCRIPTION = `Job Summary
+You'll build the next generation of production-grade AI systems - agents that reason, act, and operate reliably in messy, real-world environments. This role focuses on designing and deploying agentic AI, RAG pipelines, and LLM workloads in production, with an emphasis on reliability, safety, and integration into core product workflows.
+
+Responsibilities
+Design and ship agentic AI systems
+Build RAG pipelines and tool-using agents
+Deploy and monitor LLM workloads in production
+Focus on evaluation, reliability, and safety
+Integrate AI into core product workflows
+Work closely with founders and customers
+
+RequirementsRequired Qualifications
+Experience shipping AI systems to real users
+Deep familiarity with agents, RAG, and orchestration
+Python-first development experience
+Production ML / LLM operations experience
+Comfort operating in early-stage environments
+
+Preferred Qualifications
+Experience with LangGraph / Temporal / orchestration frameworks
+Vector databases
+HIPAA / SOC-2 compliant systems
+Terraform / Kubernetes
+Edge or real-time AI systems
+
+Benefits
+Full-time position
+Location: San Francisco
+Salary: $150k to $300k
+Role stage: Seed to Series B
+This role is for a client of Weekday (not internal team)`
 
 test("extractCanonicalSections maps heading variants to canonical buckets", () => {
   const sections = extractCanonicalSections({
@@ -140,6 +175,23 @@ test("extractCanonicalSections handles run-on inline headings without section le
       /office locations|job type|apply for this role/i.test(item)
     )
   )
+})
+
+test("extractCanonicalSections handles glued required-qualification headings", () => {
+  const sections = extractCanonicalSections({
+    adapter: "generic_html",
+    description: WEEKDAY_FOUNDING_APPLIED_AI_ENGINEER_DESCRIPTION,
+  })
+
+  const requirements = sections.requirements.items.join("\n")
+  const preferred = sections.preferred_qualifications.items.join("\n")
+
+  assert.match(requirements, /Python-first development experience/i)
+  assert.match(requirements, /Production ML \/ LLM operations experience/i)
+  assert.match(preferred, /LangGraph \/ Temporal \/ orchestration frameworks/i)
+  assert.match(preferred, /Vector databases/i)
+  assert.match(preferred, /HIPAA \/ SOC-2 compliant systems/i)
+  assert.match(preferred, /Terraform \/ Kubernetes/i)
 })
 
 test("extractCanonicalSections keeps Workday position responsibility headings intact", () => {
@@ -282,6 +334,62 @@ Visa sponsorship available for qualified candidates.
   assert.ok(result.canonical.sections.requirements.items.length > 0)
   assert.ok(result.pageView.sections.compensation.items.length > 0)
   assert.ok(result.canonical.validation.confidence_score > 0)
+})
+
+test("normalizePersistedJobRecord enriches full agentic AI descriptions", () => {
+  const result = normalizePersistedJobRecord({
+    id: "0f98c49f-49a3-444f-a2b7-515830641050",
+    title: "Founding Applied AI Engineer",
+    normalized_title: null,
+    location: "San Francisco, CA",
+    apply_url: "https://www.adzuna.com/details/5767361533",
+    external_id: "adzuna:5767361533",
+    description: WEEKDAY_FOUNDING_APPLIED_AI_ENGINEER_DESCRIPTION,
+    employment_type: null,
+    seniority_level: null,
+    is_remote: false,
+    is_hybrid: false,
+    salary_min: null,
+    salary_max: null,
+    salary_currency: "USD",
+    sponsors_h1b: null,
+    sponsorship_score: 0,
+    requires_authorization: false,
+    visa_language_detected: null,
+    skills: [],
+    first_detected_at: "2026-06-18T00:00:00.000Z",
+    raw_data: null,
+  })
+
+  assert.equal(result.nextColumns.employment_type, "fulltime")
+  assert.equal(result.nextColumns.salary_min, 150000)
+  assert.equal(result.nextColumns.salary_max, 300000)
+
+  const skills = new Set(result.nextColumns.skills)
+  for (const skill of [
+    "Python",
+    "Kubernetes",
+    "Terraform",
+    "Machine Learning",
+    "LLMs",
+    "RAG",
+    "Agentic AI",
+    "LLMOps",
+    "MLOps",
+    "LangGraph",
+    "Temporal",
+    "AI Orchestration",
+    "Vector Databases",
+    "Compliance",
+    "HIPAA",
+  ]) {
+    assert.ok(skills.has(skill), `expected "${skill}" in ${result.nextColumns.skills.join(", ")}`)
+  }
+
+  assert.ok(result.canonical.skill_groups.aiMl.includes("Agentic AI"))
+  assert.ok(result.canonical.skill_groups.databases.includes("Vector Databases"))
+  assert.ok(result.canonical.skill_groups.security.includes("Compliance"))
+  assert.ok(result.canonical.skill_groups.healthcare.includes("HIPAA"))
 })
 
 test("resolveJobCardView infers salary from description when columns are empty", () => {
