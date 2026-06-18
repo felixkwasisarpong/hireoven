@@ -86,6 +86,7 @@ function formatConcern(raw: string): string {
   if (raw.startsWith("Gate: insufficient_experience"))
     return "Below the stated minimum years of experience"
   if (raw.startsWith("Gate: extreme_seniority_mismatch")) return "Seniority is far from the role"
+  if (raw.startsWith("Gate: seniority_mismatch")) return "Seniority level differs from the role"
   if (raw.startsWith("Gate: same_family_low_title_fit"))
     return "Same broad career family, but the title evidence is weak"
   if (raw.startsWith("Gate: role_family_mismatch")) {
@@ -104,7 +105,8 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
 
   const dimensions: Dimension[] = [
     { label: "Skills", value: skillsFactor.value, weight: 0.36, state: skillsFactor.state },
-    { label: "Experience", value: score.seniority_score, weight: 0.2 },
+    { label: "Experience", value: breakdown?.experienceScore ?? score.seniority_score, weight: 0.14 },
+    { label: "Seniority", value: breakdown?.seniorityScore ?? score.seniority_score, weight: 0.06 },
     { label: "Role family", value: breakdown?.roleFamilyScore ?? null, weight: 0.14 },
     { label: "Title fit", value: score.role_fit_score, weight: 0.1 },
     { label: "Education", value: score.education_score, weight: 0.09 },
