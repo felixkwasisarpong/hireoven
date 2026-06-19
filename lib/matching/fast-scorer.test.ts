@@ -329,6 +329,73 @@ test("resume experience text contributes skill evidence when skill buckets are s
   )
 })
 
+test("unsupported stored executive seniority is ignored for IC AI roles", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-ai-ic-1",
+    file_name: "ai-engineer.pdf",
+    name: "AI Engineer Candidate",
+    summary: "Senior software engineer focused on applied AI systems.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "AI Engineer",
+        start_date: "2018",
+        end_date: null,
+        is_current: true,
+        description: "Built Python, FastAPI, TypeScript, PostgreSQL, AWS, LLM, RAG, and agentic AI systems.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "senior",
+    years_of_experience: 8,
+    primary_role: "Software Engineer, Applied AI",
+    industries: ["Technology"],
+    top_skills: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-ai-ic-stale-exec-1",
+    title: "AI Engineer",
+    description:
+      "Our CTO sets the technical and AI vision. Our Director of Product owns the roadmap. Requirements: Python, FastAPI, TypeScript, PostgreSQL, AWS, LLMs, RAG, and agentic AI.",
+    skills: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+    seniority_level: "exec",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.overall_score >= 90, `expected unsupported exec label to be ignored, got ${score.overall_score}`)
+  assert.equal(score.score_breakdown?.seniorityScore, 75)
+  assert.ok(
+    score.score_breakdown?.concerns.some((concern) =>
+      concern.includes("Unsupported stored seniority (exec) ignored")
+    ),
+    "expected ignored stale seniority to be surfaced"
+  )
+})
+
 test("under-level candidates do not score excellent on staff roles by years alone", () => {
   const resume = makeHealthcareResume({
     id: "resume-mid-to-staff-1",

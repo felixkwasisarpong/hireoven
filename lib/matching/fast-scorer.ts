@@ -30,6 +30,7 @@ import {
   normalizeSkillKey,
   normalizeSkillList,
 } from "@/lib/skills/taxonomy"
+import { inferSeniorityLevel } from "@/lib/jobs/metadata"
 
 export interface FastScoreInput {
   resume: Resume
@@ -1318,8 +1319,37 @@ const SENIORITY_MAP: Record<SeniorityLevel, number> = {
   principal: 6, director: 7, vp: 8, exec: 9,
 }
 
+const HIGH_IMPACT_SENIORITY = new Set<SeniorityLevel>(["director", "vp", "exec"])
+
 export function getSeniorityGap(c: SeniorityLevel | null | undefined, j: SeniorityLevel | null | undefined) {
   return c && j ? SENIORITY_MAP[c] - SENIORITY_MAP[j] : null
+}
+
+function resolveJobSeniorityForScoring(job: Job): {
+  level: SeniorityLevel | null
+  ignoredStoredLevel: SeniorityLevel | null
+} {
+  const inferred = inferSeniorityLevel(job.title, job.description) as SeniorityLevel | null
+
+  if (inferred) {
+    return {
+      level: inferred,
+      ignoredStoredLevel:
+        job.seniority_level && job.seniority_level !== inferred ? job.seniority_level : null,
+    }
+  }
+
+  if (job.seniority_level && HIGH_IMPACT_SENIORITY.has(job.seniority_level)) {
+    return {
+      level: null,
+      ignoredStoredLevel: job.seniority_level,
+    }
+  }
+
+  return {
+    level: job.seniority_level ?? null,
+    ignoredStoredLevel: null,
+  }
 }
 
 function scoreSeniorityAlignment(
@@ -1468,10 +1498,13 @@ export function computeFastScore({
   resumeContext,
 }: FastScoreInput): JobMatchScoreInsert {
   const context = resumeContext ?? buildFastScoreResumeContext(resume)
+  const jobSeniority = resolveJobSeniorityForScoring(job)
+  const jobForScoring =
+    job.seniority_level === jobSeniority.level ? job : { ...job, seniority_level: jobSeniority.level }
   const skills     = scoreSkills(context, job)
   const candidateSeniority = resume.seniority_level ?? profile.seniority_level
-  const experience = scoreExperience(context, job)
-  const seniority  = scoreSeniorityAlignment(candidateSeniority, job.seniority_level)
+  const experience = scoreExperience(context, jobForScoring)
+  const seniority  = scoreSeniorityAlignment(candidateSeniority, jobForScoring.seniority_level)
   const title      = scoreTitle(context, job)
   const education  = scoreEducation(resume, job)
   const domain     = scoreDomain(context, job)
@@ -1705,6 +1738,9 @@ export function computeFastScore({
           ? ["Sparse job-skill extraction; role-family evidence carried more weight."]
           : []),
         ...(topBandPromotion ? [topBandPromotion] : []),
+        ...(jobSeniority.ignoredStoredLevel
+          ? [`Unsupported stored seniority (${jobSeniority.ignoredStoredLevel}) ignored for scoring.`]
+          : []),
         ...gatesTriggered.map(g => `Gate: ${g}`),
       ],
       computedAt: now,

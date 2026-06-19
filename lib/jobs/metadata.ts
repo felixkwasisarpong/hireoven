@@ -32,6 +32,24 @@ const SENIORITY_RULES: Array<{
   { level: "intern", pattern: /\b(internship|intern|co[\s-]?op)\b/i },
 ]
 
+const DESCRIPTION_SENIORITY_LABEL_RE =
+  /\b(?:seniority|role\s+level|position\s+level|job\s+level|level)\s*[:\-]\s*(internship|intern|junior|jr\.?|entry[\s-]?level|mid|intermediate|senior|sr\.?|staff|principal|director|vp|vice president|exec|executive)\b/i
+
+const DESCRIPTION_SENIORITY_CONTEXT_RULES: Array<{
+  level: InferredSeniorityLevel
+  pattern: RegExp
+}> = [
+  { level: "exec", pattern: /\b(?:executive|c[\s-]?suite|chief[\s-]+(?:\w+[\s-]+){0,3}officer)[\s-]+(?:level[\s-]+)?(?:role|position|candidate)\b/i },
+  { level: "vp", pattern: /\b(?:vp|vice president)[\s-]+(?:level[\s-]+)?(?:role|position|candidate)\b/i },
+  { level: "director", pattern: /\bdirector[\s-]+(?:level[\s-]+)?(?:role|position|candidate)\b/i },
+  { level: "principal", pattern: /\bprincipal[\s-]+(?:level[\s-]+)?(?:role|position|candidate|engineer|developer)\b/i },
+  { level: "staff", pattern: /\bstaff[\s-]+(?:level[\s-]+)?(?:role|position|candidate|engineer|developer)\b/i },
+  { level: "senior", pattern: /\b(?:senior|sr\.?)[\s-]+(?:level[\s-]+)?(?:role|position|candidate|engineer|developer)\b/i },
+  { level: "mid", pattern: /\b(?:mid|intermediate)[\s-]+(?:level[\s-]+)?(?:role|position|candidate|engineer|developer)\b/i },
+  { level: "junior", pattern: /\b(?:junior|jr\.?|entry[\s-]?level)[\s-]+(?:role|position|candidate|engineer|developer)\b/i },
+  { level: "intern", pattern: /\b(?:internship|intern|co[\s-]?op)[\s-]+(?:role|position)\b/i },
+]
+
 const REMOTE_NEGATIVE_PATTERNS = [
   /\b(onsite|on[\s-]?site)\s+only\b/i,
   /\bno remote\b/i,
@@ -123,6 +141,21 @@ function toTextBlob(...parts: Array<string | null | undefined>) {
     .trim()
 }
 
+function normalizeSeniorityLabel(raw: string | null | undefined): InferredSeniorityLevel | null {
+  const token = raw?.trim().toLowerCase()
+  if (!token) return null
+  if (token === "internship" || token === "intern") return "intern"
+  if (token === "junior" || token === "jr." || token === "jr" || token === "entry-level" || token === "entry level") return "junior"
+  if (token === "mid" || token === "intermediate") return "mid"
+  if (token === "senior" || token === "sr." || token === "sr") return "senior"
+  if (token === "staff") return "staff"
+  if (token === "principal") return "principal"
+  if (token === "director") return "director"
+  if (token === "vp" || token === "vice president") return "vp"
+  if (token === "exec" || token === "executive") return "exec"
+  return null
+}
+
 function parseCompensationAmount(raw: string, suffix: string | undefined): number | null {
   const numeric = Number.parseFloat(raw.replace(/,/g, ""))
   if (!Number.isFinite(numeric) || numeric <= 0) return null
@@ -181,7 +214,11 @@ export function inferSeniorityLevel(
   }
 
   const descriptionBlob = toTextBlob(description)
-  for (const rule of SENIORITY_RULES) {
+  const labeled = DESCRIPTION_SENIORITY_LABEL_RE.exec(descriptionBlob)
+  const labeledLevel = normalizeSeniorityLabel(labeled?.[1])
+  if (labeledLevel) return labeledLevel
+
+  for (const rule of DESCRIPTION_SENIORITY_CONTEXT_RULES) {
     if (rule.pattern.test(descriptionBlob)) return rule.level
   }
 
