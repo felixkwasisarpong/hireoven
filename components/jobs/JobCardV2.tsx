@@ -54,6 +54,7 @@ import {
   JOB_APPLICATION_UNSAVED_EVENT,
   fetchJobSavedState,
   saveJobToPipeline,
+  unsaveJobFromPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
 import {
@@ -562,33 +563,45 @@ export default function JobCardV2({
 
   async function handleSave(e: React.MouseEvent) {
     e.stopPropagation()
-    if (saving || saved) return
+    if (saving) return
     setSaving(true)
     try {
-      const result = await saveJobToPipeline({
-        jobId: job.id,
-        companyName,
-        companyLogoUrl,
-        jobTitle: displayTitle,
-        applyUrl: job.apply_url,
-        matchScore: score,
-        source: "hireoven_feed",
-      })
-      if (!result.ok) {
-        if (result.status === 401) {
-          pushToast({ tone: "info", title: "Sign in to save jobs", description: result.message })
+      if (saved) {
+        const result = await unsaveJobFromPipeline(job.id)
+        if (!result.ok) {
+          if (result.status === 409) pushToast({ tone: "info", title: "Still in your pipeline", description: result.message })
+          else if (result.status === 401) pushToast({ tone: "info", title: "Sign in to manage saved jobs", description: result.message })
+          else pushToast({ tone: "error", title: "Couldn't remove", description: result.message })
           return
         }
-        pushToast({ tone: "error", title: "Save failed", description: result.message })
-        return
-      }
-      setSaved(true)
-      window.dispatchEvent(new CustomEvent(JOB_APPLICATION_SAVED_EVENT, { detail: { jobId: job.id } }))
-      if (!result.alreadySaved) {
-        pushToast({ tone: "success", title: "Saved to pipeline", description: "View it under Applications → Saved." })
+        setSaved(false)
+        window.dispatchEvent(new CustomEvent(JOB_APPLICATION_UNSAVED_EVENT, { detail: { jobId: job.id } }))
+      } else {
+        const result = await saveJobToPipeline({
+          jobId: job.id,
+          companyName,
+          companyLogoUrl,
+          jobTitle: displayTitle,
+          applyUrl: job.apply_url,
+          matchScore: score,
+          source: "hireoven_feed",
+        })
+        if (!result.ok) {
+          if (result.status === 401) {
+            pushToast({ tone: "info", title: "Sign in to save jobs", description: result.message })
+            return
+          }
+          pushToast({ tone: "error", title: "Save failed", description: result.message })
+          return
+        }
+        setSaved(true)
+        window.dispatchEvent(new CustomEvent(JOB_APPLICATION_SAVED_EVENT, { detail: { jobId: job.id } }))
+        if (!result.alreadySaved) {
+          pushToast({ tone: "success", title: "Saved to pipeline", description: "View it under Applications → Saved." })
+        }
       }
     } catch (err) {
-      pushToast({ tone: "error", title: "Save failed", description: err instanceof Error ? err.message : "Try again." })
+      pushToast({ tone: "error", title: saved ? "Couldn't remove" : "Save failed", description: err instanceof Error ? err.message : "Try again." })
     } finally {
       setSaving(false)
     }

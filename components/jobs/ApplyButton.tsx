@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { ExternalLink, CheckCircle2 } from "lucide-react"
-import { saveJobToPipeline, markJobApplied } from "@/lib/applications/save-job-client"
+import { markJobApplied } from "@/lib/applications/save-job-client"
 
 interface Props {
   jobId: string
@@ -31,8 +31,6 @@ export default function ApplyButton({
     window.open(applyUrl, "_blank", "noopener,noreferrer")
     if (clicked) return
     setClicked(true)
-    // Save as "saved" in background — intent to apply, not confirmation
-    saveJobToPipeline({ jobId, jobTitle, companyName, companyLogoUrl, applyUrl, matchScore, source: "hireoven_detail" }).catch(() => {})
   }
 
   async function handleConfirmApplied() {

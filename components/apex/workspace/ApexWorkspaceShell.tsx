@@ -340,6 +340,11 @@ function openContinuationPrompt(context: ApexResumableContext): string {
 
 const IS_DEV = process.env.NODE_ENV === "development"
 
+function readTrimmedParam(searchParams: ReturnType<typeof useSearchParams>, key: string): string | undefined {
+  const value = searchParams.get(key)?.trim()
+  return value || undefined
+}
+
 export function ApexWorkspaceShell() {
   const pathname   = usePathname()
   const searchParams = useSearchParams()
@@ -377,6 +382,7 @@ export function ApexWorkspaceShell() {
   const prevQueueIdRef       = useRef<string | null>(null)
   const prevQueueStatusRef   = useRef<Record<string, string>>({})
   const prevQueueCompletedAtRef = useRef<string | null>(null)
+  const handledWorkspaceDeepLinkRef = useRef<string | null>(null)
   const bulkHydrationSeqRef = useRef(0)
   const commandStartedAtRef  = useRef<number | null>(null)
   const pendingVoiceReplyRef = useRef(false)
@@ -569,6 +575,34 @@ export function ApexWorkspaceShell() {
     resumeId:      searchParams.get("resumeId")      ?? undefined,
     applicationId: searchParams.get("applicationId") ?? undefined,
   }
+
+  useEffect(() => {
+    if (searchParams.get("mode") !== "shadow_network") return
+
+    const companyName = readTrimmedParam(searchParams, "companyName") ?? readTrimmedParam(searchParams, "company")
+    const jobTitle    = readTrimmedParam(searchParams, "jobTitle")
+    const jobId       = readTrimmedParam(searchParams, "jobId")
+    const companyId   = readTrimmedParam(searchParams, "companyId")
+    const deepLinkKey = JSON.stringify({ mode: "shadow_network", companyName, jobTitle, jobId, companyId })
+
+    if (handledWorkspaceDeepLinkRef.current === deepLinkKey) return
+    handledWorkspaceDeepLinkRef.current = deepLinkKey
+
+    setWorkspaceMode("shadow_network")
+    setActiveEntities((prev) => ({
+      ...prev,
+      ...(companyName ? { companyName } : {}),
+      ...(jobTitle ? { jobTitle } : {}),
+      ...(jobId ? { jobId } : {}),
+      ...(companyId ? { companyId } : {}),
+    }))
+    setNarrative(companyName
+      ? `Shadow Network is ready to scan contacts at ${companyName}.`
+      : "Shadow Network is ready to scan contacts."
+    )
+    setNarrativeDismissed(false)
+    setError(null)
+  }, [searchParams])
 
   const fullName  = profile?.full_name ?? user?.user_metadata?.full_name ?? null
   const firstName = fullName?.split(" ")[0] ?? "there"

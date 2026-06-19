@@ -115,11 +115,23 @@ export default function ReferralDraftModal({
         return
       }
       setConnections(msg.connections)
+      void fetch("/api/apex/shadow-network", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connections: msg.connections, jobTitle, companyName }),
+      })
+        .then((response) => {
+          if (!response.ok) return
+          window.dispatchEvent(new CustomEvent("hireoven:networking-contacts-updated", {
+            detail: { jobId, companyName },
+          }))
+        })
+        .catch(() => {})
       setStep("select")
     }
     window.addEventListener("message", onMessage)
     return () => window.removeEventListener("message", onMessage)
-  }, [])
+  }, [companyName, jobId, jobTitle])
 
   useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current) }, [])
 
