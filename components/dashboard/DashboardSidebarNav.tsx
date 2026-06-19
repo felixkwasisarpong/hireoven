@@ -64,7 +64,7 @@ function FeedNavItem({
   const badge = item.label === "Applications" ? formatNavBadge(applicationCount ?? 0) : undefined
 
   const cls = cn(
-    "group flex w-full items-center gap-2.5 rounded-lg px-2.5 outline-none transition-all duration-150",
+    "group flex w-full items-center gap-2.5 rounded-lg px-2.5 text-left outline-none transition-all duration-150",
     "focus-visible:ring-2 focus-visible:ring-orange-200",
     grouped ? "py-2" : "py-2",
     locked

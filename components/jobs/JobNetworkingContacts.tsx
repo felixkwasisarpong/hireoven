@@ -1,12 +1,14 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
-import { ExternalLink, Linkedin, Loader2, Mail, Users } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { ArrowRight, ExternalLink, Linkedin, Loader2, Mail, Users } from "lucide-react"
 import type { NetworkingContact, NetworkingContactType } from "@/lib/networking/job-contact-finder"
 import { cn } from "@/lib/utils"
 
 type Props = {
   jobId: string
+  jobTitle: string | null
   companyName: string | null
 }
 
@@ -50,39 +52,64 @@ function groupContacts(contacts: NetworkingContact[]) {
   return grouped
 }
 
-export default function JobNetworkingContacts({ jobId, companyName }: Props) {
+function buildShadowNetworkHref(input: Props): string {
+  const params = new URLSearchParams({ mode: "shadow_network", source: "job_networking", jobId: input.jobId })
+  if (input.companyName) params.set("companyName", input.companyName)
+  if (input.jobTitle) params.set("jobTitle", input.jobTitle)
+  return `/dashboard/apex?${params.toString()}`
+}
+
+export default function JobNetworkingContacts({ jobId, jobTitle, companyName }: Props) {
   const [contacts, setContacts] = useState<NetworkingContact[]>([])
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
+  const loadContacts = useCallback(async (signal?: AbortSignal) => {
     setLoading(true)
     setFailed(false)
-    fetch(`/api/jobs/${jobId}/networking`, { cache: "no-store", credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("networking_fetch_failed")
-        return (await response.json()) as NetworkingApiResponse
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/networking`, {
+        cache: "no-store",
+        credentials: "include",
+        signal,
       })
-      .then((payload) => {
-        if (cancelled) return
-        setContacts(Array.isArray(payload.contacts) ? payload.contacts : [])
-      })
-      .catch(() => {
-        if (cancelled) return
-        setFailed(true)
-        setContacts([])
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
+      if (!response.ok) throw new Error("networking_fetch_failed")
+      const payload = (await response.json()) as NetworkingApiResponse
+      if (signal?.aborted) return
+      setContacts(Array.isArray(payload.contacts) ? payload.contacts : [])
+    } catch {
+      if (signal?.aborted) return
+      setFailed(true)
+      setContacts([])
+    } finally {
+      if (!signal?.aborted) setLoading(false)
     }
   }, [jobId])
 
+  useEffect(() => {
+    const controller = new AbortController()
+    void loadContacts(controller.signal)
+    return () => {
+      controller.abort()
+    }
+  }, [loadContacts])
+
+  useEffect(() => {
+    function handleContactsUpdated(event: Event) {
+      const detail = (event as CustomEvent<{ jobId?: string }>).detail
+      if (detail?.jobId && detail.jobId !== jobId) return
+      void loadContacts()
+    }
+
+    window.addEventListener("hireoven:networking-contacts-updated", handleContactsUpdated)
+    return () => window.removeEventListener("hireoven:networking-contacts-updated", handleContactsUpdated)
+  }, [jobId, loadContacts])
+
   const grouped = useMemo(() => groupContacts(contacts), [contacts])
+  const shadowNetworkHref = useMemo(
+    () => buildShadowNetworkHref({ jobId, jobTitle, companyName }),
+    [companyName, jobId, jobTitle]
+  )
   const hasContacts = contacts.length > 0
 
   return (
@@ -123,6 +150,14 @@ export default function JobNetworkingContacts({ jobId, companyName }: Props) {
             Run a Shadow Network scan for {companyName ?? "this company"} in Apex so we can surface your
             1st- and 2nd-degree connections here.
           </p>
+          <Link
+            href={shadowNetworkHref}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <Linkedin className="h-3 w-3 text-[#0A66C2]" aria-hidden />
+            Open Shadow Network
+            <ArrowRight className="h-3 w-3" aria-hidden />
+          </Link>
         </div>
       ) : (
         <div className="mt-3 space-y-2.5">

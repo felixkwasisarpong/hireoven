@@ -89,7 +89,7 @@ let currentAutofillFields: DetectedField[] = []
 let currentTailorResumeId: string | null = null
 let tailorJobId: string | null = null
 let detectedAts: string | null = null
-let appOrigin = "http://localhost:3000"
+let appOrigin = "https://hireoven.com"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -876,13 +876,10 @@ function handleProfileLink(e: Event) {
 
 async function boot() {
   const stored = await chrome.storage.local.get(["devMode", "lastJobId"])
-  const isUnpacked = !chrome.runtime.getManifest().update_url
   if (stored.devMode === true) {
     appOrigin = "http://localhost:3000"
-  } else if (stored.devMode === false) {
-    appOrigin = "https://hireoven.com"
   } else {
-    appOrigin = isUnpacked ? "http://localhost:3000" : "https://hireoven.com"
+    appOrigin = "https://hireoven.com"
   }
 
   // Restore jobId from extension storage if available (handles cross-session)

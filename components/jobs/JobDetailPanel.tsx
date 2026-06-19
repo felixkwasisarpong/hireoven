@@ -318,19 +318,6 @@ export default function JobDetailPanel({
     window.open(applyUrl, "_blank", "noopener,noreferrer")
     if (applyClicked) return
     setApplyClicked(true)
-    // Save as "saved" in the background — intent to apply, not confirmation
-    const sourceFallback = jobSourceFallbackLogo(job, job.company?.domain ?? null, job.company?.logo_url ?? null)
-    saveJobToPipeline({
-      jobId: job.id,
-      companyName: job.company?.name ?? "Company",
-      companyLogoUrl: sourceFallback?.logoUrl ?? job.company?.logo_url ?? null,
-      jobTitle: displayTitle,
-      applyUrl,
-      matchScore: overall,
-      source: "hireoven_detail",
-    }).then((result) => {
-      if (result.ok) setSaved(true)
-    }).catch(() => {})
   }
 
   async function handleConfirmApplied() {
@@ -594,6 +581,7 @@ export default function JobDetailPanel({
           <IntelLabel>Networking finder</IntelLabel>
           <JobNetworkingContacts
             jobId={job.id}
+            jobTitle={displayTitle}
             companyName={job.company?.name ?? null}
           />
         </div>

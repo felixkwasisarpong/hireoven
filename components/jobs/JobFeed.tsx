@@ -71,7 +71,7 @@ export default function JobFeed({
   hasPrimaryResume = false,
   defaultView,
 }: JobFeedProps) {
-  const personalized = hasPrimaryResume && (filters.sort ?? "freshest") === "match"
+  const personalized = hasPrimaryResume
   const {
     jobs,
     isLoading,
@@ -81,7 +81,7 @@ export default function JobFeed({
     lastHourCount,
     newJobsCount,
     refresh,
-  } = useJobs(filters, searchQuery, { personalized, withScores: hasPrimaryResume && !personalized })
+  } = useJobs(filters, searchQuery, { personalized })
   const sentinelRef = useRef<HTMLDivElement | null>(null)
   /**
    * Collect job IDs that still need a score:

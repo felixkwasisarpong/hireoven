@@ -1489,7 +1489,7 @@ export class PageAwareControlSystem {
   private shadow: ShadowRoot | null = null
   private root: HTMLElement | null = null
 
-  private appOrigin = "http://localhost:3000"
+  private appOrigin = "https://hireoven.com"
   private authenticated = false
   private user: SessionResult["user"] = null
 
