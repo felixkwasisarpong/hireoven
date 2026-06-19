@@ -221,7 +221,8 @@ export default function DashboardHomeClient({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <div className="flex min-h-0 flex-1 flex-col gap-5 px-4 py-4 sm:px-5 xl:flex-row xl:gap-5">
             <div className="relative z-20 min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto xl:soft-scrollbar">
-              <section className="min-w-0 space-y-3">
+              <section className="min-w-0 space-y-3" aria-labelledby="feed-heading">
+                <h1 id="feed-heading" className="sr-only">Job feed</h1>
                 <PushNotificationSetup />
 
                 <DashboardFeedToolbar

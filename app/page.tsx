@@ -5,9 +5,10 @@ import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
 import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
-import { createClient } from "@/lib/supabase/server"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
+
+export const revalidate = 300
 
 export const metadata: Metadata = {
   title: "Hireoven — Fresh jobs, checked for H-1B sponsorship.",
@@ -15,7 +16,6 @@ export const metadata: Metadata = {
     "Real-time job alerts and AI match scores, with H-1B sponsorship intelligence — petition history and visa-language signals — on every role. Plus one-click apply and Apex AI for your whole search.",
 }
 
-export const dynamic = "force-dynamic"
 
 // ── Data ─────────────────────────────────────────────────────────────────────
 
@@ -171,8 +171,6 @@ function FooterColumn({ title, links }: { title: string; links: { href: string; 
 
 export default async function HomePage() {
   const [stats, featured] = await Promise.all([getPlatformStats(), getFeaturedCompanies()])
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
   return (
     <div className="min-h-screen bg-white">

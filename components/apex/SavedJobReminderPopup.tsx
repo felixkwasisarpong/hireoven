@@ -21,7 +21,7 @@ type SavedReminderJob = {
   logoUrl: string | null
 }
 
-const SESSION_KEY = "apex-saved-reminder-shown-v1"
+const SHOWN_KEY = "apex-saved-reminder-shown-until"
 const SNOOZE_KEY = "apex-saved-reminder-snooze-until"
 const DAY_MS = 24 * 60 * 60 * 1000
 
@@ -94,7 +94,9 @@ export default function SavedJobReminderPopup() {
       return
     }
 
-    if (window.sessionStorage.getItem(SESSION_KEY)) return
+    // Suppress for 24 h after it was shown, and honour explicit snooze.
+    const shownUntil = Number(window.localStorage.getItem(SHOWN_KEY) || 0)
+    if (shownUntil && Date.now() < shownUntil) return
     const snoozeUntil = Number(window.localStorage.getItem(SNOOZE_KEY) || 0)
     if (snoozeUntil && Date.now() < snoozeUntil) return
 
@@ -108,7 +110,7 @@ export default function SavedJobReminderPopup() {
         if (cancelled || list.length === 0) return
         setJobs(list.slice(0, 4))
         setTotal(data.total ?? list.length)
-        window.sessionStorage.setItem(SESSION_KEY, "1")
+        try { window.localStorage.setItem(SHOWN_KEY, String(Date.now() + DAY_MS)) } catch { /* ignore */ }
         window.setTimeout(() => !cancelled && setOpen(true), 650)
       } catch {
         /* network hiccup — stay silent, it's only a nudge */

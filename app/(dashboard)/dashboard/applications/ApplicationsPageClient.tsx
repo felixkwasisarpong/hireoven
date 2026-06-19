@@ -256,6 +256,8 @@ export default function ApplicationsPageClient({
                     key={mode}
                     type="button"
                     onClick={() => setView(mode)}
+                    aria-label={mode === "kanban" ? "Kanban view" : "Table view"}
+                    aria-pressed={view === mode}
                     className={cn(
                       "flex h-8 w-8 items-center justify-center rounded-[10px] transition",
                       view === mode
@@ -263,7 +265,7 @@ export default function ApplicationsPageClient({
                         : "text-slate-400 hover:text-slate-700"
                     )}
                   >
-                    {mode === "kanban" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                    {mode === "kanban" ? <LayoutGrid className="h-4 w-4" aria-hidden /> : <List className="h-4 w-4" aria-hidden />}
                   </button>
                 ))}
               </div>

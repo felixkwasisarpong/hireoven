@@ -329,6 +329,200 @@ test("resume experience text contributes skill evidence when skill buckets are s
   )
 })
 
+test("unsupported stored executive seniority is ignored for IC AI roles", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-ai-ic-1",
+    file_name: "ai-engineer.pdf",
+    name: "AI Engineer Candidate",
+    summary: "Senior software engineer focused on applied AI systems.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "AI Engineer",
+        start_date: "2018",
+        end_date: null,
+        is_current: true,
+        description: "Built Python, FastAPI, TypeScript, PostgreSQL, AWS, LLM, RAG, and agentic AI systems.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "senior",
+    years_of_experience: 8,
+    primary_role: "Software Engineer, Applied AI",
+    industries: ["Technology"],
+    top_skills: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-ai-ic-stale-exec-1",
+    title: "AI Engineer",
+    description:
+      "Our CTO sets the technical and AI vision. Our Director of Product owns the roadmap. Requirements: Python, FastAPI, TypeScript, PostgreSQL, AWS, LLMs, RAG, and agentic AI.",
+    skills: ["Python", "FastAPI", "TypeScript", "PostgreSQL", "AWS", "LLMs", "RAG", "Agentic AI"],
+    seniority_level: "exec",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.overall_score >= 90, `expected unsupported exec label to be ignored, got ${score.overall_score}`)
+  assert.equal(score.score_breakdown?.seniorityScore, 75)
+  assert.ok(
+    score.score_breakdown?.concerns.some((concern) =>
+      concern.includes("Unsupported stored seniority (exec) ignored")
+    ),
+    "expected ignored stale seniority to be surfaced"
+  )
+})
+
+test("under-level candidates do not score excellent on staff roles by years alone", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-mid-to-staff-1",
+    file_name: "mid-software.pdf",
+    name: "Mid Software Candidate",
+    summary: "Software engineer with backend platform experience.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "Software Engineer",
+        start_date: "2017",
+        end_date: null,
+        is_current: true,
+        description: "Built TypeScript, Node.js, AWS, distributed systems, and API development.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "mid",
+    years_of_experience: 9,
+    primary_role: "Software Engineer",
+    industries: ["Technology"],
+    top_skills: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-staff-software-1",
+    title: "Staff Software Engineer",
+    description: "Requirements: TypeScript, Node.js, AWS, distributed systems, and API development.",
+    skills: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+    seniority_level: "staff",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: { ...baseProfile, seniority_level: "mid" },
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.score_breakdown?.experienceScore === 100, "expected years to meet the role")
+  assert.ok((score.score_breakdown?.seniorityScore ?? 100) < 65, "expected seniority level mismatch")
+  assert.ok(score.overall_score <= 72, `expected staff-role mismatch cap, got ${score.overall_score}`)
+  assert.ok(
+    score.score_breakdown?.concerns.some((concern) => concern.includes("seniority_mismatch")),
+    "expected seniority mismatch gate to be surfaced"
+  )
+})
+
+test("over-level candidates are capped on junior roles despite strong skills", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-staff-to-junior-1",
+    file_name: "staff-software.pdf",
+    name: "Staff Software Candidate",
+    summary: "Staff software engineer with backend platform experience.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "Staff Software Engineer",
+        start_date: "2014",
+        end_date: null,
+        is_current: true,
+        description: "Built TypeScript, Node.js, AWS, distributed systems, and API development.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "staff",
+    years_of_experience: 12,
+    primary_role: "Staff Software Engineer",
+    industries: ["Technology"],
+    top_skills: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+    raw_text: null,
+  })
+  const job = makeJob({
+    id: "job-junior-software-1",
+    title: "Junior Software Engineer",
+    description: "Requirements: TypeScript, Node.js, AWS, distributed systems, and API development.",
+    skills: ["TypeScript", "Node.js", "AWS", "Distributed Systems", "API Development"],
+    seniority_level: "junior",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: { ...baseProfile, seniority_level: "staff" },
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(score.score_breakdown?.experienceScore === 100, "expected years to meet the role")
+  assert.ok((score.score_breakdown?.seniorityScore ?? 100) < 60, "expected over-level seniority penalty")
+  assert.ok(score.overall_score <= 78, `expected junior-role mismatch cap, got ${score.overall_score}`)
+  assert.equal(score.is_seniority_match, false)
+})
+
 test("sparse same-family postings with no skill support stay below strong match", () => {
   const resume = makeHealthcareResume({
     id: "resume-tech-no-skill-support-1",

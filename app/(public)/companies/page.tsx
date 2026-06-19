@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     "Explore companies hiring now. Filter by H1B sponsorship, industry, and more. See jobs the moment they're posted.",
 }
 
-export const dynamic = "force-dynamic"
+export const revalidate = 3600
 
 function SponsorsH1BBadge({ confidence }: { confidence: number }) {
   if (confidence >= 80)
@@ -38,7 +38,8 @@ export default async function PublicCompaniesPage() {
         `SELECT id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence
          FROM companies
          WHERE is_active = true AND job_count > 0
-         ORDER BY job_count DESC`
+         ORDER BY job_count DESC
+         LIMIT 500`
       )
       companies = rows
     } catch {

@@ -50,7 +50,9 @@ export function WaitlistInlineForm() {
   return (
     <form onSubmit={handleSubmit} className="mt-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <label htmlFor="waitlist-email" className="sr-only">Email address</label>
         <input
+          id="waitlist-email"
           type="email"
           required
           value={email}
