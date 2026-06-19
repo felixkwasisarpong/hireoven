@@ -10,7 +10,8 @@
  *   BATCH=5          Parallel tab count (default: 3)
  *   START=0          Skip the first N companies (resume after a crash)
  *
- * Safe to re-run — already-rated companies are skipped.
+ * Safe to re-run — already-rated companies AND companies previously attempted
+ * but not found (glassdoor_checked_at IS NOT NULL) are skipped.
  */
 
 import fs from "fs"
@@ -49,7 +50,8 @@ async function saveRating(companyId: string, rating: number) {
   await pool.query(`
     INSERT INTO company_health_scores
       (company_id, total_score, verdict, funding_score, layoff_score,
-       glassdoor_score, headcount_score, glassdoor_rating, last_computed_at, updated_at)
+       glassdoor_score, headcount_score, glassdoor_rating,
+       glassdoor_checked_at, last_computed_at, updated_at)
     VALUES ($1,
       LEAST(100, 10 + 25 + $2 + 12),
       CASE
@@ -57,10 +59,11 @@ async function saveRating(companyId: string, rating: number) {
         WHEN LEAST(100, 10 + 25 + $2 + 12) >= 55 THEN 'healthy'
         WHEN LEAST(100, 10 + 25 + $2 + 12) >= 35 THEN 'caution'
         ELSE 'critical' END,
-      10, 25, $2, 12, $3, NOW(), NOW())
+      10, 25, $2, 12, $3, NOW(), NOW(), NOW())
     ON CONFLICT (company_id) DO UPDATE SET
-      glassdoor_rating = $3,
-      glassdoor_score  = $2,
+      glassdoor_rating     = $3,
+      glassdoor_score      = $2,
+      glassdoor_checked_at = NOW(),
       total_score = LEAST(100, GREATEST(0,
         company_health_scores.funding_score + company_health_scores.layoff_score +
         $2 + company_health_scores.headcount_score)),
@@ -77,6 +80,16 @@ async function saveRating(companyId: string, rating: number) {
         ELSE 'critical' END,
       updated_at = NOW()
   `, [companyId, gScore, rating])
+}
+
+async function markChecked(companyId: string) {
+  await pool.query(`
+    INSERT INTO company_health_scores (company_id, glassdoor_checked_at, updated_at)
+    VALUES ($1, NOW(), NOW())
+    ON CONFLICT (company_id) DO UPDATE SET
+      glassdoor_checked_at = NOW(),
+      updated_at = NOW()
+  `, [companyId])
 }
 
 // ── Glassdoor scraper (one tab) ───────────────────────────────────────────────
@@ -166,6 +179,7 @@ async function main() {
     LEFT JOIN company_health_scores chs ON chs.company_id = c.id
     WHERE c.is_active = true
       AND (chs.glassdoor_rating IS NULL OR chs.company_id IS NULL)
+      AND chs.glassdoor_checked_at IS NULL
     ORDER BY c.job_count DESC NULLS LAST
   `)
 
@@ -207,10 +221,12 @@ async function main() {
           console.log(`✓ [${globalIdx}/${total + START}] ${name} → ${result.rating}★${result.reviewCount ? ` (${result.reviewCount.toLocaleString()} reviews)` : ""}`)
           found++
         } else {
+          await markChecked(id)
           console.log(`– [${globalIdx}/${total + START}] ${name} → not found`)
           missed++
         }
       } catch (e) {
+        await markChecked(id).catch(() => {})
         console.log(`✗ [${globalIdx}/${total + START}] ${name} → error: ${e instanceof Error ? e.message : String(e)}`)
         missed++
       } finally {

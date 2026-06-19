@@ -66,3 +66,11 @@ DATABASE_URL=REPLACE_ME
 # Workday backlog drain — resolves the {tenant}:{wd}:unresolved stubs discover-companies parks (it only does 20/run).
 # Size the backlog first: drop --apply for a dry run.
   0 */6 * * *      flock -n /tmp/hireoven-wddrain.lock -c 'cd $HIREOVEN_REPO && npx tsx scripts/drain-workday-candidates.ts --apply --limit=500 >>/var/log/hireoven/drain-workday.log 2>&1'
+# ── Recover the name-only stub pool: name -> real domain (the missing first step) ──
+# Resolves Adzuna/Dice placeholder companies that have active jobs (~57% hit rate),
+# turning name-only stubs into real-domain rows that the EXISTING discover-from-domains
+# cron (06:00) then resolves to an ATS / careers crawl. Runs at 02:00 so resolved domains
+# are ready before that 06:00 consumer. Dry-run: add --dry-run.
+# NOTE: discover-from-domains is a NO-OP unless DISCOVER_FROM_DOMAINS_ENABLED=true is set in
+# the app-worker .env — verify that flag, or step 2 never fires.
+  0 2 * * *        flock -n /tmp/hireoven-domresolve.lock -c 'cd $HIREOVEN_REPO && timeout 60m npx tsx scripts/enrich-placeholder-company-domains.ts --limit=5000 --concurrency=12 >>/var/log/hireoven/enrich-domains.log 2>&1'
