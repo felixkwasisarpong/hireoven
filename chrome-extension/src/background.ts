@@ -256,18 +256,12 @@ function makeQueueId(): string {
 /**
  * Resolve the active hireoven origin.
  *
- * Default is auto-detected by install type:
- *   - Unpacked / "Load unpacked" (no `update_url` in manifest) → localhost:3000
- *   - Chrome Web Store install (has `update_url`)              → hireoven.com
+ * Default is the production app, even for manually loaded packages.
  *
  * Override via chrome.storage.local:
  *   chrome.storage.local.set({ devMode: true })   → force localhost:3000
  *   chrome.storage.local.set({ devMode: false })  → force hireoven.com
  */
-function isUnpackedInstall(): boolean {
-  return !chrome.runtime.getManifest().update_url
-}
-
 function isApexDashboardUrl(rawUrl: string): boolean {
   try {
     const parsed = new URL(rawUrl)
@@ -290,24 +284,7 @@ async function resolveOrigin(): Promise<string> {
     return LOCAL_APP_ORIGINS[0]
   }
   if (result.devMode === false) return PROD_APP_ORIGIN
-
-  if (isUnpackedInstall()) {
-    for (const origin of LOCAL_APP_ORIGINS) {
-      if (await hasSessionCookie(origin)) return origin
-    }
-    // Keep unpacked installs pinned to local app origins by default.
-    return LOCAL_APP_ORIGINS[0]
-  }
-
-  const preferred = PROD_APP_ORIGIN
-  // Production install fallback: if hireoven.com has no active session,
-  // prefer any available local dev session before returning the production
-  // origin.
-  if (await hasSessionCookie(preferred)) return preferred
-  for (const fallback of LOCAL_APP_ORIGINS) {
-    if (await hasSessionCookie(fallback)) return fallback
-  }
-  return preferred
+  return PROD_APP_ORIGIN
 }
 
 async function hasSessionCookie(origin: string): Promise<boolean> {

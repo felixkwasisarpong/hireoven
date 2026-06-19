@@ -77,9 +77,8 @@ async function pingAllTabs(): Promise<{ connected: AggregatorSite[] }> {
 // ── Auth / API helper (mirrors background.ts apiRequest pattern) ─────────────
 
 async function resolveOrigin(): Promise<string> {
-  // Default to localhost for unpacked installs; the existing background.ts has
-  // richer detection via management.getSelf(). For the dispatcher we keep it
-  // simple — same fallback chain as background.ts.
+  // Keep aggregator API writes on the production app by default. Local
+  // development routes through the main background service worker's devMode.
   return APP_ORIGINS[1]
 }
 
