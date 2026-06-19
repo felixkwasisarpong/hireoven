@@ -94,7 +94,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // { label: "Immigration Services", href: "/dashboard/international/services", icon: Scale,    group: "International", subtitle: "Book vetted attorneys & doc prep" },
 
   // ── Footer ───────────────────────────────────────────────────────────────────
-  { label: "Settings",       href: "/dashboard/billing",                  icon: Settings,      footer: true },
+  { label: "Billing",        href: "/dashboard/billing",                  icon: Settings,      footer: true },
   { label: "Feedback",       href: "#feedback",                           icon: MessageCircle, footer: true, action: "feedback" },
   { label: "Help & support", href: "mailto:support@hireoven.com",         icon: LifeBuoy,      footer: true },
 ]

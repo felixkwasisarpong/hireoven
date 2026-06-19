@@ -59,9 +59,10 @@ export default function FeatureRow({
                 type="button"
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
+                aria-label={`More info about ${feature}`}
                 className="text-slate-300 hover:text-slate-500 transition-colors"
               >
-                <HelpCircle className="h-3.5 w-3.5" />
+                <HelpCircle className="h-3.5 w-3.5" aria-hidden />
               </button>
               {showTooltip && (
                 <div className="absolute bottom-full left-1/2 z-20 mb-1.5 w-48 -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 shadow-lg">

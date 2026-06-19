@@ -196,7 +196,7 @@ function CompactJobRow({ job }: { job: JobWithCompany }) {
             H-1B ✓
           </span>
         )}
-        <span className="hidden text-[11px] text-gray-400 sm:inline">
+        <span suppressHydrationWarning className="hidden text-[11px] text-gray-400 sm:inline">
           {relativeTime(job.first_detected_at)}
         </span>
 

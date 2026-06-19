@@ -127,10 +127,16 @@ export function AuthForm({ defaultMode = "login" }: Props) {
     setLoading(true)
     setError(null)
 
+    // Read DOM values at submit so autofill / password managers that set
+    // element.value without firing a React synthetic change event still work.
+    const form = e.currentTarget as HTMLFormElement
+    const emailVal = (form.elements.namedItem("email") as HTMLInputElement | null)?.value?.trim() || email
+    const passwordVal = (form.elements.namedItem("password") as HTMLInputElement | null)?.value || password
+
     const supabase = createClient()
 
     if (mode === "login") {
-      const { data, error: err } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error: err } = await supabase.auth.signInWithPassword({ email: emailVal, password: passwordVal })
       if (err) {
         setError(err.message === "Invalid login credentials"
           ? "Incorrect email or password."
@@ -157,7 +163,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, full_name: fullName, inviteToken }),
+        body: JSON.stringify({ email: emailVal, password: passwordVal, full_name: fullName, inviteToken }),
       })
       const body = await res.json().catch(() => ({})) as { error?: string; code?: string }
       if (!res.ok) {
@@ -353,6 +359,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
               </label>
               <input
                 id="email"
+                name="email"
                 type="email"
                 autoComplete="email"
                 required
@@ -377,6 +384,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
               <div className="relative">
                 <input
                   id="password"
+                  name="password"
                   type={showPassword ? "text" : "password"}
                   autoComplete={isLogin ? "current-password" : "new-password"}
                   required

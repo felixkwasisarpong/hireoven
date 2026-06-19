@@ -13,13 +13,13 @@ const REFRESH_THRESHOLD = 60 * 60 * 24 * 7  // renew when < 7 days left
 export async function POST() {
   const user = await getSessionUser()
   if (!user) {
-    return NextResponse.json({ ok: false }, { status: 401 })
+    return NextResponse.json({ ok: false, authenticated: false })
   }
 
   const store = await cookies()
   const rawToken = store.get(SESSION_COOKIE_NAME)?.value
   if (!rawToken) {
-    return NextResponse.json({ ok: false }, { status: 401 })
+    return NextResponse.json({ ok: false, authenticated: false })
   }
 
   const secondsLeft = await getSessionTokenSecondsLeft(rawToken)

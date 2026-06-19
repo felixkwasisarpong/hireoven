@@ -422,17 +422,19 @@ export default function WatchlistPageClient({
                           <Link
                             href={`/dashboard/companies/${item.company_id}`}
                             title="View company"
+                            aria-label={`View ${item.company?.name ?? "company"} profile`}
                             className="rounded-lg p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-700"
                           >
-                            <ExternalLink className="h-3.5 w-3.5" />
+                            <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                           </Link>
                           <button
                             type="button"
                             onClick={() => void removeCompany(item.company_id)}
                             title="Remove from watchlist"
+                            aria-label={`Remove ${item.company?.name ?? "company"} from watchlist`}
                             className="rounded-lg p-1.5 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"
                           >
-                            <BookmarkX className="h-3.5 w-3.5" />
+                            <BookmarkX className="h-3.5 w-3.5" aria-hidden />
                           </button>
                         </div>
                       </div>
@@ -461,6 +463,7 @@ export default function WatchlistPageClient({
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="Search companies…"
+                    aria-label="Search companies"
                     className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
                   />
                 </div>

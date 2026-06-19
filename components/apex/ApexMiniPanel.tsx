@@ -384,6 +384,7 @@ export function ApexMiniPanel({
                   onChange={(e) => setQuery(e.target.value)}
                   disabled={isLoading}
                   placeholder="Enter a message"
+                  aria-label="Message Apex"
                   className="w-full bg-transparent text-[13px] text-gray-800 outline-none placeholder:text-gray-400"
                 />
                 <button
