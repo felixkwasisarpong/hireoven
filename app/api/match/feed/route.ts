@@ -329,13 +329,24 @@ export async function GET(request: NextRequest) {
         : minScore <= 0,
     )
     .sort((left, right) => {
-      // Best Match is purely score-ordered. Saved jobs no longer pin to the
-      // top — they're still visible (with the bookmark badge) and bypass
-      // minScore via the filter above, but they're ranked alongside everything
-      // else so a 99% fresh match doesn't get outranked by a 60% saved one.
-      const a = left.match_score?.overall_score ?? -1
-      const b = right.match_score?.overall_score ?? -1
-      if (a !== b) return b - a
+      // Best Match is purely score-ordered (freshness as tie-break). Saved jobs
+      // no longer pin to the top — they're still visible (with the bookmark
+      // badge) and bypass minScore via the filter above, but they're ranked
+      // alongside everything else so a 99% fresh match doesn't get outranked by
+      // a 60% saved one.
+      //
+      // Any OTHER sort (Freshest / Relevant / default) must NOT be score-ranked
+      // here: the candidate query already returns rows in first_detected_at DESC
+      // order, so falling straight through to the freshness comparator makes
+      // "Freshest" a true chronological stream of every incoming job (scored
+      // only for the badge). Previously this block re-ranked by score
+      // unconditionally, so "Freshest" showed a thin slice of top matches
+      // stretched across the whole window instead of the newest jobs.
+      if (isBestMatch) {
+        const a = left.match_score?.overall_score ?? -1
+        const b = right.match_score?.overall_score ?? -1
+        if (a !== b) return b - a
+      }
       return (
         new Date(right.first_detected_at).getTime() -
         new Date(left.first_detected_at).getTime()
