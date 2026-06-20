@@ -185,6 +185,20 @@ type CompanyLogoProps = {
   priority?: boolean
 }
 
+// Pleasant, mid-dark saturated palette — white initials read clearly on all of them.
+const LOGO_TILE_COLORS = [
+  "#1864ab", "#3b5bdb", "#0b7285", "#2b8a3e", "#5f3dc4",
+  "#a61e4d", "#c2410c", "#7048e8", "#0c8599", "#364fc7",
+  "#9c2bad", "#9a7d0a", "#2f6f4f", "#92400e", "#1e3a5f",
+]
+
+/** Deterministic chip color from the company name, so the same company is always the same color. */
+function tileColorFor(name: string): string {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return LOGO_TILE_COLORS[hash % LOGO_TILE_COLORS.length]
+}
+
 /**
  * Renders a company mark with automatic fallback when the stored URL fails (e.g. Clearbit 404).
  *
@@ -205,10 +219,13 @@ export default function CompanyLogo({
 
   const initial = companyName.charAt(0).toUpperCase() || "?"
 
+  // Deterministic colored chip (per company) so a logo-less company reads as an
+  // intentional avatar (Slack/Gmail style) instead of an empty box.
   const placeholder = (
     <div
       aria-hidden
-      className="absolute inset-0 flex items-center justify-center bg-surface-alt text-sm font-semibold text-brand-navy"
+      className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-white"
+      style={{ backgroundColor: tileColorFor(companyName || "?") }}
     >
       {initial}
     </div>
