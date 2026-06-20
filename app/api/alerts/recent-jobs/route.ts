@@ -457,13 +457,18 @@ export async function GET(request: NextRequest) {
        LEFT JOIN companies ON companies.id = jobs.company_id
        WHERE jms.user_id = ANY($1::uuid[])
          AND jms.overall_score >= 75
-         AND jobs.first_detected_at >= $2
+         -- A job becomes email-eligible when both the job exists and the
+         -- user's match score exists. Scores can lag ingestion by hours, so
+         -- window on the later timestamp instead of dropping late-scored jobs.
+         AND GREATEST(jobs.first_detected_at, COALESCE(jms.computed_at, jobs.first_detected_at)) >= $2
          AND jobs.is_active = true
          AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
-       -- Freshest first per user-facing convention. Score is the threshold
-       -- (>=75), not the primary sort key.
-       ORDER BY jobs.first_detected_at DESC, jms.overall_score DESC
+       -- Freshest eligible first per user-facing convention. Score is the
+       -- threshold (>=75), not the primary sort key.
+       ORDER BY GREATEST(jobs.first_detected_at, COALESCE(jms.computed_at, jobs.first_detected_at)) DESC,
+                jobs.first_detected_at DESC,
+                jms.overall_score DESC
        LIMIT 1000`,
       [resumeRecipients.map((user) => user.id), withResumeSince]
     )
