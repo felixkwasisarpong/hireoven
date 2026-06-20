@@ -2,8 +2,10 @@
  * GET /api/cron/adzuna-ingest
  *
  * Pulls fresh jobs from the Adzuna aggregator API (covers LinkedIn, Indeed,
- * company boards) and upserts them into the jobs table. Unlike Dice, Adzuna
- * returns full descriptions in search results so no enrichment step is needed.
+ * company boards) and upserts them into the jobs table. Adzuna descriptions are
+ * usually truncated around 500 chars and its redirect pages are WAF-protected,
+ * so these jobs are treated as discovery/freshness signals unless the snippet is
+ * clearly complete enough to publish.
  *
  * For each company seen:
  *  - Known ATS companies: harvest is bumped forward (freshness-signal loop).
@@ -27,8 +29,11 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import {
   AdzunaApiError,
-  searchAdzunaAllPages,
   adzunaContractToEmploymentType,
+  isAdzunaDescriptionLikelyTruncated,
+  normalizeAdzunaCompanyLookupKey,
+  normalizeAdzunaJobFingerprintPart,
+  searchAdzunaAllPages,
   type AdzunaJob,
 } from "@/lib/sources/adzuna"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
@@ -138,6 +143,42 @@ const DEFAULT_QUERIES = [
   "business analyst",
 ]
 
+type CompanyCandidate = {
+  id: string
+  name: string
+  ats_type: string | null
+  is_active: boolean
+  domain: string
+  job_count: number | null
+}
+
+function isPlaceholderDomain(domain: string | null | undefined): boolean {
+  const value = (domain ?? "").toLowerCase()
+  return (
+    value.endsWith(".placeholder") ||
+    value.endsWith(".invalid") ||
+    value.endsWith(".ats-placeholder") ||
+    value.endsWith(".builtin-discovery") ||
+    value.endsWith(".glassdoor-discovery") ||
+    value.startsWith("adzuna-") ||
+    value.startsWith("dice-")
+  )
+}
+
+function scoreCompanyCandidate(candidate: CompanyCandidate): number {
+  return (
+    (candidate.is_active && candidate.ats_type ? 1_000_000 : 0) +
+    (candidate.is_active ? 100_000 : 0) +
+    (!isPlaceholderDomain(candidate.domain) ? 10_000 : 0) +
+    (candidate.ats_type ? 5_000 : 0) +
+    Math.min(candidate.job_count ?? 0, 5_000)
+  )
+}
+
+function chooseBestCompanyCandidate(candidates: CompanyCandidate[]): CompanyCandidate | null {
+  return [...candidates].sort((a, b) => scoreCompanyCandidate(b) - scoreCompanyCandidate(a))[0] ?? null
+}
+
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -160,7 +201,17 @@ export async function GET(request: NextRequest) {
 
   const pool = getPostgresPool()
   const stats: Record<string, number> = {
-    queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0, upstreamErrors: 0, harvestBumped: 0,
+    queries: 0,
+    fetched: 0,
+    inserted: 0,
+    updated: 0,
+    errors: 0,
+    upstreamErrors: 0,
+    harvestBumped: 0,
+    canonicalCompanyMatches: 0,
+    truncatedHidden: 0,
+    duplicateFingerprintSkipped: 0,
+    duplicateFingerprintRefreshed: 0,
   }
 
   // Dedupe across queries by Adzuna job ID
@@ -194,12 +245,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ...stats, message: "No jobs fetched" })
   }
 
-  // Group by normalized company name for batch resolution
+  // Group by exact company name for batch resolution, but match through a
+  // stripped key as well so "Microsoft Corporation" resolves to the active
+  // "Microsoft" harvester row instead of an inactive aggregator placeholder.
   const byCompany = new Map<string, AdzunaJob[]>()
+  const lookupKeyByCompany = new Map<string, string>()
   for (const job of seen.values()) {
     const key = job.company.toLowerCase().trim()
     if (!byCompany.has(key)) byCompany.set(key, [])
     byCompany.get(key)!.push(job)
+    lookupKeyByCompany.set(key, normalizeAdzunaCompanyLookupKey(job.company))
   }
 
   // Bulk lookup existing companies
@@ -208,15 +263,35 @@ export async function GET(request: NextRequest) {
   // Tracks companies we harvest directly — Adzuna jobs from these are redundant.
   const harvestedCompanyIds = new Set<string>()
 
-  const existingResult = await pool.query<{ id: string; name: string; ats_type: string | null; is_active: boolean }>(
-    `SELECT id, LOWER(TRIM(name)) AS name, ats_type, is_active
-     FROM companies
-     WHERE LOWER(TRIM(name)) = ANY($1)`,
-    [companyNames]
+  const existingResult = await pool.query<CompanyCandidate>(
+    `SELECT id, name, ats_type, is_active, domain, job_count
+       FROM companies
+      WHERE duplicate_of_company_id IS NULL`
   )
+  const candidatesByExactName = new Map<string, CompanyCandidate[]>()
+  const candidatesByLookupKey = new Map<string, CompanyCandidate[]>()
   for (const row of existingResult.rows) {
-    companyIdMap.set(row.name, row.id)
-    if (row.ats_type && row.is_active) harvestedCompanyIds.add(row.id)
+    const exact = row.name.toLowerCase().trim()
+    const lookupKey = normalizeAdzunaCompanyLookupKey(row.name)
+    if (!candidatesByExactName.has(exact)) candidatesByExactName.set(exact, [])
+    candidatesByExactName.get(exact)!.push(row)
+    if (lookupKey) {
+      if (!candidatesByLookupKey.has(lookupKey)) candidatesByLookupKey.set(lookupKey, [])
+      candidatesByLookupKey.get(lookupKey)!.push(row)
+    }
+  }
+
+  for (const companyName of companyNames) {
+    const exactCandidates = candidatesByExactName.get(companyName) ?? []
+    const lookupKey = lookupKeyByCompany.get(companyName) ?? ""
+    const lookupCandidates = lookupKey ? candidatesByLookupKey.get(lookupKey) ?? [] : []
+    const best = chooseBestCompanyCandidate([...exactCandidates, ...lookupCandidates])
+    if (!best) continue
+    companyIdMap.set(companyName, best.id)
+    if (!exactCandidates.some((candidate) => candidate.id === best.id)) {
+      stats.canonicalCompanyMatches++
+    }
+    if (best.ats_type && best.is_active) harvestedCompanyIds.add(best.id)
   }
 
   // Create placeholder companies for unknowns so the FK is satisfied.
@@ -251,7 +326,64 @@ export async function GET(request: NextRequest) {
   )
   const existingByExtId = new Map(existingRows.rows.map((r) => [r.external_id, r.id]))
 
+  const fingerprintCompanyIds: string[] = []
+  const fingerprintTitleKeys: string[] = []
+  const fingerprintLocationKeys: string[] = []
+  const fingerprintByExternalId = new Map<string, string>()
+  for (const job of seen.values()) {
+    const companyId = companyIdMap.get(job.company.toLowerCase().trim())
+    if (!companyId) continue
+
+    const externalId = `adzuna:${job.id}`
+    if (existingByExtId.has(externalId)) continue
+
+    const titleKey = normalizeAdzunaJobFingerprintPart(job.title)
+    const locationKey = normalizeAdzunaJobFingerprintPart(job.location)
+    const fingerprint = `${companyId}|${titleKey}|${locationKey}`
+    fingerprintByExternalId.set(externalId, fingerprint)
+    fingerprintCompanyIds.push(companyId)
+    fingerprintTitleKeys.push(titleKey)
+    fingerprintLocationKeys.push(locationKey)
+  }
+
+  const existingAdzunaByFingerprint = new Map<string, string>()
+  if (fingerprintCompanyIds.length > 0) {
+    const fingerprintRows = await pool.query<{
+      id: string
+      company_id: string
+      title_key: string
+      location_key: string
+    }>(
+      `WITH incoming AS (
+         SELECT *
+           FROM unnest($1::uuid[], $2::text[], $3::text[])
+             AS t(company_id, title_key, location_key)
+       )
+       SELECT DISTINCT ON (incoming.company_id, incoming.title_key, incoming.location_key)
+              jobs.id,
+              incoming.company_id::text AS company_id,
+              incoming.title_key,
+              incoming.location_key
+         FROM incoming
+         JOIN jobs
+           ON jobs.company_id = incoming.company_id
+          AND jobs.is_active = true
+          AND jobs.closed_at IS NULL
+          AND jobs.external_id ILIKE 'adzuna:%'
+          AND regexp_replace(lower(coalesce(jobs.title, '')), '[^a-z0-9]+', '', 'g') = incoming.title_key
+          AND regexp_replace(lower(coalesce(jobs.location, '')), '[^a-z0-9]+', '', 'g') = incoming.location_key
+        ORDER BY incoming.company_id, incoming.title_key, incoming.location_key,
+                 jobs.first_detected_at ASC NULLS LAST, jobs.id`,
+      [fingerprintCompanyIds, fingerprintTitleKeys, fingerprintLocationKeys]
+    )
+    for (const row of fingerprintRows.rows) {
+      existingAdzunaByFingerprint.set(`${row.company_id}|${row.title_key}|${row.location_key}`, row.id)
+    }
+  }
+
   // Upsert jobs
+  const processedNewFingerprints = new Set<string>()
+  const duplicateRefreshIds = new Set<string>()
   for (const job of seen.values()) {
     const companyId = companyIdMap.get(job.company.toLowerCase().trim())
     if (!companyId) continue
@@ -263,8 +395,22 @@ export async function GET(request: NextRequest) {
     const salaryMax = job.salaryIsPredicted ? undefined : job.salaryMax
     const firstDetected = new Date(job.created).toISOString()
     const existingId = existingByExtId.get(externalId)
+    const fingerprint = fingerprintByExternalId.get(externalId)
+    if (!existingId && fingerprint) {
+      const duplicateId = existingAdzunaByFingerprint.get(fingerprint)
+      if (duplicateId) {
+        duplicateRefreshIds.add(duplicateId)
+        stats.duplicateFingerprintSkipped++
+        continue
+      }
+      if (processedNewFingerprints.has(fingerprint)) {
+        stats.duplicateFingerprintSkipped++
+        continue
+      }
+      processedNewFingerprints.add(fingerprint)
+    }
 
-    // Adzuna returns full descriptions but zero structured metadata. Run the
+    // Adzuna returns short snippets and zero structured metadata. Run the
     // deterministic normalizer (same one the harvester/description-enrichment
     // path uses) to extract skills, seniority, normalized title, etc. — without
     // this, every adzuna job lands at 0% skills and stays that way.
@@ -297,25 +443,33 @@ export async function GET(request: NextRequest) {
       skills: nc.skills,
     })
     const descLen = nc.description?.length ?? 0
-    const skillCount = nc.skills?.length ?? 0
     // Adzuna truncates descriptions at ~500 chars; redirect URLs are behind AWS
-    // WAF so enrichment is impossible. Hide jobs that add no signal:
+    // WAF so enrichment is impossible. Hide jobs that add no usable JD signal:
     //   • description < 400 chars — too short to be useful
-    //   • description 490-525 (at the truncation ceiling) with 0-1 skills
-    //     — typically staffing-agency boilerplate with no tech keywords
+    //   • description at the truncation ceiling with a trailing ellipsis
     //   • from a company we harvest directly — the harvested version is richer
-    const likelyTruncated = descLen >= 490 && descLen <= 525
+    const likelyTruncated = isAdzunaDescriptionLikelyTruncated(nc.description)
     const redundantHarvested = harvestedCompanyIds.has(companyId)
+    const hideTruncated = process.env.ADZUNA_PUBLISH_TRUNCATED !== "true"
     const publicationStatus =
       basePublicationStatus === "published" &&
-      (descLen < 400 || (likelyTruncated && skillCount <= 1) || redundantHarvested)
+      (descLen < 400 || (hideTruncated && likelyTruncated) || redundantHarvested)
         ? "hidden_low_quality"
         : basePublicationStatus
+    if (publicationStatus === "hidden_low_quality" && likelyTruncated) {
+      stats.truncatedHidden++
+    }
     const rawData = safeJsonStringify({
       source: "adzuna",
       category: job.category,
       salaryIsPredicted: job.salaryIsPredicted,
       description_captured: Boolean(nc.description),
+      description_truncated: likelyTruncated,
+      description_quality: likelyTruncated
+        ? "adzuna_truncated"
+        : descLen < 400
+          ? "too_short"
+          : "snippet",
       normalization: {
         version: norm.canonical.schema_version,
         normalized_at: norm.canonical.normalized_at,
@@ -375,6 +529,18 @@ export async function GET(request: NextRequest) {
       console.error(`[adzuna-ingest] failed to upsert job ${job.id}:`, err)
       stats.errors++
     }
+  }
+
+  if (duplicateRefreshIds.size > 0) {
+    const refreshResult = await pool.query(
+      `UPDATE jobs
+          SET is_active = true,
+              last_seen_at = NOW(),
+              updated_at = NOW()
+        WHERE id = ANY($1::uuid[])`,
+      [[...duplicateRefreshIds]]
+    )
+    stats.duplicateFingerprintRefreshed = refreshResult.rowCount ?? 0
   }
 
   // Refresh job_count on touched companies

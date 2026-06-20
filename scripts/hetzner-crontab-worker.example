@@ -34,7 +34,7 @@ DATABASE_URL=REPLACE_ME
 # Cross-sector capture sweep (runs via tsx on the host — uses DATABASE_URL above).
  20 1 * * *        cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=4 --state-limit=36 --state-min-certified=8 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
 # Recommended deep sweep lane for crawler-only territory (off-peak):
-# 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
+ 45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && CRAWLER_MAX_COMPANIES_PER_RUN=300 CRAWLER_COMPANY_CONCURRENCY=4 timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
 # Description enrichment — now near-empty (auto-retire keeps the pending floor at
 # zero), but keep it running to publish fresh crawler jobs within ~5 min.
  */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=500 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
@@ -74,3 +74,4 @@ DATABASE_URL=REPLACE_ME
 # NOTE: discover-from-domains is a NO-OP unless DISCOVER_FROM_DOMAINS_ENABLED=true is set in
 # the app-worker .env — verify that flag, or step 2 never fires.
   0 2 * * *        flock -n /tmp/hireoven-domresolve.lock -c 'cd $HIREOVEN_REPO && timeout 60m npx tsx scripts/enrich-placeholder-company-domains.ts --limit=5000 --concurrency=12 >>/var/log/hireoven/enrich-domains.log 2>&1'
+  0 6 * * *        flock -n /tmp/hireoven-domain-ats.lock -c 'cd $HIREOVEN_REPO && DISCOVER_FROM_DOMAINS_BATCH=800 DISCOVER_FROM_DOMAINS_CONCURRENCY=12 DISCOVER_FROM_DOMAINS_PROMOTE_CUSTOM=true timeout 75m bash scripts/crons.sh discover-from-domains >>/var/log/hireoven/discover-from-domains.log 2>&1'

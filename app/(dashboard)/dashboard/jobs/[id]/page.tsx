@@ -649,6 +649,25 @@ export default async function DashboardJobDetailPage({ params }: Props) {
             </div>
           </div>
 
+          {/* CTA — mobile (desktop CTA above is hidden on phones) */}
+          <div className="flex flex-col gap-2.5 pb-5 sm:hidden">
+            <ApplyButton
+              jobId={id}
+              jobTitle={displayTitle}
+              companyName={company?.name ?? "Company"}
+              companyLogoUrl={companyLogoUrl}
+              applyUrl={page.apply_url}
+              matchScore={initialMatchScore?.overall_score ?? null}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-[14px] font-bold text-primary-foreground shadow-[0_4px_24px_rgba(255,92,24,0.35)] transition hover:bg-primary-hover active:scale-[0.98] disabled:opacity-70"
+            />
+            <ReferralDraftButton
+              jobId={id}
+              jobTitle={displayTitle}
+              companyName={company?.name ?? "Company"}
+              applyUrl={page.apply_url}
+            />
+          </div>
+
           {/* Tab strip */}
           <nav className="border-t border-white/8">
             <div className="flex gap-0.5 overflow-x-auto">
@@ -678,7 +697,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
       {/* ── Content ───────────────────────────────────────────────── */}
       <div className="mx-auto w-full max-w-[1600px] px-4 py-7 sm:px-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-8">
+        <div className="mx-auto grid max-w-3xl gap-6 lg:max-w-none lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8 xl:grid-cols-[minmax(0,1fr)_400px]">
 
           {/* ──────────── Main column ──────────── */}
           <div className="min-w-0">
@@ -898,7 +917,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
           </div>
 
           {/* ──────────── Sidebar ──────────── */}
-          <aside className="xl:sticky xl:top-6 xl:self-start xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:pb-4 [&::-webkit-scrollbar]:w-0">
+          <aside className="lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:pb-4 [&::-webkit-scrollbar]:w-0">
             <JobDetailPanel
               job={job as Parameters<typeof JobDetailPanel>[0]["job"]}
               initialMatchScore={initialMatchScore}

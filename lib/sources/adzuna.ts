@@ -79,6 +79,38 @@ export interface AdzunaSearchResult {
   page: number
 }
 
+const COMPANY_LOOKUP_SUFFIX_RE =
+  /\b(incorporated|inc|corp|corporation|company|companies|co|llc|l\.l\.c|ltd|limited|plc|holdings|holding|group|technologies|technology|solutions|services|systems|operations|division|careers)\b/g
+
+export function normalizeAdzunaCompanyLookupKey(name: string): string {
+  const cleaned = name
+    .toLowerCase()
+    .replace(/^the\s+/, " ")
+    .replace(COMPANY_LOOKUP_SUFFIX_RE, " ")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim()
+
+  if (cleaned) return cleaned
+
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim()
+}
+
+export function isAdzunaDescriptionLikelyTruncated(description: string | null | undefined): boolean {
+  const text = (description ?? "").trim()
+  if (text.length < 490 || text.length > 525) return false
+  return text.endsWith("…") || text.endsWith("...")
+}
+
+export function normalizeAdzunaJobFingerprintPart(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "")
+    .trim()
+}
+
 export async function searchAdzunaJobs(opts: AdzunaSearchOptions): Promise<AdzunaSearchResult> {
   const appId = process.env.ADZUNA_APP_ID
   const appKey = process.env.ADZUNA_APP_KEY

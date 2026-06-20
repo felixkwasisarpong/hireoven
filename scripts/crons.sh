@@ -125,7 +125,7 @@ case "${1:-}" in
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  cohort-aggregate  deliver-checkins  blog-generate  dice-ingest"
     echo "  adzuna-ingest  jsearch-ingest  waas-ingest  discover-companies  discover-tenants"
-    echo "  careers-url-discovery  glassdoor-discovery  signal-api-webhooks"
+    echo "  discover-from-domains  careers-url-discovery  glassdoor-discovery  signal-api-webhooks"
     exit 1
     ;;
 esac
