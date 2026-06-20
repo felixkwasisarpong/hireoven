@@ -14,7 +14,6 @@ import {
   Edit3,
   Eye,
   FileText,
-  FilePlus2,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -454,25 +453,6 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
     pushToast({ tone: "success", title: "Resume duplicated" })
   }
 
-  async function handleCreateVersion(resume: Resume) {
-    setPendingId(resume.id)
-    const res = await fetch(`/api/resume/${resume.id}/versions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `${resume.name ?? resume.file_name} snapshot`,
-        changes_summary: "Created from the resume library.",
-      }),
-    })
-    setPendingId(null)
-    if (!res.ok) {
-      pushToast({ tone: "error", title: "Could not create version" })
-      return
-    }
-    await refreshHubData()
-    pushToast({ tone: "success", title: "New version created" })
-  }
-
   async function handleDelete(resume: Resume) {
     if (!window.confirm(`Delete "${resume.name ?? resume.file_name}"?`)) return
     setPendingId(resume.id)
@@ -725,14 +705,6 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
                           <FileText className="h-3.5 w-3.5" />
                           Tailor resume
                         </Link>
-                        <button
-                          type="button"
-                          onClick={() => void handleCreateVersion(resume)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-[12px] font-medium text-slate-700 hover:bg-slate-50"
-                        >
-                          <FilePlus2 className="h-3.5 w-3.5" />
-                          Create new version
-                        </button>
                         <button
                           type="button"
                           onClick={() => void handleDelete(resume)}
