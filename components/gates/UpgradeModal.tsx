@@ -272,7 +272,7 @@ export default function UpgradeModal() {
         {/* Footer */}
         <div className="border-t border-slate-100 px-5 py-3 text-center">
           <p className="text-[11px] text-slate-400">
-            7-day free trial · Cancel anytime · Secure checkout via Stripe
+            Cancel anytime · Secure checkout via Stripe
           </p>
         </div>
       </div>

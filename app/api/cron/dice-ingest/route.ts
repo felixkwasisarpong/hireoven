@@ -7,6 +7,7 @@
  *
  * Env:
  *   DICE_SEARCH_QUERIES  comma-separated list of search terms (default below)
+ *   DICE_COUNTRY_CODES   comma-separated country codes (default: US,CA)
  *   DICE_POSTED_DATE     ONE_DAY_AGO | THREE_DAYS_AGO | SEVEN_DAYS_AGO (default: ONE_DAY_AGO)
  *   DICE_MAX_JOBS        max jobs per query (default: 300)
  */
@@ -59,6 +60,14 @@ const DEFAULT_QUERIES = [
   "product manager",
 ]
 
+function parseDiceCountryCodes(raw: string | null | undefined): string[] {
+  const countryCodes = (raw ?? "US,CA")
+    .split(",")
+    .map((country) => country.trim().toUpperCase())
+    .filter((country) => /^[A-Z]{2}$/.test(country))
+  return countryCodes.length ? [...new Set(countryCodes)] : ["US", "CA"]
+}
+
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -78,11 +87,15 @@ export async function GET(request: NextRequest) {
 
   const postedDate = url.searchParams.get("postedDate") ?? process.env.DICE_POSTED_DATE ?? "ONE_DAY_AGO"
   const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.DICE_MAX_JOBS ?? "300")
+  const countryOverride = url.searchParams.get("countryCode")
+  const countryCodes = countryOverride
+    ? parseDiceCountryCodes(countryOverride)
+    : parseDiceCountryCodes(process.env.DICE_COUNTRY_CODES)
 
   const pool = getPostgresPool()
   const stats: Record<string, number> = {
     queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0,
-    upstreamErrors: 0, providerBlocked: 0,
+    upstreamErrors: 0, providerBlocked: 0, countries: countryCodes.length,
     enrichmentAttempted: 0, enriched: 0, enrichFail: 0,
   }
 
@@ -90,11 +103,12 @@ export async function GET(request: NextRequest) {
   const seen = new Map<string, DiceJob>()
   const queryDelayMs = Number(process.env.DICE_QUERY_DELAY_MS ?? "800")
 
-  for (let qi = 0; qi < queries.length; qi += 1) {
-    const q = queries[qi]
+  const searchRequests = queries.flatMap((q) => countryCodes.map((countryCode) => ({ q, countryCode })))
+  for (let qi = 0; qi < searchRequests.length; qi += 1) {
+    const { q, countryCode } = searchRequests[qi]
     if (qi > 0 && queryDelayMs > 0) await new Promise((r) => setTimeout(r, queryDelayMs)) // pace queries under the WAF
     try {
-      const jobs = await searchDiceAllPages({ q, postedDate }, maxJobs)
+      const jobs = await searchDiceAllPages({ q, countryCode, postedDate }, maxJobs)
       stats.queries++
       for (const job of jobs) {
         if (!seen.has(job.id) && isValidCompanyName(job.company)) seen.set(job.id, job)
@@ -104,6 +118,7 @@ export async function GET(request: NextRequest) {
       if (err instanceof DiceApiError) {
         console.warn("[dice-ingest] query failed after retries", {
           query: q,
+          countryCode,
           status: err.status,
           retryable: err.retryable,
         })
@@ -114,7 +129,7 @@ export async function GET(request: NextRequest) {
           break
         }
       } else {
-        console.error(`[dice-ingest] query "${q}" failed:`, err)
+        console.error(`[dice-ingest] query "${q}" (${countryCode}) failed:`, err)
         stats.errors++
       }
     }

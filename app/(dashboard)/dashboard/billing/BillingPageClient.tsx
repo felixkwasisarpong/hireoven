@@ -112,7 +112,7 @@ const PLAN_TAGLINES: Record<string, string> = {
 const STATUS_LABELS: Record<string, { label: string; color: string; dot: string }> = {
   free:      { label: "Active",   color: "bg-slate-100 text-slate-600",       dot: "bg-slate-400" },
   active:    { label: "Active",   color: "bg-emerald-50 text-emerald-700",    dot: "bg-emerald-500" },
-  trialing:  { label: "Trial",    color: "bg-amber-50 text-amber-700",        dot: "bg-amber-500" },
+  trialing:  { label: "Access",   color: "bg-amber-50 text-amber-700",        dot: "bg-amber-500" },
   canceled:  { label: "Canceled", color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
   past_due:  { label: "Past due", color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
   unpaid:    { label: "Unpaid",   color: "bg-rose-50 text-rose-700",          dot: "bg-rose-500" },
@@ -263,7 +263,7 @@ export default function BillingPageClient({
       // spinner.
       setPortalError(
         res.status === 404
-          ? "We don't have a Stripe billing account on file for you yet. Start a Pro trial below."
+          ? "We don't have a Stripe billing account on file for you yet. Choose a Pro plan below."
           : data.error ?? "Couldn't open the billing portal. Try again in a moment."
       )
     } catch {
@@ -496,7 +496,7 @@ export default function BillingPageClient({
   const amountLabel = isPro ? formatMoney(effectiveAmountCents, effectiveCurrency) : "$0"
   const renewLabel =
     status === "trialing"
-      ? "Trial ends"
+      ? "Access until"
       : status === "canceled" || resolvedCancelAtPeriodEnd
         ? "Access until"
         : "Renews"
@@ -1040,7 +1040,7 @@ export default function BillingPageClient({
               )}
               {!promoCode && (
                 <p className="mt-2 text-[11.5px] text-slate-400">
-                  Codes apply at checkout and stack on top of trial/yearly discounts where Stripe allows it.
+                  Codes apply at checkout and stack on top of yearly discounts where Stripe allows it.
                 </p>
               )}
             </div>
@@ -1060,7 +1060,7 @@ export default function BillingPageClient({
                   ? "Student discount (30% off) will be applied automatically at checkout."
                   : "Unlock AI resume tools, autofill, deep analyses, and unlimited alerts."
             }
-            ctaLabel="Start Pro trial"
+            ctaLabel="Start Pro"
             onClick={() => startCheckout("pro")}
           />
         )}

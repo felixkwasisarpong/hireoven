@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
+import type { Pool } from "pg"
 import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { startTrial } from "@/lib/stripe/trial"
 
 export const runtime = "nodejs"
+
+type StoredSubscriptionStatus = "active" | "trialing" | "canceled" | "past_due" | "unpaid"
 
 function normalizePlanForPricing(raw: string | null | undefined): PlanKey {
   if (raw === "pro_international") return "pro_max"
@@ -22,6 +24,82 @@ function getSubscriptionPeriod(sub: any) {
     start: sub.current_period_start ?? firstItem?.current_period_start ?? sub.start_date ?? sub.created,
     end: sub.current_period_end ?? firstItem?.current_period_end ?? sub.trial_end ?? sub.cancel_at ?? sub.ended_at ?? sub.created,
   }
+}
+
+function normalizeStripeSubscriptionStatus(raw: string | null | undefined): StoredSubscriptionStatus {
+  switch (raw) {
+    case "active":
+    case "trialing":
+    case "canceled":
+    case "past_due":
+    case "unpaid":
+      return raw
+    default:
+      return "canceled"
+  }
+}
+
+async function upsertSubscriptionRow(
+  pool: Pool,
+  args: {
+    userId: string
+    plan: PlanKey
+    status: StoredSubscriptionStatus
+    stripeSubscriptionId: string
+    stripeCustomerId: string
+    interval: BillingInterval
+    amountCents: number
+    currentPeriodStart: Date
+    currentPeriodEnd: Date
+    trialEnd: Date | null
+    cancelAtPeriodEnd: boolean
+  },
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO subscriptions (
+      user_id,
+      plan,
+      status,
+      stripe_subscription_id,
+      stripe_customer_id,
+      billing_interval,
+      amount_cents,
+      current_period_start,
+      current_period_end,
+      trial_end,
+      cancel_at_period_end,
+      updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+    )
+    ON CONFLICT (stripe_subscription_id)
+    DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      plan = EXCLUDED.plan,
+      status = EXCLUDED.status,
+      stripe_customer_id = EXCLUDED.stripe_customer_id,
+      billing_interval = EXCLUDED.billing_interval,
+      amount_cents = EXCLUDED.amount_cents,
+      current_period_start = EXCLUDED.current_period_start,
+      current_period_end = EXCLUDED.current_period_end,
+      trial_end = EXCLUDED.trial_end,
+      cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+      updated_at = EXCLUDED.updated_at`,
+    [
+      args.userId,
+      normalizePlanForStorage(args.plan),
+      args.status,
+      args.stripeSubscriptionId,
+      args.stripeCustomerId,
+      args.interval,
+      args.amountCents,
+      args.currentPeriodStart.toISOString(),
+      args.currentPeriodEnd.toISOString(),
+      args.trialEnd ? args.trialEnd.toISOString() : null,
+      args.cancelAtPeriodEnd,
+      new Date().toISOString(),
+    ]
+  )
 }
 
 export async function POST(request: NextRequest) {
@@ -117,11 +195,25 @@ export async function POST(request: NextRequest) {
 
       const sub = await stripe.subscriptions.retrieve(session.subscription as string)
       const period = getSubscriptionPeriod(sub)
-      const trialEnd = sub.trial_end
-        ? new Date(sub.trial_end * 1000)
-        : new Date(period.end * 1000)
+      const firstItem = sub.items?.data?.[0]
+      const amountCents =
+        typeof firstItem?.price?.unit_amount === "number"
+          ? firstItem.price.unit_amount
+          : getPlanAmountCents(planForPricing, interval)
 
-      await startTrial(userId, planForPricing, interval, trialEnd, sub.id, session.customer as string)
+      await upsertSubscriptionRow(pool, {
+        userId,
+        plan: planForPricing,
+        status: normalizeStripeSubscriptionStatus(sub.status),
+        stripeSubscriptionId: sub.id,
+        stripeCustomerId: session.customer as string,
+        interval,
+        amountCents,
+        currentPeriodStart: new Date(period.start * 1000),
+        currentPeriodEnd: new Date(period.end * 1000),
+        trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
+        cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+      })
       break
     }
 
@@ -131,15 +223,7 @@ export async function POST(request: NextRequest) {
       const userId = sub.metadata?.userId
       if (!userId) break
 
-      const statusMap: Record<string, string> = {
-        active: "active",
-        trialing: "trialing",
-        canceled: "canceled",
-        past_due: "past_due",
-        unpaid: "unpaid",
-      }
       const plan = normalizePlanForPricing(sub.metadata?.plan ?? "free")
-      const planForStorage = normalizePlanForStorage(plan)
       const recurringInterval = sub.items?.data?.[0]?.price?.recurring?.interval
       const interval: BillingInterval =
         sub.metadata?.interval === "yearly" || recurringInterval === "year"
@@ -153,51 +237,19 @@ export async function POST(request: NextRequest) {
             : getPlanAmountCents(plan, interval)
       const period = getSubscriptionPeriod(sub)
 
-      await pool.query(
-        `INSERT INTO subscriptions (
-          user_id,
-          plan,
-          status,
-          stripe_subscription_id,
-          stripe_customer_id,
-          billing_interval,
-          amount_cents,
-          current_period_start,
-          current_period_end,
-          trial_end,
-          cancel_at_period_end,
-          updated_at
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
-        )
-        ON CONFLICT (stripe_subscription_id)
-        DO UPDATE SET
-          user_id = EXCLUDED.user_id,
-          plan = EXCLUDED.plan,
-          status = EXCLUDED.status,
-          stripe_customer_id = EXCLUDED.stripe_customer_id,
-          billing_interval = EXCLUDED.billing_interval,
-          amount_cents = EXCLUDED.amount_cents,
-          current_period_start = EXCLUDED.current_period_start,
-          current_period_end = EXCLUDED.current_period_end,
-          trial_end = EXCLUDED.trial_end,
-          cancel_at_period_end = EXCLUDED.cancel_at_period_end,
-          updated_at = EXCLUDED.updated_at`,
-        [
-          userId,
-          planForStorage,
-          statusMap[sub.status] ?? "canceled",
-          sub.id,
-          sub.customer as string,
-          interval,
-          amountCents,
-          new Date(period.start * 1000).toISOString(),
-          new Date(period.end * 1000).toISOString(),
-          sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
-          sub.cancel_at_period_end,
-          new Date().toISOString(),
-        ]
-      )
+      await upsertSubscriptionRow(pool, {
+        userId,
+        plan,
+        status: normalizeStripeSubscriptionStatus(sub.status),
+        stripeSubscriptionId: sub.id,
+        stripeCustomerId: sub.customer as string,
+        interval,
+        amountCents,
+        currentPeriodStart: new Date(period.start * 1000),
+        currentPeriodEnd: new Date(period.end * 1000),
+        trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
+        cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+      })
       break
     }
   }

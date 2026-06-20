@@ -16,6 +16,7 @@
  *   ADZUNA_APP_ID          — required (https://developer.adzuna.com)
  *   ADZUNA_APP_KEY         — required
  *   ADZUNA_SEARCH_QUERIES  — comma-separated keywords (default list below)
+ *   ADZUNA_COUNTRIES       — comma-separated Adzuna country endpoints (default: us,ca)
  *   ADZUNA_MAX_DAYS_OLD    — 1 | 3 | 7 (default: 1 = last 24h, freshest)
  *   ADZUNA_MAX_JOBS        — max jobs per query (default: 300)
  *
@@ -179,6 +180,14 @@ function chooseBestCompanyCandidate(candidates: CompanyCandidate[]): CompanyCand
   return [...candidates].sort((a, b) => scoreCompanyCandidate(b) - scoreCompanyCandidate(a))[0] ?? null
 }
 
+function parseAdzunaCountries(raw: string | null | undefined): string[] {
+  const countries = (raw ?? "us,ca")
+    .split(",")
+    .map((country) => country.trim().toLowerCase())
+    .filter((country) => /^[a-z]{2}$/.test(country))
+  return countries.length ? [...new Set(countries)] : ["us", "ca"]
+}
+
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -198,10 +207,15 @@ export async function GET(request: NextRequest) {
 
   const maxDaysOld = Number(url.searchParams.get("maxDaysOld") ?? process.env.ADZUNA_MAX_DAYS_OLD ?? "2")
   const maxJobs = Number(url.searchParams.get("maxJobs") ?? process.env.ADZUNA_MAX_JOBS ?? "500")
+  const countryOverride = url.searchParams.get("country")
+  const countries = countryOverride
+    ? parseAdzunaCountries(countryOverride)
+    : parseAdzunaCountries(process.env.ADZUNA_COUNTRIES)
 
   const pool = getPostgresPool()
   const stats: Record<string, number> = {
     queries: 0,
+    countries: countries.length,
     fetched: 0,
     inserted: 0,
     updated: 0,
@@ -218,26 +232,29 @@ export async function GET(request: NextRequest) {
   const seen = new Map<string, AdzunaJob>()
 
   for (const q of queries) {
-    try {
-      const jobs = await searchAdzunaAllPages({ what: q, maxDaysOld, sortBy: "date" }, maxJobs)
-      stats.queries++
-      for (const job of jobs) {
-        if (!seen.has(job.id) && isValidCompanyName(job.company)) seen.set(job.id, job)
+    for (const country of countries) {
+      try {
+        const jobs = await searchAdzunaAllPages({ what: q, country, maxDaysOld, sortBy: "date" }, maxJobs)
+        stats.queries++
+        for (const job of jobs) {
+          if (!seen.has(job.id) && isValidCompanyName(job.company)) seen.set(job.id, job)
+        }
+        stats.fetched = seen.size
+      } catch (err) {
+        if (err instanceof AdzunaApiError) {
+          console.warn("[adzuna-ingest] query failed after retries", {
+            query: q,
+            country,
+            status: err.status,
+            retryable: err.retryable,
+            bodyPreview: err.bodyPreview,
+          })
+          stats.upstreamErrors++
+        } else {
+          console.error(`[adzuna-ingest] query "${q}" (${country}) failed:`, err)
+        }
+        stats.errors++
       }
-      stats.fetched = seen.size
-    } catch (err) {
-      if (err instanceof AdzunaApiError) {
-        console.warn("[adzuna-ingest] query failed after retries", {
-          query: q,
-          status: err.status,
-          retryable: err.retryable,
-          bodyPreview: err.bodyPreview,
-        })
-        stats.upstreamErrors++
-      } else {
-        console.error(`[adzuna-ingest] query "${q}" failed:`, err)
-      }
-      stats.errors++
     }
   }
 

@@ -1,15 +1,15 @@
 /**
- * USA job-location confirmation helpers.
+ * US/Canada job-location confirmation helpers.
  *
  * Used at discovery time to decide whether a newly-found career source has
- * any US-based openings before it is enrolled in the companies table.
+ * any US- or Canada-based openings before it is enrolled in the companies table.
  *
  * Design principles:
  *  - Prefer false negatives over false positives: when in doubt, return false
- *    rather than admitting non-USA sources.
- *  - "Remote" without a country qualifier is treated as USA-compatible because
- *    the majority of US companies post remote jobs without "US only" language
- *    and HireOven's user base is USA-focused.
+ *    rather than admitting non-US/Canada sources.
+ *  - "Remote" without a country qualifier is treated as compatible because
+ *    the majority of North American companies post remote jobs without country
+ *    language and HireOven's user base is focused on the US and Canada.
  *  - Each ATS has its own location field shape — callers normalize before
  *    passing to the generic helpers here.
  */
@@ -23,6 +23,10 @@ const US_STATE_ABBRS = new Set([
   "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
   "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
   "DC","PR","GU","VI","AS","MP",
+])
+
+const CANADA_PROVINCE_ABBRS = new Set([
+  "AB","BC","MB","NB","NL","NS","NT","NU","ON","PE","QC","SK","YT",
 ])
 
 // US cities that are common enough to appear without state context in job posts.
@@ -59,11 +63,18 @@ const KNOWN_US_CITIES = new Set([
   "redwood city", "bellevue", "kirkland", "bothell", "redmond",
 ])
 
-// Country names / strings that clearly indicate non-USA.
+const KNOWN_CANADIAN_CITIES = new Set([
+  "toronto", "vancouver", "montreal", "ottawa", "calgary", "edmonton",
+  "mississauga", "winnipeg", "quebec city", "hamilton", "kitchener",
+  "waterloo", "halifax", "victoria", "burnaby", "surrey", "markham",
+  "richmond", "brampton", "saskatoon", "regina", "moncton",
+  "st. john's", "st johns",
+])
+
+// Country names / strings that clearly indicate non-US/Canada.
 // We match these as substrings (lowercased) against the raw location string.
-const NON_USA_COUNTRY_FRAGMENTS = [
+const NON_US_CA_COUNTRY_FRAGMENTS = [
   "united kingdom", " uk", "england", "scotland", "wales", "london",
-  "canada", " toronto", " vancouver", " montreal", " ottawa", " calgary",
   "australia", " sydney", " melbourne", " brisbane", " perth",
   "germany", " berlin", " munich", " hamburg", " frankfurt",
   "france", " paris", " lyon",
@@ -110,9 +121,9 @@ const NON_USA_COUNTRY_FRAGMENTS = [
 ]
 
 /**
- * Returns true if the raw location string appears to be a US location.
+ * Returns true if the raw location string appears to be a US or Canada location.
  * This is intentionally inclusive for ambiguous strings like "Remote" —
- * those are treated as USA-compatible.
+ * those are treated as US/Canada-compatible.
  */
 export function isUsaLocation(location: string | null | undefined): boolean {
   if (!location) return false
@@ -125,39 +136,53 @@ export function isUsaLocation(location: string | null | undefined): boolean {
   if (/\bunited states\b/.test(lower)) return true
   if (/\bu\.s\.a\.?\b/.test(lower)) return true
   if (/\b\(?usa?\)?\b/.test(lower)) return true
+  if (/\bcanada\b/.test(lower)) return true
+  if (/\bcanadian\b/.test(lower)) return true
 
-  // Remote without a non-USA country modifier.
+  // Remote without a non-US/Canada country modifier.
   if (/\bremote\b/.test(lower)) {
     // "Remote - UK", "Remote (India)" etc. should fail.
-    if (NON_USA_COUNTRY_FRAGMENTS.some(f => lower.includes(f))) return false
+    if (NON_US_CA_COUNTRY_FRAGMENTS.some(f => lower.includes(f))) return false
     return true
   }
 
   // ", STATE" or "(STATE)" patterns — e.g. "San Francisco, CA" or "Austin (TX)".
   const stateMatch = raw.match(/[,\s(]+([A-Z]{2})[)\s]*$/)
   if (stateMatch && US_STATE_ABBRS.has(stateMatch[1])) return true
+  if (stateMatch && CANADA_PROVINCE_ABBRS.has(stateMatch[1])) return true
 
   // "City, State" where city is a known US city.
   for (const city of KNOWN_US_CITIES) {
     if (lower.startsWith(city)) return true
   }
+  for (const city of KNOWN_CANADIAN_CITIES) {
+    if (lower.startsWith(city)) return true
+  }
 
-  // Anything that contains a clearly non-US country is out.
-  if (NON_USA_COUNTRY_FRAGMENTS.some(f => lower.includes(f))) return false
+  // Anything that contains a clearly non-US/Canada country is out.
+  if (NON_US_CA_COUNTRY_FRAGMENTS.some(f => lower.includes(f))) return false
 
-  // Ambiguous — don't claim it's USA.
+  // Ambiguous — don't claim it's in the US or Canada.
   return false
 }
 
 /**
- * Returns true if the country code/name is explicitly the USA.
+ * Returns true if the country code/name is explicitly the US or Canada.
  * Use this when the ATS gives you a structured country field (SmartRecruiters,
  * Workday, etc.) rather than a raw location string.
  */
 export function isUsaCountryCode(country: string | null | undefined): boolean {
   if (!country) return false
   const c = country.trim().toLowerCase()
-  return c === "us" || c === "usa" || c === "united states" || c === "united states of america"
+  return (
+    c === "us" ||
+    c === "usa" ||
+    c === "united states" ||
+    c === "united states of america" ||
+    c === "ca" ||
+    c === "can" ||
+    c === "canada"
+  )
 }
 
 export type JobLocationLike = {
@@ -168,8 +193,9 @@ export type JobLocationLike = {
 }
 
 /**
- * Checks a batch of job records (max 5) to confirm at least one is a US-based role.
- * Returns the count of USA-confirmed jobs alongside the boolean result.
+ * Checks a batch of job records to confirm at least one US/Canada-based role.
+ * Returns the count alongside the boolean result. The usa* names are kept for
+ * compatibility with existing discovery columns and callers.
  */
 export function confirmsUsaJobs(jobs: JobLocationLike[]): { confirmed: boolean; usaCount: number } {
   let usaCount = 0

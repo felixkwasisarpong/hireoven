@@ -18,9 +18,9 @@ export type ScoreFactors = {
   apiHttp200: boolean
   /** Number of jobs returned by the listing API at discovery time. */
   jobsFound: number
-  /** At least one job has a USA location. */
+  /** At least one job has a US or Canada location. */
   usaConfirmed: boolean
-  /** Number of USA-located jobs seen. */
+  /** Number of US/Canada-located jobs seen. */
   usaJobCount: number
   /** Candidate came from a curated seed file or GitHub seed list. */
   fromCuratedSeed: boolean
@@ -40,8 +40,8 @@ export type ScoreFactors = {
   priorRejections: number
   // ─── Signal-resolver factors (resolve-source.ts). All optional so the
   //     probe scripts that predate them keep compiling. ───
-  /** Jobs were checked but NONE were USA — a non-USA-only source is pure
-   *  waste for a USA-only product. Strong negative, drives to reject. */
+  /** Jobs were checked but NONE were US/Canada — an out-of-market source is
+   *  pure waste for a US/Canada product. Strong negative, drives to reject. */
   usaRejected?: boolean
   /** Came from a directory/name list with no live ATS or careers-page
    *  confirmation. Holds for re-verification instead of enrolling. */

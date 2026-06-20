@@ -26,8 +26,8 @@ const FAQ_ITEMS = [
     a: "Yes - always. No credit card, no trial period, no expiration. We believe everyone deserves access to real-time job listings.",
   },
   {
-    q: "What happens after the 7-day trial?",
-    a: "You'll be charged at your chosen rate unless you cancel before the trial ends. We send a reminder email 24 hours before.",
+    q: "When will I be charged?",
+    a: "Paid plans are charged when you check out. You can cancel anytime from billing settings.",
   },
   {
     q: "Can I switch between monthly and yearly?",
@@ -81,7 +81,7 @@ function FaqItem({ q, a }: { q: string; a: string }) {
 // ─── Trust signals ────────────────────────────────────────────────────────────
 
 const TRUST_SIGNALS = [
-  { icon: ShieldCheck, text: "7-day free trial - no credit card required" },
+  { icon: ShieldCheck, text: "Free plan available - no card required" },
   { icon: Globe, text: "Cancel anytime - no questions asked" },
   { icon: CreditCard, text: "Secure billing via Stripe" },
   { icon: Users, text: "Used by students at 200+ universities" },
@@ -262,7 +262,7 @@ export default function PricingPage() {
               href="/signup?plan=pro&interval=monthly"
               className="rounded-xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(3,105,161,0.28)] transition hover:bg-[#075985]"
             >
-              Start Pro trial
+              Start Pro
             </Link>
           </div>
         </div>

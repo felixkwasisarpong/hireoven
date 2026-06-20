@@ -79,8 +79,8 @@ export const CORE_FEATURES: {
   },
   {
     icon: Globe2,
-    title: "Built for the US market",
-    body: "Every role is US-based — no overseas listings to filter out. The feed, match scores, and visa signals are all tuned to the American job market.",
+    title: "Built for the US + Canada market",
+    body: "Every role is in the United States or Canada — no overseas listings to filter out. The feed, match scores, and location signals are tuned to the North American job market.",
     accent: "text-[#2563EB]",
     ring: "border-[#D8E8FF] bg-[#F5FAFF]",
   },

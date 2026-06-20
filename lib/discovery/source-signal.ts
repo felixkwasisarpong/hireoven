@@ -4,7 +4,7 @@
  * flow described in the harvester design:
  *
  *   board signal {name, location} → official domain → career page
- *     → ATS detect → USA verify → confidence → enroll / hold
+ *     → ATS detect → US/Canada verify → confidence → enroll / hold
  *
  * Feed adapters in lib/sources/* emit SourceSignals; resolveCareerSource()
  * turns each one into a scored, persistable career source. Adapters do NOT
@@ -21,7 +21,7 @@ export type SourceSignal = {
    *  candidate row for debugging / later auditing. */
   sampleTitle?: string | null
   /** A sample job location string ("Austin, TX", "Remote") used as a cheap
-   *  first USA-confirmation signal before any career-page fetch. */
+   *  first US/Canada-confirmation signal before any career-page fetch. */
   sampleLocation?: string | null
   /** Channel id for discovery_runs / discovered_candidates.source, e.g.
    *  "snagajob", "dice", "hn-whoishiring". */
