@@ -75,6 +75,7 @@ async function ensureResumeColumns(pool: ReturnType<typeof getPostgresPool>) {
        ADD COLUMN IF NOT EXISTS parse_error TEXT,
        ADD COLUMN IF NOT EXISTS github_url TEXT,
        ADD COLUMN IF NOT EXISTS certifications JSONB,
+       ADD COLUMN IF NOT EXISTS additional_sections JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
        ALTER COLUMN file_url DROP NOT NULL,

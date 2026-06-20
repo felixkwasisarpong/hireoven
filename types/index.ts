@@ -1112,6 +1112,17 @@ export type Project = {
   technologies: string[];
 };
 
+/**
+ * Catch-all for any résumé section that doesn't map to a first-class field
+ * (Publications, Conferences, Awards, Patents, Volunteer, Speaking,
+ * Memberships, Languages, Interests, …). Preserves the original heading and
+ * each line/bullet verbatim so parsing never silently drops content.
+ */
+export type ResumeAdditionalSection = {
+  heading: string;
+  items: string[];
+};
+
 export type ParsedResume = {
   full_name: string | null;
   email: string | null;
@@ -1129,6 +1140,7 @@ export type ParsedResume = {
   primary_role: string | null;
   industries: string[];
   top_skills: string[];
+  additional_sections: ResumeAdditionalSection[];
   resume_score: number | null;
   raw_text: string;
 };
@@ -1163,6 +1175,7 @@ export type Resume = {
   primary_role: string | null;
   industries: string[] | null;
   top_skills: string[] | null;
+  additional_sections?: ResumeAdditionalSection[] | null;
   resume_score: number | null;
   ats_score?: number | null;
   raw_text: string | null;

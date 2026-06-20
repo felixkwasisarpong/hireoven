@@ -13,6 +13,7 @@ import type {
   Education,
   ParsedResume,
   Project,
+  ResumeAdditionalSection,
   SeniorityLevel,
   Skills,
   WorkExperience,
@@ -131,6 +132,29 @@ function normalizeProjects(value: unknown): Project[] {
       }
     })
     .filter((item): item is Project => Boolean(item))
+}
+
+/**
+ * Catch-all for résumé sections that don't map to a first-class field
+ * (Publications, Conferences, Awards, Patents, Volunteer, …). Keeps the heading
+ * and every line verbatim so nothing is silently dropped on parse.
+ */
+function normalizeAdditionalSections(value: unknown): ResumeAdditionalSection[] {
+  if (!Array.isArray(value)) return []
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null
+      const entry = item as Record<string, unknown>
+      const heading = cleanString(entry.heading) ?? cleanString(entry.title)
+      // Prefer items[]; accept a single `content` string as a fallback.
+      const items = toStringArray(entry.items)
+      const content = cleanString(entry.content)
+      const finalItems = items.length > 0 ? items : content ? [content] : []
+      if (!heading || finalItems.length === 0) return null
+      return { heading, items: finalItems }
+    })
+    .filter((item): item is ResumeAdditionalSection => Boolean(item))
 }
 
 function normalizeSeniority(value: unknown): SeniorityLevel | null {
@@ -299,6 +323,7 @@ function fallbackParse(rawText: string): ParsedResume {
     primary_role: inferRole(rawText),
     industries: [],
     top_skills: topSkills,
+    additional_sections: [],
     resume_score: estimateResumeScore({
       summary,
       email,
@@ -333,6 +358,7 @@ function normalizeParsedResume(raw: unknown, extractedText: string): ParsedResum
   const portfolioUrl = cleanString(parsed.portfolio_url)
   const summary = cleanString(parsed.summary)
   const industries = toStringArray(parsed.industries)
+  const additionalSections = normalizeAdditionalSections(parsed.additional_sections)
   const topSkills = normalizeSkillList(toStringArray(parsed.top_skills, 10), 10)
   const yearsOfExperience =
     typeof parsed.years_of_experience === "number"
@@ -356,6 +382,7 @@ function normalizeParsedResume(raw: unknown, extractedText: string): ParsedResum
     primary_role: cleanString(parsed.primary_role) ?? inferRole(extractedText),
     industries,
     top_skills: topSkills.length > 0 ? topSkills : inferTopSkills(extractedText),
+    additional_sections: additionalSections,
     resume_score:
       (typeof parsed.resume_score === "number" ? clampScore(parsed.resume_score) : null) ??
       estimateResumeScore({
@@ -522,8 +549,17 @@ async function parseWithClaude(extractedText: string) {
   primary_role: string,
   industries: string[],
   top_skills: string[],
-  resume_score: number
+  resume_score: number,
+  additional_sections: [{ heading: string, items: string[] }]
 }
+
+CRITICAL — preserve ALL content. Capture EVERY section of the resume. Any section
+not covered by the fields above (e.g. Publications, Conferences, Presentations,
+Awards, Honors, Patents, Volunteer, Speaking, Memberships, Affiliations, Languages,
+Interests, References) MUST be returned in additional_sections — one object per
+section, with the section's original heading and each line/bullet copied verbatim
+into items. Never omit, merge, restructure, or summarize content. If a section
+already maps to a field above, do not also duplicate it into additional_sections.
 
 Resume text:
 ${extractedText}`,
