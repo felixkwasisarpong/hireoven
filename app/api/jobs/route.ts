@@ -21,6 +21,41 @@ type JobWithOptionalCompany = Omit<JobWithCompany, "company"> & {
   company: JobWithCompany["company"] | null
 }
 
+// List cards do not need jobs.raw_data. Some rows carry very large normalized
+// source blobs there, and selecting jobs.* forces Postgres to de-toast and send
+// them for every card. The detail route can still fetch raw_data when needed.
+const JOB_LIST_COLUMNS = [
+  "id", "company_id", "title", "department", "location", "is_remote", "is_hybrid",
+  "employment_type", "seniority_level", "salary_min", "salary_max", "salary_currency",
+  "description", "apply_url", "external_id", "first_detected_at", "last_seen_at",
+  "is_active", "sponsors_h1b", "sponsorship_score", "visa_language_detected",
+  "requires_authorization", "skills", "normalized_title", "created_at", "updated_at",
+  "h1b_prediction", "h1b_prediction_at", "normalization_version", "normalization_confidence",
+  "normalization_completeness", "normalization_requires_review", "posted_at", "closed_at",
+  "content_hash", "source_ats", "source_ats_slug", "duplicate_of_id", "is_us_or_ca_strict",
+  "job_intelligence", "publication_status",
+].map((column) => `jobs.${column}`).join(", ")
+
+const COMPANY_LIST_JSON = `jsonb_build_object(
+  'id', companies.id,
+  'name', companies.name,
+  'domain', companies.domain,
+  'logo_url', companies.logo_url,
+  'industry', companies.industry,
+  'size', companies.size,
+  'careers_url', companies.careers_url,
+  'ats_type', companies.ats_type,
+  'ats_identifier', companies.ats_identifier,
+  'is_active', companies.is_active,
+  'job_count', companies.job_count,
+  'h1b_sponsor_count_1yr', companies.h1b_sponsor_count_1yr,
+  'h1b_sponsor_count_3yr', companies.h1b_sponsor_count_3yr,
+  'sponsors_h1b', companies.sponsors_h1b,
+  'sponsorship_confidence', companies.sponsorship_confidence,
+  'created_at', companies.created_at,
+  'updated_at', companies.updated_at
+)`
+
 export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams
   const q = sp.get("q")
@@ -120,8 +155,8 @@ export async function GET(request: NextRequest) {
     // write load. Fetch one extra row instead, enough for pagination affordance.
     const [jobsResult, newInLastHourResult] = await Promise.all([
       pool.query<JobWithOptionalCompany>(
-        `SELECT jobs.*,
-                to_jsonb(companies.*) AS company,
+        `SELECT ${JOB_LIST_COLUMNS},
+                CASE WHEN companies.id IS NULL THEN NULL ELSE ${COMPANY_LIST_JSON} END AS company,
                 gjs.risk_score AS ghost_risk_score,
                 gjs.risk_level AS ghost_risk_level,
                 gjs.repost_count AS ghost_repost_count

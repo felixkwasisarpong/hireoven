@@ -26,6 +26,7 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import {
+  AdzunaApiError,
   searchAdzunaAllPages,
   adzunaContractToEmploymentType,
   type AdzunaJob,
@@ -159,7 +160,7 @@ export async function GET(request: NextRequest) {
 
   const pool = getPostgresPool()
   const stats: Record<string, number> = {
-    queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0, harvestBumped: 0,
+    queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0, upstreamErrors: 0, harvestBumped: 0,
   }
 
   // Dedupe across queries by Adzuna job ID
@@ -174,7 +175,17 @@ export async function GET(request: NextRequest) {
       }
       stats.fetched = seen.size
     } catch (err) {
-      console.error(`[adzuna-ingest] query "${q}" failed:`, err)
+      if (err instanceof AdzunaApiError) {
+        console.warn("[adzuna-ingest] query failed after retries", {
+          query: q,
+          status: err.status,
+          retryable: err.retryable,
+          bodyPreview: err.bodyPreview,
+        })
+        stats.upstreamErrors++
+      } else {
+        console.error(`[adzuna-ingest] query "${q}" failed:`, err)
+      }
       stats.errors++
     }
   }
