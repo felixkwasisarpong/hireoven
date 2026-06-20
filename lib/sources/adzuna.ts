@@ -18,6 +18,36 @@
 const ADZUNA_BASE = "https://api.adzuna.com/v1/api/jobs"
 const PAGE_SIZE = 50
 const REQUEST_TIMEOUT_MS = 12_000
+const ADZUNA_MAX_RETRIES = Math.max(1, Number(process.env.ADZUNA_MAX_RETRIES ?? "3"))
+const ADZUNA_RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504])
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function retryDelayMs(response: Response | null, attempt: number): number {
+  const retryAfter = Number(response?.headers.get("retry-after"))
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, 20_000)
+  }
+  return Math.min(800 * 2 ** (attempt - 1) + Math.random() * 500, 20_000)
+}
+
+export class AdzunaApiError extends Error {
+  readonly status: number
+  readonly query: string
+  readonly bodyPreview: string
+  readonly retryable: boolean
+
+  constructor(status: number, query: string, bodyPreview = "") {
+    super(`Adzuna API ${status || "network"} for "${query}"`)
+    this.name = "AdzunaApiError"
+    this.status = status
+    this.query = query
+    this.bodyPreview = bodyPreview
+    this.retryable = status === 0 || ADZUNA_RETRYABLE_STATUSES.has(status)
+  }
+}
 
 export interface AdzunaJob {
   id: string
@@ -67,31 +97,50 @@ export async function searchAdzunaJobs(opts: AdzunaSearchOptions): Promise<Adzun
   if (opts.maxDaysOld) params.set("max_days_old", String(opts.maxDaysOld))
 
   const url = `${ADZUNA_BASE}/${country}/search/${page}?${params}`
-  const res = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    },
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    // Bypass Next.js fetch cache — without this, the patched fetch in App Router
-    // may add unexpected headers or deduplicate requests incorrectly.
-    cache: "no-store",
-  })
+  const headers = {
+    Accept: "application/json",
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  }
 
-  if (!res.ok) {
+  let lastError: AdzunaApiError | null = null
+  for (let attempt = 1; attempt <= ADZUNA_MAX_RETRIES; attempt += 1) {
+    let res: Response | null = null
+    try {
+      res = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        // Bypass Next.js fetch cache — without this, the patched fetch in App Router
+        // may add unexpected headers or deduplicate requests incorrectly.
+        cache: "no-store",
+      })
+    } catch {
+      lastError = new AdzunaApiError(0, opts.what)
+      if (attempt < ADZUNA_MAX_RETRIES) {
+        await sleep(retryDelayMs(null, attempt))
+        continue
+      }
+      throw lastError
+    }
+
+    if (res.ok) {
+      const body = await res.json() as {
+        results?: RawAdzunaJob[]
+        count?: number
+      }
+
+      const jobs = (body.results ?? []).map(mapAdzunaJob).filter(Boolean) as AdzunaJob[]
+      return { jobs, count: body.count ?? jobs.length, page }
+    }
+
     const body = await res.text().catch(() => "")
-    throw new Error(`Adzuna API ${res.status} for "${opts.what}": ${body.slice(0, 200)}`)
+    lastError = new AdzunaApiError(res.status, opts.what, body.slice(0, 200))
+    if (!lastError.retryable || attempt === ADZUNA_MAX_RETRIES) throw lastError
+    await sleep(retryDelayMs(res, attempt))
   }
 
-  const body = await res.json() as {
-    results?: RawAdzunaJob[]
-    count?: number
-  }
-
-  const jobs = (body.results ?? []).map(mapAdzunaJob).filter(Boolean) as AdzunaJob[]
-  return { jobs, count: body.count ?? jobs.length, page }
+  throw lastError ?? new AdzunaApiError(0, opts.what)
 }
 
 export async function searchAdzunaAllPages(

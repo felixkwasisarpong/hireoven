@@ -18,6 +18,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
 import {
+  DiceApiError,
   searchDiceAllPages,
   parseDiceSalary,
   parseDiceWorkMode,
@@ -81,6 +82,7 @@ export async function GET(request: NextRequest) {
   const pool = getPostgresPool()
   const stats: Record<string, number> = {
     queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0,
+    upstreamErrors: 0, providerBlocked: 0,
     enrichmentAttempted: 0, enriched: 0, enrichFail: 0,
   }
 
@@ -99,8 +101,22 @@ export async function GET(request: NextRequest) {
       }
       stats.fetched = seen.size
     } catch (err) {
-      console.error(`[dice-ingest] query "${q}" failed:`, err)
-      stats.errors++
+      if (err instanceof DiceApiError) {
+        console.warn("[dice-ingest] query failed after retries", {
+          query: q,
+          status: err.status,
+          retryable: err.retryable,
+        })
+        stats.errors++
+        stats.upstreamErrors++
+        if (err.status === 401 || err.status === 403) {
+          stats.providerBlocked++
+          break
+        }
+      } else {
+        console.error(`[dice-ingest] query "${q}" failed:`, err)
+        stats.errors++
+      }
     }
   }
 

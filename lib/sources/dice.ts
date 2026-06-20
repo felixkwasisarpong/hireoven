@@ -23,6 +23,20 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+export class DiceApiError extends Error {
+  readonly status: number
+  readonly query: string
+  readonly retryable: boolean
+
+  constructor(status: number, query: string) {
+    super(`Dice API ${status || "network"} for "${query}"`)
+    this.name = "DiceApiError"
+    this.status = status
+    this.query = query
+    this.retryable = status === 0 || DICE_RETRYABLE_STATUSES.has(status)
+  }
+}
+
 export interface DiceJob {
   id: string
   title: string
@@ -113,7 +127,7 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
     await sleep(backoffMs)
   }
 
-  throw new Error(`Dice API ${lastStatus} for "${opts.q}"`)
+  throw new DiceApiError(lastStatus, opts.q)
 }
 
 export async function searchDiceAllPages(

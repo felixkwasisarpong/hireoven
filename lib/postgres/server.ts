@@ -2,6 +2,28 @@ import { Pool } from "pg"
 
 let pool: Pool | null = null
 
+const TRANSIENT_POSTGRES_CODES = new Set([
+  "53300", // too_many_connections
+  "57P01", // admin_shutdown / terminated by administrator command
+  "57P02", // crash_shutdown
+  "57P03", // cannot_connect_now
+])
+
+export function getPostgresErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const code = (error as { code?: unknown }).code
+  return typeof code === "string" ? code : undefined
+}
+
+export function isTransientPostgresError(error: unknown): boolean {
+  const code = getPostgresErrorCode(error)
+  return Boolean(code && (code.startsWith("08") || TRANSIENT_POSTGRES_CODES.has(code)))
+}
+
+export function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function getConnectionString(): string {
   const connectionString = process.env.DATABASE_URL ?? process.env.TARGET_POSTGRES_URL
   if (!connectionString) {
