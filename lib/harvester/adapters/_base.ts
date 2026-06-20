@@ -29,6 +29,8 @@ export type AtsName =
   | "goldman-sachs"
   | "eightfold"
   | "zohorecruit"
+  | "adp"
+  | "teamworkonline"
   | "jsonld"
   | "radancy"
 

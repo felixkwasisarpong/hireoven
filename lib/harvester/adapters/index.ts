@@ -10,6 +10,8 @@ import { ripplingAlgoliaAdapter } from "@/lib/harvester/adapters/rippling-algoli
 import { goldmanSachsAdapter } from "@/lib/harvester/adapters/goldman-sachs"
 import { eightfoldAdapter } from "@/lib/harvester/adapters/eightfold"
 import { zohoRecruitAdapter } from "@/lib/harvester/adapters/zohorecruit"
+import { adpAdapter } from "@/lib/harvester/adapters/adp"
+import { teamworkOnlineAdapter } from "@/lib/harvester/adapters/teamworkonline"
 import { jsonldAdapter } from "@/lib/harvester/adapters/jsonld"
 import { radancyAdapter } from "@/lib/harvester/adapters/radancy"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
@@ -57,6 +59,8 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   "goldman-sachs": goldmanSachsAdapter,
   eightfold: eightfoldAdapter,
   zohorecruit: zohoRecruitAdapter,
+  adp: adpAdapter,
+  teamworkonline: teamworkOnlineAdapter,
   jsonld: jsonldAdapter,
   radancy: radancyAdapter,
 }
