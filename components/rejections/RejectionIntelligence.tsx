@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import type { PatternsResponse } from "@/app/api/rejections/patterns/route"
@@ -142,6 +143,9 @@ function ReportModal({
   const [done, setDone] = useState(false)
   const firstEl = useRef<HTMLButtonElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  // Portal target only exists after mount (SSR safety for createPortal below).
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   // Focus trap + Escape
   useEffect(() => {
@@ -176,10 +180,14 @@ function ReportModal({
     }
   }
 
-  return (
+  // Portal to <body> so the overlay can never be clipped/stacked/composited by a
+  // transformed or backdrop-blurred ancestor (the job-detail panel) — that was
+  // letting the page bleed through the modal on Safari and Chrome.
+  if (!mounted) return null
+  return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 sm:items-center"
+      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-label="Report your outcome"
@@ -271,7 +279,8 @@ function ReportModal({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
