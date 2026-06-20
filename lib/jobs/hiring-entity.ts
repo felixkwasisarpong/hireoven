@@ -39,8 +39,17 @@ const CLIENT_CAPTURE_PATTERNS: Array<{ source: string; re: RegExp }> = [
   },
 ]
 
+// Words that mark a value as a generic placeholder rather than a real name.
+// "company"/"organization" are deliberately excluded here because they double
+// as legitimate trailing nouns in real names ("The Wonderful Company") — those
+// are handled separately below so we don't reject the whole brand.
 const INVALID_CANDIDATE_RE =
-  /\b(client|company|organization|employer|role|position|opening|opportunity|confidential|stealth|fortune\s*\d{2,3})\b/i
+  /\b(client|employer|role|position|opening|opportunity|confidential|stealth|fortune\s*\d{2,3})\b/i
+
+// "company"/"organization" only signal a placeholder when they stand alone
+// ("the company", "our organization") — i.e. nothing distinctive survives
+// removing them. A real name like "Wonderful Company" leaves "Wonderful".
+const GENERIC_ENTITY_NOUN_RE = /\b(company|organization)\b/gi
 
 const LEGAL_SUFFIX_RE =
   /\b(incorporated|inc|corp|corporation|company|co|llc|l\.?l\.?c\.?|llp|ltd|limited|plc)\b/g
@@ -74,6 +83,18 @@ function cleanCandidate(value: string | null | undefined): string | null {
   // "or partners") is a sentence fragment, not a company name.
   if (/^(?:and|or|nor|but)\b/i.test(stripped)) return null
   if (INVALID_CANDIDATE_RE.test(stripped) && stripped.split(/\s+/).length <= 3) return null
+  // Reject bare "company"/"organization" placeholders, but keep real brands
+  // that merely end in one of those nouns.
+  if (GENERIC_ENTITY_NOUN_RE.test(stripped)) {
+    const remainder = normalizeSpacing(
+      stripped
+        .replace(GENERIC_ENTITY_NOUN_RE, " ")
+        // Drop leading determiners/pronouns so "our company" / "this
+        // organization" still read as placeholders, not "our"/"this".
+        .replace(/\b(our|your|their|its|the|a|an|this|that|these|those)\b/gi, " ")
+    )
+    if (!remainder || remainder.length < 2) return null
+  }
 
   const letters = (stripped.match(/[A-Za-z]/g) ?? []).length
   if (letters < 1) return null
