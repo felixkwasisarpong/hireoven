@@ -198,6 +198,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   skills JSONB,
   projects JSONB,
   certifications JSONB,
+  additional_sections JSONB, -- catch-all: Publications, Conferences, Awards, etc. (never drop content)
   seniority_level TEXT,
   years_of_experience INTEGER,
   primary_role TEXT,

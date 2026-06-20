@@ -22,6 +22,10 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const pool = getPostgresPool()
+  // Catch-all sections column is provisioned lazily (older resumes predate it).
+  await pool
+    .query(`ALTER TABLE resumes ADD COLUMN IF NOT EXISTS additional_sections JSONB`)
+    .catch(() => {})
   const current = await pool.query<Resume>(
     `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
     [id, user.id]
@@ -64,8 +68,9 @@ export async function POST(
          resume_score = $17,
          ats_score = $18,
          raw_text = $19,
+         additional_sections = $20::jsonb,
          updated_at = now()
-       WHERE id = $20 AND user_id = $21
+       WHERE id = $21 AND user_id = $22
        RETURNING *`,
       [
         parsed.full_name,
@@ -87,6 +92,7 @@ export async function POST(
         parsed.resume_score,
         parsed.ats_score ?? null,
         parsed.raw_text,
+        JSON.stringify(parsed.additional_sections ?? []),
         id,
         user.id,
       ]

@@ -70,7 +70,7 @@ import {
   sanitizeTailorSummaryText,
 } from "@/lib/resume/tailor-analysis"
 import { createResumeSnapshot } from "@/lib/resume/hub"
-import type { Profile, Resume } from "@/types"
+import type { Profile, Resume, ResumeAdditionalSection } from "@/types"
 import type { TailorAnalysisResult, TailorFix, TailorRoleAlignment, TailorWorkflowStep } from "@/types/tailor-analysis"
 
 type StudioMode = "preview" | "tailor"
@@ -1383,6 +1383,36 @@ export default function ResumeStudioPage() {
       .filter(Boolean)
       .join("\n\n")
     setProjectsDraft(projectText)
+
+    // Seed catch-all sections (Publications, Conferences, Awards, …) the parser
+    // captured into the studio's custom-section model so the preview renders them
+    // instead of the resume silently losing that content. Keyed `parsed-extra-*`
+    // and reset per resume so they don't carry across resumes.
+    const extraSections = (selectedResume.additional_sections ?? []).filter(
+      (s): s is ResumeAdditionalSection =>
+        Boolean(s?.heading?.trim()) && Array.isArray(s?.items) && s.items.length > 0
+    )
+    const seededCustom: Record<string, ResumePreviewCustomSection> = {}
+    const seededSections: ResumeSectionState[] = extraSections.map((section, i) => {
+      const id = `parsed-extra-${i}`
+      seededCustom[id] = {
+        title: section.heading.trim(),
+        content: section.items.filter(Boolean).join("\n"),
+      }
+      return {
+        id,
+        type: "custom" as ResumeSectionType,
+        title: section.heading.trim(),
+        collapsed: false,
+        enabled: true,
+        order: 0,
+      }
+    })
+    setCustomSections(seededCustom)
+    setSections((current) => {
+      const base = current.filter((sec) => !sec.id.startsWith("parsed-extra-"))
+      return [...base, ...seededSections.map((sec, i) => ({ ...sec, order: base.length + i }))]
+    })
 
     setPersonalCustomFields([])
     setIsDirty(false)
