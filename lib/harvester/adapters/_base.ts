@@ -25,6 +25,10 @@ export type AtsName =
   | "microsoft"
   | "netflix"
   | "rippling"
+  | "rippling-algolia"
+  | "goldman-sachs"
+  | "eightfold"
+  | "zohorecruit"
   | "jsonld"
   | "radancy"
 
