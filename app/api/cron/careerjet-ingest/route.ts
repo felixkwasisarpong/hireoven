@@ -12,6 +12,9 @@
  * Env:
  *   CAREERJET_AFFILIATE_ID   — required (free, register at careerjet.com)
  *   CAREERJET_AFFID          — legacy alias, also accepted
+ *   CAREERJET_REFERER        — optional; Referer sent to the v4 API (must match the
+ *                              affiliate's registered domain). Defaults to
+ *                              NEXT_PUBLIC_APP_URL, else https://hireoven.com
  *   CAREERJET_USER_IP        — optional fallback user_ip for API attribution
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
  *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
@@ -108,7 +111,8 @@ async function fetchCareerJetPage(
   page: number,
   pageSize: number,
   userIp: string,
-  userAgent: string
+  userAgent: string,
+  referer: string
 ): Promise<CareerJetJob[]> {
   const params = new URLSearchParams({
     keywords,
@@ -127,6 +131,9 @@ async function fetchCareerJetPage(
       Accept: "application/json",
       Authorization: `Basic ${credentials}`,
       "User-Agent": userAgent,
+      // CareerJet v4 rejects requests without a Referer (the domain registered
+      // with the affiliate account) — 403 "Undeclared referrer".
+      Referer: referer,
     },
     signal: AbortSignal.timeout(15_000),
   })
@@ -167,6 +174,12 @@ export async function GET(request: NextRequest) {
   const maxPages = Number(sp.get("maxPages") ?? process.env.CAREERJET_MAX_PAGES ?? "3")
   const userIp = requestIp(request)
   const userAgent = request.headers.get("user-agent") || "Hireoven/1.0"
+  // CareerJet v4 requires a Referer matching the affiliate's registered domain.
+  const referer =
+    process.env.CAREERJET_REFERER ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    "https://hireoven.com"
   const countryOverride = sp.get("country")
   const countries = countryOverride
     ? parseCareerJetCountries(countryOverride)
@@ -188,7 +201,7 @@ export async function GET(request: NextRequest) {
     for (const country of countries) {
       try {
         for (let page = 1; page <= maxPages; page++) {
-          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery, userIp, userAgent)
+          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery, userIp, userAgent, referer)
           if (jobs.length === 0) break
           for (const job of jobs) {
             if (!job.url) continue
