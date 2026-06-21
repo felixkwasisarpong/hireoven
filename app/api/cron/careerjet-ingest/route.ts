@@ -12,6 +12,7 @@
  * Env:
  *   CAREERJET_AFFILIATE_ID   — required (free, register at careerjet.com)
  *   CAREERJET_AFFID          — legacy alias, also accepted
+ *   CAREERJET_USER_IP        — optional fallback user_ip for API attribution
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
  *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
  *   CAREERJET_MAX_JOBS       — max jobs per query (default: 99, API max per page)
@@ -63,6 +64,8 @@ type CareerJetJob = {
 type CareerJetResponse = {
   type: string
   hits: number
+  message?: string
+  pages?: number
   jobs?: CareerJetJob[]
   error?: string
 }
@@ -103,21 +106,28 @@ async function fetchCareerJetPage(
   affiliateId: string,
   country: CareerJetCountry,
   page: number,
-  pageSize: number
+  pageSize: number,
+  userIp: string,
+  userAgent: string
 ): Promise<CareerJetJob[]> {
   const params = new URLSearchParams({
     keywords,
     location: country.location,
     locale_code: country.localeCode,
-    affid: affiliateId,
-    format: "json",
-    pagesize: String(pageSize),
+    page_size: String(pageSize),
     page: String(page),
     sort: "date",
+    user_ip: userIp,
+    user_agent: userAgent,
   })
-  const url = `https://public.api.careerjet.com/search?${params}`
+  const url = `https://search.api.careerjet.net/v4/query?${params}`
+  const credentials = Buffer.from(`${affiliateId}:`).toString("base64")
   const res = await fetch(url, {
-    headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
+    headers: {
+      Accept: "application/json",
+      Authorization: `Basic ${credentials}`,
+      "User-Agent": userAgent,
+    },
     signal: AbortSignal.timeout(15_000),
   })
   if (!res.ok) {
@@ -128,7 +138,15 @@ async function fetchCareerJetPage(
   if (data.error || data.type?.toLowerCase() === "error") {
     throw new Error(`CareerJet API error for "${keywords}" (${country.key}): ${data.error ?? data.type}`)
   }
+  if (data.type === "LOCATIONS") {
+    throw new Error(`CareerJet location mode for "${keywords}" (${country.key}): ${data.message ?? "ambiguous location"}`)
+  }
   return data.jobs ?? []
+}
+
+function requestIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
+  return forwarded || process.env.CAREERJET_USER_IP || "127.0.0.1"
 }
 
 export async function GET(request: NextRequest) {
@@ -147,6 +165,8 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const maxJobsPerQuery = Number(sp.get("maxJobs") ?? process.env.CAREERJET_MAX_JOBS ?? "99")
   const maxPages = Number(sp.get("maxPages") ?? process.env.CAREERJET_MAX_PAGES ?? "3")
+  const userIp = requestIp(request)
+  const userAgent = request.headers.get("user-agent") || "Hireoven/1.0"
   const countryOverride = sp.get("country")
   const countries = countryOverride
     ? parseCareerJetCountries(countryOverride)
@@ -168,7 +188,7 @@ export async function GET(request: NextRequest) {
     for (const country of countries) {
       try {
         for (let page = 1; page <= maxPages; page++) {
-          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery)
+          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery, userIp, userAgent)
           if (jobs.length === 0) break
           for (const job of jobs) {
             if (!job.url) continue
