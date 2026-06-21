@@ -4,8 +4,13 @@
  * Pulls US and Canada jobs from CareerJet's free affiliate API.
  * Register at https://www.careerjet.com/partners/api/ to get an affiliate ID.
  *
+ * Persistence is delegated to the shared aggregator pipeline
+ * (lib/jobs/aggregator-ingest). The query-loop fetch stays here, and the
+ * legacy external_id scheme (`careerjet:<base64(url)>`) is preserved so this
+ * migration does not re-ingest existing rows.
+ *
  * Env:
- *   CAREERJET_AFFILIATE_ID  — required (free, register at careerjet.com)
+ *   CAREERJET_AFFILIATE_ID   — required (free, register at careerjet.com)
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
  *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
  *   CAREERJET_MAX_JOBS       — max jobs per query (default: 99, API max per page)
@@ -15,10 +20,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
-import { isValidCompanyName } from "@/lib/sources/company-name-guard"
-import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { ingestAggregatorJobs, type AggregatorJob } from "@/lib/jobs/aggregator-ingest"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -85,6 +87,16 @@ function parseCareerJetCountries(raw: string | null | undefined): CareerJetCount
   return keys.map((country) => CAREERJET_COUNTRIES[country])
 }
 
+type CareerJetAggregatorJob = AggregatorJob & {
+  sourceCountry: CareerJetCountry["key"]
+  salaryRaw: string
+}
+
+// Legacy external_id scheme — keep identical so migrated runs match existing rows.
+function careerjetExternalKey(url: string): string {
+  return Buffer.from(url).toString("base64").slice(0, 64)
+}
+
 async function fetchCareerJetPage(
   keywords: string,
   affiliateId: string,
@@ -105,11 +117,11 @@ async function fetchCareerJetPage(
   const url = `https://public.api.careerjet.com/search?${params}`
   try {
     const res = await fetch(url, {
-      headers: { "Accept": "application/json", "User-Agent": "Hireoven/1.0" },
+      headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
       signal: AbortSignal.timeout(15_000),
     })
     if (!res.ok) return []
-    const data = await res.json() as CareerJetResponse
+    const data = (await res.json()) as CareerJetResponse
     return data.jobs ?? []
   } catch {
     return []
@@ -133,16 +145,19 @@ export async function GET(request: NextRequest) {
   const countries = countryOverride
     ? parseCareerJetCountries(countryOverride)
     : parseCareerJetCountries(process.env.CAREERJET_COUNTRIES)
-  const queries = (sp.get("q") ? [sp.get("q")!] :
-    (process.env.CAREERJET_SEARCH_QUERIES ?? "")
-      .split(",").map((q) => q.trim()).filter(Boolean)
-      .concat(DEFAULT_QUERIES)
-      .filter((q, i, arr) => arr.indexOf(q) === i))
+  const queries = sp.get("q")
+    ? [sp.get("q")!]
+    : (process.env.CAREERJET_SEARCH_QUERIES ?? "")
+        .split(",")
+        .map((q) => q.trim())
+        .filter(Boolean)
+        .concat(DEFAULT_QUERIES)
+        .filter((q, i, arr) => arr.indexOf(q) === i)
 
-  const pool = getPostgresPool()
-  const stats = { queries: 0, countries: countries.length, fetched: 0, inserted: 0, updated: 0, errors: 0 }
-  const seen = new Map<string, CareerJetJob>()
-
+  // Dedupe across queries/countries by apply URL (CareerJet has no native id).
+  const byUrl = new Map<string, { job: CareerJetJob; country: CareerJetCountry }>()
+  let queriesFetched = 0
+  let fetchErrors = 0
   for (const q of queries) {
     for (const country of countries) {
       try {
@@ -150,151 +165,51 @@ export async function GET(request: NextRequest) {
           const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery)
           if (jobs.length === 0) break
           for (const job of jobs) {
-            if (!job.url || !isValidCompanyName(job.company)) continue
-            if (!seen.has(job.url)) seen.set(job.url, job)
+            if (!job.url) continue
+            if (!byUrl.has(job.url)) byUrl.set(job.url, { job, country })
           }
           if (jobs.length < maxJobsPerQuery) break
         }
-        stats.queries++
-        stats.fetched = seen.size
+        queriesFetched++
       } catch (err) {
         console.error(`[careerjet-ingest] query "${q}" (${country.key}) failed:`, err)
-        stats.errors++
+        fetchErrors++
       }
     }
   }
 
-  if (seen.size === 0) return NextResponse.json({ ...stats, message: "No jobs fetched" })
+  const collected: CareerJetAggregatorJob[] = [...byUrl.entries()].map(([url, entry]) => ({
+    id: careerjetExternalKey(url),
+    title: entry.job.title,
+    company: entry.job.company,
+    location: entry.job.locations || "",
+    description: entry.job.description,
+    applyUrl: entry.job.url,
+    postedAt: entry.job.date,
+    isRemote: /remote/i.test(entry.job.locations) || /remote/i.test(entry.job.title),
+    salaryCurrency: entry.country.key === "ca" ? "CAD" : "USD",
+    publisher: entry.job.site,
+    sourceCountry: entry.country.key,
+    salaryRaw: entry.job.salary,
+  }))
 
-  // Group by normalized company name
-  const byCompany = new Map<string, CareerJetJob[]>()
-  for (const job of seen.values()) {
-    const key = job.company.toLowerCase().trim()
-    if (!byCompany.has(key)) byCompany.set(key, [])
-    byCompany.get(key)!.push(job)
-  }
-
-  const companyNames = [...byCompany.keys()]
-  const companyIdMap = new Map<string, string>()
-
-  const existingResult = await pool.query<{ id: string; name: string }>(
-    `SELECT id, LOWER(TRIM(name)) AS name FROM companies WHERE LOWER(TRIM(name)) = ANY($1)`,
-    [companyNames]
-  )
-  for (const row of existingResult.rows) companyIdMap.set(row.name, row.id)
-
-  const missing = companyNames.filter((n) => !companyIdMap.has(n))
-  for (const normName of missing) {
-    const sample = byCompany.get(normName)![0]
-    const domain = `careerjet-${normName.replace(/[^a-z0-9]/g, "-")}.placeholder`
-    try {
-      if (sample.url) {
-        const enrolled = await enrollFromApplyUrl(pool, {
-          companyName: sample.company,
-          applyUrl: sample.url,
-          companyDomain: null,
-          logoUrl: null,
-          source: "careerjet",
-        })
-        if (enrolled) { companyIdMap.set(normName, enrolled.id); continue }
-      }
-      const res = await pool.query<{ id: string }>(
-        `INSERT INTO companies (name, domain, careers_url, is_active, raw_ats_config)
-         VALUES ($1, $2, null, false, $3)
-         ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
-        [sample.company, domain, JSON.stringify({ source: "careerjet", crawl_allowed: false })]
-      )
-      if (res.rows[0]) companyIdMap.set(normName, res.rows[0].id)
-    } catch { /* domain conflict */ }
-  }
-
-  // Dedupe key = URL (CareerJet has no stable job ID)
-  const allExtIds = [...seen.keys()].map((url) => `careerjet:${Buffer.from(url).toString("base64").slice(0, 64)}`)
-  const existingRows = await pool.query<{ id: string; external_id: string }>(
-    `SELECT id, external_id FROM jobs WHERE external_id = ANY($1)`,
-    [allExtIds]
-  )
-  const existingByExtId = new Map(existingRows.rows.map((r) => [r.external_id, r.id]))
-
-  for (const [url, job] of seen.entries()) {
-    const companyId = companyIdMap.get(job.company.toLowerCase().trim())
-    if (!companyId) continue
-
-    const externalId = `careerjet:${Buffer.from(url).toString("base64").slice(0, 64)}`
-    const existingId = existingByExtId.get(externalId)
-    const postedAt = new Date(job.date).toISOString()
-
-    const norm = normalizePersistedJobRecord({
-      id: existingId ?? "",
-      title: job.title,
-      normalized_title: null,
-      location: job.locations || null,
-      apply_url: job.url,
-      external_id: externalId,
-      description: job.description || null,
-      employment_type: null,
-      seniority_level: null,
-      is_remote: false,
-      is_hybrid: false,
-      salary_min: null,
-      salary_max: null,
-      salary_currency: "USD",
-      sponsors_h1b: null,
-      sponsorship_score: 0,
-      requires_authorization: false,
-      visa_language_detected: null,
-      skills: [],
-      first_detected_at: postedAt,
-      raw_data: { source: "careerjet", salary_raw: job.salary, site: job.site },
+  try {
+    const pool = getPostgresPool()
+    const stats = await ingestAggregatorJobs(pool, "careerjet", collected, {
+      rawExtra: (job) => {
+        const careerjetJob = job as CareerJetAggregatorJob
+        return { country: careerjetJob.sourceCountry, salary_raw: careerjetJob.salaryRaw }
+      },
     })
-    const nc = norm.nextColumns
-    const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
-    const rawData = JSON.stringify({
-      source: "careerjet", salary_raw: job.salary, site: job.site, normalized: norm.canonical,
+    return NextResponse.json({
+      ok: true,
+      countries: countries.map((country) => country.key),
+      queriesFetched,
+      fetchErrors,
+      ...stats,
     })
-
-    try {
-      if (existingId) {
-        await pool.query(
-          `UPDATE jobs SET title=$1, normalized_title=$2, location=$3, is_remote=$4,
-             employment_type=$5, seniority_level=$6, description=$7, skills=$8,
-             requires_authorization=$9, sponsors_h1b=$10, sponsorship_score=$11,
-             visa_language_detected=$12, publication_status=$13,
-             is_active=true, last_seen_at=NOW(), updated_at=NOW(), raw_data=$14
-           WHERE id=$15`,
-          [job.title, nc.normalized_title, nc.location, nc.is_remote,
-           nc.employment_type, nc.seniority_level, nc.description, nc.skills,
-           nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
-           nc.visa_language_detected, publicationStatus, rawData, existingId]
-        )
-        stats.updated++
-      } else {
-        await pool.query(
-          `INSERT INTO jobs (
-             company_id, title, normalized_title, location, is_remote, is_hybrid,
-             employment_type, seniority_level, description, apply_url, external_id,
-             salary_min, salary_max, salary_currency,
-             requires_authorization, sponsors_h1b, sponsorship_score,
-             visa_language_detected, skills, publication_status,
-             is_active, last_seen_at, first_detected_at, created_at, updated_at, raw_data
-           ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-             true, NOW(), $21, NOW(), NOW(), $22
-           ) ON CONFLICT (external_id) DO NOTHING`,
-          [companyId, job.title, nc.normalized_title, nc.location, nc.is_remote, false,
-           nc.employment_type, nc.seniority_level, nc.description, job.url, externalId,
-           nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
-           nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
-           nc.visa_language_detected, nc.skills, publicationStatus,
-           postedAt, rawData]
-        )
-        stats.inserted++
-      }
-    } catch (err) {
-      console.error("[careerjet-ingest] job upsert failed:", err)
-      stats.errors++
-    }
+  } catch (err) {
+    console.error("[careerjet-ingest] ingest failed:", err)
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })
   }
-
-  return NextResponse.json(stats)
 }

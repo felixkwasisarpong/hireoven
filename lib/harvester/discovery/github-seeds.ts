@@ -144,4 +144,24 @@ export const DEFAULT_SEED_SOURCES: SeedSource[] = [
     name: "SimplifyJobs/Summer2026-Internships",
     url: "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md",
   },
+  {
+    name: "speedyapply/2025-AI-College-Jobs",
+    url: "https://raw.githubusercontent.com/speedyapply/2025-AI-College-Jobs/main/README.md",
+  },
+  {
+    name: "speedyapply/2025-SWE-College-Jobs",
+    url: "https://raw.githubusercontent.com/speedyapply/2025-SWE-College-Jobs/main/README.md",
+  },
+  {
+    name: "vanshb03/Summer2026-Internships",
+    url: "https://raw.githubusercontent.com/vanshb03/Summer2026-Internships/dev/README.md",
+  },
+  {
+    name: "vanshb03/New-Grad-2025",
+    url: "https://raw.githubusercontent.com/vanshb03/New-Grad-2025/dev/README.md",
+  },
+  {
+    name: "SimplifyJobs/New-Grad-Positions-2026",
+    url: "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md",
+  },
 ]

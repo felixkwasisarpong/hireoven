@@ -28,6 +28,17 @@ import { successfactorsAdapter } from "@/lib/harvester/adapters/successfactors"
 import { taleoAdapter } from "@/lib/harvester/adapters/taleo"
 import { teamtailorAdapter } from "@/lib/harvester/adapters/teamtailor"
 import { usajobsAdapter } from "@/lib/harvester/adapters/usajobs"
+import { neogovAdapter } from "@/lib/harvester/adapters/neogov"
+import { euresAdapter } from "@/lib/harvester/adapters/eures"
+import { ukfindajobAdapter } from "@/lib/harvester/adapters/ukfindajob"
+import { canadajobbankAdapter } from "@/lib/harvester/adapters/canadajobbank"
+import { fountainAdapter } from "@/lib/harvester/adapters/fountain"
+import { paylocityAdapter } from "@/lib/harvester/adapters/paylocity"
+import { paycomAdapter } from "@/lib/harvester/adapters/paycom"
+import { dayforceAdapter } from "@/lib/harvester/adapters/dayforce"
+import { phenomAdapter } from "@/lib/harvester/adapters/phenom"
+import { avatureAdapter } from "@/lib/harvester/adapters/avature"
+import { ukgAdapter } from "@/lib/harvester/adapters/ukg"
 import { workableAdapter } from "@/lib/harvester/adapters/workable"
 import { workdayAdapter } from "@/lib/harvester/adapters/workday"
 
@@ -49,6 +60,17 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   taleo: taleoAdapter,
   oraclecloud: oraclecloudAdapter,
   usajobs: usajobsAdapter,
+  neogov: neogovAdapter,
+  eures: euresAdapter,
+  ukfindajob: ukfindajobAdapter,
+  canadajobbank: canadajobbankAdapter,
+  fountain: fountainAdapter,
+  paylocity: paylocityAdapter,
+  paycom: paycomAdapter,
+  dayforce: dayforceAdapter,
+  phenom: phenomAdapter,
+  avature: avatureAdapter,
+  ukg: ukgAdapter,
   infosys: infosysAdapter,
   apple: appleAdapter,
   amazon: amazonAdapter,
