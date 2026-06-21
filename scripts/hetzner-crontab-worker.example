@@ -56,7 +56,7 @@ DATABASE_URL=REPLACE_ME
  45 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh jsearch-ingest     >>/var/log/hireoven/jsearch-ingest.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
 # Aggregator feeds via the shared ingest pipeline (lib/jobs/aggregator-ingest).
-# Keyless: remotive, themuse, remoteok, arbeitnow. Keyed: careerjet (CAREERJET_AFFID), jooble (JOOBLE_API_KEY).
+# Keyless: remotive, themuse, remoteok, arbeitnow. Keyed: careerjet (CAREERJET_AFFILIATE_ID), jooble (JOOBLE_API_KEY).
   0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh remotive-ingest    >>/var/log/hireoven/remotive-ingest.log 2>&1
   0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh themuse-ingest     >>/var/log/hireoven/themuse-ingest.log 2>&1
   0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh remoteok-ingest    >>/var/log/hireoven/remoteok-ingest.log 2>&1

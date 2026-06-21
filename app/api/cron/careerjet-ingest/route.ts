@@ -11,6 +11,7 @@
  *
  * Env:
  *   CAREERJET_AFFILIATE_ID   — required (free, register at careerjet.com)
+ *   CAREERJET_AFFID          — legacy alias, also accepted
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
  *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
  *   CAREERJET_MAX_JOBS       — max jobs per query (default: 99, API max per page)
@@ -115,17 +116,19 @@ async function fetchCareerJetPage(
     sort: "date",
   })
   const url = `https://public.api.careerjet.com/search?${params}`
-  try {
-    const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
-      signal: AbortSignal.timeout(15_000),
-    })
-    if (!res.ok) return []
-    const data = (await res.json()) as CareerJetResponse
-    return data.jobs ?? []
-  } catch {
-    return []
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(`CareerJet API ${res.status} for "${keywords}" (${country.key}): ${body.slice(0, 200)}`)
   }
+  const data = (await res.json()) as CareerJetResponse
+  if (data.error || data.type?.toLowerCase() === "error") {
+    throw new Error(`CareerJet API error for "${keywords}" (${country.key}): ${data.error ?? data.type}`)
+  }
+  return data.jobs ?? []
 }
 
 export async function GET(request: NextRequest) {
@@ -133,9 +136,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const affiliateId = process.env.CAREERJET_AFFILIATE_ID
+  const affiliateId = process.env.CAREERJET_AFFILIATE_ID ?? process.env.CAREERJET_AFFID
   if (!affiliateId) {
-    return NextResponse.json({ skipped: true, reason: "CAREERJET_AFFILIATE_ID not configured" })
+    return NextResponse.json({
+      skipped: true,
+      reason: "CAREERJET_AFFILIATE_ID (or CAREERJET_AFFID) not configured",
+    })
   }
 
   const sp = request.nextUrl.searchParams
@@ -176,6 +182,16 @@ export async function GET(request: NextRequest) {
         fetchErrors++
       }
     }
+  }
+
+  if (byUrl.size === 0 && fetchErrors > 0) {
+    return NextResponse.json({
+      ok: false,
+      error: "CareerJet upstream fetch failed before any jobs were collected",
+      countries: countries.map((country) => country.key),
+      queriesFetched,
+      fetchErrors,
+    }, { status: 502 })
   }
 
   const collected: CareerJetAggregatorJob[] = [...byUrl.entries()].map(([url, entry]) => ({

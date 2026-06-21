@@ -44,6 +44,7 @@ export async function enrollFromApplyUrl(
        ON CONFLICT (domain) DO UPDATE
          SET ats_type        = EXCLUDED.ats_type,
              ats_identifier  = EXCLUDED.ats_identifier,
+             logo_url        = COALESCE(NULLIF(companies.logo_url, ''), EXCLUDED.logo_url),
              is_active       = true,
              status          = 'active',
              freshness_tier  = CASE WHEN companies.freshness_tier = 'tier_dead' THEN 'tier_2' ELSE companies.freshness_tier END,
