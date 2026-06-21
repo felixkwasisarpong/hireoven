@@ -12,14 +12,14 @@ import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
 
-const TRIAL_BANNER_DISMISS_KEY = "trial_banner_dismissed_at"
+const BILLING_BANNER_DISMISS_KEY = "billing_banner_dismissed_at"
 
-function TrialReminderBanner() {
-  const { status, trialDaysRemaining, isPro } = useSubscription()
+function BillingReminderBanner() {
+  const { status, isPro } = useSubscription()
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
-    const dismissedAt = localStorage.getItem(TRIAL_BANNER_DISMISS_KEY)
+    const dismissedAt = localStorage.getItem(BILLING_BANNER_DISMISS_KEY)
     if (dismissedAt && Date.now() - Number(dismissedAt) < 24 * 60 * 60 * 1000) {
       setDismissed(true)
     }
@@ -28,11 +28,8 @@ function TrialReminderBanner() {
   if (dismissed || !isPro) return null
 
   const isPaymentFailed = status === "past_due" || status === "unpaid"
-  const isTrial = status === "trialing" && typeof trialDaysRemaining === "number"
 
-  if (!isPaymentFailed && !isTrial) return null
-
-  const urgent = isPaymentFailed || (trialDaysRemaining ?? 99) <= 3
+  if (!isPaymentFailed) return null
 
   async function openPortal() {
     const response = await fetch("/api/stripe/portal", { method: "POST" })
@@ -41,7 +38,7 @@ function TrialReminderBanner() {
   }
 
   function dismiss() {
-    localStorage.setItem(TRIAL_BANNER_DISMISS_KEY, String(Date.now()))
+    localStorage.setItem(BILLING_BANNER_DISMISS_KEY, String(Date.now()))
     setDismissed(true)
   }
 
@@ -49,34 +46,22 @@ function TrialReminderBanner() {
     <div
       className={cn(
         "flex items-center justify-center gap-3 px-4 py-2 text-sm font-medium",
-        isPaymentFailed
-          ? "border-b border-red-200 bg-red-50 text-red-800"
-          : urgent
-            ? "border-b border-amber-200 bg-amber-50 text-amber-900"
-            : "border-b border-emerald-200 bg-emerald-50 text-emerald-800"
+        "border-b border-red-200 bg-red-50 text-red-800"
       )}
     >
-      <span>
-        {isPaymentFailed
-          ? "Your trial has ended - add a payment method to keep your Pro features."
-          : urgent
-            ? `Your trial ends in ${trialDaysRemaining} day${trialDaysRemaining === 1 ? "" : "s"}.`
-            : `Pro trial active - ${trialDaysRemaining} days remaining.`}
-      </span>
-      {urgent && (
-        <button
-          type="button"
-          onClick={openPortal}
-          className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-inherit shadow-sm transition hover:bg-white"
-        >
-          {isPaymentFailed ? "Update billing" : "Add payment method"}
-        </button>
-      )}
+      <span>Your payment needs attention - update billing to keep your Pro features.</span>
+      <button
+        type="button"
+        onClick={openPortal}
+        className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold text-inherit shadow-sm transition hover:bg-white"
+      >
+        Update billing
+      </button>
       <button
         type="button"
         onClick={dismiss}
         className="rounded-full p-1 opacity-70 transition hover:bg-white/60 hover:opacity-100"
-        aria-label="Dismiss trial reminder"
+        aria-label="Dismiss billing reminder"
       >
         <X className="h-3.5 w-3.5" />
       </button>
@@ -113,7 +98,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   if (isMainFeed) {
     return (
       <>
-        <TrialReminderBanner />
+        <BillingReminderBanner />
         {children}
       </>
     )
@@ -121,7 +106,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <TrialReminderBanner />
+      <BillingReminderBanner />
       <DashboardSubpageChrome>{children}</DashboardSubpageChrome>
     </>
   )

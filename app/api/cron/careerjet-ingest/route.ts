@@ -1,7 +1,7 @@
 /**
  * GET /api/cron/careerjet-ingest
  *
- * Pulls US jobs from CareerJet's free affiliate API.
+ * Pulls US and Canada jobs from CareerJet's free affiliate API.
  * Register at https://www.careerjet.com/partners/api/ to get an affiliate ID.
  *
  * Persistence is delegated to the shared aggregator pipeline
@@ -12,7 +12,8 @@
  * Env:
  *   CAREERJET_AFFILIATE_ID   — required (free, register at careerjet.com)
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
- *   CAREERJET_MAX_JOBS       — max jobs per query page (default: 99)
+ *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
+ *   CAREERJET_MAX_JOBS       — max jobs per query (default: 99, API max per page)
  *   CAREERJET_MAX_PAGES      — pages per query (default: 3)
  */
 
@@ -65,6 +66,32 @@ type CareerJetResponse = {
   error?: string
 }
 
+type CareerJetCountry = {
+  key: "us" | "ca"
+  location: string
+  localeCode: string
+}
+
+const CAREERJET_COUNTRIES: Record<CareerJetCountry["key"], CareerJetCountry> = {
+  us: { key: "us", location: "USA", localeCode: "en_US" },
+  ca: { key: "ca", location: "Canada", localeCode: "en_CA" },
+}
+
+function parseCareerJetCountries(raw: string | null | undefined): CareerJetCountry[] {
+  const requested = (raw ?? "us,ca")
+    .split(",")
+    .map((country) => country.trim().toLowerCase())
+    .filter((country): country is CareerJetCountry["key"] => country === "us" || country === "ca")
+  const unique = [...new Set(requested)]
+  const keys: CareerJetCountry["key"][] = unique.length ? unique : ["us", "ca"]
+  return keys.map((country) => CAREERJET_COUNTRIES[country])
+}
+
+type CareerJetAggregatorJob = AggregatorJob & {
+  sourceCountry: CareerJetCountry["key"]
+  salaryRaw: string
+}
+
 // Legacy external_id scheme — keep identical so migrated runs match existing rows.
 function careerjetExternalKey(url: string): string {
   return Buffer.from(url).toString("base64").slice(0, 64)
@@ -73,13 +100,14 @@ function careerjetExternalKey(url: string): string {
 async function fetchCareerJetPage(
   keywords: string,
   affiliateId: string,
+  country: CareerJetCountry,
   page: number,
   pageSize: number
 ): Promise<CareerJetJob[]> {
   const params = new URLSearchParams({
     keywords,
-    location: "USA",
-    locale_code: "en_US",
+    location: country.location,
+    locale_code: country.localeCode,
     affid: affiliateId,
     format: "json",
     pagesize: String(pageSize),
@@ -113,6 +141,10 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const maxJobsPerQuery = Number(sp.get("maxJobs") ?? process.env.CAREERJET_MAX_JOBS ?? "99")
   const maxPages = Number(sp.get("maxPages") ?? process.env.CAREERJET_MAX_PAGES ?? "3")
+  const countryOverride = sp.get("country")
+  const countries = countryOverride
+    ? parseCareerJetCountries(countryOverride)
+    : parseCareerJetCountries(process.env.CAREERJET_COUNTRIES)
   const queries = sp.get("q")
     ? [sp.get("q")!]
     : (process.env.CAREERJET_SEARCH_QUERIES ?? "")
@@ -122,45 +154,60 @@ export async function GET(request: NextRequest) {
         .concat(DEFAULT_QUERIES)
         .filter((q, i, arr) => arr.indexOf(q) === i)
 
-  // Dedupe across queries by apply URL (CareerJet has no native id).
-  const byUrl = new Map<string, CareerJetJob>()
+  // Dedupe across queries/countries by apply URL (CareerJet has no native id).
+  const byUrl = new Map<string, { job: CareerJetJob; country: CareerJetCountry }>()
   let queriesFetched = 0
   let fetchErrors = 0
   for (const q of queries) {
-    try {
-      for (let page = 1; page <= maxPages; page++) {
-        const jobs = await fetchCareerJetPage(q, affiliateId, page, maxJobsPerQuery)
-        if (jobs.length === 0) break
-        for (const job of jobs) {
-          if (!job.url) continue
-          if (!byUrl.has(job.url)) byUrl.set(job.url, job)
+    for (const country of countries) {
+      try {
+        for (let page = 1; page <= maxPages; page++) {
+          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery)
+          if (jobs.length === 0) break
+          for (const job of jobs) {
+            if (!job.url) continue
+            if (!byUrl.has(job.url)) byUrl.set(job.url, { job, country })
+          }
+          if (jobs.length < maxJobsPerQuery) break
         }
-        if (jobs.length < maxJobsPerQuery) break
+        queriesFetched++
+      } catch (err) {
+        console.error(`[careerjet-ingest] query "${q}" (${country.key}) failed:`, err)
+        fetchErrors++
       }
-      queriesFetched++
-    } catch (err) {
-      console.error(`[careerjet-ingest] query "${q}" failed:`, err)
-      fetchErrors++
     }
   }
 
-  const collected: AggregatorJob[] = [...byUrl.entries()].map(([url, job]) => ({
+  const collected: CareerJetAggregatorJob[] = [...byUrl.entries()].map(([url, entry]) => ({
     id: careerjetExternalKey(url),
-    title: job.title,
-    company: job.company,
-    location: job.locations || "",
-    description: job.description,
-    applyUrl: job.url,
-    postedAt: job.date,
-    isRemote: /remote/i.test(job.locations) || /remote/i.test(job.title),
-    salaryCurrency: "USD",
-    publisher: job.site,
+    title: entry.job.title,
+    company: entry.job.company,
+    location: entry.job.locations || "",
+    description: entry.job.description,
+    applyUrl: entry.job.url,
+    postedAt: entry.job.date,
+    isRemote: /remote/i.test(entry.job.locations) || /remote/i.test(entry.job.title),
+    salaryCurrency: entry.country.key === "ca" ? "CAD" : "USD",
+    publisher: entry.job.site,
+    sourceCountry: entry.country.key,
+    salaryRaw: entry.job.salary,
   }))
 
   try {
     const pool = getPostgresPool()
-    const stats = await ingestAggregatorJobs(pool, "careerjet", collected)
-    return NextResponse.json({ ok: true, queriesFetched, fetchErrors, ...stats })
+    const stats = await ingestAggregatorJobs(pool, "careerjet", collected, {
+      rawExtra: (job) => {
+        const careerjetJob = job as CareerJetAggregatorJob
+        return { country: careerjetJob.sourceCountry, salary_raw: careerjetJob.salaryRaw }
+      },
+    })
+    return NextResponse.json({
+      ok: true,
+      countries: countries.map((country) => country.key),
+      queriesFetched,
+      fetchErrors,
+      ...stats,
+    })
   } catch (err) {
     console.error("[careerjet-ingest] ingest failed:", err)
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })

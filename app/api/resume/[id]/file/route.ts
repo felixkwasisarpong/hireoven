@@ -1,6 +1,7 @@
 import { Readable } from "node:stream"
 import { NextResponse } from "next/server"
 import { generateResumeDocx } from "@/lib/resume/docx-generator"
+import { generateResumePDF } from "@/lib/resume/pdf-generator"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { getResumeObject } from "@/lib/supabase/storage"
 import { createClient } from "@/lib/supabase/server"
@@ -39,6 +40,23 @@ function contentDispositionFor(resume: Resume, forceDownload: boolean) {
   )
   const disposition = forceDownload ? "attachment" : "inline"
   return `${disposition}; filename="${preferredName}"`
+}
+
+function fallbackBaseName(resume: Resume) {
+  return sanitizeDownloadName(resume.name ?? resume.file_name, "resume")
+    .replace(/\.(pdf|docx?|rtf|txt)$/i, "")
+}
+
+function acceptsHtmlNavigation(request: Request) {
+  const accept = request.headers.get("accept") ?? ""
+  return accept.includes("text/html") && !accept.includes("application/json")
+}
+
+function studioPreviewRedirect(request: Request, resumeId: string) {
+  const url = new URL("/dashboard/resume/studio", request.url)
+  url.searchParams.set("mode", "preview")
+  url.searchParams.set("resumeId", resumeId)
+  return NextResponse.redirect(url)
 }
 
 export async function GET(
@@ -111,35 +129,42 @@ export async function GET(
         storagePath: resume.storage_path,
         error: error instanceof Error ? error.message : String(error),
       })
-      // When this is a preview request (no ?download=1), don't fall through to
-      // DOCX generation — the browser can't display DOCX inline and will trigger
-      // an unwanted page-level download from within the iframe.
-      if (!forceDownload) {
-        return NextResponse.json({ error: "File unavailable" }, { status: 404 })
-      }
     }
   }
 
-  // DOCX generation fallback — only reached when there is no storage_path, or
-  // storage_path exists but streaming failed AND the caller explicitly requested
-  // a download (?download=1). Preview requests (forceDownload=false) with a
-  // storage_path bail out above so we never serve an un-embeddable DOCX to an
-  // iframe.
+  // Generated fallback. Inline previews get a PDF so the browser can render the
+  // tab even when the original uploaded object is missing. Explicit downloads
+  // keep the editable DOCX export.
   try {
+    const baseName = fallbackBaseName(resume)
+    if (!forceDownload) {
+      const pdfBuffer = await generateResumePDF(resume)
+      return new NextResponse(new Uint8Array(pdfBuffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `inline; filename="${baseName}.pdf"`,
+          "Cache-Control": "no-store",
+        },
+      })
+    }
+
     const docxBuffer = await generateResumeDocx(resume)
     return new NextResponse(new Uint8Array(docxBuffer), {
       headers: {
         "Content-Type":
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "Content-Disposition": `${forceDownload ? "attachment" : "inline"}; filename="${sanitizeDownloadName(resume.name ?? resume.file_name, "resume")}.docx"`,
+        "Content-Disposition": `attachment; filename="${baseName}.docx"`,
         "Cache-Control": "no-store",
       },
     })
   } catch (error) {
-    console.error("[resume/file] Fallback DOCX generation failed", {
+    console.error("[resume/file] Fallback document generation failed", {
       resumeId: resume.id,
       error: error instanceof Error ? error.message : String(error),
     })
+    if (!forceDownload && acceptsHtmlNavigation(_request)) {
+      return studioPreviewRedirect(_request, resume.id)
+    }
     return NextResponse.json(
       { error: "Could not load resume file" },
       { status: 500 }
