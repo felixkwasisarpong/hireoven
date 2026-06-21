@@ -46,6 +46,12 @@ run() {
 # adzuna-ingest      30 */6 * * *      run api/cron/adzuna-ingest
 # jsearch-ingest     45 5 * * *        run api/cron/jsearch-ingest
 # waas-ingest        15 */6 * * *      run api/cron/waas-ingest
+# remotive-ingest    0 */12 * * *      run api/cron/remotive-ingest
+# themuse-ingest     0 */12 * * *      run api/cron/themuse-ingest
+# remoteok-ingest    0 */12 * * *      run api/cron/remoteok-ingest
+# arbeitnow-ingest   30 */12 * * *     run api/cron/arbeitnow-ingest
+# careerjet-ingest   30 */12 * * *     run api/cron/careerjet-ingest  # requires CAREERJET_AFFID
+# jooble-ingest      45 */12 * * *     run api/cron/jooble-ingest     # requires JOOBLE_API_KEY
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
 # discover-from-domains 0 6 * * *      run api/cron/discover-from-domains  # requires DISCOVER_FROM_DOMAINS_ENABLED=true
@@ -84,6 +90,12 @@ case "${1:-}" in
   adzuna-ingest)     run api/cron/adzuna-ingest ;;
   jsearch-ingest)    run api/cron/jsearch-ingest ;;
   waas-ingest)       run api/cron/waas-ingest ;;
+  remotive-ingest)   run api/cron/remotive-ingest ;;
+  themuse-ingest)    run api/cron/themuse-ingest ;;
+  remoteok-ingest)   run api/cron/remoteok-ingest ;;
+  arbeitnow-ingest)  run api/cron/arbeitnow-ingest ;;
+  careerjet-ingest)  run api/cron/careerjet-ingest ;;
+  jooble-ingest)     run api/cron/jooble-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
   discover-from-domains) run "api/cron/discover-from-domains?batch=${DISCOVER_FROM_DOMAINS_BATCH:-100}&concurrency=${DISCOVER_FROM_DOMAINS_CONCURRENCY:-8}" ;;

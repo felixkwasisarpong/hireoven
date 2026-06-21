@@ -55,6 +55,14 @@ DATABASE_URL=REPLACE_ME
  30 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh adzuna-ingest      >>/var/log/hireoven/adzuna-ingest.log 2>&1
  45 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh jsearch-ingest     >>/var/log/hireoven/jsearch-ingest.log 2>&1
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh dice-ingest        >>/var/log/hireoven/dice-ingest.log 2>&1
+# Aggregator feeds via the shared ingest pipeline (lib/jobs/aggregator-ingest).
+# Keyless: remotive, themuse, remoteok, arbeitnow. Keyed: careerjet (CAREERJET_AFFID), jooble (JOOBLE_API_KEY).
+  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh remotive-ingest    >>/var/log/hireoven/remotive-ingest.log 2>&1
+  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh themuse-ingest     >>/var/log/hireoven/themuse-ingest.log 2>&1
+  0 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh remoteok-ingest    >>/var/log/hireoven/remoteok-ingest.log 2>&1
+ 30 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh arbeitnow-ingest   >>/var/log/hireoven/arbeitnow-ingest.log 2>&1
+ 30 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh careerjet-ingest   >>/var/log/hireoven/careerjet-ingest.log 2>&1
+ 45 */12 * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh jooble-ingest      >>/var/log/hireoven/jooble-ingest.log 2>&1
   0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh discover-companies >>/var/log/hireoven/discover-companies.log 2>&1
   0 */2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh discover-tenants   >>/var/log/hireoven/discover-tenants.log 2>&1
   0 */4 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh builtin-discovery  >>/var/log/hireoven/builtin-discovery.log 2>&1
@@ -75,3 +83,17 @@ DATABASE_URL=REPLACE_ME
 # the app-worker .env — verify that flag, or step 2 never fires.
   0 2 * * *        flock -n /tmp/hireoven-domresolve.lock -c 'cd $HIREOVEN_REPO && timeout 60m npx tsx scripts/enrich-placeholder-company-domains.ts --limit=5000 --concurrency=12 >>/var/log/hireoven/enrich-domains.log 2>&1'
   0 6 * * *        flock -n /tmp/hireoven-domain-ats.lock -c 'cd $HIREOVEN_REPO && DISCOVER_FROM_DOMAINS_BATCH=800 DISCOVER_FROM_DOMAINS_CONCURRENCY=12 DISCOVER_FROM_DOMAINS_PROMOTE_CUSTOM=true timeout 75m bash scripts/crons.sh discover-from-domains >>/var/log/hireoven/discover-from-domains.log 2>&1'
+# ── New discovery feeders (host-side tsx, like the tasks above) ──
+# HN "Who is hiring?" — monthly thread, but cheap to run daily (it no-ops between
+# threads). Enrolls ATS-matched apply URLs via enroll-from-apply-url.
+ 30 7 * * *        flock -n /tmp/hireoven-hn.lock -c 'cd $HIREOVEN_REPO && npm run discover:hn:execute >>/var/log/hireoven/discover-hn.log 2>&1'
+# VC portfolios — funded startups are nearly all Greenhouse/Lever/Ashby. Weekly.
+  0 4 * * 2        flock -n /tmp/hireoven-vc.lock -c 'cd $HIREOVEN_REPO && timeout 60m npm run discover:vc-portfolios:execute >>/var/log/hireoven/discover-vc.log 2>&1'
+# BuiltWith — PAID (Lists API gates to ~$495/mo Pro). Left OFF by default. The
+# free path is ad-hoc with a domain list file:
+#   npx tsx scripts/discover-builtwith.ts --file=domains.txt --execute
+# To enable the recurring per-tech pull, set BUILTWITH_API_KEY and uncomment:
+#  0 4 * * 3        flock -n /tmp/hireoven-bw.lock -c 'cd $HIREOVEN_REPO && timeout 90m npx tsx scripts/discover-builtwith.ts --tech=Greenhouse --execute --limit=2000 >>/var/log/hireoven/discover-builtwith.log 2>&1'
+# Crunchbase — PAID (no free API tier as of 2025). Left OFF by default. Set
+# CRUNCHBASE_API_KEY and uncomment to enable:
+#  0 4 * * 4        flock -n /tmp/hireoven-cb.lock -c 'cd $HIREOVEN_REPO && timeout 60m npm run discover:crunchbase:execute >>/var/log/hireoven/discover-crunchbase.log 2>&1'

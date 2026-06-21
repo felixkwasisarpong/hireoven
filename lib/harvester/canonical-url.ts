@@ -86,6 +86,29 @@ export function canonicalCareersUrl(atsType: AtsName, slug: string): string | nu
       return `https://www.usajobs.gov/Search/Results?d=${encodeURIComponent(slug)}`
     case "rippling":
       return `https://ats.rippling.com/${encodeURIComponent(slug)}/jobs`
+    case "neogov":
+      // Slug = GovernmentJobs.com agency token.
+      return `https://www.governmentjobs.com/careers/${encodeURIComponent(slug)}`
+    case "eures":
+      return `https://eures.europa.eu/search?q=${encodeURIComponent(slug)}`
+    case "ukfindajob":
+      return `https://findajob.dwp.gov.uk/search?q=${encodeURIComponent(slug)}`
+    case "canadajobbank":
+      return `https://www.jobbank.gc.ca/jobsearch?q=${encodeURIComponent(slug)}`
+    case "fountain":
+      return `https://app.fountain.com/careers/${encodeURIComponent(slug)}`
+    case "paylocity":
+      return `https://recruiting.paylocity.com/recruiting/jobs/All/${encodeURIComponent(slug)}`
+    case "paycom":
+      return `https://www.paycomonline.net/v4/ats/web.php/jobs?clientkey=${encodeURIComponent(slug)}`
+    case "dayforce":
+      return `https://us.dayforcehcm.com/CandidatePortal/en-US/${encodeURIComponent(slug)}`
+    case "phenom":
+      return `https://${slug}.phenompeople.com/`
+    case "avature":
+      return `https://${slug}.avature.net/`
+    case "ukg":
+      return `https://recruiting.ultipro.com/${encodeURIComponent(slug)}`
     default:
       return null
   }
