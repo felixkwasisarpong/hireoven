@@ -50,7 +50,7 @@ run() {
 # themuse-ingest     0 */12 * * *      run api/cron/themuse-ingest
 # remoteok-ingest    0 */12 * * *      run api/cron/remoteok-ingest
 # arbeitnow-ingest   30 */12 * * *     run api/cron/arbeitnow-ingest
-# careerjet-ingest   30 */12 * * *     run api/cron/careerjet-ingest  # requires CAREERJET_AFFID
+# careerjet-ingest   30 */12 * * *     run api/cron/careerjet-ingest  # requires CAREERJET_AFFILIATE_ID
 # jooble-ingest      45 */12 * * *     run api/cron/jooble-ingest     # requires JOOBLE_API_KEY
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants

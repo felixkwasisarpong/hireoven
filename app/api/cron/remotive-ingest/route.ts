@@ -56,17 +56,16 @@ type RemotiveJob = {
 
 async function fetchRemotiveJobs(category: string, limit: number): Promise<RemotiveJob[]> {
   const url = `https://remotive.io/api/remote-jobs?category=${encodeURIComponent(category)}&limit=${limit}`
-  try {
-    const res = await fetch(url, {
-      headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
-      signal: AbortSignal.timeout(20_000),
-    })
-    if (!res.ok) return []
-    const data = (await res.json()) as { jobs?: RemotiveJob[] }
-    return data.jobs ?? []
-  } catch {
-    return []
+  const res = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!res.ok) {
+    const body = await res.text().catch(() => "")
+    throw new Error(`Remotive API ${res.status} for "${category}": ${body.slice(0, 200)}`)
   }
+  const data = (await res.json()) as { jobs?: RemotiveJob[] }
+  return data.jobs ?? []
 }
 
 function parseSalary(salaryStr: string): { min?: number; max?: number } {
@@ -94,12 +93,14 @@ export async function GET(request: NextRequest) {
 
   const sp = request.nextUrl.searchParams
   const limitPerCategory = Number(sp.get("limit") ?? process.env.REMOTIVE_LIMIT ?? "100")
-  const categories = (sp.get("categories") ?? process.env.REMOTIVE_CATEGORIES ?? "")
-    .split(",")
-    .map((c) => c.trim())
-    .filter(Boolean)
-    .concat(DEFAULT_CATEGORIES)
-    .filter((c, i, arr) => arr.indexOf(c) === i)
+  const categoryOverride = sp.get("categories") ?? process.env.REMOTIVE_CATEGORIES
+  const categories = categoryOverride
+    ? categoryOverride
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .filter((c, i, arr) => arr.indexOf(c) === i)
+    : DEFAULT_CATEGORIES
 
   const collected: AggregatorJob[] = []
   let categoriesFetched = 0
@@ -131,6 +132,15 @@ export async function GET(request: NextRequest) {
       console.error(`[remotive-ingest] category "${cat}" failed:`, err)
       fetchErrors++
     }
+  }
+
+  if (collected.length === 0 && fetchErrors > 0) {
+    return NextResponse.json({
+      ok: false,
+      error: "Remotive upstream fetch failed before any jobs were collected",
+      categoriesFetched,
+      fetchErrors,
+    }, { status: 502 })
   }
 
   try {

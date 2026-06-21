@@ -18,6 +18,8 @@
  */
 
 import type { Pool } from "pg"
+import { isAtsDomain } from "@/lib/companies/ats-domains"
+import { companyLogoUrlFromDomain, isLogoUrlSafe, normalizeCompanyDomain } from "@/lib/companies/logo-url"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
@@ -61,7 +63,9 @@ export interface IngestStats {
   updated: number
   enrolled: number
   placeholders: number
+  logosResolved: number
   hiddenLowQuality: number
+  removedEmptyCompanies: number
   errors: number
   harvestBumped: number
 }
@@ -73,6 +77,33 @@ function deriveFallbackDomain(source: string, companyName: string): string {
     .replace(/-+/g, "-")
     .slice(0, 40)
   return `${source}-${slug}.placeholder`
+}
+
+function normalizedRealDomain(domain: string | null | undefined): string | null {
+  const normalized = normalizeCompanyDomain(domain ?? "")
+  if (!normalized || normalized.endsWith(".placeholder") || isAtsDomain(normalized)) return null
+  return normalized
+}
+
+function resolvedLogoForJob(job: AggregatorJob): string | null {
+  if (isLogoUrlSafe(job.companyLogo)) return job.companyLogo!.trim()
+
+  const domain = normalizedRealDomain(job.companyDomain)
+  if (!domain) return null
+
+  const logoUrl = companyLogoUrlFromDomain(domain, "logo-dev")
+  return logoUrl || null
+}
+
+function shouldBackfillLogo(currentLogoUrl: string | null | undefined): boolean {
+  if (!currentLogoUrl?.trim()) return true
+  if (!isLogoUrlSafe(currentLogoUrl)) return true
+  try {
+    const host = new URL(currentLogoUrl).hostname.toLowerCase()
+    return host.includes("google.com") || host.endsWith(".gstatic.com")
+  } catch {
+    return false
+  }
 }
 
 export async function ingestAggregatorJobs(
@@ -88,7 +119,9 @@ export async function ingestAggregatorJobs(
     updated: 0,
     enrolled: 0,
     placeholders: 0,
+    logosResolved: 0,
     hiddenLowQuality: 0,
+    removedEmptyCompanies: 0,
     errors: 0,
     harvestBumped: 0,
   }
@@ -115,51 +148,90 @@ export async function ingestAggregatorJobs(
   // Resolve existing companies by lower(trim(name)).
   const companyNames = [...byCompany.keys()]
   const companyIdMap = new Map<string, string>()
-  const existing = await pool.query<{ id: string; name: string }>(
-    `SELECT id, LOWER(TRIM(name)) AS name
+  const logoBackfills = new Map<string, string>()
+  const newlyCreatedCompanyIds = new Set<string>()
+  const existing = await pool.query<{ id: string; name: string; logo_url: string | null }>(
+    `SELECT id, LOWER(TRIM(name)) AS name, logo_url
        FROM companies
       WHERE LOWER(TRIM(name)) = ANY($1)`,
     [companyNames]
   )
-  for (const row of existing.rows) companyIdMap.set(row.name, row.id)
+  for (const row of existing.rows) {
+    companyIdMap.set(row.name, row.id)
+    const sample = byCompany.get(row.name)?.find((job) => resolvedLogoForJob(job)) ?? byCompany.get(row.name)?.[0]
+    const logoUrl = sample ? resolvedLogoForJob(sample) : null
+    if (logoUrl && shouldBackfillLogo(row.logo_url)) logoBackfills.set(row.id, logoUrl)
+  }
 
   // Create companies for unknowns — ATS enrollment first, then placeholder.
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
   for (const normName of missing) {
     const sample = byCompany.get(normName)![0]!
+    const logoUrl = resolvedLogoForJob(sample)
     try {
       const enrolled = await enrollFromApplyUrl(pool, {
         companyName: sample.company,
         applyUrl: sample.applyUrl,
         companyDomain: sample.companyDomain ?? null,
-        logoUrl: sample.companyLogo ?? null,
+        logoUrl,
         source,
       })
       if (enrolled) {
         companyIdMap.set(normName, enrolled.id)
-        if (enrolled.enrolled) stats.enrolled++
+        if (enrolled.enrolled) {
+          stats.enrolled++
+          newlyCreatedCompanyIds.add(enrolled.id)
+        }
         continue
       }
       const domain = sample.companyDomain ?? deriveFallbackDomain(source, sample.company)
-      const res = await pool.query<{ id: string }>(
+      const res = await pool.query<{ id: string; created: boolean }>(
         `INSERT INTO companies (name, domain, careers_url, is_active, logo_url, raw_ats_config)
          VALUES ($1, $2, $3, false, $4, $5)
-         ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name
-         RETURNING id`,
+         ON CONFLICT (domain) DO UPDATE
+           SET name = EXCLUDED.name,
+               logo_url = COALESCE(NULLIF(companies.logo_url, ''), EXCLUDED.logo_url),
+               updated_at = CASE
+                 WHEN EXCLUDED.logo_url IS NOT NULL AND NULLIF(companies.logo_url, '') IS NULL THEN NOW()
+                 ELSE companies.updated_at
+               END
+         RETURNING id, (xmax = 0) AS created`,
         [
           sample.company,
           domain,
           sample.companyDomain ? `https://${sample.companyDomain}` : null,
-          sample.companyLogo ?? null,
+          logoUrl,
           JSON.stringify({ source, publisher: sample.publisher, crawl_allowed: false }),
         ]
       )
       if (res.rows[0]) {
         companyIdMap.set(normName, res.rows[0].id)
-        stats.placeholders++
+        if (res.rows[0].created) {
+          stats.placeholders++
+          newlyCreatedCompanyIds.add(res.rows[0].id)
+        }
       }
     } catch {
       // Domain conflict — skip this company's jobs.
+    }
+  }
+
+  for (const [companyId, logoUrl] of logoBackfills) {
+    try {
+      const res = await pool.query(
+        `UPDATE companies
+            SET logo_url = $1, updated_at = NOW()
+          WHERE id = $2
+            AND (
+              logo_url IS NULL OR trim(logo_url) = ''
+              OR logo_url ILIKE '%google.com/s2/favicons%'
+              OR logo_url ILIKE '%gstatic.com/favicon%'
+            )`,
+        [logoUrl, companyId]
+      )
+      stats.logosResolved += res.rowCount ?? 0
+    } catch (err) {
+      console.error(`[${source}-ingest] failed to backfill company logo ${companyId}:`, err)
     }
   }
 
@@ -283,18 +355,36 @@ export async function ingestAggregatorJobs(
     }
   }
 
+  if (newlyCreatedCompanyIds.size > 0) {
+    const empty = await pool.query<{ id: string }>(
+      `DELETE FROM companies c
+        WHERE c.id = ANY($1::uuid[])
+          AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_id = c.id)
+        RETURNING id`,
+      [[...newlyCreatedCompanyIds]]
+    )
+    stats.removedEmptyCompanies = empty.rowCount ?? 0
+    for (const row of empty.rows) {
+      for (const [name, id] of companyIdMap.entries()) {
+        if (id === row.id) companyIdMap.delete(name)
+      }
+    }
+  }
+
+  const touchedCompanyIds = [...new Set(companyIdMap.values())]
+
   // Refresh job_count on touched companies.
-  if (companyIdMap.size > 0) {
+  if (touchedCompanyIds.length > 0) {
     await pool.query(
       `UPDATE companies c
           SET job_count = (SELECT COUNT(*) FROM jobs j WHERE j.company_id = c.id AND j.is_active = true)
         WHERE c.id = ANY($1)`,
-      [[...companyIdMap.values()]]
+      [touchedCompanyIds]
     )
   }
 
   try {
-    stats.harvestBumped = await bumpHarvestForActiveCompanies(pool, [...companyIdMap.values()])
+    stats.harvestBumped = await bumpHarvestForActiveCompanies(pool, touchedCompanyIds)
   } catch (err) {
     console.error(`[${source}-ingest] harvest bump failed:`, err)
   }
