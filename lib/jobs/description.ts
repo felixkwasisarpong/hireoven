@@ -799,6 +799,42 @@ function extractShopifyDescriptionFromHtml(html: string): string | null {
   return cleanJobDescription(decoded)
 }
 
+/**
+ * Infosys careers detail pages (digitalcareers.infosys.com) have no JSON-LD and
+ * no semantic article/main wrapper, so the generic extractor falls back to the
+ * whole <body> and drags in the language selector + breadcrumb nav ("English -
+ * Spanish - ... Infosys Careers Explore Opportunities Jobs in USA ..."). The
+ * real JD (the structured fields plus Overview/Responsibilities/Qualifications
+ * prose) lives in `.description-content`. Note: an earlier
+ * `.js-template-job-description` element is a script-laden template stub that
+ * leaks the nav strings, so we deliberately anchor on `.description-content`.
+ * Slice it up to the next sibling section (similar jobs / bottom links / footer)
+ * and clean it. `.description-page-right` is NOT used as an end marker because
+ * it can appear mid-content before the prose.
+ */
+function extractInfosysDescriptionFromHtml(html: string): string | null {
+  const startMatch = html.match(
+    /<div[^>]*\bclass=["'][^"']*\bdescription-content\b[^"']*["'][^>]*>/i
+  )
+  if (!startMatch || startMatch.index == null) return null
+
+  const start = startMatch.index + startMatch[0].length
+  const rest = html.slice(start)
+
+  const endMarkers = [
+    /<div[^>]*\bid=["']similar_jobs["']/i,
+    /<div[^>]*\bclass=["'][^"']*\bdescription-page-bottom-links\b/i,
+    /<footer\b/i,
+  ]
+  let end = rest.length
+  for (const marker of endMarkers) {
+    const m = rest.match(marker)
+    if (m?.index != null && m.index < end) end = m.index
+  }
+
+  return cleanJobDescription(rest.slice(0, end))
+}
+
 function parseWorkdayDetailContext(url: URL):
   | { tenantHost: string; tenant: string; site: string; normalizedPath: string }
   | null {
@@ -1064,6 +1100,10 @@ export async function fetchJobDescription(
     if (parsedUrl?.hostname.toLowerCase().endsWith("shopify.com")) {
       const shopifyDescription = extractShopifyDescriptionFromHtml(html)
       if (shopifyDescription) return shopifyDescription
+    }
+    if (parsedUrl?.hostname.toLowerCase().includes("digitalcareers.infosys.com")) {
+      const infosysDescription = extractInfosysDescriptionFromHtml(html)
+      if (infosysDescription) return infosysDescription
     }
     return extractJobDescriptionFromHtml(html, resolvedProvider)
   } catch {
