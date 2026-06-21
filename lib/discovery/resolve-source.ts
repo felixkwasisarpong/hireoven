@@ -5,7 +5,7 @@
  *     → resolveDomain()            (lib/discovery/resolve-domain)
  *     → discoverCareersUrl()       (lib/companies/careers-url-discovery)
  *     → detectAdapter / detectAtsFromHtml
- *     → USA confirmation           (lib/discovery/usa-confirm + JobPosting JSON-LD)
+ *     → US/Canada confirmation     (lib/discovery/usa-confirm + JobPosting JSON-LD)
  *     → computeConfidence()        (lib/discovery/confidence-score)
  *
  * Pure with respect to the DB: it takes a SourceSignal, performs at most a
@@ -25,7 +25,7 @@ import { detectAtsFromHtml } from "@/lib/companies/ats-signatures"
 import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { computeConfidence } from "@/lib/discovery/confidence-score"
-import { isUsaLocation } from "@/lib/discovery/usa-confirm"
+import { isUsaCountryCode, isUsaLocation } from "@/lib/discovery/usa-confirm"
 import { resolveDomain, type ResolveDomainInput } from "@/lib/discovery/resolve-domain"
 import type { SourceSignal } from "@/lib/discovery/source-signal"
 
@@ -97,12 +97,12 @@ function jobPostingIsUsa(posting: Record<string, unknown>): boolean {
   const loc = posting.jobLocation as { address?: { addressCountry?: unknown; addressRegion?: unknown; addressLocality?: unknown } } | undefined
   const addr = Array.isArray(loc) ? (loc[0]?.address ?? {}) : (loc?.address ?? {})
   const country = String(addr?.addressCountry ?? "")
-  if (/^(us|usa|united states)/i.test(country.trim())) return true
+  if (isUsaCountryCode(country)) return true
   const flat = `${addr?.addressLocality ?? ""}, ${addr?.addressRegion ?? ""}`.trim()
   return isUsaLocation(flat)
 }
 
-/** Scan a careers page's JSON-LD for JobPosting nodes + how many are USA. */
+/** Scan a careers page's JSON-LD for JobPosting nodes + how many are US/Canada. */
 function scanCareersHtml(html: string): { postings: number; usaPostings: number } {
   let postings = 0
   let usaPostings = 0
@@ -184,7 +184,7 @@ export async function resolveCareerSource(
       atsIdentifier = urlDet.slug
       trace.push(`ats:url:${atsType}:${atsIdentifier}`)
     }
-    // Fetch the winning page once for JSON-LD USA + (if needed) HTML ATS.
+    // Fetch the winning page once for JSON-LD US/Canada + (if needed) HTML ATS.
     const page = await probe({ url: careers.url, signal: input.outerSignal })
     if (page.ok && page.html) {
       careersReachable = true
@@ -205,7 +205,7 @@ export async function resolveCareerSource(
     careers.url ||
     null
 
-  // ── 4. USA confirmation ──────────────────────────────────────────────────────
+  // ── 4. US/Canada confirmation ───────────────────────────────────────────────
   const usaFromSample = isUsaLocation(signal.sampleLocation)
   const checkedJobs = scan.postings > 0 || Boolean(signal.sampleLocation)
   const usaConfirmed = usaFromSample || scan.usaPostings > 0

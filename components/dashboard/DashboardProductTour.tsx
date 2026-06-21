@@ -216,7 +216,7 @@ function buildTourSteps(plan: Plan | null): TourStep[] {
           ? "Upgrade to Pro Max"
           : plan === "pro_max"
             ? undefined
-            : "Start Pro trial",
+            : "Start Pro",
       ctaFeature: upsellFeature,
     },
   ]

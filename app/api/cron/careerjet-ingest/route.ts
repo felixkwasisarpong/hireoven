@@ -1,12 +1,13 @@
 /**
  * GET /api/cron/careerjet-ingest
  *
- * Pulls US jobs from CareerJet's free affiliate API.
+ * Pulls US and Canada jobs from CareerJet's free affiliate API.
  * Register at https://www.careerjet.com/partners/api/ to get an affiliate ID.
  *
  * Env:
  *   CAREERJET_AFFILIATE_ID  — required (free, register at careerjet.com)
  *   CAREERJET_SEARCH_QUERIES — comma-separated keywords (default list below)
+ *   CAREERJET_COUNTRIES      — comma-separated markets: us,ca (default: us,ca)
  *   CAREERJET_MAX_JOBS       — max jobs per query (default: 99, API max per page)
  *   CAREERJET_MAX_PAGES      — pages per query (default: 3)
  */
@@ -63,16 +64,38 @@ type CareerJetResponse = {
   error?: string
 }
 
+type CareerJetCountry = {
+  key: "us" | "ca"
+  location: string
+  localeCode: string
+}
+
+const CAREERJET_COUNTRIES: Record<CareerJetCountry["key"], CareerJetCountry> = {
+  us: { key: "us", location: "USA", localeCode: "en_US" },
+  ca: { key: "ca", location: "Canada", localeCode: "en_CA" },
+}
+
+function parseCareerJetCountries(raw: string | null | undefined): CareerJetCountry[] {
+  const requested = (raw ?? "us,ca")
+    .split(",")
+    .map((country) => country.trim().toLowerCase())
+    .filter((country): country is CareerJetCountry["key"] => country === "us" || country === "ca")
+  const unique = [...new Set(requested)]
+  const keys: CareerJetCountry["key"][] = unique.length ? unique : ["us", "ca"]
+  return keys.map((country) => CAREERJET_COUNTRIES[country])
+}
+
 async function fetchCareerJetPage(
   keywords: string,
   affiliateId: string,
+  country: CareerJetCountry,
   page: number,
   pageSize: number
 ): Promise<CareerJetJob[]> {
   const params = new URLSearchParams({
     keywords,
-    location: "USA",
-    locale_code: "en_US",
+    location: country.location,
+    locale_code: country.localeCode,
     affid: affiliateId,
     format: "json",
     pagesize: String(pageSize),
@@ -106,6 +129,10 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const maxJobsPerQuery = Number(sp.get("maxJobs") ?? process.env.CAREERJET_MAX_JOBS ?? "99")
   const maxPages = Number(sp.get("maxPages") ?? process.env.CAREERJET_MAX_PAGES ?? "3")
+  const countryOverride = sp.get("country")
+  const countries = countryOverride
+    ? parseCareerJetCountries(countryOverride)
+    : parseCareerJetCountries(process.env.CAREERJET_COUNTRIES)
   const queries = (sp.get("q") ? [sp.get("q")!] :
     (process.env.CAREERJET_SEARCH_QUERIES ?? "")
       .split(",").map((q) => q.trim()).filter(Boolean)
@@ -113,25 +140,27 @@ export async function GET(request: NextRequest) {
       .filter((q, i, arr) => arr.indexOf(q) === i))
 
   const pool = getPostgresPool()
-  const stats = { queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0 }
+  const stats = { queries: 0, countries: countries.length, fetched: 0, inserted: 0, updated: 0, errors: 0 }
   const seen = new Map<string, CareerJetJob>()
 
   for (const q of queries) {
-    try {
-      for (let page = 1; page <= maxPages; page++) {
-        const jobs = await fetchCareerJetPage(q, affiliateId, page, maxJobsPerQuery)
-        if (jobs.length === 0) break
-        for (const job of jobs) {
-          if (!job.url || !isValidCompanyName(job.company)) continue
-          if (!seen.has(job.url)) seen.set(job.url, job)
+    for (const country of countries) {
+      try {
+        for (let page = 1; page <= maxPages; page++) {
+          const jobs = await fetchCareerJetPage(q, affiliateId, country, page, maxJobsPerQuery)
+          if (jobs.length === 0) break
+          for (const job of jobs) {
+            if (!job.url || !isValidCompanyName(job.company)) continue
+            if (!seen.has(job.url)) seen.set(job.url, job)
+          }
+          if (jobs.length < maxJobsPerQuery) break
         }
-        if (jobs.length < maxJobsPerQuery) break
+        stats.queries++
+        stats.fetched = seen.size
+      } catch (err) {
+        console.error(`[careerjet-ingest] query "${q}" (${country.key}) failed:`, err)
+        stats.errors++
       }
-      stats.queries++
-      stats.fetched = seen.size
-    } catch (err) {
-      console.error(`[careerjet-ingest] query "${q}" failed:`, err)
-      stats.errors++
     }
   }
 

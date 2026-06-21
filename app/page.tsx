@@ -384,7 +384,7 @@ export default async function HomePage() {
             <FeatureCard icon="✍️" title="Resume tailoring" body="Apex adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
             <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
             <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
-            <FeatureCard icon="🇺🇸" title="Built for the US market" body="Every role is US-based — no overseas noise to filter out. The feed, match scores, and visa signals are all tuned to the American job market." accent="USA-only" color="#2563EB" />
+            <FeatureCard icon="🇺🇸🇨🇦" title="Built for the US + Canada market" body="Every role is in the United States or Canada — no overseas noise to filter out. The feed, match scores, and location signals are tuned to the North American job market." accent="US + Canada" color="#2563EB" />
           </div>
         </div>
       </section>
@@ -484,7 +484,7 @@ export default async function HomePage() {
               Join the waitlist
               <ArrowRight className="h-4 w-4" />
             </Link>
-            <p className="text-xs text-white/30">Pro feature · 7-day free trial included</p>
+            <p className="text-xs text-white/30">Pro feature · Paid plans start at $19/month</p>
           </div>
         </div>
       </section>
@@ -554,7 +554,7 @@ export default async function HomePage() {
             />
           </div>
           <p className="mt-8 text-center text-sm text-slate-400">
-            All paid plans include a 7-day free trial. Cancel anytime.{" "}
+            Paid plans start at $19/month. Cancel anytime.{" "}
             <Link href="/pricing" className="font-semibold text-[#FF5C18] hover:underline">Full comparison →</Link>
           </p>
         </div>
