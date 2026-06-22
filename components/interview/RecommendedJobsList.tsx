@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { Zap } from "lucide-react"
+import { ArrowRight, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type RecommendedJob = {
@@ -29,18 +29,19 @@ function formatDate(iso: string) {
 
 function CompanyInitial({ name }: { name: string }) {
   const letter = name.trim()[0]?.toUpperCase() ?? "?"
-  const colors = [
-    "bg-blue-100 text-blue-700",
-    "bg-violet-100 text-violet-700",
-    "bg-emerald-100 text-emerald-700",
-    "bg-amber-100 text-amber-700",
-    "bg-pink-100 text-pink-700",
-    "bg-cyan-100 text-cyan-700",
-    "bg-orange-100 text-orange-700",
+  const colors: Array<{ bg: string; text: string }> = [
+    { bg: "#fff3ea", text: "#ec6516" },
+    { bg: "#eef4ff", text: "#2563eb" },
+    { bg: "#ecfdf5", text: "#0f9d6a" },
+    { bg: "#fff7ed", text: "#c2530d" },
+    { bg: "#f3eeff", text: "#7c3aed" },
   ]
   const color = colors[letter.charCodeAt(0) % colors.length]
   return (
-    <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[13px] font-bold shadow-sm ${color}`}>
+    <div
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] text-[14px] font-extrabold"
+      style={{ backgroundColor: color.bg, color: color.text }}
+    >
       {letter}
     </div>
   )
@@ -66,52 +67,58 @@ export default function RecommendedJobsList({
 
   if (loading) {
     return (
-      <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
-        <div className="h-4 w-44 animate-pulse rounded-full bg-slate-100" />
+      <section className={cn(className)}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="h-5 w-56 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-4 w-14 animate-pulse rounded-full bg-slate-100" />
+        </div>
         <div className="mt-3 space-y-2">
-          {[0, 1].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-100" />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-[66px] animate-pulse rounded-[14px] bg-slate-100" />
           ))}
         </div>
       </section>
     )
   }
 
-  if (jobs.length === 0) return null
-
   return (
-    <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
+    <section className={cn(className)}>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-orange-600">
-            Pipeline practice
-          </p>
-          <h2 className="mt-1 text-sm font-semibold text-slate-950">Saved jobs to rehearse</h2>
-        </div>
+        <h2 className="text-[16px] font-bold text-[#0d1424]">Rehearse against a saved job</h2>
+        <Link
+          href="/dashboard/applications"
+          className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#2563eb] transition hover:text-blue-700"
+        >
+          View all <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+        </Link>
       </div>
 
       <div className="space-y-2">
-        {jobs.map((job) => (
+        {jobs.length === 0 ? (
+          <div className="rounded-[14px] border border-[#eef0f4] bg-white px-4 py-5 text-[13px] text-[#98a1b0]">
+            Save a job first, then come back to rehearse against the real role.
+          </div>
+        ) : jobs.map((job) => (
           <div
             key={job.id}
-            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
+            className="flex items-center gap-[13px] rounded-[14px] border border-[#eef0f4] bg-white px-3.5 py-[13px] transition hover:border-[#dfe3ea]"
           >
             <CompanyInitial name={job.company} />
 
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold text-slate-900">
+              <p className="truncate text-[14.5px] font-bold text-[#0f1729]">
                 {job.title}
               </p>
-              <p className="text-[11px] text-slate-400">
+              <p className="mt-0.5 truncate text-[12.5px] text-[#98a1b0]">
                 {job.company} · saved {formatDate(job.savedAt)}
               </p>
             </div>
 
             <Link
               href={`/dashboard/interview/setup?jobId=${job.id}`}
-              className="flex shrink-0 items-center gap-1.5 rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-[12px] font-semibold text-orange-700 transition hover:bg-orange-100"
+              className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[10px] border border-[#ffdcc4] bg-[#fff6f0] px-3.5 text-[13px] font-semibold text-[#c2530d] transition hover:bg-[#ffeede] active:translate-y-px"
             >
-              <Zap className="h-3 w-3" />
+              <Zap className="h-3.5 w-3.5 fill-[#ec6516] text-[#ec6516]" />
               Practice
             </Link>
           </div>

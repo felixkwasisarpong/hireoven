@@ -2,8 +2,7 @@ import { getSessionUser } from "@/lib/auth/session-user"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { listRecentSessions, type InterviewSessionWithDebrief } from "@/lib/apex/interview/queries"
 import Link from "next/link"
-import { ArrowRight, Mic } from "lucide-react"
-import GrowPageShell from "@/components/grow/GrowPageShell"
+import { History } from "lucide-react"
 import InterviewHubCards from "@/components/interview/InterviewHubCards"
 import RecommendedJobsList from "@/components/interview/RecommendedJobsList"
 import RecentSessionsList from "@/components/interview/RecentSessionsList"
@@ -152,39 +151,34 @@ export default async function InterviewHubPage() {
   const initialData = await getHubInitialData()
 
   return (
-    <GrowPageShell
-      kicker="Grow"
-      title="Interview Practice"
-      description="Choose text, live voice, or coding practice, then turn each session into a focused debrief for your next real interview."
-      icon={Mic}
-      signals={[
-        { label: "Modes", value: "Text, live, coding" },
-        { label: "Output", value: "Debriefs" },
-        { label: "Context", value: "Saved jobs" },
-      ]}
-    >
-      <div className="space-y-5">
-        <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-5">
-          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-orange-600">
-                Practice modes
-              </p>
-              <h2 className="mt-1 text-base font-semibold text-slate-950">Start a session</h2>
-            </div>
-            <Link
-              href="/dashboard/interview/history"
-              className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-950"
-            >
-              Session history
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-            </Link>
+    <main className="min-h-full bg-[#fbfcfd]">
+      <div className="mx-auto w-full max-w-[1260px] px-4 py-8 sm:px-6 lg:px-11 lg:py-[38px]">
+        <div className="mb-[30px] flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2.5 text-[11.5px] font-bold uppercase tracking-[0.16em] text-[#ec6516]">
+              Grow · Interview Practice
+            </p>
+            <h1 className="m-0 text-[34px] font-extrabold leading-[1.02] tracking-[-0.03em] text-[#0d1424] sm:text-[40px]">
+              Step into the room.
+            </h1>
+            <p className="mt-3 max-w-[540px] text-[16px] leading-[1.6] text-[#5b6573]">
+              Pick a practice mode, run a focused session, and walk away with a debrief built for your next real interview.
+            </p>
           </div>
+          <Link
+            href="/dashboard/interview/history"
+            className="inline-flex h-11 w-fit shrink-0 items-center gap-2 rounded-xl border border-[#e7eaf0] bg-white px-[18px] text-[13.5px] font-semibold text-[#3f4856] shadow-[0_1px_2px_rgba(15,23,42,.03)] transition hover:border-[#d6dbe4] hover:bg-[#f9fafb] active:translate-y-px"
+          >
+            <History className="h-[15px] w-[15px] text-[#9aa3b1]" strokeWidth={2} aria-hidden />
+            Session history
+          </Link>
+        </div>
 
+        <div className="mb-[34px]">
           <InterviewHubCards />
-        </section>
+        </div>
 
-        <div className="grid gap-5 lg:grid-cols-2">
+        <div className="grid gap-[22px] lg:grid-cols-2">
           <RecommendedJobsList
             className="mt-0"
             initialJobs={initialData.recommendedJobs}
@@ -197,6 +191,6 @@ export default async function InterviewHubPage() {
           />
         </div>
       </div>
-    </GrowPageShell>
+    </main>
   )
 }

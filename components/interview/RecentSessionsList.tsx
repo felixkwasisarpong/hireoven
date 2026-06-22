@@ -29,9 +29,9 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const TYPE_STYLES: Record<string, { pill: string; dot: string }> = {
-  text:   { pill: "bg-blue-50 text-blue-700 ring-1 ring-blue-100",    dot: "bg-blue-500" },
-  live:   { pill: "bg-violet-50 text-violet-700 ring-1 ring-violet-100", dot: "bg-violet-500" },
-  coding: { pill: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",  dot: "bg-amber-500" },
+  text:   { pill: "border-[#dbeafe] bg-[#eff6ff] text-[#2563eb]", dot: "bg-[#2563eb]" },
+  live:   { pill: "border-[#e0d5ff] bg-[#f3eeff] text-[#7c3aed]", dot: "bg-[#7c3aed]" },
+  coding: { pill: "border-[#bbf3da] bg-[#ecfdf5] text-[#0f9d6a]", dot: "bg-[#0f9d6a]" },
 }
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -43,17 +43,17 @@ const PERSONA_LABELS: Record<string, string> = {
 }
 
 function scoreColor(score: number | null) {
-  if (score === null) return "text-slate-400"
-  if (score >= 80) return "text-emerald-600"
-  if (score >= 60) return "text-amber-600"
-  return "text-red-500"
+  if (score === null) return "text-[#98a1b0]"
+  if (score >= 40) return "text-[#0b7a52]"
+  if (score >= 20) return "text-[#c2530d]"
+  return "text-[#dc2626]"
 }
 
 function scoreBg(score: number | null) {
-  if (score === null) return "bg-slate-50 ring-slate-200"
-  if (score >= 80) return "bg-emerald-50 ring-emerald-200"
-  if (score >= 60) return "bg-amber-50 ring-amber-200"
-  return "bg-red-50 ring-red-200"
+  if (score === null) return "bg-[#f4f6f9]"
+  if (score >= 40) return "bg-[#ecfdf5]"
+  if (score >= 20) return "bg-[#fff7ed]"
+  return "bg-[#fef2f2]"
 }
 
 function formatDate(iso: string) {
@@ -80,38 +80,38 @@ export default function RecentSessionsList({
 
   if (loading) {
     return (
-      <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
-        <div className="h-4 w-32 animate-pulse rounded-full bg-slate-100" />
+      <section className={cn(className)}>
+        <div className="mb-3 flex items-center justify-between">
+          <div className="h-5 w-48 animate-pulse rounded-full bg-slate-100" />
+          <div className="h-4 w-14 animate-pulse rounded-full bg-slate-100" />
+        </div>
         <div className="mt-3 space-y-2">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-[60px] animate-pulse rounded-lg bg-slate-100" />
+            <div key={i} className="h-[66px] animate-pulse rounded-[14px] bg-slate-100" />
           ))}
         </div>
       </section>
     )
   }
 
-  if (sessions.length === 0) return null
-
   return (
-    <section className={cn("rounded-lg border border-slate-200 bg-white p-4 shadow-[0_1px_2px_rgba(15,23,42,0.04)]", className)}>
+    <section className={cn(className)}>
       <div className="mb-3 flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">
-            Recent sessions
-          </p>
-          <h2 className="mt-1 text-sm font-semibold text-slate-950">Debriefs and active rooms</h2>
-        </div>
+        <h2 className="text-[16px] font-bold text-[#0d1424]">Recent debriefs & rooms</h2>
         <Link
           href="/dashboard/interview/history"
-          className="flex items-center gap-1 text-[12px] font-medium text-slate-500 transition hover:text-slate-600"
+          className="inline-flex items-center gap-1 text-[13px] font-semibold text-[#2563eb] transition hover:text-blue-700"
         >
-          View all <ArrowRight className="h-3 w-3" />
+          View all <ArrowRight className="h-3.5 w-3.5" />
         </Link>
       </div>
 
       <div className="space-y-2">
-        {sessions.map((session) => {
+        {sessions.length === 0 ? (
+          <div className="rounded-[14px] border border-[#eef0f4] bg-white px-4 py-5 text-[13px] text-[#98a1b0]">
+            Finish a practice session and your debrief will show up here.
+          </div>
+        ) : sessions.map((session) => {
           const style = TYPE_STYLES[session.type] ?? { pill: "bg-slate-50 text-slate-600 ring-1 ring-slate-200", dot: "bg-slate-300" }
           const score = session.debrief?.overallScore ?? null
           const isCompleted = session.status === "completed" && session.debrief
@@ -120,32 +120,30 @@ export default function RecentSessionsList({
           return (
             <div
               key={session.id}
-              className="group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3 transition hover:border-slate-300 hover:bg-slate-50"
+              className="group flex items-center gap-[13px] rounded-[14px] border border-[#eef0f4] bg-white px-3.5 py-[13px] transition hover:border-[#dfe3ea]"
             >
-              {/* Type pill */}
-              <span className={cn("hidden shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold sm:inline-flex", style.pill)}>
+              <span className={cn(
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-[9px] py-1 text-[10.5px] font-bold uppercase tracking-[0.06em]",
+                style.pill
+              )}>
+                <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
                 {TYPE_LABELS[session.type] ?? session.type}
               </span>
 
-              {/* Mobile dot */}
-              <span className={cn("h-2 w-2 shrink-0 rounded-full sm:hidden", style.dot)} />
-
-              {/* Title + meta */}
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-semibold text-slate-900">
+                <p className="truncate text-[14px] font-bold text-[#0f1729]">
                   {session.jobTitle
                     ? `${session.jobTitle}${session.jobCompany ? ` · ${session.jobCompany}` : ""}`
                     : "Generic practice"}
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="mt-0.5 truncate text-[12px] text-[#98a1b0]">
                   {PERSONA_LABELS[session.persona] ?? session.persona} · {formatDate(session.createdAt)}
                 </p>
               </div>
 
-              {/* Score badge */}
               {score !== null && (
                 <div className={cn(
-                  "flex shrink-0 items-center justify-center rounded-lg px-2 py-1 ring-1",
+                  "flex h-7 min-w-[34px] shrink-0 items-center justify-center rounded-lg px-2",
                   scoreBg(score)
                 )}>
                   <span className={cn("text-[14px] font-black tabular-nums leading-none", scoreColor(score))}>
@@ -159,14 +157,14 @@ export default function RecentSessionsList({
                 {isCompleted ? (
                   <Link
                     href={`/dashboard/interview/${session.id}/debrief`}
-                    className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-100"
+                    className="inline-flex h-[34px] items-center gap-1 rounded-[10px] border border-[#e7eaf0] bg-white px-3 text-[12.5px] font-semibold text-[#3f4856] transition hover:border-[#d6dbe4] hover:bg-[#f9fafb] active:translate-y-px"
                   >
                     Debrief <ArrowRight className="h-3 w-3" />
                   </Link>
                 ) : isActive ? (
                   <Link
                     href={`/dashboard/interview/${session.type}/${session.id}`}
-                    className="flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-600 transition hover:bg-blue-100"
+                    className="inline-flex h-[34px] items-center gap-1 rounded-[10px] border border-[#c4e3fb] bg-[#eef7ff] px-3 text-[12.5px] font-semibold text-[#0369a1] transition hover:bg-[#e0f2fe] active:translate-y-px"
                   >
                     Resume <ArrowRight className="h-3 w-3" />
                   </Link>
