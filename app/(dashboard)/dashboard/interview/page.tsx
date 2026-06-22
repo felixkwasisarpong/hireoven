@@ -152,33 +152,33 @@ export default async function InterviewHubPage() {
 
   return (
     <main className="min-h-full bg-[#fbfcfd]">
-      <div className="mx-auto w-full max-w-[1260px] px-4 py-8 sm:px-6 lg:px-11 lg:py-[38px]">
-        <div className="mb-[30px] flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto w-full max-w-[1140px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="mb-2.5 text-[11.5px] font-bold uppercase tracking-[0.16em] text-[#ec6516]">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#ec6516]">
               Grow · Interview Practice
             </p>
-            <h1 className="m-0 text-[34px] font-extrabold leading-[1.02] tracking-[-0.03em] text-[#0d1424] sm:text-[40px]">
+            <h1 className="m-0 text-[26px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0d1424] sm:text-[31px]">
               Step into the room.
             </h1>
-            <p className="mt-3 max-w-[540px] text-[16px] leading-[1.6] text-[#5b6573]">
+            <p className="mt-2 max-w-[500px] text-[14px] leading-[1.55] text-[#5b6573]">
               Pick a practice mode, run a focused session, and walk away with a debrief built for your next real interview.
             </p>
           </div>
           <Link
             href="/dashboard/interview/history"
-            className="inline-flex h-11 w-fit shrink-0 items-center gap-2 rounded-xl border border-[#e7eaf0] bg-white px-[18px] text-[13.5px] font-semibold text-[#3f4856] shadow-[0_1px_2px_rgba(15,23,42,.03)] transition hover:border-[#d6dbe4] hover:bg-[#f9fafb] active:translate-y-px"
+            className="inline-flex h-9 w-fit shrink-0 items-center gap-2 rounded-lg border border-[#e7eaf0] bg-white px-4 text-[12.5px] font-semibold text-[#3f4856] shadow-[0_1px_2px_rgba(15,23,42,.03)] transition hover:border-[#d6dbe4] hover:bg-[#f9fafb] active:translate-y-px"
           >
-            <History className="h-[15px] w-[15px] text-[#9aa3b1]" strokeWidth={2} aria-hidden />
+            <History className="h-[14px] w-[14px] text-[#9aa3b1]" strokeWidth={2} aria-hidden />
             Session history
           </Link>
         </div>
 
-        <div className="mb-[34px]">
+        <div className="mb-7">
           <InterviewHubCards />
         </div>
 
-        <div className="grid gap-[22px] lg:grid-cols-2">
+        <div className="grid gap-4 lg:grid-cols-2">
           <RecommendedJobsList
             className="mt-0"
             initialJobs={initialData.recommendedJobs}
