@@ -1,12 +1,17 @@
 /**
  * GET /api/cron/discover-from-domains
  *
- * Resolves ATS boards for companies we already hold with a **real guessed
- * domain** but no `ats_type` (mostly aggregator-ingested rows and discovery
- * placeholders). For each it finds the careers page from the domain, detects the
- * ATS embedded on that page (or via a name-slug probe), and — only if the
- * resolved board currently has live jobs — enrolls the company IN PLACE (sets
- * ats_type / ats_identifier / careers_url, activates it).
+ * Two stages in one pass:
+ *   0. RESOLVE — name-only placeholder companies (`<slug>.placeholder`,
+ *      `<slug>.builtin-discovery`) with no domain get a real domain guessed from
+ *      their name and written to `raw_ats_config.guessed_domain` (precision-first
+ *      heuristic resolver). This feeds stage 1 the same run.
+ *   1. ENROLL — companies we hold with a **real or guessed domain** but no
+ *      `ats_type` (aggregator-ingested rows, discovery placeholders, and the
+ *      stage-0 resolutions). For each it finds the careers page from the domain,
+ *      detects the ATS embedded on that page (or via a name-slug probe), and —
+ *      only if the resolved board currently has live jobs — enrolls the company
+ *      IN PLACE (sets ats_type / ats_identifier / careers_url, activates it).
  *
  * If no supported ATS is detected but the careers page has enough job-listing
  * evidence, the company is promoted to `ats_type = 'custom'` and queued for the
@@ -28,6 +33,10 @@
  *   DISCOVER_FROM_DOMAINS_PROMOTE_CUSTOM set to "false" to disable custom-crawl promotion
  *   DISCOVER_FROM_DOMAINS_CUSTOM_MIN_CONFIDENCE high|medium|low (default medium)
  *   DISCOVER_FROM_DOMAINS_RETRY_AFTER_HOURS retry older unmatched attempts (default 72)
+ *   DISCOVER_FROM_DOMAINS_RESOLVE_BATCH  name-only companies to domain-resolve per run (default 50; 0 disables stage 0)
+ *   DISCOVER_FROM_DOMAINS_RESOLVE_CONCURRENCY parallel resolutions (default 6)
+ *   DISCOVER_FROM_DOMAINS_RESOLVE_RETRY_HOURS re-attempt a resolution miss after N hours (default 168)
+ *   DISCOVER_FROM_DOMAINS_ENABLE_CLEARBIT set to "true" to also try Clearbit autocomplete (lower precision; off by default)
  * Query:
  *   ?dry=1                               resolve + probe but never write (measure hit-rate)
  *   ?batch=100&concurrency=8             override batch/concurrency
@@ -41,6 +50,8 @@ import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { discoverCareersUrl, type DiscoveryProbe } from "@/lib/companies/careers-url-discovery"
 import { resolveDirectAtsUrl } from "@/lib/companies/ats-url-resolver"
+import { resolveCompanyDomainFromName } from "@/lib/companies/domain-resolution"
+import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 import type { Pool } from "pg"
 
 export const runtime = "nodejs"
@@ -383,6 +394,111 @@ async function resolveCompany(
   if (updated.rowCount && updated.rowCount > 0) counters.enrolled += 1
 }
 
+type ResolveStats = { attempted: number; resolved: number; missed: number; byMethod: Record<string, number> }
+
+/**
+ * Pre-phase: resolve a real domain for name-only placeholder companies
+ * (`<slug>.placeholder`, `<slug>.builtin-discovery`) that have no real domain
+ * and no prior guess. The resolved domain is written to
+ * `raw_ats_config.guessed_domain` — the exact field the claim below reads — so
+ * freshly-resolved companies flow into careers/ATS detection in THIS same run
+ * (they still have `careers_discovery_attempted_at = NULL`). A guess never
+ * touches the canonical `companies.domain`; downstream ATS verification is the
+ * safety net for a wrong guess.
+ */
+async function resolveGuessedDomains(
+  pool: Pool,
+  params: URLSearchParams,
+  deadline: number,
+  dry: boolean
+): Promise<ResolveStats> {
+  const stats: ResolveStats = { attempted: 0, resolved: 0, missed: 0, byMethod: {} }
+  const batch = intParamOrEnv(params, "resolveBatch", "DISCOVER_FROM_DOMAINS_RESOLVE_BATCH", 50)
+  if (batch <= 0) return stats
+  const retryHours = intEnv("DISCOVER_FROM_DOMAINS_RESOLVE_RETRY_HOURS", 168)
+  const disableClearbit = process.env.DISCOVER_FROM_DOMAINS_ENABLE_CLEARBIT !== "true"
+
+  const select = `
+    SELECT c.id, c.name
+      FROM companies c
+     WHERE c.ats_type IS NULL
+       AND c.duplicate_of_company_id IS NULL
+       AND COALESCE(c.status, 'active') <> 'dead'
+       AND c.name IS NOT NULL AND length(trim(c.name)) >= 2
+       AND (c.domain ILIKE '%.placeholder' OR c.domain ILIKE '%.builtin-discovery')
+       AND COALESCE(c.raw_ats_config->>'guessed_domain', '') = ''
+       AND (
+         c.raw_ats_config->>'domain_resolution_attempted_at' IS NULL
+         OR (c.raw_ats_config->>'domain_resolution_attempted_at')::timestamptz
+              < now() - ($2::int || ' hours')::interval
+       )
+     ORDER BY c.job_count DESC NULLS LAST, c.created_at ASC NULLS LAST
+     LIMIT $1
+     FOR UPDATE OF c SKIP LOCKED`
+
+  // Claim (and stamp the attempt) so concurrent/next runs skip these rows.
+  const { rows } = dry
+    ? await pool.query<{ id: string; name: string }>(select, [batch, retryHours])
+    : await pool.query<{ id: string; name: string }>(
+        `WITH candidates AS (${select}),
+              claimed AS (
+                UPDATE companies c
+                   SET raw_ats_config = COALESCE(c.raw_ats_config, '{}'::jsonb)
+                         || jsonb_build_object('domain_resolution_attempted_at', to_jsonb(now())),
+                       updated_at = now()
+                  FROM candidates
+                 WHERE c.id = candidates.id
+                 RETURNING c.id, c.name
+              )
+         SELECT * FROM claimed`,
+        [batch, retryHours]
+      )
+  if (rows.length === 0) return stats
+
+  const limit = pLimit(intParamOrEnv(params, "resolveConcurrency", "DISCOVER_FROM_DOMAINS_RESOLVE_CONCURRENCY", 6))
+  await Promise.all(
+    rows.map((company) =>
+      limit(async () => {
+        if (Date.now() > deadline) return
+        stats.attempted += 1
+        let resolved
+        try {
+          resolved = await resolveCompanyDomainFromName(company.name, { timeoutMs: 6_000, disableClearbit })
+        } catch {
+          stats.missed += 1
+          return
+        }
+        if (!resolved) {
+          stats.missed += 1
+          return
+        }
+        stats.resolved += 1
+        stats.byMethod[resolved.method] = (stats.byMethod[resolved.method] ?? 0) + 1
+        if (dry) return
+        const logoUrl = companyLogoUrlFromDomain(resolved.domain)
+        await pool.query(
+          `UPDATE companies
+              SET raw_ats_config = COALESCE(raw_ats_config, '{}'::jsonb)
+                    || jsonb_build_object(
+                         'guessed_domain', $2::text,
+                         'domain_resolution', jsonb_build_object(
+                           'domain', $2::text, 'method', $3::text,
+                           'confidence', $4::text, 'resolved_at', to_jsonb(now())
+                         )
+                       ),
+                  logo_url = CASE
+                    WHEN (logo_url IS NULL OR logo_url = '') AND $5 <> '' THEN $5
+                    ELSE logo_url END,
+                  updated_at = now()
+            WHERE id = $1`,
+          [company.id, resolved.domain, resolved.method, resolved.confidence, logoUrl]
+        )
+      })
+    )
+  )
+  return stats
+}
+
 export async function GET(req: NextRequest) {
   if (!requireCronAuth(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -397,6 +513,10 @@ export async function GET(req: NextRequest) {
   const deadline = startedAt + TIME_BUDGET_MS
   const pool = getPostgresPool()
   const retryAfterHours = intEnv("DISCOVER_FROM_DOMAINS_RETRY_AFTER_HOURS", 72)
+
+  // Pre-phase: give name-only placeholder companies a guessed_domain so the
+  // claim below can pick them up (this run or the next).
+  const resolveStats = await resolveGuessedDomains(pool, params, deadline, dry)
 
   // Claim a batch of real-domain, unmatched companies and mark them attempted so
   // concurrent/next runs skip them. (Dry runs don't claim — they re-read freely.)
@@ -456,7 +576,7 @@ export async function GET(req: NextRequest) {
       )
 
   if (batch.length === 0) {
-    return NextResponse.json({ ok: true, message: "no real-domain candidates", enrolled: 0 })
+    return NextResponse.json({ ok: true, message: "no real-domain candidates", enrolled: 0, resolved_domains: resolveStats })
   }
 
   const counters: Counters = {
@@ -520,6 +640,7 @@ export async function GET(req: NextRequest) {
     dry,
     budgetHit,
     durationMs: Date.now() - startedAt,
+    resolved_domains: resolveStats,
     ...counters,
   })
 }

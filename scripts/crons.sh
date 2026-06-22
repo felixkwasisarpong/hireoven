@@ -54,8 +54,7 @@ run() {
 # jooble-ingest      45 */12 * * *     run api/cron/jooble-ingest     # requires JOOBLE_API_KEY
 # discover-companies 0 5 * * *         run api/cron/discover-companies
 # discover-tenants   0 */2 * * *       run api/cron/discover-tenants
-# resolve-company-domains 15 */3 * * * run api/cron/resolve-company-domains  # requires RESOLVE_COMPANY_DOMAINS_ENABLED=true; feeds guessed_domain to discover-from-domains
-# discover-from-domains 0 6 * * *      run api/cron/discover-from-domains  # requires DISCOVER_FROM_DOMAINS_ENABLED=true
+# discover-from-domains 0 6 * * *      run api/cron/discover-from-domains  # requires DISCOVER_FROM_DOMAINS_ENABLED=true; stage 0 resolves name-only domains, stage 1 enrolls ATS
 # careers-url-discovery 30 */4 * * *   CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh careers-url-discovery
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
 # builtin-discovery   0 */4 * * *       run api/cron/builtin-discovery
@@ -99,7 +98,6 @@ case "${1:-}" in
   jooble-ingest)     run api/cron/jooble-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
-  resolve-company-domains) run "api/cron/resolve-company-domains?batch=${RESOLVE_COMPANY_DOMAINS_BATCH:-50}&concurrency=${RESOLVE_COMPANY_DOMAINS_CONCURRENCY:-6}" ;;
   discover-from-domains) run "api/cron/discover-from-domains?batch=${DISCOVER_FROM_DOMAINS_BATCH:-100}&concurrency=${DISCOVER_FROM_DOMAINS_CONCURRENCY:-8}" ;;
   careers-url-discovery) run "api/cron/careers-url-discovery?batch=${CAREERS_DISCOVERY_BATCH:-10}" ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
