@@ -208,7 +208,7 @@ function ModeSelectorRow({
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center gap-[13px] rounded-2xl border px-[15px] py-3.5 text-left transition active:translate-y-px",
+        "flex w-full items-center gap-3 rounded-xl border px-3.5 py-3 text-left transition active:translate-y-px",
         active
           ? "border-[#d7dde6] bg-white shadow-[0_18px_38px_-22px_rgba(15,23,42,.5)]"
           : "border-[#eef0f4] bg-[#f4f6f9] hover:border-[#dfe3ea] hover:bg-white"
@@ -217,24 +217,24 @@ function ModeSelectorRow({
       aria-pressed={active}
     >
       <span
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border"
         style={{ backgroundColor: mode.tileBg, borderColor: mode.tileBorder, color: mode.tileIcon }}
       >
-        <Icon className="h-5 w-5" strokeWidth={2} aria-hidden />
+        <Icon className="h-[17px] w-[17px]" strokeWidth={2} aria-hidden />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2 text-[15px] font-bold text-[#0f1729]">
+        <span className="flex min-w-0 items-center gap-2 text-[13.5px] font-bold text-[#0f1729]">
           <span className="truncate">{mode.selectorTitle}</span>
           {mode.popular ? (
-            <span className="shrink-0 rounded-full bg-[#e0f2fe] px-[7px] py-0.5 text-[9.5px] font-extrabold uppercase tracking-[0.08em] text-[#0369a1]">
+            <span className="shrink-0 rounded-full bg-[#e0f2fe] px-[7px] py-0.5 text-[9px] font-extrabold uppercase tracking-[0.08em] text-[#0369a1]">
               Popular
             </span>
           ) : null}
         </span>
-        <span className="mt-0.5 block text-[12.5px] text-[#98a1b0]">{sub}</span>
+        <span className="mt-0.5 block text-[12px] text-[#98a1b0]">{sub}</span>
       </span>
       <ChevronRight
-        className="h-[17px] w-[17px] shrink-0"
+        className="h-4 w-4 shrink-0"
         color={active ? "#0f1729" : "#c2c9d4"}
         strokeWidth={2.4}
         aria-hidden
@@ -255,7 +255,7 @@ function StagePanel({
 
   return (
     <section
-      className="relative flex min-h-[458px] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(165deg,#141d31,#090e19)] px-6 py-7 shadow-[0_40px_80px_-34px_rgba(8,16,32,.7)] sm:px-[34px] sm:py-8"
+      className="relative flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[linear-gradient(165deg,#141d31,#090e19)] px-4 py-5 shadow-[0_40px_80px_-34px_rgba(8,16,32,.7)] sm:px-5 sm:py-6 lg:min-h-[392px] lg:rounded-3xl lg:px-7 lg:py-7"
       aria-live="polite"
     >
       <div
@@ -265,7 +265,7 @@ function StagePanel({
 
       <div className="relative flex items-center justify-between gap-4">
         <span
-          className="inline-flex items-center gap-[9px] rounded-full border px-[13px] py-1.5 text-[11px] font-extrabold uppercase tracking-[0.1em]"
+          className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-[10.5px] font-extrabold uppercase tracking-[0.1em]"
           style={{ backgroundColor: mode.badgeBg, borderColor: mode.badgeBorder, color: mode.accent }}
         >
           <span className="relative h-[7px] w-[7px]">
@@ -274,7 +274,7 @@ function StagePanel({
           </span>
           {mode.badge}
         </span>
-        <div className="flex h-[30px] items-end gap-[3px] opacity-90" style={{ color: mode.accent }} aria-hidden>
+        <div className="flex h-[26px] items-end gap-[3px] opacity-90" style={{ color: mode.accent }} aria-hidden>
           {WAVE_DELAYS.map((delay, index) => (
             <span
               key={`${delay}-${index}`}
@@ -285,32 +285,32 @@ function StagePanel({
         </div>
       </div>
 
-      <div className="relative mt-[26px] flex items-center gap-[18px]">
+      <div className="relative mt-4 flex items-center gap-3 lg:mt-5 lg:gap-[14px]">
         <span
-          className="flex h-[62px] w-[62px] shrink-0 items-center justify-center rounded-[17px] border"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border lg:h-[50px] lg:w-[50px] lg:rounded-[14px]"
           style={{ backgroundColor: mode.iconBg, borderColor: mode.badgeBorder, color: mode.accent }}
         >
-          <Icon className="h-7 w-7" strokeWidth={2} aria-hidden />
+          <Icon className="h-[22px] w-[22px] lg:h-6 lg:w-6" strokeWidth={2} aria-hidden />
         </span>
         <div>
-          <h2 className="m-0 text-[28px] font-extrabold leading-[1.05] tracking-[-0.02em] text-white">
+          <h2 className="m-0 text-[19px] font-extrabold leading-[1.05] tracking-[-0.02em] text-white lg:text-[22px]">
             {mode.title}
           </h2>
-          <div className="mt-1 text-[13px] text-[#7f93ad]">
+          <div className="mt-1 text-[12px] text-[#7f93ad] lg:text-[12.5px]">
             <span className="font-semibold text-[#a9bace]">Best for</span> · {mode.bestFor}
           </div>
         </div>
       </div>
 
-      <p className="relative mt-[22px] max-w-xl text-[15.5px] leading-[1.65] text-[#aebed3]">
+      <p className="relative mt-3 max-w-xl text-[13px] leading-[1.55] text-[#aebed3] lg:mt-4 lg:text-[14px] lg:leading-[1.6]">
         {mode.desc}
       </p>
 
-      <div className="relative mt-6 flex flex-col gap-[13px]">
+      <div className="relative mt-4 flex flex-col gap-2 lg:mt-5 lg:gap-2.5">
         {mode.features.map((feature) => (
-          <div key={feature} className="flex items-center gap-3 text-[14.5px] font-medium text-[#d4dde9]">
+          <div key={feature} className="flex items-center gap-2.5 text-[12.5px] font-medium text-[#d4dde9] lg:text-[13.5px]">
             <span
-              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-lg"
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg lg:h-[23px] lg:w-[23px]"
               style={{ backgroundColor: mode.badgeBg }}
             >
               <Check className="h-3.5 w-3.5" color={mode.accent} strokeWidth={2.6} aria-hidden />
@@ -320,8 +320,8 @@ function StagePanel({
         ))}
       </div>
 
-      <div className="relative mt-auto flex flex-col gap-5 border-t border-white/[0.09] pt-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-[13px] leading-normal text-[#7f93ad]">
+      <div className="relative mt-auto flex flex-col gap-3 border-t border-white/[0.09] pt-4 sm:flex-row sm:items-center sm:justify-between lg:gap-4 lg:pt-5">
+        <div className="text-[12px] leading-normal text-[#7f93ad] lg:text-[12.5px]">
           {liveNeedsCredits ? "Buy a live credit to start this room." : mode.meta}
         </div>
 
@@ -333,11 +333,11 @@ function StagePanel({
         ) : (
           <Link
             href={mode.href}
-            className="inline-flex h-[52px] shrink-0 items-center justify-center gap-2.5 rounded-[14px] px-7 text-[15px] font-bold transition hover:brightness-105 active:translate-y-px"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-[13.5px] font-bold transition hover:brightness-105 active:translate-y-px lg:h-[46px] lg:px-6 lg:text-[14px]"
             style={{ background: mode.ctaBg, color: mode.ctaText, boxShadow: `0 16px 34px -14px ${mode.glow}` }}
           >
             {mode.ctaLabel}
-            <ArrowRight className="h-[17px] w-[17px]" strokeWidth={2.4} aria-hidden />
+            <ArrowRight className="h-4 w-4" strokeWidth={2.4} aria-hidden />
           </Link>
         )}
       </div>
@@ -392,12 +392,12 @@ export default function InterviewHubCards() {
   const activeMode = MODES[selectedMode]
 
   return (
-    <div className="grid items-stretch gap-[22px] lg:grid-cols-[330px_minmax(0,1fr)]">
+    <div className="grid items-stretch gap-4 lg:grid-cols-[290px_minmax(0,1fr)]">
       <aside className="flex flex-col">
-        <div className="mb-3.5 pl-0.5 text-[11.5px] font-bold uppercase tracking-[0.14em] text-[#9aa3b1]">
+        <div className="mb-3 pl-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-[#9aa3b1]">
           Choose a mode
         </div>
-        <div className="flex flex-1 flex-col gap-2.5">
+        <div className="flex flex-1 flex-col gap-2">
           {modes.map((mode) => (
             <ModeSelectorRow
               key={mode.id}
@@ -408,12 +408,12 @@ export default function InterviewHubCards() {
             />
           ))}
 
-          <div className="mt-auto rounded-[14px] border border-dashed border-[#e2e6ec] bg-[#fafbfc] px-4 py-[15px]">
-            <div className="mb-1 flex items-center gap-2 text-[12.5px] font-bold text-[#3f4856]">
-              <Info className="h-[15px] w-[15px] text-[#ec6516]" strokeWidth={2} aria-hidden />
+          <div className="mt-auto rounded-xl border border-dashed border-[#e2e6ec] bg-[#fafbfc] px-3.5 py-3">
+            <div className="mb-1 flex items-center gap-2 text-[12px] font-bold text-[#3f4856]">
+              <Info className="h-[14px] w-[14px] text-[#ec6516]" strokeWidth={2} aria-hidden />
               Every session ends in a debrief
             </div>
-            <p className="text-[12px] leading-[1.55] text-[#98a1b0]">
+            <p className="text-[11.5px] leading-[1.5] text-[#98a1b0]">
               Strengths, gaps, and a focused checklist - saved to your history.
             </p>
           </div>
