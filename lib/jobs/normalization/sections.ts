@@ -64,6 +64,9 @@ const LOCATION_META_LIKE_RE =
 const PROMOTIONAL_LIKE_RE =
   /\b(career advancement|grow your skills|grow and develop|personal development plans|join [a-z][a-z ]+ and do work that matters|stand out|set you apart|extraordinary twists and turns|welcome diverse perspectives|challenge assumptions|make a difference|be part of something|impact millions)\b/i
 
+const SKILLS_HEADING_NOISE_RE =
+  /^(?:about(?:\s+(?:the|this))?\s+role|role overview|overview|the\s+(?:position|role|opportunity)|job summary|position summary|responsibilities|position responsibilities|key responsibilities|what you(?:'|’)ll do|what you will do|requirements|minimum requirements|minimum qualifications|basic qualifications|required qualifications|qualifications required|preferred qualifications|qualifications|benefits|perks|company|about us|about the company)$/i
+
 const COMPENSATION_LIKE_RE =
   /\b(\$\s?\d|usd|salary|pay range|base salary|on target earnings|annual(?:ly)?|per year|ote)\b/i
 
@@ -121,6 +124,7 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "requirements", alias: "Minimum qualifications" },
   { key: "requirements", alias: "Basic qualifications" },
   { key: "requirements", alias: "Required qualifications" },
+  { key: "requirements", alias: "Qualifications required" },
   { key: "requirements", alias: "Who you are" },
   { key: "requirements", alias: "Qualifications" },
   { key: "requirements", alias: "What you bring" },
@@ -1422,6 +1426,7 @@ function sanitizeSkillsBucket(buckets: Record<CanonicalSectionKey, SectionBucket
   buckets.skills.items = uniqCaseInsensitive(
     buckets.skills.items.filter((item) => {
       if (item.length > 140) return false
+      if (SKILLS_HEADING_NOISE_RE.test(item.trim())) return false
       if (/[.!?]$/.test(item) && /\b(we|you|engineer|candidate|team|role)\b/i.test(item)) {
         return false
       }

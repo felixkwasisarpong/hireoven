@@ -28,7 +28,7 @@ import {
 } from "@/lib/sources/dice"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import type { EmploymentType } from "@/types"
 
@@ -321,7 +321,7 @@ export async function GET(request: NextRequest) {
           raw_data: { source: "dice", diceId: job.id, workFromHome: job.workFromHome, easyApply: job.easyApply },
         })
         const nc = norm.nextColumns
-        const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
+        const publicationStatus = publicationStatusForNormalization(norm)
         const richRawData = safeJsonStringify({
           source: "dice",
           diceId: job.id,

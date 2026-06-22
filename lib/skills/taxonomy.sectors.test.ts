@@ -98,13 +98,54 @@ test("AI platform and agentic systems", () => {
   )
 })
 
+test("Cyber defense tools and practices", () => {
+  extracts(
+    "Technical requirements: Microsoft Sentinel, Defender suite, KQL, SIEM/SOAR, UEBA, SOC engineering, detection logic, incident response, Python, PowerShell, and API development",
+    [
+      "Microsoft Sentinel",
+      "Microsoft Defender",
+      "KQL",
+      "SIEM",
+      "SOAR",
+      "UEBA",
+      "SOC Operations",
+      "Detection Engineering",
+      "Incident Response",
+      "Python",
+      "PowerShell",
+      "API Development",
+    ],
+  )
+})
+
+test("Public-health communications product skills", () => {
+  extracts(
+    "Requirements: public health communications, health literacy, plain-language standards, strategic communications, content calendars, Section 508 accessibility, Adobe Creative Suite, Canva for Enterprise, graphic design, data visualizations, Microsoft Office Suite, Microsoft Teams, SharePoint",
+    [
+      "Public Health",
+      "Health Literacy",
+      "Plain Language",
+      "Strategic Communications",
+      "Content Calendars",
+      "Accessibility",
+      "Adobe Creative Suite",
+      "Canva",
+      "Graphic Design",
+      "Data Visualization",
+      "Microsoft Office",
+      "Microsoft Teams",
+      "SharePoint",
+    ],
+  )
+})
+
 test("does not false-positive on ordinary prose", () => {
   const found = new Set(
     extractSkillsFromText(
-      "We are a friendly team that values clear communication and helping each other grow. Snacks provided.",
+      "We are a friendly team that values clear communication and helping each other grow. Maintain version control over documents and comply with information security requirements. Snacks provided.",
     ),
   )
-  for (const noise of ["GAAP", "Actuarial Science", "SCADA", "Revit", "HACCP", "Underwriting"]) {
+  for (const noise of ["GAAP", "Actuarial Science", "SCADA", "Revit", "HACCP", "Underwriting", "Git", "Cybersecurity"]) {
     assert.ok(!found.has(noise), `should not extract "${noise}" from ordinary prose`)
   }
 })

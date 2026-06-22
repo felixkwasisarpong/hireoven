@@ -6,6 +6,7 @@ import {
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
+import { cleanJobDescription } from "@/lib/jobs/description"
 
 /**
  * Lever Postings API (public, unauthenticated).
@@ -51,8 +52,28 @@ function detectFromUrl(url: string): { slug: string } | null {
 
 function stripHtml(value: string | undefined | null): string | undefined {
   if (!value) return undefined
+  const text = cleanJobDescription(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|section|article|li|ul|ol|h[1-6])>/gi, "\n")
+      .replace(/<li\b[^>]*>/gi, "\n- ")
+  )
+  return text || undefined
+}
+
+function richerText(...candidates: Array<string | undefined | null>): string | undefined {
+  let best: string | undefined
+  for (const candidate of candidates) {
+    const text = candidate?.trim()
+    if (!text) continue
+    if (!best || text.length > best.length) best = text
+  }
+  return best
+}
+
+function stripPlain(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
   const text = value
-    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -67,7 +88,7 @@ function stripHtml(value: string | undefined | null): string | undefined {
 
 function buildDescription(raw: LeverRawPosting): string | undefined {
   const parts: string[] = []
-  const opener = raw.descriptionPlain ?? stripHtml(raw.description)
+  const opener = richerText(stripPlain(raw.descriptionPlain), stripHtml(raw.description))
   if (opener) parts.push(opener)
   for (const item of raw.lists ?? []) {
     const heading = item.text?.trim()
@@ -76,7 +97,7 @@ function buildDescription(raw: LeverRawPosting): string | undefined {
     else if (body) parts.push(body)
     else if (heading) parts.push(heading)
   }
-  const closer = raw.additionalPlain ?? stripHtml(raw.additional)
+  const closer = richerText(stripPlain(raw.additionalPlain), stripHtml(raw.additional))
   if (closer) parts.push(closer)
   const combined = parts.join("\n\n").trim()
   return combined || undefined

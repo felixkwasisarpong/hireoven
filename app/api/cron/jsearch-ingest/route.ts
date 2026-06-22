@@ -32,7 +32,7 @@ import {
 } from "@/lib/sources/jsearch"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
@@ -206,7 +206,7 @@ export async function GET(request: NextRequest) {
       raw_data: { source: "jsearch", publisher: job.publisher, applyIsDirect: job.applyIsDirect },
     })
     const nc = norm.nextColumns
-    const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
+    const publicationStatus = publicationStatusForNormalization(norm)
     const rawData = JSON.stringify({
       source: "jsearch",
       publisher: job.publisher,

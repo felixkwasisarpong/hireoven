@@ -22,6 +22,50 @@ test("lever: detectFromUrl returns null when slug is missing or malformed", () =
   assert.equal(leverAdapter.detectFromUrl("https://jobs.lever.co/!!"), null)
 })
 
+test("lever: prefers rich HTML description over short descriptionPlain", async () => {
+  const result = await leverAdapter.fetchJobs({
+    slug: "ibility",
+    ctx: {
+      etag: null,
+      lastModified: null,
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify([
+            {
+              id: "d628175f-1f71-47b0-817c-b3ea55154c2c",
+              text: "Junior Communications Product Specialist",
+              hostedUrl: "https://jobs.lever.co/ibility/d628175f-1f71-47b0-817c-b3ea55154c2c",
+              descriptionPlain:
+                "Founded in early 2021, Ibility is a Service-Disabled Veteran-Owned Small Business.",
+              description: `
+                <div>Founded in early 2021, Ibility is a Service-Disabled Veteran-Owned Small Business.</div>
+                <div><p><strong>Position Overview:</strong></p>
+                <p>The Communications Products Specialist is a full-time position supporting a federal public health program.</p>
+                <p><strong>Key Responsibilities:</strong></p>
+                <ul>
+                  <li>Develop healthcare-related promotional and educational materials.</li>
+                  <li>Create digital assets including graphics, infographics, and data visualizations.</li>
+                </ul>
+                <p><strong>Qualifications Required:</strong></p>
+                <ul><li>Bachelor's degree in Communications, Public Health, Marketing, Graphic Design, English, or a closely related field.</li></ul></div>
+              `,
+              lists: [],
+            },
+          ]),
+          { status: 200, headers: { "content-type": "application/json" } }
+        ),
+    },
+  })
+
+  assert.equal(result.jobs.length, 1)
+  const description = result.jobs[0]?.description ?? ""
+  assert.match(description, /Position Overview/i)
+  assert.match(description, /federal public health program/i)
+  assert.match(description, /healthcare-related promotional/i)
+  assert.match(description, /Bachelor's degree/i)
+  assert.ok(description.length > 300)
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
 const LIVE_SLUG = process.env.HARVESTER_LIVE_LEVER_SLUG ?? "anduril"
 const LIVE_LATENCY_BUDGET_MS = Number.parseInt(

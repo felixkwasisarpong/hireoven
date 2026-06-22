@@ -77,6 +77,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "R",           aliases: ["r language", "r programming", "rlang"] },
   { label: "MATLAB",      aliases: ["matlab"] },
   { label: "Bash",        aliases: ["bash", "shell scripting", "bash scripting"] },
+  { label: "PowerShell",  aliases: ["powershell", "power shell"] },
   { label: "Dart",        aliases: ["dart"] },
   { label: "Elixir",      aliases: ["elixir"] },
   { label: "Haskell",     aliases: ["haskell"] },
@@ -119,7 +120,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Data Structures", aliases: ["data structures", "data structure"] },
   { label: "Algorithms", aliases: ["algorithms", "algorithm design"] },
   { label: "Code Review", aliases: ["code review", "code reviews", "peer review", "pull request review"] },
-  { label: "Git", aliases: ["git", "github", "gitlab", "version control"] },
+  { label: "Git", aliases: ["git", "github", "gitlab"] },
 
   // ─── Databases ────────────────────────────────────────────────────────────
   { label: "SQL",         aliases: ["sql"] },
@@ -189,7 +190,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Data Analysis",     aliases: ["data analysis", "data analytics"] },
   { label: "Data Engineering",  aliases: ["data engineering", "data pipelines", "etl", "elt"] },
   { label: "Data Science",      aliases: ["data science", "data scientist"] },
-  { label: "Data Visualization", aliases: ["data visualization", "data viz", "tableau", "power bi", "looker"] },
+  { label: "Data Visualization", aliases: ["data visualization", "data visualizations", "data viz", "tableau", "power bi", "looker"] },
   { label: "NLP",               aliases: ["nlp", "natural language processing"], patterns: [NLP_SIGNAL_RE], requiresPattern: false },
   { label: "Computer Vision",   aliases: ["computer vision", "cv"], patterns: [COMPUTER_VISION_SIGNAL_RE], requiresPattern: false },
   { label: "LLMs",              aliases: ["llm", "llms", "large language models", "generative ai", "gen ai"] },
@@ -203,10 +204,18 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "A/B Testing",       aliases: ["a/b testing", "a/b test", "experimentation", "hypothesis testing"] },
 
   // ─── Security ─────────────────────────────────────────────────────────────
-  { label: "Cybersecurity",       aliases: ["cybersecurity", "information security", "infosec"] },
+  { label: "Cybersecurity",       aliases: ["cybersecurity", "infosec"] },
   { label: "Penetration Testing", aliases: ["penetration testing", "pen testing", "pentest"] },
   { label: "Network Security",    aliases: ["network security"] },
   { label: "SIEM",                aliases: ["siem"] },
+  { label: "Microsoft Sentinel",   aliases: ["microsoft sentinel", "azure sentinel", "sentinel siem"] },
+  { label: "Microsoft Defender",   aliases: ["microsoft defender", "defender for endpoint", "defender for cloud", "defender suite", "m365 defender"] },
+  { label: "KQL",                  aliases: ["kql", "kusto query language"] },
+  { label: "SOAR",                 aliases: ["soar", "security orchestration automation and response"] },
+  { label: "UEBA",                 aliases: ["ueba", "user entity behavior analytics", "user and entity behavior analytics", "user/entity behavior analytics"] },
+  { label: "SOC Operations",       aliases: ["soc operations", "soc engineering", "security operations center", "security operations"] },
+  { label: "Detection Engineering", aliases: ["detection engineering", "detection systems", "detection logic", "threat detection"] },
+  { label: "Incident Response",    aliases: ["incident response", "incident handling"] },
   // Bare "compliance" matched the compliance *team/requirement* ("partner with
   // security and compliance") on technical roles. Require a specific framework
   // or qualified phrase so it only fires when compliance is the actual skill.
@@ -218,6 +227,9 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Adobe XD",           aliases: ["adobe xd", "xd"] },
   { label: "Photoshop",          aliases: ["photoshop", "adobe photoshop"] },
   { label: "Illustrator",        aliases: ["illustrator", "adobe illustrator"] },
+  { label: "Adobe Creative Suite", aliases: ["adobe creative suite", "adobe creative cloud"] },
+  { label: "Canva",              aliases: ["canva", "canva for enterprise"] },
+  { label: "Graphic Design",     aliases: ["graphic design", "digital graphics", "visual communications"] },
   { label: "After Effects",      aliases: ["after effects", "adobe after effects"] },
   { label: "InDesign",           aliases: ["indesign", "adobe indesign"] },
   { label: "UX Research",        aliases: ["ux research", "user research", "usability testing"] },
@@ -226,7 +238,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Wireframing",        aliases: ["wireframing", "wireframes"] },
   { label: "Design Systems",     aliases: ["design systems", "design system"] },
   { label: "Motion Design",      aliases: ["motion design", "motion graphics"] },
-  { label: "Accessibility",      aliases: ["accessibility", "a11y", "wcag", "ada compliance"] },
+  { label: "Accessibility",      aliases: ["accessibility", "a11y", "wcag", "ada compliance", "section 508"] },
 
   // ─── Product & Project Management ────────────────────────────────────────
   { label: "Product Management",  aliases: ["product management", "product manager"] },
@@ -254,6 +266,8 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Meta Ads",              aliases: ["meta ads", "facebook ads", "instagram ads", "facebook advertising"] },
   { label: "Email Marketing",       aliases: ["email marketing", "email campaigns"] },
   { label: "Content Marketing",     aliases: ["content marketing", "content strategy"] },
+  { label: "Strategic Communications", aliases: ["strategic communications", "communications strategy", "stakeholder communications"] },
+  { label: "Content Calendars",     aliases: ["content calendar", "content calendars", "editorial workflows", "editorial workflow"] },
   { label: "Social Media Marketing", aliases: ["social media marketing", "social media management"] },
   { label: "Copywriting",           aliases: ["copywriting", "copy writing"] },
   { label: "Brand Strategy",        aliases: ["brand strategy", "branding"] },
@@ -456,6 +470,8 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "ICD-10",           aliases: ["icd-10", "icd10", "medical coding", "cpt coding"] },
   { label: "Clinical Trials",  aliases: ["clinical trials", "clinical research", "clinical studies"] },
   { label: "Clinical Research", aliases: ["clinical research", "clinical research coordination", "clinical study coordination", "research coordinator"] },
+  { label: "Public Health",    aliases: ["public health", "federal public health"] },
+  { label: "Health Literacy",  aliases: ["health literacy"] },
   { label: "Pharmacology",     aliases: ["pharmacology", "pharmacotherapeutics", "drug therapy"] },
   { label: "Pharmacy Practice", aliases: ["pharmacy practice", "pharmacist", "medication therapy management", "mtm", "dispensing", "prescription verification", "patient counseling", "pharmacy operations"] },
   { label: "Patient Care",     aliases: ["patient care", "clinical care", "patient counseling", "patient services"] },
@@ -501,8 +517,12 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Mentoring",            aliases: ["mentoring", "mentorship", "coaching"] },
   { label: "Public Speaking",      aliases: ["public speaking", "presentations", "presenting"] },
   { label: "Writing",              aliases: ["technical writing", "writing skills", "copywriting", "content writing"] },
+  { label: "Plain Language",        aliases: ["plain language", "plain-language"] },
   { label: "Adaptability",         aliases: ["adaptability", "adaptable"] },
   { label: "Organizational Skills", aliases: ["organizational skills", "highly organized"] },
+  { label: "Microsoft Office",      aliases: ["microsoft office", "microsoft office suite", "ms office", "microsoft word", "powerpoint", "outlook"] },
+  { label: "Microsoft Teams",       aliases: ["microsoft teams"] },
+  { label: "SharePoint",            aliases: ["sharepoint", "microsoft sharepoint"] },
 
   // ── Accounting / Audit / Tax ────────────────────────────────────────────────
   { label: "GAAP",                 aliases: ["gaap", "generally accepted accounting principles", "us gaap"] },
@@ -614,6 +634,7 @@ const PROGRAMMING_LANGUAGE_SKILLS = new Set([
   "R",
   "MATLAB",
   "Bash",
+  "PowerShell",
   "Dart",
   "Elixir",
   "Haskell",
@@ -736,6 +757,14 @@ const SECURITY_SKILLS = new Set([
   "Penetration Testing",
   "Network Security",
   "SIEM",
+  "Microsoft Sentinel",
+  "Microsoft Defender",
+  "KQL",
+  "SOAR",
+  "UEBA",
+  "SOC Operations",
+  "Detection Engineering",
+  "Incident Response",
   "Compliance",
   "OAuth",
 ])
@@ -777,11 +806,13 @@ const MEDIA_SKILLS = new Set([
   "Premiere Pro", "Final Cut Pro", "DaVinci Resolve", "Avid", "Logic Pro", "Pro Tools",
   "Audacity", "Blender", "Cinema 4D", "Maya", "3ds Max", "Unity", "Unreal Engine",
   "WordPress", "Webflow", "Shopify", "Video Production", "Photography", "AR/VR",
+  "Adobe Creative Suite", "Canva", "Graphic Design", "Strategic Communications",
+  "Content Calendars",
 ])
 
 const HEALTHCARE_SKILLS = new Set([
   "HIPAA", "Epic", "Cerner", "HL7/FHIR", "EHR/EMR", "ICD-10", "Clinical Trials",
-  "Clinical Research", "Pharmacology", "Pharmacy Practice", "Patient Care",
+  "Clinical Research", "Public Health", "Health Literacy", "Pharmacology", "Pharmacy Practice", "Patient Care",
   "Clinical Laboratory Techniques", "GMP", "FDA Regulatory", "Bioinformatics",
   "PCR", "qPCR", "CRISPR", "Flow Cytometry", "Microscopy", "Molecular Biology",
   "NGS", "Cell Culture", "Pharmacovigilance", "Medical Devices", "Radiology",
@@ -812,6 +843,10 @@ export const SOFT_SKILLS = new Set([
   "Organizational Skills",
   "Project Management",
   "Stakeholder Management",
+  "Plain Language",
+  "Microsoft Office",
+  "Microsoft Teams",
+  "SharePoint",
 ])
 
 function escapeRegex(value: string) {

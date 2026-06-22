@@ -2,7 +2,7 @@ import type { Pool, PoolClient } from "pg"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import { hashContent, type HarvestedJob } from "@/lib/harvester/adapters/_base"
 
 /**
@@ -462,7 +462,7 @@ function buildPersistRow(args: {
     sponsors_h1b: cols.sponsors_h1b ?? null,
     sponsorship_score: cols.sponsorship_score ?? null,
     visa_language_detected: cols.visa_language_detected ?? null,
-    publication_status: publicationStatusForJob({ description, skills }),
+    publication_status: publicationStatusForNormalization(normalization),
     posted_at: normalizedPostedAt,
     content_hash: usedExistingDescriptionFallback
       ? hashContent([job.contentHash, descriptionForNormalization?.slice(0, 4_000)])

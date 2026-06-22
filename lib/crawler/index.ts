@@ -969,11 +969,19 @@ async function crawlLever(careersUrl: URL): Promise<RawJob[]> {
     .filter((job) => job?.id && job?.text && job?.hostedUrl)
     .map((job) => {
       const bodyParts = [
-        job.descriptionPlain ?? (job.description ? cleanText(job.description) : null),
-        ...(job.lists ?? []).map((l) =>
-          [l.text, l.content ? cleanText(l.content) : null].filter(Boolean).join("\n")
+        richerText(
+          job.descriptionPlain,
+          job.description ? cleanJobDescription(job.description) ?? cleanText(job.description) : null
         ),
-        job.additionalPlain ?? (job.additional ? cleanText(job.additional) : null),
+        ...(job.lists ?? []).map((l) =>
+          [l.text, l.content ? cleanJobDescription(l.content) ?? cleanText(l.content) : null]
+            .filter(Boolean)
+            .join("\n")
+        ),
+        richerText(
+          job.additionalPlain,
+          job.additional ? cleanJobDescription(job.additional) ?? cleanText(job.additional) : null
+        ),
       ].filter(Boolean)
 
       return {
@@ -1186,6 +1194,16 @@ function cleanText(value: string): string {
   return decodeHtmlEntities(value.replace(/<[^>]+>/g, " "))
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function richerText(...candidates: Array<string | undefined | null>): string | undefined {
+  let best: string | undefined
+  for (const candidate of candidates) {
+    const text = candidate?.trim()
+    if (!text) continue
+    if (!best || text.length > best.length) best = text
+  }
+  return best
 }
 
 function toUrl(value: string, base?: URL): URL | null {

@@ -1,7 +1,7 @@
 import type { Pool } from "pg"
 import { normalizePersistedJobRecordWithAI } from "@/lib/jobs/normalization"
 import type { PersistedJobForNormalization } from "@/lib/jobs/normalization/types"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 const SLIM_RAW_DATA_KEYS = [
@@ -197,10 +197,7 @@ async function updateJobAfterEnrichmentSuccess(
       normalization.nextColumns.sponsorship_score,
       normalization.nextColumns.visa_language_detected,
       normalization.nextColumns.skills,
-      publicationStatusForJob({
-        description: normalization.nextColumns.description,
-        skills: normalization.nextColumns.skills,
-      }),
+      publicationStatusForNormalization(normalization),
       JSON.stringify(nextRawData),
     ]
   )

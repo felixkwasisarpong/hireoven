@@ -22,7 +22,7 @@ import pLimit from "p-limit"
 import { hashContent, conditionalFetchJson } from "@/lib/harvester/adapters/_base"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import type { EmploymentType } from "@/types"
 
@@ -163,7 +163,7 @@ async function main() {
           raw_data: row.job_raw_data ?? { source: "workable" },
         })
         const nc = norm.nextColumns
-        const publicationStatus = publicationStatusForJob({ description: nc.description, skills: nc.skills })
+        const publicationStatus = publicationStatusForNormalization(norm)
         const contentHash = hashContent([row.job_title, row.job_apply_url, row.job_location, nc.description?.slice(0, 4_000)])
         const rawData = safeJsonStringify({
           ...(row.job_raw_data ?? {}),
