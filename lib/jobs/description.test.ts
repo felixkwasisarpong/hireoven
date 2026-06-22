@@ -3,6 +3,7 @@ import assert from "node:assert/strict"
 import {
   cleanJobDescription,
   extractJobDescriptionFromHtml,
+  fetchJobDescription,
   parseJobDescriptionSections,
 } from "@/lib/jobs/description"
 
@@ -178,4 +179,44 @@ test("cleanJobDescription rejects content where most lines are chrome", () => {
 
   const cleaned = cleanJobDescription(mostlyChrome)
   assert.equal(cleaned, null, "chrome-dominated input must be rejected")
+})
+
+test("fetchJobDescription prefers rich Lever HTML description over short plain field", async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = (async () =>
+    new Response(
+      JSON.stringify({
+        descriptionPlain:
+          "Founded in early 2021, Ibility is a Service-Disabled Veteran-Owned Small Business.",
+        description: `
+          <div>Founded in early 2021, Ibility is a Service-Disabled Veteran-Owned Small Business.</div>
+          <div>
+            <p><strong>Position Overview:</strong></p>
+            <p>The Communications Products Specialist is a full-time position supporting a federal public health program focused on outreach, education, and stakeholder communications.</p>
+            <p><strong>Key Responsibilities:</strong></p>
+            <ul>
+              <li>Develop healthcare-related promotional and educational materials.</li>
+              <li>Create digital assets including graphics, infographics, and data visualizations.</li>
+            </ul>
+            <p><strong>Qualifications Required:</strong></p>
+            <ul><li>Bachelor's degree in Communications, Public Health, Marketing, Graphic Design, English, or a closely related field.</li></ul>
+          </div>
+        `,
+        lists: [],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } }
+    )) as typeof fetch
+
+  try {
+    const description = await fetchJobDescription(
+      "https://jobs.lever.co/ibility/d628175f-1f71-47b0-817c-b3ea55154c2c"
+    )
+    assert.ok(description, "expected Lever description")
+    assert.match(description, /Position Overview/i)
+    assert.match(description, /federal public health program/i)
+    assert.match(description, /healthcare-related promotional/i)
+    assert.match(description, /Bachelor's degree/i)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
 })

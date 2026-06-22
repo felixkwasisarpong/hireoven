@@ -980,6 +980,16 @@ function parseLeverJobUrl(url: URL): { company: string; jobId: string } | null {
   return { company, jobId }
 }
 
+function richerDescriptionText(...candidates: Array<string | null | undefined>): string | null {
+  let best: string | null = null
+  for (const candidate of candidates) {
+    const text = candidate?.trim()
+    if (!text) continue
+    if (!best || text.length > best.length) best = text
+  }
+  return best
+}
+
 /** https://boards.greenhouse.io/{company}/jobs/{jobId} → parsed context */
 function parseGreenhouseJobUrl(url: URL): { company: string; jobId: string } | null {
   const host = url.hostname.toLowerCase()
@@ -1001,14 +1011,23 @@ async function fetchLeverDescriptionFromUrl(url: URL): Promise<string | null> {
     const payload = (await res.json()) as {
       descriptionPlain?: string
       description?: string
+      additionalPlain?: string
+      additional?: string
       lists?: Array<{ text?: string; content?: string }>
     }
-    const base = payload.descriptionPlain ?? payload.description ?? null
+    const base = richerDescriptionText(
+      payload.descriptionPlain,
+      cleanJobDescription(payload.description)
+    )
     const sections = (payload.lists ?? [])
-      .map((l) => [l.text, l.content].filter(Boolean).join("\n"))
+      .map((l) => [l.text, cleanJobDescription(l.content)].filter(Boolean).join("\n"))
       .filter(Boolean)
       .join("\n\n")
-    const full = [base, sections].filter(Boolean).join("\n\n")
+    const additional = richerDescriptionText(
+      payload.additionalPlain,
+      cleanJobDescription(payload.additional)
+    )
+    const full = [base, sections, additional].filter(Boolean).join("\n\n")
     return cleanJobDescription(full)
   } catch {
     return null

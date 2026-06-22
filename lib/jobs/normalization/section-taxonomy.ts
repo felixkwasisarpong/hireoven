@@ -53,7 +53,7 @@ const HEADING_RULES: Rule[] = [
   {
     key: "requirements",
     pattern:
-      /\b(requirements|minimum qualifications|required qualifications|basic qualifications|must have|must-have|what you bring|who you are|your profile|experience required|what we(?:'|')re looking for|what we are looking for|what you(?:'|')ll need|what you need to succeed|required experience|required skills)\b/i,
+      /\b(requirements|minimum qualifications|required qualifications|qualifications required|basic qualifications|must have|must-have|what you bring|who you are|your profile|experience required|what we(?:'|')re looking for|what we are looking for|what you(?:'|')ll need|what you need to succeed|required experience|required skills)\b/i,
   },
   {
     key: "preferred_qualifications",
