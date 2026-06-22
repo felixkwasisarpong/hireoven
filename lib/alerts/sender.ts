@@ -1,6 +1,7 @@
 import webpush from "web-push"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
+import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
 import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
@@ -127,7 +128,7 @@ function renderJobRow(job: JobWithCompanyContext, index: number) {
           <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
         </div>
         <div style="font-size:13px;color:#475569;margin-bottom:2px;">${esc(companyName)}</div>
-        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(job.first_detected_at)}</div>
+        <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(String(notificationFreshnessDate(job) ?? job.first_detected_at))}</div>
         ${badges ? `<div>${badges}</div>` : ""}
       </td>
     </tr>

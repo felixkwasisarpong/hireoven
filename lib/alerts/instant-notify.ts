@@ -18,7 +18,9 @@ import {
   sendEmailAlert,
   sendWatchlistAlert,
 } from "@/lib/alerts/sender"
+import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { matchJobToAlerts, matchJobToWatchlists } from "@/lib/alerts/matcher"
+import { instantNotifyWindowMinutes, isWithinInstantNotifyWindow } from "@/lib/alerts/instant-notify-window"
 import { shouldSponsorPush } from "@/lib/alerts/sponsor-match"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -78,7 +80,11 @@ async function recordNotification(
  * users, grouped per user. Safe to call repeatedly for the same jobs.
  */
 export async function processNotifications(jobs: Job[]): Promise<void> {
-  if (jobs.length === 0) return
+  const windowMinutes = instantNotifyWindowMinutes()
+  const freshJobs = jobs.filter((job) =>
+    isWithinInstantNotifyWindow(notificationFreshnessDate(job), { windowMinutes })
+  )
+  if (freshJobs.length === 0) return
   try {
     // (userId -> jobIds notified this run) so a user the alert pass reached
     // isn't also hit by the watchlist / sponsor pass for the same job.
@@ -92,7 +98,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
 
     // ── 1. Alert matches, grouped per user ────────────────────────────────────
     const alertsByUser = new Map<string, { name: string; alertIds: Set<string>; jobs: Map<string, Job> }>()
-    for (const job of jobs) {
+    for (const job of freshJobs) {
       for (const alert of await matchJobToAlerts(job)) {
         const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", alertIds: new Set(), jobs: new Map() }
         entry.alertIds.add(alert.id)
@@ -153,7 +159,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     // ── 2. Watchlist matches, grouped per (user, company) ─────────────────────
     const watchByUser = new Map<string, Map<string, Job[]>>() // userId -> companyId -> jobs
     const companyIds = new Set<string>()
-    for (const job of jobs) {
+    for (const job of freshJobs) {
       const userIds = await matchJobToWatchlists(job)
       for (const userId of userIds) {
         if (wasNotified(userId, job.id)) continue
@@ -208,7 +214,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     }
 
     // ── 3. Sponsor-match push, grouped per seeker ─────────────────────────────
-    const sponsorJobs = jobs.filter((j) => j.sponsors_h1b)
+    const sponsorJobs = freshJobs.filter((j) => j.sponsors_h1b)
     if (sponsorJobs.length > 0) {
       const pool = getPostgresPool()
       const { rows: seekers } = await pool.query<{ id: string }>(

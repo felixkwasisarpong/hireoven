@@ -3,6 +3,11 @@ import {
   matchesLocationFilter,
   matchesSearchQuery,
 } from "@/lib/jobs/search-match"
+import {
+  buildJobSearchTokenSql,
+  escapeLikePattern,
+  tokenizeJobSearchQuery,
+} from "@/lib/jobs/search-sql"
 import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getCachedScoresForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
@@ -147,6 +152,15 @@ export async function GET(request: NextRequest) {
         AND jobs.apply_url NOT ILIKE '%dice.com%'
       )
     )`)
+  }
+  if (q.trim()) {
+    // Push text search into SQL before LIMIT/OFFSET. Filtering only after
+    // fetching the newest candidate window makes the header search appear
+    // broken for companies/titles that are not in the freshest slice.
+    for (const token of tokenizeJobSearchQuery(q)) {
+      const p = addParam(`%${escapeLikePattern(token)}%`)
+      where.push(buildJobSearchTokenSql({ patternParam: p, token }))
+    }
   }
 
   // Freshness window applies to the base query only. The saved-jobs UNION

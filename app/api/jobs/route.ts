@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
+import {
+  buildJobSearchTokenSql,
+  escapeLikePattern,
+  tokenizeJobSearchQuery,
+} from "@/lib/jobs/search-sql"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
@@ -89,19 +94,12 @@ export async function GET(request: NextRequest) {
 
   if (q?.trim()) {
     // Tokenize so multi-word queries like "senior backend engineer Java
-    // Spring Boot Python" don't require the whole phrase to appear as a
-    // single substring (it never does — those words are split across the
-    // title and the skills array). Each token must match somewhere in the
-    // field group: AND across tokens, OR across fields.
-    const tokens = q.trim().split(/\s+/).filter(Boolean)
-    for (const token of tokens) {
-      const p = addParam(`\\m${token}\\M`)
-      where.push(`(
-        jobs.title ~* ${p}
-        OR jobs.normalized_title ~* ${p}
-        OR companies.name ~* ${p}
-        OR EXISTS (SELECT 1 FROM unnest(jobs.skills) s WHERE s ~* ${p})
-      )`)
+    // Spring Boot Python" can match across title/company/location/skills.
+    // Use ILIKE instead of regex: technical searches such as "C++", "C#",
+    // ".NET", or "SRE (remote)" must not throw PostgreSQL regex errors.
+    for (const token of tokenizeJobSearchQuery(q)) {
+      const p = addParam(`%${escapeLikePattern(token)}%`)
+      where.push(buildJobSearchTokenSql({ patternParam: p, token }))
     }
   }
   if (companyId) where.push(`jobs.company_id = ${addParam(companyId)}`)
