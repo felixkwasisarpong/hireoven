@@ -101,6 +101,13 @@ function hasWeakNormalizedEvidence(input: JobPublicationInput): boolean {
   return input.requiresReview === true || confidenceScore < LOW_CONFIDENCE_THRESHOLD
 }
 
+function needsDescriptionEnrichment(input: JobPublicationInput): boolean {
+  return (
+    normalizedDescription(input.description).length < MIN_DESCRIPTION_CHARS &&
+    skillCount(input) < MIN_SKILL_COUNT
+  )
+}
+
 export function hasUsablePublicJobContent(input: JobPublicationInput): boolean {
   if (isLikelyCompanyBoilerplateOnly(input.description)) return false
   if (hasWeakNormalizedEvidence(input)) return false
@@ -110,6 +117,7 @@ export function hasUsablePublicJobContent(input: JobPublicationInput): boolean {
 }
 
 export function publicationStatusForJob(input: JobPublicationInput): JobPublicationStatus {
+  if (needsDescriptionEnrichment(input)) return "pending_enrichment"
   if (isLikelyCompanyBoilerplateOnly(input.description)) return "hidden_low_quality"
   if (hasWeakNormalizedEvidence(input)) return "hidden_low_quality"
   return hasUsablePublicJobContent(input) ? "published" : "pending_enrichment"

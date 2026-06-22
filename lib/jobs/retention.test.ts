@@ -20,7 +20,7 @@ test("purgeExpiredInactiveJobs: sums batches and stops when a batch deletes 0", 
   const r = await purgeExpiredInactiveJobs({ pool, olderThanDays: 30, batchSize: 5000, maxBatches: 50 })
   assert.equal(r.deleted, 11200)
   assert.equal(r.batches, 3)
-  assert.equal(calls.length, 4) // 3 deleting + 1 that returned 0
+  assert.equal(calls.length, 5) // 3 deleting + 1 that returned 0 + VACUUM
   assert.deepEqual(calls[0], [30, 5000]) // [days, batchSize]
 })
 
@@ -29,7 +29,7 @@ test("purgeExpiredInactiveJobs: respects maxBatches cap", async () => {
   const r = await purgeExpiredInactiveJobs({ pool, olderThanDays: 30, batchSize: 5000, maxBatches: 2 })
   assert.equal(r.batches, 2)
   assert.equal(r.deleted, 10000)
-  assert.equal(calls.length, 2)
+  assert.equal(calls.length, 3) // 2 deleting + VACUUM
 })
 
 test("purgeExpiredInactiveJobs: enforces a 7-day minimum retention", async () => {

@@ -11,6 +11,7 @@ import {
   fetchHtmlConditional,
   mapJsonLdToHarvestedJobs,
 } from "@/lib/harvester/adapters/_json-ld"
+import { extractJobDescriptionFromHtml } from "@/lib/jobs/description"
 
 /**
  * iCIMS public career portal. Slug is the full host
@@ -191,12 +192,24 @@ async function fetchJobDetail(link: JobLink, ctx: HarvestCtx): Promise<Harvested
     fallbackUrl: link.url,
   })
   const first = mapped.find((j) => j.title) ?? null
-  if (!first) return null
+  const htmlDescription = extractJobDescriptionFromHtml(result.html, "icims") ?? undefined
+  if (!first && !htmlDescription) return null
+  const title = link.title || first?.title
+  if (!title) return null
+  const description = first?.description || htmlDescription
   return {
-    ...first,
+    ...(first ?? {}),
     externalId: `icims:${link.host}:${link.jobId}`,
-    title: link.title || first.title,
+    title,
     applyUrl: link.url,
+    description,
+    contentHash: hashContent([
+      title,
+      link.url,
+      first?.location,
+      first?.postedAt,
+      description?.slice(0, 4_000),
+    ]),
   }
 }
 
