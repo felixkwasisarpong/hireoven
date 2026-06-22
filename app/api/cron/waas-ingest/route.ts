@@ -32,7 +32,10 @@ import {
   type WaasRoleSlug,
 } from "@/lib/sources/workatastartup"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob, type JobPublicationStatus } from "@/lib/jobs/publication"
+import {
+  publicationStatusForJob,
+  type JobPublicationStatus,
+} from "@/lib/jobs/publication"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 export const runtime = "nodejs"
@@ -277,7 +280,13 @@ export async function GET(request: NextRequest) {
       normalizedSeniority = nc.seniority_level
       const union = new Set<string>([...(skills ?? []), ...(nc.skills ?? [])])
       mergedSkills = union.size > 0 ? [...union] : null
-      publicationStatus = publicationStatusForJob({ description: nc.description, skills: mergedSkills })
+      publicationStatus = publicationStatusForJob({
+        description: nc.description,
+        skills: mergedSkills,
+        sections: norm.pageView.sections,
+        confidenceScore: norm.canonical.validation.confidence_score,
+        requiresReview: norm.canonical.validation.requires_review,
+      })
       enrichedRawData = JSON.stringify({
         ...JSON.parse(rawData),
         description_captured: Boolean(nc.description),

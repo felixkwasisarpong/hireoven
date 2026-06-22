@@ -24,7 +24,7 @@ import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import type { EmploymentType } from "@/types"
 
 /** Normalized job shape every aggregator source maps into. */
@@ -278,10 +278,7 @@ export async function ingestAggregatorJobs(
       raw_data: { source, publisher: job.publisher },
     })
     const nc = norm.nextColumns
-    const basePublicationStatus = publicationStatusForJob({
-      description: nc.description,
-      skills: nc.skills,
-    })
+    const basePublicationStatus = publicationStatusForNormalization(norm)
     const descLen = nc.description?.length ?? 0
     const publicationStatus =
       basePublicationStatus === "published" && minDesc > 0 && descLen < minDesc

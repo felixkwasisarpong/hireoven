@@ -98,6 +98,26 @@ test("AI platform and agentic systems", () => {
   )
 })
 
+test("Cyber defense tools and practices", () => {
+  extracts(
+    "Technical requirements: Microsoft Sentinel, Defender suite, KQL, SIEM/SOAR, UEBA, SOC engineering, detection logic, incident response, Python, PowerShell, and API development",
+    [
+      "Microsoft Sentinel",
+      "Microsoft Defender",
+      "KQL",
+      "SIEM",
+      "SOAR",
+      "UEBA",
+      "SOC Operations",
+      "Detection Engineering",
+      "Incident Response",
+      "Python",
+      "PowerShell",
+      "API Development",
+    ],
+  )
+})
+
 test("does not false-positive on ordinary prose", () => {
   const found = new Set(
     extractSkillsFromText(

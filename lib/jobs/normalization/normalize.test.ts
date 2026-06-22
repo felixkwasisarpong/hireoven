@@ -300,6 +300,56 @@ Right to Work (Spanish)
   assert.ok(result.pageView.sections.requirements.items.some((item) => /2\+ years/i.test(item)))
 })
 
+test("normalizeCrawlerJobForPersistence enriches cyber defense skills and drops heading noise", () => {
+  const result = normalizeCrawlerJobForPersistence({
+    rawJob: {
+      externalId: "workday:/job/SIEM_R456",
+      title: "Cyber Defense Engineer - SIEM",
+      url: "https://northmark.wd108.myworkdayjobs.com/job/Cyber-Defense-Engineer-SIEM_R456",
+      location: "Remote",
+      description: `
+The Position
+The Cyber Defense Engineer builds and tunes detection systems for a global security operations center.
+
+Responsibilities
+- Develop detection logic for Microsoft Sentinel and other SIEM platforms.
+- Support incident response workflows with SOAR automation.
+- Partner with SOC engineering teams to improve monitoring coverage.
+
+Technical Requirements
+- The Position
+- Microsoft Sentinel and Microsoft Defender suite
+- KQL queries, SIEM, SOAR, and UEBA use cases
+- Python, PowerShell, and API development
+- Detection engineering and incident response experience
+`,
+    },
+    crawledAtIso: "2026-06-22T00:00:00.000Z",
+  })
+
+  assert.ok(
+    result.pageView.sections.skills.items.every((item) => !/^the position$/i.test(item))
+  )
+
+  const skills = new Set(result.nextColumns.skills)
+  for (const skill of [
+    "Microsoft Sentinel",
+    "Microsoft Defender",
+    "KQL",
+    "SIEM",
+    "SOAR",
+    "UEBA",
+    "SOC Operations",
+    "Detection Engineering",
+    "Incident Response",
+    "Python",
+    "PowerShell",
+    "API Development",
+  ]) {
+    assert.ok(skills.has(skill), `expected "${skill}" in ${result.nextColumns.skills.join(", ")}`)
+  }
+})
+
 test("normalizeCrawlerJobForPersistence derives canonical fields with provenance", () => {
   const result = normalizeCrawlerJobForPersistence({
     rawJob: {

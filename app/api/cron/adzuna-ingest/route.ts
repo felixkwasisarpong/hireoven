@@ -39,7 +39,7 @@ import {
 } from "@/lib/sources/adzuna"
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import type { EmploymentType } from "@/types"
 
@@ -455,10 +455,7 @@ export async function GET(request: NextRequest) {
       raw_data: { source: "adzuna", category: job.category, salaryIsPredicted: job.salaryIsPredicted },
     })
     const nc = norm.nextColumns
-    const basePublicationStatus = publicationStatusForJob({
-      description: nc.description,
-      skills: nc.skills,
-    })
+    const basePublicationStatus = publicationStatusForNormalization(norm)
     const descLen = nc.description?.length ?? 0
     // Adzuna truncates descriptions at ~500 chars; redirect URLs are behind AWS
     // WAF so enrichment is impossible. Hide jobs that add no usable JD signal:

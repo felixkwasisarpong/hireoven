@@ -16,7 +16,7 @@
 import { loadEnvConfig } from "@next/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { normalizePersistedJobRecord, type PersistedJobForNormalization } from "@/lib/jobs/normalization"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 
 loadEnvConfig(process.cwd())
 
@@ -99,7 +99,7 @@ async function main() {
       for (const job of rows) {
         const norm = normalizePersistedJobRecord(job)
         const nc = norm.nextColumns
-        const status = publicationStatusForJob({ description: nc.description, skills: nc.skills })
+        const status = publicationStatusForNormalization(norm)
 
         if (dryRun) { totalUpdated += 1; continue }
 

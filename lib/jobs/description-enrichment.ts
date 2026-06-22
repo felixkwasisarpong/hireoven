@@ -5,7 +5,10 @@ import {
   normalizePersistedJobRecord,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
-import { publicationStatusForJob, type JobPublicationStatus } from "@/lib/jobs/publication"
+import {
+  publicationStatusForNormalization,
+  type JobPublicationStatus,
+} from "@/lib/jobs/publication"
 import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import { getPostgresPool } from "@/lib/postgres/server"
 
@@ -218,10 +221,7 @@ async function updateSuccess(
   const normalized = normalizePersistedJobRecord({ ...job, description })
   const rawData = toRecord(job.raw_data)
   const attempts = readAttempts(rawData) + 1
-  const status = publicationStatusForJob({
-    description: normalized.nextColumns.description,
-    skills: normalized.nextColumns.skills,
-  })
+  const status = publicationStatusForNormalization(normalized)
   const nowIso = toIsoNow()
 
   await pool.query(

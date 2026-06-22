@@ -22,7 +22,7 @@ import {
 import { normalizeGreenhouseBoardUrl } from "@/lib/companies/greenhouse-url"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
-import { publicationStatusForJob } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization } from "@/lib/jobs/publication"
 import type { EmploymentType, SeniorityLevel } from "@/types"
 
 const DESCRIPTION_FETCH_CONCURRENCY = Math.max(
@@ -647,10 +647,7 @@ export async function persistCrawlJobs({
       sponsorship_score: normalization.nextColumns.sponsorship_score,
       visa_language_detected: normalization.nextColumns.visa_language_detected,
       skills: normalization.nextColumns.skills,
-      publication_status: publicationStatusForJob({
-        description: normalization.nextColumns.description,
-        skills: normalization.nextColumns.skills,
-      }),
+      publication_status: publicationStatusForNormalization(normalization),
       is_active: true,
       last_seen_at: crawledAtIso,
       raw_data: {
