@@ -152,16 +152,16 @@ export default async function InterviewHubPage() {
 
   return (
     <main className="min-h-full bg-[#fbfcfd]">
-      <div className="mx-auto w-full max-w-[1140px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="mx-auto w-full max-w-[1140px] px-4 py-5 sm:px-5 lg:px-8 lg:py-8">
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between lg:mb-6">
           <div>
-            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#ec6516]">
+            <p className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.16em] text-[#ec6516] lg:text-[11px]">
               Grow · Interview Practice
             </p>
-            <h1 className="m-0 text-[26px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0d1424] sm:text-[31px]">
+            <h1 className="m-0 text-[23px] font-extrabold leading-[1.04] tracking-[-0.03em] text-[#0d1424] lg:text-[30px]">
               Step into the room.
             </h1>
-            <p className="mt-2 max-w-[500px] text-[14px] leading-[1.55] text-[#5b6573]">
+            <p className="mt-2 max-w-[460px] text-[13px] leading-[1.55] text-[#5b6573] lg:max-w-[500px] lg:text-[14px]">
               Pick a practice mode, run a focused session, and walk away with a debrief built for your next real interview.
             </p>
           </div>

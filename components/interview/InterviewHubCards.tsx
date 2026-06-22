@@ -255,7 +255,7 @@ function StagePanel({
 
   return (
     <section
-      className="relative flex min-h-[392px] flex-col overflow-hidden rounded-3xl border border-white/[0.08] bg-[linear-gradient(165deg,#141d31,#090e19)] px-5 py-6 shadow-[0_40px_80px_-34px_rgba(8,16,32,.7)] sm:px-7 sm:py-7"
+      className="relative flex min-h-[340px] flex-col overflow-hidden rounded-2xl border border-white/[0.08] bg-[linear-gradient(165deg,#141d31,#090e19)] px-4 py-5 shadow-[0_40px_80px_-34px_rgba(8,16,32,.7)] sm:px-5 sm:py-6 lg:min-h-[392px] lg:rounded-3xl lg:px-7 lg:py-7"
       aria-live="polite"
     >
       <div
@@ -285,32 +285,32 @@ function StagePanel({
         </div>
       </div>
 
-      <div className="relative mt-5 flex items-center gap-[14px]">
+      <div className="relative mt-4 flex items-center gap-3 lg:mt-5 lg:gap-[14px]">
         <span
-          className="flex h-[50px] w-[50px] shrink-0 items-center justify-center rounded-[14px] border"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border lg:h-[50px] lg:w-[50px] lg:rounded-[14px]"
           style={{ backgroundColor: mode.iconBg, borderColor: mode.badgeBorder, color: mode.accent }}
         >
-          <Icon className="h-6 w-6" strokeWidth={2} aria-hidden />
+          <Icon className="h-[22px] w-[22px] lg:h-6 lg:w-6" strokeWidth={2} aria-hidden />
         </span>
         <div>
-          <h2 className="m-0 text-[22px] font-extrabold leading-[1.05] tracking-[-0.02em] text-white">
+          <h2 className="m-0 text-[19px] font-extrabold leading-[1.05] tracking-[-0.02em] text-white lg:text-[22px]">
             {mode.title}
           </h2>
-          <div className="mt-1 text-[12.5px] text-[#7f93ad]">
+          <div className="mt-1 text-[12px] text-[#7f93ad] lg:text-[12.5px]">
             <span className="font-semibold text-[#a9bace]">Best for</span> · {mode.bestFor}
           </div>
         </div>
       </div>
 
-      <p className="relative mt-4 max-w-xl text-[14px] leading-[1.6] text-[#aebed3]">
+      <p className="relative mt-3 max-w-xl text-[13px] leading-[1.55] text-[#aebed3] lg:mt-4 lg:text-[14px] lg:leading-[1.6]">
         {mode.desc}
       </p>
 
-      <div className="relative mt-5 flex flex-col gap-2.5">
+      <div className="relative mt-4 flex flex-col gap-2 lg:mt-5 lg:gap-2.5">
         {mode.features.map((feature) => (
-          <div key={feature} className="flex items-center gap-2.5 text-[13.5px] font-medium text-[#d4dde9]">
+          <div key={feature} className="flex items-center gap-2.5 text-[12.5px] font-medium text-[#d4dde9] lg:text-[13.5px]">
             <span
-              className="flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-lg"
+              className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg lg:h-[23px] lg:w-[23px]"
               style={{ backgroundColor: mode.badgeBg }}
             >
               <Check className="h-3.5 w-3.5" color={mode.accent} strokeWidth={2.6} aria-hidden />
@@ -320,8 +320,8 @@ function StagePanel({
         ))}
       </div>
 
-      <div className="relative mt-auto flex flex-col gap-4 border-t border-white/[0.09] pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="text-[12.5px] leading-normal text-[#7f93ad]">
+      <div className="relative mt-auto flex flex-col gap-3 border-t border-white/[0.09] pt-4 sm:flex-row sm:items-center sm:justify-between lg:gap-4 lg:pt-5">
+        <div className="text-[12px] leading-normal text-[#7f93ad] lg:text-[12.5px]">
           {liveNeedsCredits ? "Buy a live credit to start this room." : mode.meta}
         </div>
 
@@ -333,7 +333,7 @@ function StagePanel({
         ) : (
           <Link
             href={mode.href}
-            className="inline-flex h-[46px] shrink-0 items-center justify-center gap-2 rounded-xl px-6 text-[14px] font-bold transition hover:brightness-105 active:translate-y-px"
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl px-5 text-[13.5px] font-bold transition hover:brightness-105 active:translate-y-px lg:h-[46px] lg:px-6 lg:text-[14px]"
             style={{ background: mode.ctaBg, color: mode.ctaText, boxShadow: `0 16px 34px -14px ${mode.glow}` }}
           >
             {mode.ctaLabel}
