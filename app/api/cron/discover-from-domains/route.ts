@@ -77,6 +77,14 @@ function intParamOrEnv(params: URLSearchParams, param: string, env: string, fall
   return intEnv(env, fallback)
 }
 
+function nonNegativeIntParamOrEnv(params: URLSearchParams, param: string, env: string, fallback: number): number {
+  const fromParam = Number.parseInt(params.get(param) ?? "", 10)
+  if (Number.isFinite(fromParam) && fromParam >= 0) return fromParam
+  const fromEnv = Number.parseInt(process.env[env] ?? "", 10)
+  if (Number.isFinite(fromEnv) && fromEnv >= 0) return fromEnv
+  return fallback
+}
+
 function confidenceRank(confidence: string): number {
   switch (confidence) {
     case "high":
@@ -413,7 +421,7 @@ async function resolveGuessedDomains(
   dry: boolean
 ): Promise<ResolveStats> {
   const stats: ResolveStats = { attempted: 0, resolved: 0, missed: 0, byMethod: {} }
-  const batch = intParamOrEnv(params, "resolveBatch", "DISCOVER_FROM_DOMAINS_RESOLVE_BATCH", 50)
+  const batch = nonNegativeIntParamOrEnv(params, "resolveBatch", "DISCOVER_FROM_DOMAINS_RESOLVE_BATCH", 50)
   if (batch <= 0) return stats
   const retryHours = intEnv("DISCOVER_FROM_DOMAINS_RESOLVE_RETRY_HOURS", 168)
   const disableClearbit = process.env.DISCOVER_FROM_DOMAINS_ENABLE_CLEARBIT !== "true"
