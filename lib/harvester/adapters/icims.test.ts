@@ -93,6 +93,36 @@ test("icims: extractJobLinks rejects non-icims.com hosts", () => {
   assert.equal(links.length, 0)
 })
 
+test("icims: fetchJobs falls back to detail HTML descriptions without JSON-LD", async () => {
+  const searchHtml = `
+    <a class="iCIMS_Anchor" href="https://careers-acme.icims.com/jobs/23007/verizon-sales-consultant/job?in_iframe=1" title="23007 - Verizon Sales Consultant">
+  `
+  const detailHtml = `
+    <html><body>
+      <div class="iCIMS_JobDescription">
+        <p>Cellular Sales is growing and this Verizon Sales Consultant role helps customers choose wireless plans, devices, and accessories.</p>
+        <p>Responsibilities include building customer relationships, explaining product options, meeting sales goals, and maintaining accurate account notes.</p>
+        <p>Requirements include communication skills, retail sales experience, schedule flexibility, and comfort learning new technology every week.</p>
+      </div>
+    </body></html>
+  `
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes("/jobs/search?pr=0")) return new Response(searchHtml, { status: 200 })
+    if (url.includes("/jobs/search?pr=1")) return new Response("", { status: 200 })
+    return new Response(detailHtml, { status: 200 })
+  }
+
+  const result = await icimsAdapter.fetchJobs({
+    slug: "careers-acme.icims.com",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(result.jobs.length, 1)
+  assert.match(result.jobs[0].externalId, /^icims:careers-acme\.icims\.com:23007$/)
+  assert.match(result.jobs[0].description ?? "", /Responsibilities include building customer relationships/)
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
 const LIVE_SLUG = process.env.HARVESTER_LIVE_ICIMS_SLUG ?? "careers-iridium.icims.com"
 

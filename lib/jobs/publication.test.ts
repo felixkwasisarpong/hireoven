@@ -10,6 +10,19 @@ import {
 test("publicationStatusForJob holds empty jobs for enrichment", () => {
   assert.equal(publicationStatusForJob({ description: "", skills: [] }), "pending_enrichment")
   assert.equal(publicationStatusForJob({ description: "Short LinkedIn shell", skills: [] }), "pending_enrichment")
+  assert.equal(
+    publicationStatusForJob({
+      description: "",
+      skills: [],
+      sections: {
+        responsibilities: { items: [] },
+        requirements: { items: [] },
+      },
+      confidenceScore: 0.2,
+      requiresReview: true,
+    }),
+    "pending_enrichment"
+  )
 })
 
 test("publicationStatusForJob publishes jobs with useful content", () => {

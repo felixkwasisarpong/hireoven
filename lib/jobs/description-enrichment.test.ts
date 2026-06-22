@@ -1,7 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 import type { Pool } from "pg"
-import { markFailure } from "./description-enrichment"
+import { markFailure, processPendingDescriptionEnrichmentBatch } from "./description-enrichment"
 
 type Captured = { sql: string; params: unknown[] }
 
@@ -45,4 +45,22 @@ test("markFailure: keeps pending while attempts remain", async () => {
   const raw = JSON.parse(calls[0].params[1] as string)
   assert.equal(raw.description_enrichment.status, "failed")
   assert.equal(raw.description_enrichment.attempts, 1)
+})
+
+test("processPendingDescriptionEnrichmentBatch: reclaims hidden fetchable ATS jobs", async () => {
+  const { pool, calls } = fakePool()
+  await processPendingDescriptionEnrichmentBatch({
+    pool,
+    batchSize: 25,
+    maxAttempts: 3,
+    minDescriptionChars: 150,
+  })
+
+  assert.equal(calls.length, 1)
+  assert.match(calls[0].sql, /hidden_low_quality/)
+  assert.match(calls[0].sql, /source_ats = ANY\(\$5::text\[\]\)/)
+  assert.match(calls[0].sql, /apply_url ~\* \$6/)
+  assert.equal(calls[0].params[3], 150)
+  assert.match(String(calls[0].params[4]), /icims/)
+  assert.match(String(calls[0].params[5]), /applytojob/)
 })

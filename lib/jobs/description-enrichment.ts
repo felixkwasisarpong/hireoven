@@ -46,6 +46,22 @@ const DEFAULT_STALE_PROCESSING_MS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_STALE_MS ?? "900000", 10)
 )
 
+const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
+  "ashby",
+  "bamboohr",
+  "greenhouse",
+  "icims",
+  "jazzhr",
+  "jobvite",
+  "lever",
+  "rippling",
+  "smartrecruiters",
+  "workday",
+] as const
+
+const DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN =
+  "(ashbyhq\\.com|bamboohr\\.com|greenhouse\\.io|icims\\.com|applytojob\\.com|jobvite\\.com|jobs\\.lever\\.co|ats\\.rippling\\.com|smartrecruiters\\.com|myworkdayjobs\\.com)"
+
 type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
 }
@@ -113,23 +129,49 @@ function notProcessingOrStaleSql(intervalParam: string): string {
       )`
 }
 
+function enrichablePublicationStatusSql(
+  minDescriptionCharsParam: string,
+  sourceAtsParam: string,
+  applyUrlPatternParam: string
+): string {
+  return `(
+        COALESCE(publication_status, 'published') = 'pending_enrichment'
+        OR (
+          COALESCE(publication_status, 'published') = 'hidden_low_quality'
+          AND COALESCE(length(description), 0) < ${minDescriptionCharsParam}
+          AND (
+            source_ats = ANY(${sourceAtsParam}::text[])
+            OR apply_url ~* ${applyUrlPatternParam}
+          )
+        )
+      )`
+}
+
 async function fetchCandidateIds(
   pool: Pool,
   limit: number,
   maxAttempts: number,
-  staleMs: number
+  staleMs: number,
+  minDescriptionChars: number
 ): Promise<string[]> {
   const { rows } = await pool.query<{ id: string }>(
     `SELECT id
        FROM jobs
       WHERE is_active = true
-        AND COALESCE(publication_status, 'published') = 'pending_enrichment'
+        AND ${enrichablePublicationStatusSql("$4", "$5", "$6")}
         AND apply_url IS NOT NULL
         AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $1
         AND ${notProcessingOrStaleSql("$3")}
       ORDER BY first_detected_at DESC NULLS LAST, updated_at DESC NULLS LAST
       LIMIT $2`,
-    [maxAttempts, limit, staleMs]
+    [
+      maxAttempts,
+      limit,
+      staleMs,
+      minDescriptionChars,
+      DESCRIPTION_ENRICHABLE_SOURCE_ATS,
+      DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN,
+    ]
   )
   return rows.map((row) => row.id)
 }
@@ -139,7 +181,8 @@ async function claimJob(
   id: string,
   runId: string,
   maxAttempts: number,
-  staleMs: number
+  staleMs: number,
+  minDescriptionChars: number
 ): Promise<DescriptionEnrichmentJob | null> {
   const nowIso = toIsoNow()
   const { rows } = await pool.query<DescriptionEnrichmentJob>(
@@ -158,7 +201,7 @@ async function claimJob(
             updated_at = NOW()
       WHERE id = $1::uuid
         AND is_active = true
-        AND COALESCE(publication_status, 'published') = 'pending_enrichment'
+        AND ${enrichablePublicationStatusSql("$6", "$7", "$8")}
         AND apply_url IS NOT NULL
         AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $4
         AND ${notProcessingOrStaleSql("$5")}
@@ -166,7 +209,16 @@ async function claimJob(
                 employment_type, seniority_level, is_remote, is_hybrid, salary_min, salary_max,
                 salary_currency, sponsors_h1b, sponsorship_score, requires_authorization,
                 visa_language_detected, skills, first_detected_at, raw_data, updated_at`,
-    [id, runId, nowIso, maxAttempts, staleMs]
+    [
+      id,
+      runId,
+      nowIso,
+      maxAttempts,
+      staleMs,
+      minDescriptionChars,
+      DESCRIPTION_ENRICHABLE_SOURCE_ATS,
+      DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN,
+    ]
   )
   return rows[0] ?? null
 }
@@ -183,9 +235,8 @@ export async function markFailure(
   // Once a job exhausts its attempts it can never be re-picked (fetchCandidateIds
   // filters attempts < maxAttempts), so it would sit in pending_enrichment
   // forever — the un-drainable "floor". Retire it to the terminal hidden state so
-  // it leaves the pending pool and stops being counted and retried. Only the
-  // crawler produces these; harvester jobs arrive with descriptions and never hit
-  // this path. A later re-crawl/harvest that finds a description re-publishes it.
+  // it leaves the retry pool and stops being counted. A later re-crawl/harvest
+  // that finds a description re-publishes it.
   const retired = attempts >= maxAttempts
   await pool.query(
     `UPDATE jobs
@@ -321,13 +372,21 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
   )
   const runId = `desc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-  const ids = await fetchCandidateIds(pool, batchSize, maxAttempts, staleProcessingMs)
+  const ids = await fetchCandidateIds(
+    pool,
+    batchSize,
+    maxAttempts,
+    staleProcessingMs,
+    minDescriptionChars
+  )
   if (ids.length === 0) {
     return { processed: 0, enriched: 0, published: 0, failed: 0, skipped: 0 }
   }
 
   const claimed = await runWithConcurrency(
-    ids.map((id) => () => claimJob(pool, id, runId, maxAttempts, staleProcessingMs)),
+    ids.map((id) => () =>
+      claimJob(pool, id, runId, maxAttempts, staleProcessingMs, minDescriptionChars)
+    ),
     concurrency
   )
   const jobs = claimed.filter((job): job is DescriptionEnrichmentJob => Boolean(job))
