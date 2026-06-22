@@ -1,5 +1,6 @@
 import type { Pool } from "pg"
 import { detectAdapter, getAdapter, type AtsAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { isBlockedAtsSource, isBlockedAtsUrl } from "@/lib/harvester/ats-blocklist"
 import { throwIfAborted } from "@/lib/harvester/adapters/_base"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { persistJobsBulk } from "@/lib/harvester/persist-bulk"
@@ -140,7 +141,10 @@ export type AtsHarvestCompany = {
 function detectCompanyAdapter(
   company: AtsHarvestCompany
 ): { adapter: AtsAdapter; slug: string } | null {
+  // Blocklisted aggregator tenants must never be harvested.
+  if (isBlockedAtsSource(company.ats_type, company.ats_identifier)) return null
   const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
+  if (isBlockedAtsUrl(detectionUrl)) return null
   const fromUrl = detectAdapter(detectionUrl)
   if (fromUrl) return fromUrl
 

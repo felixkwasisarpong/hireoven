@@ -1,6 +1,7 @@
 import type { Pool } from "pg"
 import pLimit from "p-limit"
 import { adapters, detectAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { isBlockedAtsSource, isBlockedAtsUrl } from "@/lib/harvester/ats-blocklist"
 import {
   runAtsHarvest,
   type AtsHarvestCompany,
@@ -19,11 +20,15 @@ export type AdapterLimits = {
  * the company row hasn't been classified yet.
  */
 export function adapterNameFor(company: AtsHarvestCompany): AtsName | null {
+  // Skip blocklisted aggregator tenants even if a stale row still has ats_type set.
+  if (isBlockedAtsSource(company.ats_type, company.ats_identifier)) return null
+  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
+  if (isBlockedAtsUrl(detectionUrl)) return null
+
   if (company.ats_type) {
     const known = SUPPORTED_ATS_TYPES.find((n) => n === company.ats_type)
     if (known) return known as AtsName
   }
-  const detectionUrl = company.direct_ats_url?.trim() || company.careers_url
   const detection = detectAdapter(detectionUrl)
   return (detection?.adapter.name as AtsName | undefined) ?? null
 }

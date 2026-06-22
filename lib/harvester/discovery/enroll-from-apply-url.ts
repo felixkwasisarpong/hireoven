@@ -14,6 +14,7 @@
 
 import type { Pool } from "pg"
 import { detectAdapter } from "@/lib/harvester/adapters"
+import { isBlockedAtsSource } from "@/lib/harvester/ats-blocklist"
 
 export async function enrollFromApplyUrl(
   pool: Pool,
@@ -30,6 +31,10 @@ export async function enrollFromApplyUrl(
 
   const { adapter, slug } = detected
   const atsType = adapter.name
+
+  // Never (re)enroll a blocklisted aggregator tenant (e.g. Jack & Jill's board).
+  if (isBlockedAtsSource(atsType, slug)) return null
+
   const careersUrl = args.applyUrl
 
   // Stable domain key so we don't create duplicates across runs
