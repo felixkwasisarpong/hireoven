@@ -11,9 +11,11 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
+import { sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { processNotifications } from "@/lib/alerts/instant-notify"
+import { instantNotifyWindowMinutes } from "@/lib/alerts/instant-notify-window"
 import type { Job } from "@/types"
 
 export const runtime = "nodejs"
@@ -33,19 +35,23 @@ export async function POST(request: NextRequest) {
   if (ids.length === 0) return NextResponse.json({ ok: true, processed: 0 })
 
   const pool = getPostgresPool()
+  const windowMin = instantNotifyWindowMinutes()
   // Lean column set — only what the matcher + senders read (no raw_data).
   const { rows } = await pool.query<Job>(
     `SELECT id, title, company_id, location, normalized_title, employment_type,
             seniority_level, skills, sponsors_h1b, sponsorship_score, requires_authorization,
             apply_url, is_remote, is_hybrid, first_detected_at, posted_at, salary_min, salary_max
        FROM jobs
-      WHERE id = ANY($1::uuid[]) AND is_active = true AND ${sqlPublishedJob("jobs")}`,
-    [ids],
+      WHERE id = ANY($1::uuid[])
+        AND is_active = true
+        AND ${sqlPublishedJob("jobs")}
+        AND ${sqlNotificationFreshnessDate("jobs")} > now() - make_interval(mins => $2)`,
+    [ids, windowMin],
   )
 
   // One batch call so a user matching many of these jobs gets one combined
   // email + one summary push, not a ping per job.
   await processNotifications(rows)
 
-  return NextResponse.json({ ok: true, requested: ids.length, processed: rows.length })
+  return NextResponse.json({ ok: true, requested: ids.length, processed: rows.length, windowMin })
 }

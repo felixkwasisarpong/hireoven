@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
+import { notificationFreshnessDate, sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
@@ -55,6 +56,7 @@ type MatchedJobRow = {
     location: string | null
     is_remote: boolean
     first_detected_at: string
+    posted_at: string | null
     company: CompanyShape | null
   } | null
 }
@@ -66,6 +68,7 @@ type FallbackJob = {
   location: string | null
   is_remote: boolean
   first_detected_at: string
+  posted_at: string | null
   company: CompanyShape | null
 }
 
@@ -187,7 +190,7 @@ function renderJobRows(
             ${htmlEscape([cleanCompanyName(job.company?.name), formatLocation(job.location, job.is_remote)].filter(Boolean).join(" · "))}
           </div>
           <div style="font-size:12px;color:#94a3b8;margin-top:6px;">
-            Posted ${htmlEscape(formatFreshness(job.first_detected_at))}
+            Posted ${htmlEscape(formatFreshness(String(notificationFreshnessDate(job) ?? job.first_detected_at)))}
           </div>
           ${scoreBadge}
         </td>
@@ -433,6 +436,7 @@ export async function GET(request: NextRequest) {
         location: string | null
         is_remote: boolean
         first_detected_at: string
+        posted_at: string | null
         company_name: string | null
         company_domain: string | null
         company_logo_url: string | null
@@ -448,6 +452,7 @@ export async function GET(request: NextRequest) {
          jobs.location,
          jobs.is_remote,
          jobs.first_detected_at,
+         jobs.posted_at,
          companies.name     AS company_name,
          companies.domain   AS company_domain,
          companies.logo_url AS company_logo_url,
@@ -460,6 +465,7 @@ export async function GET(request: NextRequest) {
          -- A job becomes email-eligible when both the job exists and the
          -- user's match score exists. Scores can lag ingestion by hours, so
          -- window on the later timestamp instead of dropping late-scored jobs.
+         AND ${sqlNotificationFreshnessDate("jobs")} >= $3
          AND GREATEST(jobs.first_detected_at, COALESCE(jms.computed_at, jobs.first_detected_at)) >= $2
          AND jobs.is_active = true
          AND ${sqlPublishedJob("jobs")}
@@ -470,7 +476,7 @@ export async function GET(request: NextRequest) {
                 jobs.first_detected_at DESC,
                 jms.overall_score DESC
        LIMIT 1000`,
-      [resumeRecipients.map((user) => user.id), withResumeSince]
+      [resumeRecipients.map((user) => user.id), withResumeSince, endOfDaySince]
     )
 
     type EnrichedMatchedRow = MatchedJobRow & { jobFull?: Job }
@@ -490,6 +496,7 @@ export async function GET(request: NextRequest) {
           location: row.location,
           is_remote: row.is_remote,
           first_detected_at: row.first_detected_at,
+          posted_at: row.posted_at,
           company,
         },
         jobFull: row.job_full,
@@ -571,6 +578,7 @@ export async function GET(request: NextRequest) {
         location: string | null
         is_remote: boolean
         first_detected_at: string
+        posted_at: string | null
         company_name: string | null
         company_domain: string | null
         company_logo_url: string | null
@@ -583,6 +591,7 @@ export async function GET(request: NextRequest) {
          jobs.location,
          jobs.is_remote,
          jobs.first_detected_at,
+         jobs.posted_at,
          companies.name     AS company_name,
          companies.domain   AS company_domain,
          companies.logo_url AS company_logo_url
@@ -591,8 +600,8 @@ export async function GET(request: NextRequest) {
        WHERE jobs.is_active = true
          AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
-         AND jobs.first_detected_at >= $1
-       ORDER BY jobs.first_detected_at DESC
+         AND ${sqlNotificationFreshnessDate("jobs")} >= $1
+       ORDER BY ${sqlNotificationFreshnessDate("jobs")} DESC
        LIMIT 5`,
       [endOfDaySince]
     )
@@ -604,6 +613,7 @@ export async function GET(request: NextRequest) {
       location: row.location,
       is_remote: row.is_remote,
       first_detected_at: row.first_detected_at,
+      posted_at: row.posted_at,
       company: row.company_name
         ? { name: row.company_name, domain: row.company_domain, logo_url: row.company_logo_url }
         : null,

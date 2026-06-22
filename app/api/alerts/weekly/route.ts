@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
@@ -184,7 +185,7 @@ export async function GET(request: NextRequest) {
     pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa(
         "jobs"
-      )} AND first_detected_at >= $1`,
+      )} AND ${sqlNotificationFreshnessDate("jobs")} >= $1`,
       [weekStart]
     ),
     pool.query<{ count: string }>(
@@ -195,7 +196,7 @@ export async function GET(request: NextRequest) {
       `SELECT companies.name
        FROM jobs
        JOIN companies ON companies.id = jobs.company_id
-       WHERE jobs.first_detected_at >= $1
+       WHERE ${sqlNotificationFreshnessDate("jobs")} >= $1
          AND jobs.is_active = true
          AND ${sqlPublishedJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
@@ -235,8 +236,8 @@ export async function GET(request: NextRequest) {
      WHERE jobs.is_active = true
        AND ${sqlPublishedJob("jobs")}
        AND ${sqlJobLocatedInUsa("jobs")}
-       AND jobs.first_detected_at >= $1
-     ORDER BY jobs.first_detected_at DESC`,
+       AND ${sqlNotificationFreshnessDate("jobs")} >= $1
+     ORDER BY ${sqlNotificationFreshnessDate("jobs")} DESC`,
     [since]
   )
   const recentJobs = recentJobsResult.rows

@@ -17,6 +17,7 @@
  */
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
+import { sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { processNotifications } from "@/lib/alerts/instant-notify"
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
             apply_url, is_remote, is_hybrid, first_detected_at, posted_at, salary_min, salary_max
        FROM jobs
       WHERE first_detected_at > now() - make_interval(mins => $1)
+        AND ${sqlNotificationFreshnessDate("jobs")} > now() - make_interval(mins => $1)
         AND is_active = true
         AND ${sqlPublishedJob("jobs")}
       ORDER BY first_detected_at ASC

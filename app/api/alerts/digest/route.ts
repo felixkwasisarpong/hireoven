@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
+import { sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { matchesLocationFilter } from "@/lib/jobs/search-match"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
@@ -233,7 +234,7 @@ async function fetchTopPicksForUser(
          AND s.overall_score >= $2
          AND j.is_active = true
          AND ${sqlPublishedJob("j")}
-         AND j.first_detected_at >= $3
+         AND ${sqlNotificationFreshnessDate("j")} >= $3
        ORDER BY s.job_id, s.overall_score DESC, s.computed_at DESC
      )
      SELECT j.*,
@@ -244,7 +245,7 @@ async function fetchTopPicksForUser(
      FROM scored
      JOIN jobs j ON j.id = scored.job_id
      LEFT JOIN companies c ON c.id = j.company_id
-     ORDER BY scored.overall_score DESC, j.first_detected_at DESC
+     ORDER BY scored.overall_score DESC, ${sqlNotificationFreshnessDate("j")} DESC
      LIMIT $4`,
     [userId, TOP_PICKS_MIN_SCORE, sinceIso, TOP_PICKS_PER_USER]
   )
@@ -296,8 +297,8 @@ export async function GET(request: NextRequest) {
      WHERE jobs.is_active = true
        AND ${sqlPublishedJob("jobs")}
        AND ${sqlJobLocatedInUsa("jobs")}
-       AND jobs.first_detected_at >= $1
-     ORDER BY jobs.first_detected_at DESC`,
+       AND ${sqlNotificationFreshnessDate("jobs")} >= $1
+     ORDER BY ${sqlNotificationFreshnessDate("jobs")} DESC`,
     [since]
   )
   const flatJobs: JobEmailRow[] = recentJobsResult.rows
