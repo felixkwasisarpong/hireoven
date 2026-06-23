@@ -1,12 +1,12 @@
 /**
- * Idempotently create / locate Pro Max prices (and the underlying product)
- * in Stripe and print the IDs for .env.local. Skips Pro since those env vars
- * already point at valid prices.
+ * Idempotently create / locate the Pro and Pro Max subscription prices (and
+ * their products) in Stripe and print the IDs for .env.local.
  *
  *   npx tsx scripts/seed-stripe-prices.ts
  *
- * Identifies the product by metadata.hireoven_plan = pro_max so re-running
- * the script is safe.
+ * Amounts come straight from lib/pricing.ts (getPlanAmountCents), which the
+ * subscription snapshot validates against — so the seeded prices must match.
+ * Products are identified by metadata.hireoven_plan, so re-running is safe.
  */
 
 import { loadEnvConfig } from "@next/env"
@@ -14,8 +14,27 @@ loadEnvConfig(process.cwd())
 
 import Stripe from "stripe"
 
-const PRO_MAX_MONTHLY_CENTS = 2900
-const PRO_MAX_YEARLY_CENTS = 22900
+// Mirror lib/pricing.ts PLAN_DATA → getPlanAmountCents (monthly*100, yearlyBilled*100).
+const PLAN_PRICES = [
+  {
+    plan: "pro",
+    name: "Hireoven Pro",
+    description: "Everything you need to land the job — unlimited match scores, resume tools, and Apex AI.",
+    monthlyCents: 1900,
+    yearlyCents: 14900,
+    monthlyEnv: "STRIPE_PRICE_PRO_MONTHLY",
+    yearlyEnv: "STRIPE_PRICE_PRO_YEARLY",
+  },
+  {
+    plan: "pro_max",
+    name: "Hireoven Pro Max",
+    description: "Apex strategy, generous monthly quotas, and 1 live voice interview / 28 days.",
+    monthlyCents: 2900,
+    yearlyCents: 22900,
+    monthlyEnv: "STRIPE_PRICE_PRO_MAX_MONTHLY",
+    yearlyEnv: "STRIPE_PRICE_PRO_MAX_YEARLY",
+  },
+] as const
 
 async function findProductByPlan(stripe: Stripe, plan: string): Promise<Stripe.Product | null> {
   const list = await stripe.products.list({ limit: 100, active: true })
@@ -48,54 +67,58 @@ async function main() {
 
   const stripe = new Stripe(secret, { apiVersion: "2026-03-25.dahlia" })
   const currency = (process.env.STRIPE_CURRENCY ?? "usd").toLowerCase()
+  const envLines: string[] = []
 
-  // ── Product ────────────────────────────────────────────────────────────────
-  let product = await findProductByPlan(stripe, "pro_max")
-  if (!product) {
-    product = await stripe.products.create({
-      name: "Hireoven Pro Max",
-      description: "Apex strategy, generous monthly quotas, and 1 live voice interview / 28 days.",
-      metadata: { hireoven_plan: "pro_max" },
-    })
-    console.log(`+ Created product: ${product.id}`)
-  } else {
-    console.log(`✓ Product already exists: ${product.id}`)
+  for (const spec of PLAN_PRICES) {
+    // ── Product ──────────────────────────────────────────────────────────────
+    let product = await findProductByPlan(stripe, spec.plan)
+    if (!product) {
+      product = await stripe.products.create({
+        name: spec.name,
+        description: spec.description,
+        metadata: { hireoven_plan: spec.plan },
+      })
+      console.log(`+ Created product ${spec.plan}: ${product.id}`)
+    } else {
+      console.log(`✓ Product ${spec.plan} already exists: ${product.id}`)
+    }
+
+    // ── Prices ───────────────────────────────────────────────────────────────
+    let monthly = await findPrice(stripe, product.id, spec.monthlyCents, "month", currency)
+    if (!monthly) {
+      monthly = await stripe.prices.create({
+        product: product.id,
+        unit_amount: spec.monthlyCents,
+        currency,
+        recurring: { interval: "month" },
+        nickname: `${spec.name} monthly`,
+        metadata: { hireoven_plan: spec.plan, interval: "monthly" },
+      })
+      console.log(`+ Created ${spec.plan} monthly: ${monthly.id}`)
+    } else {
+      console.log(`✓ ${spec.plan} monthly already exists: ${monthly.id}`)
+    }
+
+    let yearly = await findPrice(stripe, product.id, spec.yearlyCents, "year", currency)
+    if (!yearly) {
+      yearly = await stripe.prices.create({
+        product: product.id,
+        unit_amount: spec.yearlyCents,
+        currency,
+        recurring: { interval: "year" },
+        nickname: `${spec.name} yearly`,
+        metadata: { hireoven_plan: spec.plan, interval: "yearly" },
+      })
+      console.log(`+ Created ${spec.plan} yearly: ${yearly.id}`)
+    } else {
+      console.log(`✓ ${spec.plan} yearly already exists: ${yearly.id}`)
+    }
+
+    envLines.push(`${spec.monthlyEnv}=${monthly.id}`, `${spec.yearlyEnv}=${yearly.id}`)
   }
 
-  // ── Prices ─────────────────────────────────────────────────────────────────
-  let monthly = await findPrice(stripe, product.id, PRO_MAX_MONTHLY_CENTS, "month", currency)
-  if (!monthly) {
-    monthly = await stripe.prices.create({
-      product: product.id,
-      unit_amount: PRO_MAX_MONTHLY_CENTS,
-      currency,
-      recurring: { interval: "month" },
-      nickname: "Pro Max monthly",
-      metadata: { hireoven_plan: "pro_max", interval: "monthly" },
-    })
-    console.log(`+ Created Pro Max monthly: ${monthly.id}`)
-  } else {
-    console.log(`✓ Pro Max monthly already exists: ${monthly.id}`)
-  }
-
-  let yearly = await findPrice(stripe, product.id, PRO_MAX_YEARLY_CENTS, "year", currency)
-  if (!yearly) {
-    yearly = await stripe.prices.create({
-      product: product.id,
-      unit_amount: PRO_MAX_YEARLY_CENTS,
-      currency,
-      recurring: { interval: "year" },
-      nickname: "Pro Max yearly",
-      metadata: { hireoven_plan: "pro_max", interval: "yearly" },
-    })
-    console.log(`+ Created Pro Max yearly: ${yearly.id}`)
-  } else {
-    console.log(`✓ Pro Max yearly already exists: ${yearly.id}`)
-  }
-
-  console.log("\n=== Summary ===")
-  console.log(`STRIPE_PRICE_PRO_MAX_MONTHLY=${monthly.id}`)
-  console.log(`STRIPE_PRICE_PRO_MAX_YEARLY=${yearly.id}`)
+  console.log("\n=== Summary (paste into .env.local) ===")
+  for (const line of envLines) console.log(line)
 }
 
 main().catch((err) => {

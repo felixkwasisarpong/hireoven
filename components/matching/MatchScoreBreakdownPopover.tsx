@@ -259,9 +259,15 @@ function computeCoords(anchor: HTMLElement): Coords {
     ? rect.top + window.scrollY - POPOVER_HEIGHT_ESTIMATE - GAP
     : rect.bottom + window.scrollY + GAP
 
-  // Center-align under anchor, but clamp to viewport with 12px padding.
+  // When the anchor sits in the right portion of the viewport (e.g. the score
+  // ring at a card's right edge, next to the sidebar), open the panel leftward so
+  // it lands over the card instead of colliding with the sidebar. Otherwise
+  // center it under the anchor. Always clamp to the viewport with 12px padding.
   const centerX = rect.left + rect.width / 2
-  let left = centerX - POPOVER_WIDTH / 2 + window.scrollX
+  const anchorOnRight = centerX > viewportWidth * 0.55
+  let left = anchorOnRight
+    ? rect.right - POPOVER_WIDTH + window.scrollX
+    : centerX - POPOVER_WIDTH / 2 + window.scrollX
   const minLeft = window.scrollX + 12
   const maxLeft = window.scrollX + viewportWidth - POPOVER_WIDTH - 12
   left = Math.max(minLeft, Math.min(maxLeft, left))
@@ -315,17 +321,21 @@ export function MatchScoreBreakdownPopover({
 
   if (!open || !score || !coords || typeof document === "undefined") return null
 
+  // Anchored popover — faint scrim focuses it; panel positioned next to the ring.
   const panel: ReactNode = (
-    <div
-      ref={panelRef}
-      style={{ position: "absolute", top: coords.top, left: coords.left, zIndex: 1000 }}
-    >
-      <BreakdownPanel
-        score={score}
-        onClose={onClose}
-        onSeeFullAnalysis={onSeeFullAnalysis}
-      />
-    </div>
+    <>
+      <div aria-hidden style={{ position: "fixed", inset: 0, zIndex: 999 }} className="bg-black/5" />
+      <div
+        ref={panelRef}
+        style={{ position: "absolute", top: coords.top, left: coords.left, zIndex: 1000 }}
+      >
+        <BreakdownPanel
+          score={score}
+          onClose={onClose}
+          onSeeFullAnalysis={onSeeFullAnalysis}
+        />
+      </div>
+    </>
   )
 
   return createPortal(panel, document.body)

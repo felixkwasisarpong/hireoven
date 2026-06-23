@@ -22,6 +22,7 @@ import { HAIKU_MODEL, ANTHROPIC_TIER_PRICING } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
 import { sanitizeGeneratedText, replaceEmDash } from "@/lib/text/sanitize-generated-text"
+import { formatResumeContext } from "@/lib/autofill/resume-context"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -51,18 +52,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "question is required" }, { status: 400 })
   }
 
-  // Fetch the user's primary resume
+  // Fetch the user's primary resume — the full parsed structure so the model
+  // answers from real work history, achievements and education.
   const pool = getPostgresPool()
-  const resumeResult = await pool.query<{
-    summary: string | null
-    primary_role: string | null
-    top_skills: string[] | null
-    work_experience: Array<{ title: string; company: string; duration?: string; description?: string }> | null
-    education: Array<{ degree: string; institution: string; year?: number }> | null
-    years_of_experience: number | null
-    raw_text: string | null
-  }>(
-    `SELECT summary, primary_role, top_skills, work_experience, education, years_of_experience, raw_text
+  const resumeResult = await pool.query<ResumeRow>(
+    `SELECT summary, primary_role, top_skills, work_experience, education,
+            projects, years_of_experience, raw_text
      FROM resumes
      WHERE user_id = $1
      ORDER BY is_primary DESC, updated_at DESC
@@ -79,8 +74,11 @@ export async function POST(request: Request) {
   const quota = await requireQuota(gate.userId, "autofill", gate.plan)
   if (quota instanceof NextResponse) return quota
 
-  // Build a compact resume context — prefer structured data over raw text
-  const resumeContext = buildResumeContext(resume)
+  // Build a complete resume context — full structured data, raw-text fallback.
+  const resumeContext = formatResumeContext(resume)
+  if (!resumeContext) {
+    return NextResponse.json({ error: "No resume found — upload one in Hireoven first." }, { status: 404 })
+  }
   const jobContext = [jobTitle, company].filter(Boolean).join(" at ") || "this role"
 
   const message = await anthropic.messages.create({
@@ -96,14 +94,14 @@ Write a concise, honest, first-person answer that matches the question length ex
     messages: [
       {
         role: "user",
-        content: `Resume summary:
+        content: `Applicant's résumé:
 ${resumeContext}
 
 Applying for: ${jobContext}
 
 Question: "${question}"
 
-Write a concise answer based only on the resume above.`,
+Write a concise answer grounded only in the résumé above.`,
       },
     ],
   })
@@ -134,40 +132,13 @@ Write a concise answer based only on the resume above.`,
   return NextResponse.json(sanitizeGeneratedText({ answer }))
 }
 
-function buildResumeContext(resume: {
+type ResumeRow = {
   summary: string | null
   primary_role: string | null
   top_skills: string[] | null
-  work_experience: Array<{ title: string; company: string; duration?: string; description?: string }> | null
-  education: Array<{ degree: string; institution: string; year?: number }> | null
+  work_experience: unknown
+  education: unknown
+  projects: unknown
   years_of_experience: number | null
   raw_text: string | null
-}): string {
-  const parts: string[] = []
-
-  if (resume.primary_role) parts.push(`Role: ${resume.primary_role}`)
-  if (resume.years_of_experience) parts.push(`Experience: ${resume.years_of_experience} years`)
-  if (resume.summary) parts.push(`Summary: ${resume.summary}`)
-  if (resume.top_skills?.length) parts.push(`Skills: ${resume.top_skills.slice(0, 15).join(", ")}`)
-
-  if (resume.work_experience?.length) {
-    const jobs = resume.work_experience.slice(0, 3).map((j) =>
-      `${j.title} at ${j.company}${j.duration ? ` (${j.duration})` : ""}${j.description ? `: ${j.description.slice(0, 120)}` : ""}`
-    )
-    parts.push(`Experience:\n${jobs.join("\n")}`)
-  }
-
-  if (resume.education?.length) {
-    const edu = resume.education.slice(0, 2).map((e) =>
-      `${e.degree} — ${e.institution}${e.year ? ` (${e.year})` : ""}`
-    )
-    parts.push(`Education: ${edu.join("; ")}`)
-  }
-
-  // Fallback to raw text if structured data is sparse
-  if (parts.length < 3 && resume.raw_text) {
-    parts.push(`Resume text (excerpt): ${resume.raw_text.slice(0, 800)}`)
-  }
-
-  return parts.join("\n")
 }
