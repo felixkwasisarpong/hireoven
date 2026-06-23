@@ -84,7 +84,9 @@ function formatConcern(raw: string): string {
   if (raw.startsWith("Gate: low_signal_skills_lt5"))
     return "Sparse skill evidence in this posting"
   if (raw.startsWith("Gate: insufficient_experience"))
-    return "Below the stated minimum years of experience"
+    return "Well below the stated minimum years of experience"
+  if (raw.startsWith("Gate: below_preferred_experience"))
+    return "Somewhat under the preferred years of experience"
   if (raw.startsWith("Gate: extreme_seniority_mismatch")) return "Seniority is far from the role"
   if (raw.startsWith("Gate: seniority_mismatch")) return "Seniority level differs from the role"
   if (raw.startsWith("Gate: same_family_low_title_fit"))
