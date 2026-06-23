@@ -2944,6 +2944,15 @@ export class ApexBar {
       if (submitButton) {
         const progressed = await this.clickAndWaitForProgress(submitButton)
         if (this.isConfirmationPage()) return { submitted: true }
+        // Some ATSes prompt for sign-in / account creation AFTER submit. Pause
+        // for login rather than looping; the post-login re-trigger records it.
+        if (this.isLoginOrAccountPage()) {
+          return {
+            submitted: false,
+            needsLogin: true,
+            reason: "Sign in to finish submitting your application.",
+          }
+        }
         if (progressed) continue
         const cleanup = await this.runRequiredQuestionCleanup()
         if (cleanup.filledCount > 0) {
@@ -3018,11 +3027,30 @@ export class ApexBar {
         }
       }
 
+      // "Apply Manually" was just clicked — the blank form is loading. Don't
+      // hunt for a Save and Continue button (there isn't one yet); let the next
+      // iteration re-detect and fill My Information.
+      if (result.stepId === "start_application") {
+        await sleep(700)
+        continue
+      }
+
       if (result.reachedReview) {
         const submitButton = this.findBestActionButton("submit") ?? this.findBestActionButton("next")
         if (!submitButton) return { submitted: false, reason: "Workday review submit button not found." }
         await this.clickAndWaitForProgress(submitButton)
         if (this.isConfirmationPage()) return { submitted: true }
+        // Some tenants require sign-in AFTER the final submit. Treat that as a
+        // login pause (not a failure) so the run waits for the user, then the
+        // post-login re-trigger records the confirmation.
+        this.runDetection()
+        if (this.isLoginOrAccountPage()) {
+          return {
+            submitted: false,
+            needsLogin: true,
+            reason: "Sign in to Workday to finish submitting your application.",
+          }
+        }
         return { submitted: false, reason: "Workday review submit did not reach confirmation." }
       }
 
@@ -3046,6 +3074,33 @@ export class ApexBar {
     chrome.runtime.sendMessage({ type: "AGENT_RUN_STATUS", phase, reason }, () => {
       void chrome.runtime.lastError
     })
+  }
+
+  /**
+   * Record a submitted application: persist proof, signal the dashboard, and
+   * settle the bar into its done state. Used both when the agent reaches a
+   * confirmation page itself and when it lands on one after a post-submit login.
+   */
+  private async finishAsSubmitted(): Promise<{ handled: boolean }> {
+    await this.maybeSaveProofAutomatically()
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage(
+        {
+          type: "AGENT_APPLICATION_SUBMITTED",
+          jobId: this.knownJobId,
+          applyUrl: location.href,
+          atsProvider: this.site,
+        },
+        () => {
+          // Fire-and-forget signal to the dashboard tab; ignore response errors.
+          void chrome.runtime.lastError
+        },
+      )
+    }
+    this.autofillStatus = "done"
+    this.autofillError = null
+    this.render()
+    return { handled: true }
   }
 
   private async runAgentAutofill(payload?: Record<string, unknown>): Promise<{ handled: boolean; waiting?: boolean }> {
@@ -3081,6 +3136,13 @@ export class ApexBar {
       // If we were waiting for login and now have a form, clear the banner.
       this.agentWaitingForLogin = false
       this.sendRunStatus("filling")
+
+      // Re-triggered onto a confirmation page — typically after the user signed
+      // in following a post-submit login prompt. The application is already in;
+      // record it instead of trying to autofill a completed page.
+      if (this.isConfirmationPage()) {
+        return await this.finishAsSubmitted()
+      }
 
       if (!this.autofillSiteSupported()) {
         // We may be on the job posting (e.g. SmartRecruiters), not the form yet.
@@ -3151,25 +3213,7 @@ export class ApexBar {
         return { handled: true }
       }
 
-      await this.maybeSaveProofAutomatically()
-      if (chrome.runtime?.id) {
-        chrome.runtime.sendMessage(
-          {
-            type: "AGENT_APPLICATION_SUBMITTED",
-            jobId: this.knownJobId,
-            applyUrl: location.href,
-            atsProvider: this.site,
-          },
-          () => {
-            // Fire-and-forget signal to the dashboard tab; ignore response errors.
-            void chrome.runtime.lastError
-          },
-        )
-      }
-      this.autofillStatus = "done"
-      this.autofillError = null
-      this.render()
-      return { handled: true }
+      return await this.finishAsSubmitted()
     } catch (err) {
       this.autofillStatus = "error"
       this.autofillError = err instanceof Error ? err.message : "Agent mode failed unexpectedly."

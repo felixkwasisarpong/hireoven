@@ -39,6 +39,7 @@ import {
 import { getPlanForUserId, gateResponse } from "@/lib/gates/server-gate"
 import { canAccess } from "@/lib/gates"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
+import { formatResumeContext } from "@/lib/autofill/resume-context"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -238,6 +239,10 @@ type ProfileRow = {
   r_primary_role: string | null
   r_top_skills: string[] | null
   r_years: number | null
+  r_work_experience: unknown
+  r_education: unknown
+  r_projects: unknown
+  r_raw_text: string | null
 }
 
 async function buildProfileContext(userId: string): Promise<string | null> {
@@ -250,10 +255,13 @@ async function buildProfileContext(userId: string): Promise<string | null> {
               ap.willing_to_relocate, ap.preferred_work_type, ap.highest_degree,
               ap.field_of_study, ap.university, ap.city, ap.state, ap.country,
               r.summary AS r_summary, r.primary_role AS r_primary_role,
-              r.top_skills AS r_top_skills, r.years_of_experience AS r_years
+              r.top_skills AS r_top_skills, r.years_of_experience AS r_years,
+              r.work_experience AS r_work_experience, r.education AS r_education,
+              r.projects AS r_projects, r.raw_text AS r_raw_text
        FROM autofill_profiles ap
        LEFT JOIN LATERAL (
-         SELECT summary, primary_role, top_skills, years_of_experience
+         SELECT summary, primary_role, top_skills, years_of_experience,
+                work_experience, education, projects, raw_text
          FROM resumes WHERE user_id = $1
          ORDER BY is_primary DESC, updated_at DESC LIMIT 1
        ) r ON true
@@ -276,9 +284,11 @@ async function buildProfileContext(userId: string): Promise<string | null> {
       ? `${p.salary_expectation_min ?? ""}${p.salary_expectation_max ? `–${p.salary_expectation_max}` : ""}`.replace(/^–/, "")
       : null
 
-  const lines: Array<string | null> = [
+  // Form-default preferences the user set in their autofill profile. These take
+  // precedence for logistics questions (auth, salary, relocation, start date)
+  // that aren't on a résumé.
+  const profileLines: Array<string | null> = [
     p.first_name || p.last_name ? `Name: ${[p.first_name, p.last_name].filter(Boolean).join(" ")}` : null,
-    p.r_primary_role ? `Current role: ${p.r_primary_role}` : null,
     yearsExp != null ? `Years of experience: ${yearsExp}` : null,
     location ? `Location: ${location}` : null,
     p.work_authorization ? `Work authorization: ${p.work_authorization}` : null,
@@ -291,10 +301,26 @@ async function buildProfileContext(userId: string): Promise<string | null> {
     p.earliest_start_date ? `Earliest start date: ${p.earliest_start_date}` : null,
     p.highest_degree ? `Highest degree: ${p.highest_degree}${p.field_of_study ? ` in ${p.field_of_study}` : ""}` : null,
     p.university ? `University: ${p.university}` : null,
-    p.r_top_skills?.length ? `Skills: ${p.r_top_skills.slice(0, 20).join(", ")}` : null,
-    p.r_summary ? `Summary: ${p.r_summary.slice(0, 600)}` : null,
   ]
-  const ctx = lines.filter(Boolean).join("\n")
+
+  // Full parsed résumé — grounds answers about experience, achievements and education.
+  const resumeContext = formatResumeContext({
+    summary: p.r_summary,
+    primary_role: p.r_primary_role,
+    years_of_experience: p.r_years,
+    top_skills: p.r_top_skills,
+    work_experience: p.r_work_experience,
+    education: p.r_education,
+    projects: p.r_projects,
+    raw_text: p.r_raw_text,
+  })
+
+  const sections = [
+    profileLines.filter(Boolean).join("\n"),
+    resumeContext ? `Résumé:\n${resumeContext}` : null,
+  ].filter((s): s is string => Boolean(s && s.trim()))
+
+  const ctx = sections.join("\n\n")
   return ctx.trim() ? ctx : null
 }
 

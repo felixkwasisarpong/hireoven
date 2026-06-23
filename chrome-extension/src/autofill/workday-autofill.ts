@@ -18,6 +18,7 @@ type SemanticQuestion = {
 
 type WorkdayStepId =
   | "account_required"
+  | "start_application"
   | "resume_upload"
   | "my_information"
   | "my_experience"
@@ -1309,6 +1310,28 @@ class WorkdayAutofillRunner {
       }
 
       switch (step.id) {
+        case "start_application": {
+          // Choose "Apply Manually" — a clean form we fill ourselves — instead
+          // of uploading / parsing the résumé. Clicking it navigates to My
+          // Information; the observer (manual) or agent loop re-detects next.
+          const clicked = await this.clickApplyManually()
+          this.debug(clicked ? "info" : "warn", "run.start_application", { clicked })
+          if (clicked) {
+            this.startNameCasingWatch(20000)
+            this.setToolbarState("WAITING", "Opening a manual Workday application…")
+          } else {
+            this.requiredFieldMissesThisStep += 1
+            this.setToolbarState(
+              "NEEDS_REVIEW",
+              "Couldn't start the manual application.",
+              "Click \"Apply Manually\" on the page, then continue.",
+            )
+            this.logWarning(
+              "Manual review needed: choose 'Apply Manually' to start the Workday application without uploading a résumé.",
+            )
+          }
+          break
+        }
         case "resume_upload": {
           const filledBefore = this.fieldsFilledCount
           const uploaded = await this.maybeUploadResume()
@@ -1399,6 +1422,14 @@ class WorkdayAutofillRunner {
     // if they were the My Information step — detect this first and bail.
     if (this.isAccountStep()) {
       return { id: "account_required", name: "Sign in to Workday", index: 0, total: STEP_TOTAL }
+    }
+
+    // "Start Your Application" chooser (Apply Manually / Autofill with Resume /
+    // Use My Last Application). Prefer a clean, manually-filled form over the
+    // résumé parser (which produces miscased / mis-segmented data), so this is
+    // detected BEFORE resume_upload and resolved by clicking "Apply Manually".
+    if (this.isStartApplicationStep()) {
+      return { id: "start_application", name: "Start Your Application", index: 0, total: STEP_TOTAL }
     }
 
     const stepEl =
@@ -1541,6 +1572,70 @@ class WorkdayAutofillRunner {
       '[data-automation-id="formField-legalName--firstName"]',
     )
     return !inApplicationFlow
+  }
+
+  /**
+   * Locate the "Apply Manually" choice on Workday's "Start Your Application"
+   * chooser. Tries the stable automation id first, then a visible-text match
+   * for tenants/i18n variants that don't expose it.
+   */
+  private findApplyManuallyButton(): HTMLElement | null {
+    const byId = document.querySelector<HTMLElement>(
+      '[data-automation-id="applyManually" i], [data-automation-id="applyManuallyButton" i]',
+    )
+    if (byId && isControlReachable(byId)) return byId
+
+    const candidates = Array.from(
+      document.querySelectorAll<HTMLElement>('a[role="button"], a[href], button, [role="button"]'),
+    )
+    for (const el of candidates) {
+      if (!isControlReachable(el)) continue
+      const text = normText(el.textContent || el.getAttribute("aria-label"))
+      if (text === "apply manually" || text === "apply manual") return el
+    }
+    return null
+  }
+
+  /**
+   * True on the "Start Your Application" chooser — detected by the presence of
+   * an "Apply Manually" option and the absence of the real application form
+   * (so we don't re-trigger it once past the chooser).
+   */
+  private isStartApplicationStep(): boolean {
+    if (!this.findApplyManuallyButton()) return false
+    const inForm = document.querySelector(
+      '[data-automation-id="legalNameSection_firstName"], ' +
+      '[data-automation-id="formField-legalName--firstName"], ' +
+      '[data-automation-id="legalName--firstName"], ' +
+      '[data-automation-id="applyFlowMyInfoPage"]',
+    )
+    return !inForm
+  }
+
+  /**
+   * Click "Apply Manually" to open a clean, blank application form (no résumé
+   * parsing). Waits for the chooser to give way before returning so the caller
+   * doesn't act on the stale start screen.
+   */
+  private async clickApplyManually(): Promise<boolean> {
+    const button = this.findApplyManuallyButton()
+    if (!button) return false
+    this.setToolbarField("Apply Manually")
+    try {
+      button.scrollIntoView({ block: "center" })
+    } catch {
+      // best-effort
+    }
+    await sleep(200 + Math.round(Math.random() * 300))
+    button.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    button.click()
+    button.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+    const deadline = Date.now() + 8000
+    while (Date.now() < deadline) {
+      await sleep(200)
+      if (!this.findApplyManuallyButton()) return true
+    }
+    return !this.findApplyManuallyButton()
   }
 
   private captureApplicationPageSignature(): string {
@@ -2145,15 +2240,22 @@ class WorkdayAutofillRunner {
       return
     }
 
-    // Ordered by how universally these options appear in tenant source lists.
-    // selectComboboxElement type-searches each and returns on the first that
-    // resolves to a real option, so unavailable ones are simply skipped.
+    // Ordered by preference: the company's own career site first (most honest
+    // answer — you found the role on their careers page), then company website,
+    // then the broad job-board / social options. selectComboboxElement
+    // type-searches each and returns on the first that resolves to a real
+    // option, so variants a given tenant doesn't offer are simply skipped.
     const preferred = [
+      "Company Career Site",
+      "Career Site",
+      "Careers",
+      "Company Website",
+      "Company Site",
+      "Organization Website",
       "LinkedIn",
       "Indeed",
       "Job Board",
       "Online Job Board",
-      "Company Website",
       "Social Media",
       "Other",
     ]
@@ -3125,17 +3227,24 @@ class WorkdayAutofillRunner {
     ) {
       return false
     }
-    // "Are you a previous/former employee of <company>?" → default No. Avoids an
-    // AI round-trip; a returning employee can correct it via manual review.
-    // Guarded against "previous employer" (handled above) and relative/family
-    // wording so we don't mis-answer a different question.
+    // "Have you ever worked for / with us?" / "Are you a previous employee?" →
+    // default No. Avoids an AI round-trip; a returning employee can correct it
+    // via manual review. Guarded against "previous employer" (handled above) and
+    // relative/family wording so we don't mis-answer a different question.
     if (
       (q.includes("previous employee") ||
         q.includes("former employee") ||
+        q.includes("current or former employee") ||
         q.includes("previously been employed") ||
         q.includes("currently or previously employed") ||
+        q.includes("currently or previously worked") ||
         q.includes("ever been employed by") ||
-        q.includes("ever worked for")) &&
+        q.includes("currently employed by") ||
+        q.includes("ever worked for") ||
+        q.includes("ever worked with") ||
+        q.includes("ever worked at") ||
+        q.includes("worked with us") ||
+        q.includes("worked here")) &&
       !q.includes("relative") &&
       !q.includes("family")
     ) {

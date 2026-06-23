@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils"
 import {
   companyLogoUrlFromDomain,
   normalizeCompanyDomain,
+  resolveLogoDomainOverride,
 } from "@/lib/companies/logo-url"
 import { isAtsDomain } from "@/lib/companies/ats-domains"
 
@@ -119,6 +120,15 @@ function isInvalidAtsLogoUrl(logoUrl: string | null | undefined) {
   return Boolean(domain && (isAtsDomain(domain) || isPlaceholderDomain(domain)))
 }
 
+// A stored remote logo URL (logo.dev / Google favicon) whose domain has a brand
+// override points at a guessed/wrong domain — favicon CDNs return a generic
+// globe for it instead of erroring, so skip it and resolve from the real domain.
+function isOverriddenStoredLogoUrl(logoUrl: string | null | undefined) {
+  if (!logoUrl || logoUrl.trim().startsWith("/")) return false
+  const domain = domainFromLogoUrl(logoUrl)
+  return Boolean(domain && resolveLogoDomainOverride(domain) !== domain)
+}
+
 function buildLogoSources(logoUrl: string | null | undefined, domain: string | null | undefined) {
   const out: string[] = []
   const push = (u: string) => {
@@ -131,17 +141,19 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
 
   // Prefer the domain implied by the stored logo URL (e.g. explicit brand override
   // to petco.com/labcorp.com) before falling back to the raw company domain.
-  const canonicalDomain = [logoDomain, explicitDomain].find(
-    (item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item)
-  )
+  const canonicalDomain = [logoDomain, explicitDomain]
+    .map((item) => (item ? resolveLogoDomainOverride(item) : item))
+    .find((item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item))
 
   const invalidPlaceholderFavicon = isInvalidPlaceholderGoogleFaviconUrl(logoUrl)
   const invalidAtsLogo = isInvalidAtsLogoUrl(logoUrl)
+  const overriddenStoredLogo = isOverriddenStoredLogoUrl(logoUrl)
   const isStaticAsset = !!logoUrl?.trim().startsWith("/")
   const useStoredLogo =
     !!logoUrl &&
     !invalidPlaceholderFavicon &&
     !invalidAtsLogo &&
+    !overriddenStoredLogo &&
     !isStaticAsset &&
     !isClearbitUrl(logoUrl)
 

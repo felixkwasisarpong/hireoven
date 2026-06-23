@@ -174,6 +174,21 @@ const FAVICON_DOMAIN_OVERRIDES: Record<string, string> = {
   "career-soft.com": "career.com",
   // Brand domain for S&P Global Market Intelligence; direct domain resolves to the wrong mark.
   "spglobalmarketintelligence.com": "spglobal.com",
+  // Guessed domain from the truncated name "The Childrens Hospital Of Philadel"
+  // resolves to nothing; the real brand domain is chop.edu.
+  "thechildrenshospitalofphiladel.com": "chop.edu",
+}
+
+/**
+ * Resolve a company domain to the domain that actually serves a usable brand
+ * mark, applying the favicon overrides above. Returns the input (normalized)
+ * when no override exists. Used by the logo UI to redirect guessed/wrong
+ * domains to their real brand domain before fetching logos.
+ */
+export function resolveLogoDomainOverride(domain: string | null | undefined): string {
+  const normalized = normalizeCompanyDomain(domain ?? "")
+  if (!normalized) return ""
+  return FAVICON_DOMAIN_OVERRIDES[normalized] ?? normalized
 }
 
 const GOOGLE_FAVICON_URL_OVERRIDES: Record<string, string> = {
