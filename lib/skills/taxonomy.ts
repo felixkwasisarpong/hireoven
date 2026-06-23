@@ -58,6 +58,23 @@ const SALES_SIGNAL_RE =
 const RECRUITING_SIGNAL_RE =
   /\b(?:full[\s-]?cycle|end[\s-]?to[\s-]?end|technical|executive|campus|high[\s-]?volume)\s+recruit(?:ing|ment)\b|\btalent\s+acquisition(?:\s+(?:strategy|operations?|specialist|partner|manager|lead|coordinator))?\b|\bcandidate\s+(?:sourcing|pipeline|screening|interview(?:ing)?|experience)\b|\b(?:applicant\s+tracking\s+system|ats)\b|\brecruitment\s+(?:operations?|analytics|marketing|coordinator|specialist)\b/i
 
+// Requires the literal firewall term — vendor names (Palo Alto, Fortinet,
+// Check Point) were removed as aliases because they match employer names, so a
+// fullstack engineer at Palo Alto Networks was getting a phantom "Firewall".
+const FIREWALL_SIGNAL_RE =
+  /\b(?:firewalls?|ngfw|next[\s-]?gen(?:eration)?\s+firewalls?|network\s+firewalls?|web\s+application\s+firewall|waf)\b/i
+
+// Only count Cybersecurity as a required skill when there's genuine security
+// context — not "the cybersecurity partner of choice" company-mission prose.
+const CYBERSECURITY_SIGNAL_RE =
+  /\b(?:infosec|application\s+security|network\s+security|cloud\s+security|security\s+(?:engineer|engineering|analyst|operations|architect|architecture|posture|controls|principles|fundamentals|best\s+practices|vulnerabilit|clearance)|penetration\s+testing|threat\s+(?:modeling|modelling|detection|intelligence)|cyber\s?security\s+(?:experience|expertise|skills?|background|principles|fundamentals|practices?|controls|tools|operations|engineer|analyst|domain|knowledge|certification)|(?:experience|expertise|background|knowledge|proficien\w+)\s+(?:in|with|of)\s+(?:cyber\s?security|information\s+security))\b/i
+
+// Only count Product Management as a required skill when the role owns/practices
+// it — not "partner closely with Product Management and Design" (collaborating
+// WITH the PM org on an engineering role).
+const PRODUCT_MANAGEMENT_SIGNAL_RE =
+  /\b(?:product\s+management\s+(?:experience|expertise|skills?|background|methodolog\w+|lifecycle|process)|(?:experience|expertise|background|proficien\w+|years?)\s+(?:in|of|with|as\s+an?)\s+product\s+(?:management|manager)|product\s+(?:roadmap|backlog|lifecycle|discovery)|defin(?:e|ing)\s+product\s+(?:strategy|vision|requirements)|prioriti[sz](?:e|ing)\s+(?:the\s+)?(?:product\s+)?(?:backlog|roadmap|features))\b/i
+
 
 export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Languages ────────────────────────────────────────────────────────────
@@ -204,7 +221,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "A/B Testing",       aliases: ["a/b testing", "a/b test", "experimentation", "hypothesis testing"] },
 
   // ─── Security ─────────────────────────────────────────────────────────────
-  { label: "Cybersecurity",       aliases: ["cybersecurity", "infosec"] },
+  { label: "Cybersecurity",       aliases: ["cybersecurity", "infosec"], patterns: [CYBERSECURITY_SIGNAL_RE], requiresPattern: true },
   { label: "Penetration Testing", aliases: ["penetration testing", "pen testing", "pentest"] },
   { label: "Network Security",    aliases: ["network security"] },
   { label: "SIEM",                aliases: ["siem"] },
@@ -241,7 +258,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Accessibility",      aliases: ["accessibility", "a11y", "wcag", "ada compliance", "section 508"] },
 
   // ─── Product & Project Management ────────────────────────────────────────
-  { label: "Product Management",  aliases: ["product management", "product manager"] },
+  { label: "Product Management",  aliases: ["product management", "product manager"], patterns: [PRODUCT_MANAGEMENT_SIGNAL_RE], requiresPattern: true },
   { label: "Product Strategy",    aliases: ["product strategy", "product vision", "product roadmap"] },
   { label: "Project Management",  aliases: ["project management", "project manager"] },
   {
@@ -427,7 +444,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   // ─── Networking & Infrastructure ─────────────────────────────────────────
   { label: "TCP/IP",            aliases: ["tcp/ip", "tcp ip", "networking protocols", "network protocols"] },
   { label: "DNS",               aliases: ["dns", "domain name system"] },
-  { label: "Firewall",          aliases: ["firewall", "network firewall", "palo alto", "fortinet", "checkpoint"] },
+  { label: "Firewall",          aliases: ["firewall", "network firewall", "ngfw"], patterns: [FIREWALL_SIGNAL_RE], requiresPattern: true },
   { label: "VPN",               aliases: ["vpn", "virtual private network", "ipsec", "ssl vpn"] },
   { label: "Cisco",             aliases: ["cisco", "cisco networking", "ccna", "ccnp", "ccie"] },
   { label: "BGP/OSPF",          aliases: ["bgp", "ospf", "eigrp", "routing protocols"] },
@@ -1066,6 +1083,14 @@ export function filterSkillsByTextEvidence(
       const def = SKILL_DEFINITIONS.find((d) => d.label === canonical)
       if (!def) return true
       return def.aliases.some((alias) => aliasPattern(alias).test(cleanBlob))
+    }
+    // Re-validate skills the taxonomy marks as ambiguous (requiresPattern) so a
+    // stored copy carried over from a noisy enrichment must still satisfy the
+    // same context pattern. Drops false positives like company-name → "Firewall"
+    // or mission/collaboration prose → "Cybersecurity"/"Product Management".
+    const ambiguous = SKILL_DEFINITIONS.find((d) => d.label === canonical && d.requiresPattern)
+    if (ambiguous) {
+      return Boolean(ambiguous.patterns?.some((pattern) => pattern.test(cleanBlob)))
     }
     return true
   })
