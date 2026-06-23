@@ -161,11 +161,13 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
     (analysis.bonus_skills?.length ?? 0) > 0
   const hasKeywords = missingKws.length > 0 || matchingKws.length > 0
 
+  const showRight = hasSkills || hasKeywords
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
 
       {/* ── Score hero card ───────────────────────────────────────────── */}
-      <div className="rounded-2xl bg-white ring-1 ring-slate-200/60 shadow-sm overflow-hidden">
+      <div className="rounded-3xl bg-white ring-1 ring-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_18px_40px_-24px_rgba(15,23,42,0.22)] overflow-hidden">
         <div className="p-6 sm:p-7">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:gap-7">
             {/* Score ring */}
@@ -234,15 +236,18 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
         </div>
       </div>
 
-      {/* ── Two-column grid ───────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* ── Rail + main grid (full width) ─────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-12 lg:items-start">
 
-        {/* Left: Score breakdown + Experience */}
-        <div className="space-y-4">
+        {/* Left rail: metrics summary — sticky on desktop */}
+        <div className="space-y-5 lg:col-span-4 lg:sticky lg:top-6 lg:self-start">
+
+        {/* Score breakdown + Experience (one surface, hairline divider) */}
+        <div className="divide-y divide-slate-100 rounded-3xl bg-white ring-1 ring-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-22px_rgba(15,23,42,0.18)]">
 
           {/* Score breakdown */}
-          <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200/60 shadow-sm">
-            <h3 className="mb-5 text-[13px] font-semibold uppercase tracking-widest text-slate-400">
+          <div className="p-6">
+            <h3 className="mb-5 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
               Score breakdown
             </h3>
             <div className="space-y-4">
@@ -268,8 +273,8 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
 
           {/* Experience match */}
           {expMatch && (
-            <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200/60 shadow-sm">
-              <h3 className="mb-5 text-[13px] font-semibold uppercase tracking-widest text-slate-400">
+            <div className="p-6">
+              <h3 className="mb-5 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 Experience match
               </h3>
 
@@ -329,13 +334,19 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
           )}
         </div>
 
-        {/* Right: Skills + Keywords */}
-        <div className="space-y-4">
+        </div>{/* end left rail */}
+
+        {/* Main column */}
+        <div className="space-y-5 lg:col-span-8">
+
+        {/* Skills + ATS keywords (one surface, hairline divider) */}
+        {showRight && (
+        <div className="divide-y divide-slate-100 rounded-3xl bg-white ring-1 ring-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-22px_rgba(15,23,42,0.18)]">
 
           {/* Skills analysis */}
           {hasSkills && (
-            <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200/60 shadow-sm">
-              <h3 className="mb-5 text-[13px] font-semibold uppercase tracking-widest text-slate-400">
+            <div className="p-6">
+              <h3 className="mb-5 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 Skills analysis
               </h3>
               <div className="space-y-5">
@@ -402,8 +413,8 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
 
           {/* ATS Keywords */}
           {hasKeywords && (
-            <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200/60 shadow-sm">
-              <h3 className="mb-1.5 text-[13px] font-semibold uppercase tracking-widest text-slate-400">
+            <div className="p-6">
+              <h3 className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
                 ATS keywords
               </h3>
               <p className="mb-5 text-[13px] leading-relaxed text-slate-500">
@@ -450,12 +461,12 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
             </div>
           )}
         </div>
-      </div>
+        )}
 
-      {/* ── Recommendations — full width ──────────────────────────────── */}
-      {sortedRecs.length > 0 && (
-        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200/60 shadow-sm sm:p-7">
-          <h3 className="mb-6 text-[13px] font-semibold uppercase tracking-widest text-slate-400">
+        {/* ── Recommendations ───────────────────────────────────────── */}
+        {sortedRecs.length > 0 && (
+        <div className="rounded-3xl bg-white p-6 ring-1 ring-slate-200/70 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-22px_rgba(15,23,42,0.18)] sm:p-7">
+          <h3 className="mb-6 text-[12px] font-semibold uppercase tracking-[0.14em] text-slate-400">
             Recommendations
           </h3>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -493,6 +504,8 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
           </div>
         </div>
       )}
+        </div>{/* end main column */}
+      </div>{/* end rail + main grid */}
     </div>
   )
 }

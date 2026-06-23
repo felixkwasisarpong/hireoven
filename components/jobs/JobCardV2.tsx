@@ -1016,14 +1016,14 @@ export default function JobCardV2({
                       ))}
                     </div>
 
-                    {/* Tailor CTA */}
+                    {/* Analysis CTA — routes to the full resume-vs-job analysis page */}
                     <button
                       type="button"
                       onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/resume/analyze/${job.id}`) }}
                       className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-white/20 bg-white/5 px-3 py-1.5 text-[12px] font-semibold text-slate-200 transition hover:bg-white/10 hover:text-white"
                     >
                       <Sparkles className="h-3 w-3 text-[#FF7D45]" aria-hidden />
-                      Tailor Resume
+                      Analyze fit
                     </button>
                   </div>
                 )}
