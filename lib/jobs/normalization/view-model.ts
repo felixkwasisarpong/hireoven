@@ -138,6 +138,16 @@ const VIEW_LEADING_BULLET_RE =
 const VIEW_HEADING_MARKER_RE =
   /^[A-Z][A-Z\s,&/()'-]{2,}:?$/
 
+// Structured "Key: value" metadata lines (Function: TECHNOLOGY, Role: Engineer,
+// Experience: 8 - 10 Years, Domain: …) that aggregator/Infosys-style boards emit
+// inline. They are parsed into their own fields elsewhere and are noise inside
+// prose sections — they were getting absorbed into Compensation when they
+// followed a salary line. Salary-bearing lines are preserved via the guard below.
+const VIEW_METADATA_FIELD_RE =
+  /^(function|role|career role|experience|department|industry|domain|interest group|company|requisition id|req id|work location|location|job type|employment type|seniority|posted)\s*:/i
+const VIEW_SALARY_SIGNAL_RE =
+  /\$\s?\d|\b(salary|compensation|pay|wage|stipend|bonus|equity|usd|cad|gbp|eur)\b|\d+\s?k\b/i
+
 function cleanCachedItem(item: string): string {
   return decodeHtmlEntities(item)
     .replace(VIEW_LEADING_BULLET_RE, "")
@@ -152,6 +162,9 @@ function cleanCachedItems(items: string[]): string[] {
     const cleaned = cleanCachedItem(raw)
     if (cleaned.length < 3) continue
     if (VIEW_HEADING_MARKER_RE.test(cleaned)) continue
+    // Drop inline metadata fields (Function:, Role:, Experience:, …) unless the
+    // line actually carries compensation info.
+    if (VIEW_METADATA_FIELD_RE.test(cleaned) && !VIEW_SALARY_SIGNAL_RE.test(cleaned)) continue
     const key = cleaned.toLowerCase()
     if (seen.has(key)) continue
     seen.add(key)

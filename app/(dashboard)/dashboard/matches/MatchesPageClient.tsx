@@ -8,9 +8,19 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import DashboardPageHeader from "@/components/layout/DashboardPageHeader"
 import { explainScore } from "@/lib/matching/score-explainer"
 import { useAuth } from "@/lib/hooks/useAuth"
+import { useRefetchOnVisible } from "@/lib/hooks/useRefetchOnVisible"
 import type { JobWithMatchScore } from "@/types"
 
 const SYSTEM_ALERT_NAME = "System: strong matches"
+
+async function fetchMatchJobs(threshold: number): Promise<JobWithMatchScore[]> {
+  const response = await fetch(`/api/match/feed?limit=40&within=24h&sort=match&minScore=${threshold}`, {
+    cache: "no-store",
+  })
+  if (!response.ok) return []
+  const payload = (await response.json()) as { jobs?: JobWithMatchScore[] }
+  return payload.jobs ?? []
+}
 
 type MatchesPageClientProps = {
   initialThreshold?: number
@@ -70,8 +80,19 @@ export default function MatchesPageClient({
 
   const userId = user?.id ?? null
 
+  const resumeReady = Boolean(primaryResume && primaryResume.parse_status === "complete")
+
+  // Reset the tab-return staleness clock whenever we load through another path
+  // (initial render, threshold change) so returning to the tab doesn't
+  // immediately refetch right after a fresh load.
+  const markMatchesFresh = useRefetchOnVisible(() => {
+    if (!resumeReady) return
+    // Background refresh — keep the current list visible while it reloads.
+    fetchMatchJobs(threshold).then((data) => setJobs(data))
+  })
+
   useEffect(() => {
-    if (!primaryResume || primaryResume.parse_status !== "complete") {
+    if (!resumeReady) {
       setJobs([])
       setIsLoading(false)
       return
@@ -80,32 +101,29 @@ export default function MatchesPageClient({
     if (skipInitialMatchesFetchRef.current && threshold === initialThreshold) {
       skipInitialMatchesFetchRef.current = false
       setIsLoading(false)
+      markMatchesFresh()
       return
     }
 
     let cancelled = false
     setIsLoading(true)
 
-    fetch(`/api/match/feed?limit=40&within=24h&sort=match&minScore=${threshold}`, {
-      cache: "no-store",
-    })
-      .then(async (response) => {
-        if (!response.ok) return []
-        const payload = (await response.json()) as { jobs?: JobWithMatchScore[] }
-        return payload.jobs ?? []
-      })
+    fetchMatchJobs(threshold)
       .then((data) => {
         if (cancelled) return
         setJobs(data)
       })
       .finally(() => {
-        if (!cancelled) setIsLoading(false)
+        if (!cancelled) {
+          setIsLoading(false)
+          markMatchesFresh()
+        }
       })
 
     return () => {
       cancelled = true
     }
-  }, [initialThreshold, primaryResume, threshold])
+  }, [initialThreshold, resumeReady, threshold, markMatchesFresh])
 
   useEffect(() => {
     if (!userId) {

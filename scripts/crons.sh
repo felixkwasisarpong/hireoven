@@ -74,6 +74,7 @@ run_many() {
 # discover-from-domains 0 6 * * *      run api/cron/discover-from-domains  # requires DISCOVER_FROM_DOMAINS_ENABLED=true; stage 0 resolves name-only domains, stage 1 enrolls ATS
 # ats-discovery-sweep 30 */4 * * *     run builtin-discovery -> careers-url-discovery
 # glassdoor-discovery 30 5 * * *       run api/cron/glassdoor-discovery
+# company-logos       40 6 * * *       run api/cron/company-logos  # logos for companies with a real/guessed domain but no logo
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
 #
 # NOTE: the two off-box discovery jobs (commoncrawl-mine, drain-workday) are NOT
@@ -147,6 +148,7 @@ case "${1:-}" in
     ;;
   glassdoor-discovery) run api/cron/glassdoor-discovery ;;
   builtin-discovery) run api/cron/builtin-discovery ;;
+  company-logos)     run "api/cron/company-logos?batch=${COMPANY_LOGOS_BATCH:-300}&concurrency=${COMPANY_LOGOS_CONCURRENCY:-6}" ;;
   signal-api-webhooks) run api/cron/signal-api-webhooks ;;
   career-crawl)      run "api/cron/career-crawl?mode=${CAREER_CRAWL_MODE:-crawl}&limit=${CAREER_CRAWL_LIMIT:-500}" ;;
   nightly-maintenance)

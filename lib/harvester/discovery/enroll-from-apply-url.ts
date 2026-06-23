@@ -14,6 +14,7 @@
 
 import type { Pool } from "pg"
 import { detectAdapter } from "@/lib/harvester/adapters"
+import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 
 export async function enrollFromApplyUrl(
   pool: Pool,
@@ -32,8 +33,17 @@ export async function enrollFromApplyUrl(
   const atsType = adapter.name
   const careersUrl = args.applyUrl
 
-  // Stable domain key so we don't create duplicates across runs
+  // Stable domain key so we don't create duplicates across runs. The ATS slug
+  // (not the company's real website) is the dedup key, so when the caller knows
+  // the real domain we keep it in raw_ats_config.guessed_domain for logo/display.
   const domain = `${slug}.${atsType}-discovered`
+
+  // Logo: prefer an explicit logo from the caller, else derive from the real
+  // company domain when we have one. companyLogoUrlFromDomain returns "" for
+  // ATS/placeholder domains, so a synthetic domain never yields a bogus logo.
+  const realDomain = args.companyDomain?.trim() || null
+  const logoUrl =
+    (args.logoUrl?.trim() || (realDomain ? companyLogoUrlFromDomain(realDomain) : "")) || null
 
   try {
     const res = await pool.query<{ id: string; enrolled: boolean }>(
@@ -55,11 +65,15 @@ export async function enrollFromApplyUrl(
         args.companyName,
         domain,
         careersUrl,
-        args.logoUrl ?? null,
+        logoUrl,
         atsType,
         slug,
         `apply-url:${args.source}`,
-        JSON.stringify({ source: args.source, detected_from: args.applyUrl }),
+        JSON.stringify({
+          source: args.source,
+          detected_from: args.applyUrl,
+          ...(realDomain ? { guessed_domain: realDomain } : {}),
+        }),
       ]
     )
 
