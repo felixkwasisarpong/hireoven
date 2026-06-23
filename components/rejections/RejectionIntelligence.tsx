@@ -187,16 +187,16 @@ function ReportModal({
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[100] flex items-end justify-center bg-black/50 sm:items-center"
+      // `!fixed` + inline z-index defeat `body.site-chroma > * { position: relative; z-index: 1 }`
+      // (globals.css) which otherwise drops this portaled overlay into normal flow at page bottom.
+      className="!fixed inset-0 flex items-center justify-center bg-black/50 p-4"
+      style={{ zIndex: 100 }}
       role="dialog"
       aria-modal="true"
       aria-label="Report your outcome"
       onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
     >
-      <div className="w-full max-w-lg rounded-t-2xl bg-white px-6 pb-8 pt-5 sm:rounded-2xl">
-        {/* Handle */}
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-slate-200 sm:hidden" />
-
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white px-6 pb-8 pt-5">
         <div className="mb-5 flex items-center justify-between">
           <p className="text-[15px] font-semibold text-slate-900">Report your outcome</p>
           <button
