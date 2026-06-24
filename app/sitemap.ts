@@ -3,8 +3,16 @@ import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
+import { industrySlug } from "@/lib/h1b/leaderboard"
 
 export const dynamic = "force-dynamic"
+
+const LEADERBOARD_STATES = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
+  "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT",
+  "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI",
+  "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
@@ -15,6 +23,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/extension`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/companies`, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
     { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
+    { url: `${base}/h1b-sponsors/leaderboard`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
+    { url: `${base}/h1b-sponsors/leaderboard/methodology`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
+    ...LEADERBOARD_STATES.map((s) => ({
+      url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
+      lastModified: new Date(),
+      changeFrequency: "weekly" as const,
+      priority: 0.6,
+    })),
     { url: `${base}/login`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
     { url: `${base}/signup`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.2 },
@@ -69,6 +85,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       .filter(([, n]) => n >= 5)
       .map(([industry]) => ({ url: `${base}/h1b-sponsors/industry/${companySlug(industry)}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.65 }))
 
+    const leaderboardIndustryRoutes: MetadataRoute.Sitemap = [...industryCounts.entries()]
+      .filter(([, n]) => n >= 5)
+      .map(([industry]) => ({ url: `${base}/h1b-sponsors/leaderboard/by-industry/${industrySlug(industry)}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.6 }))
+
     const cityRoutes: MetadataRoute.Sitemap = citiesResult.rows.map((c) => ({
       url: `${base}/h1b-sponsors/in/${companySlug(c.city)}-${c.state.toLowerCase()}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.65,
     }))
@@ -81,7 +101,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${base}/jobs/${j.id}`, lastModified: new Date(j.updated_at), changeFrequency: "weekly", priority: 0.6,
     }))
 
-    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...jobRoutes]
+    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...jobRoutes]
   } catch {
     return staticRoutes
   }

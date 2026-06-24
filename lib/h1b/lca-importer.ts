@@ -743,6 +743,17 @@ function stateAbbr(value: string | null): string | null {
   return abbr ?? null
 }
 
+// DOL case numbers encode the fiscal year of receipt as `I-<form>-YYDDD-NNNNNN`
+// (e.g. "I-200-25090-813987" → FY2025). This is the authoritative fiscal year and
+// is preferred over decision_date, which in some disclosure exports is unreliable
+// (we've seen future-dated decisions that would mislabel the FY).
+function fiscalYearFromCaseNumber(caseNumber: string | null): number | null {
+  if (!caseNumber) return null
+  const m = caseNumber.match(/^[A-Za-z]-\d+-(\d{2})\d{3}-/)
+  if (!m) return null
+  return 2000 + Number(m[1])
+}
+
 function normalizeLCARow(
   row: Record<string, unknown>,
   fiscalYearHint?: number
@@ -753,9 +764,10 @@ function normalizeLCARow(
   if (!status) return null
 
   const decisionDate = toDate(pick(row, FIELD_ALIASES.decisionDate))
-  let fiscalYear: number | null = fiscalYearHint ?? null
+  const caseNumber = pick(row, FIELD_ALIASES.caseNumber)
+  let fiscalYear: number | null = fiscalYearHint ?? fiscalYearFromCaseNumber(caseNumber)
   if (!fiscalYear && decisionDate) {
-    // Federal FY is Oct 1 → Sep 30.
+    // Fallback: derive from decision_date. Federal FY is Oct 1 → Sep 30.
     const d = new Date(decisionDate)
     const month = d.getUTCMonth() + 1
     const year = d.getUTCFullYear()
@@ -791,7 +803,7 @@ function normalizeLCARow(
     full_time_position: toBoolean(pick(row, FIELD_ALIASES.fullTime)),
     naics_code: pick(row, FIELD_ALIASES.naicsCode),
     fiscal_year: fiscalYear,
-    source_case_number: pick(row, FIELD_ALIASES.caseNumber),
+    source_case_number: caseNumber,
   }
 }
 
@@ -1051,7 +1063,16 @@ export async function rebuildEmployerStats(): Promise<void> {
     const placeholders = slice.map((_, ri) =>
       `(${cols.map((_, ci) => `$${ri * cols.length + ci + 1}`).join(', ')})`
     ).join(', ')
-    const values = slice.flatMap((row) => cols.map((c) => (row as Record<string, unknown>)[c] ?? null))
+    // jsonb columns must be passed as JSON strings; node-postgres renders a JS
+    // array param as a Postgres array literal ("{...}"), which is invalid JSON.
+    const JSONB_COLS = new Set(['stats_by_year', 'stats_by_wage_level', 'top_job_titles', 'top_states'])
+    const values = slice.flatMap((row) =>
+      cols.map((c) => {
+        const v = (row as Record<string, unknown>)[c]
+        if (v == null) return null
+        return JSONB_COLS.has(c) ? JSON.stringify(v) : v
+      })
+    )
     const updateSet = cols
       .filter((c) => c !== 'employer_name_normalized')
       .map((c) => `"${c}" = EXCLUDED."${c}"`)
