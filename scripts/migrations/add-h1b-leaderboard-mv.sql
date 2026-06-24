@@ -45,13 +45,15 @@ base AS (
 ),
 -- Merge stats_by_year across variants → certified per fiscal year, newest first
 year_rollup AS (
-  SELECT els.company_id, (kv.key)::int AS fy, SUM((kv.value->>'certified')::int) AS certified
+  SELECT els.company_id, (kv.key)::int AS fy,
+         SUM((kv.value->>'certified')::int) AS certified,
+         SUM((kv.value->>'total')::int)     AS filed
   FROM els, LATERAL jsonb_each(els.stats_by_year) AS kv
   WHERE kv.key ~ '^\d{4}$'
   GROUP BY els.company_id, (kv.key)::int
 ),
 year_ranked AS (
-  SELECT company_id, fy, certified,
+  SELECT company_id, fy, certified, filed,
          ROW_NUMBER() OVER (PARTITION BY company_id ORDER BY fy DESC) AS rn
   FROM year_rollup
 ),
@@ -63,7 +65,8 @@ year_pivot AS (
     MAX(fy) FILTER (WHERE rn = 3)                          AS prev2_fy,
     COALESCE(MAX(certified) FILTER (WHERE rn = 1), 0)::int AS certified_latest_fy,
     COALESCE(MAX(certified) FILTER (WHERE rn = 2), 0)::int AS certified_prev_fy,
-    COALESCE(MAX(certified) FILTER (WHERE rn = 3), 0)::int AS certified_prev2_fy
+    COALESCE(MAX(certified) FILTER (WHERE rn = 3), 0)::int AS certified_prev2_fy,
+    COALESCE(MAX(filed) FILTER (WHERE rn = 1), 0)::int     AS filed_latest_fy
   FROM year_ranked
   GROUP BY company_id
 ),
@@ -141,6 +144,7 @@ agg AS (
     COALESCE(yp.certified_latest_fy, 0)        AS certified_latest_fy,
     COALESCE(yp.certified_prev_fy, 0)          AS certified_prev_fy,
     COALESCE(yp.certified_prev2_fy, 0)         AS certified_prev2_fy,
+    COALESCE(yp.filed_latest_fy, 0)            AS filed_latest_fy,
     CASE
       WHEN COALESCE(yp.certified_prev_fy, 0) > 0
         THEN ROUND(
