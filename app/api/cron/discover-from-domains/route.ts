@@ -50,7 +50,7 @@ import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { discoverCareersUrl, type DiscoveryProbe } from "@/lib/companies/careers-url-discovery"
 import { resolveDirectAtsUrl } from "@/lib/companies/ats-url-resolver"
-import { resolveCompanyDomainFromName } from "@/lib/companies/domain-resolution"
+import { resolveCompanyDomainFromName, nameTokens, domainMatchesName } from "@/lib/companies/domain-resolution"
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 import type { Pool } from "pg"
 
@@ -180,6 +180,7 @@ type MissReason =
   | "no_live_jobs"
   | "low_confidence_careers"
   | "custom_disabled"
+  | "domain_name_mismatch"
   | "timeout"
 
 type Counters = {
@@ -288,6 +289,16 @@ async function resolveCompany(
 ): Promise<void> {
   const deadline = AbortSignal.timeout(PER_COMPANY_DEADLINE_MS)
   const probe: DiscoveryProbe = ({ url }) => plainFetchHtml(url)
+
+  // 0. Sanity-guard the (possibly legacy/guessed) domain against the company
+  //    name — a stored domain whose slug carries no distinctive name token is
+  //    likely a wrong resolution (e.g. "The Norfolk Companies" → pilotonline.com)
+  //    and would enroll/crawl an unrelated company. Skip rather than mis-enroll.
+  const nameToks = nameTokens(company.name)
+  if (nameToks.length && !domainMatchesName(company.effective_domain, nameToks)) {
+    counters.miss.domain_name_mismatch += 1
+    return
+  }
 
   // 1. domain → careers page
   const careers = await discoverCareersUrl({
@@ -605,6 +616,7 @@ export async function GET(req: NextRequest) {
       no_live_jobs: 0,
       low_confidence_careers: 0,
       custom_disabled: 0,
+      domain_name_mismatch: 0,
       timeout: 0,
     },
   }
