@@ -552,6 +552,7 @@ function scoreExperience(
       // "perfect fit". Most legitimate tech roles state a minimum and will
       // still score 1.0 via the years/required path below.
       score: 0.70,
+      ratio: null as number | null,
       evidence: `No minimum experience required; candidate has ${years.toFixed(1)} years.`,
       flags: [] as string[],
       relevantYears: years,
@@ -559,13 +560,18 @@ function scoreExperience(
     }
   }
 
-  const score = clamp(years / required)
+  const ratio = years / required
+  // Convex shortfall penalty (was a flat linear ratio). Being at 62% of the
+  // required years should NOT read as a 62% experience fit. ratio^1.6 keeps
+  // small gaps mild (0.9→0.85) but makes real gaps bite (0.62→0.47, 0.5→0.33).
+  // Meeting or exceeding the requirement still earns full credit.
+  const score = ratio >= 1 ? 1 : clamp(Math.pow(ratio, 1.6))
   const flags: string[] = years > 2.5 * required ? ["overqualified"] : []
   const evidence = years >= required
     ? `${years.toFixed(1)} years meets the ${required}-year requirement${flags.includes("overqualified") ? " (possibly overqualified)" : ""}.`
     : `${years.toFixed(1)} of ${required} required years.`
 
-  return { score, evidence, flags, relevantYears: years, required }
+  return { score, ratio, evidence, flags, relevantYears: years, required }
 }
 
 // ─── 3. Title (weight 0.10) ───────────────────────────────────────────────────
@@ -1576,13 +1582,21 @@ export function computeFastScore({
     gatesTriggered.push("missing_required_skills_gt75pct")
   }
 
-  // Experience gate — relaxed 55 → 65. Years-of-experience is a soft signal:
-  // a candidate just under the stated minimum but otherwise a strong match
-  // shouldn't be capped below the "good match" band.
-  const minYears = extractMinYears(job.description)
-  if (minYears > 0 && experience.score < 0.35) {
-    overall = Math.min(overall, 65)
-    gatesTriggered.push("insufficient_experience")
+  // Experience gate — tiered by how far under the stated requirement the
+  // candidate is, using the raw years ratio (candidate_years / required_years).
+  // A real shortfall must keep a role out of the great-match band: a 5-year
+  // candidate on an "8–10 years" role (ratio 0.62) is a "good", not "great",
+  // fit no matter how well the other dimensions line up.
+  if (experience.required > 0 && experience.ratio != null) {
+    if (experience.ratio < 0.5) {
+      // Less than half the required years — well short.
+      overall = Math.min(overall, 65)
+      gatesTriggered.push("insufficient_experience")
+    } else if (experience.ratio < 0.75) {
+      // Meaningfully under the requirement — cap below the strong-match band.
+      overall = Math.min(overall, 80)
+      gatesTriggered.push("below_preferred_experience")
+    }
   }
 
   // Extreme seniority mismatch (e.g. exec applying for intern) — relaxed
@@ -1630,6 +1644,19 @@ export function computeFastScore({
     gatesTriggered.push(`role_family_mismatch:${roleFamily.candidateFamilies[0]}→${roleFamily.jobFamily}`)
   }
 
+  // Spread genuine (ungated) matches across the range so good and mediocre fits
+  // separate visibly instead of clumping in the 70s–80s. Expanding around a 70
+  // pivot pushes strong matches up and weak ones down (90→94, 80→82, 60→58).
+  // Applied ONLY when no gate fired, so the cross-domain / seniority / skills /
+  // experience guards above are never re-inflated — that unconditional inflation
+  // is exactly what retired the previous global curve. Runs before the
+  // top-band promotion so promoted floors (95/98) are never themselves expanded.
+  if (gatesTriggered.length === 0) {
+    const PIVOT = 70
+    const SPREAD = 1.22
+    overall = clamp(Math.round(PIVOT + (overall - PIVOT) * SPREAD), 0, 100)
+  }
+
   const hasTopBandBlockingGate = gatesTriggered.some((gate) =>
     gate === "missing_required_cert" ||
     gate === "missing_required_skills_gt75pct" ||
@@ -1655,7 +1682,16 @@ export function computeFastScore({
     hasUsableSkillEvidence
 
   if (excellentSameProfessionEvidence) {
-    const target = skills.score >= 0.8 ? 95 : skills.score >= 0.6 ? 92 : 90
+    // Near-perfect evidence reaches into the 96–98 band so a truly exceptional
+    // fit is visibly distinct from a merely strong one (which tops out ~92–95).
+    const target =
+      skills.score >= 0.9 && experience.score >= 0.95 && title.score >= 0.9 && seniority.score >= 0.85
+        ? 98
+        : skills.score >= 0.8
+          ? 95
+          : skills.score >= 0.6
+            ? 92
+            : 90
     if (overall < target) {
       overall = target
       topBandPromotion = `Excellent same-profession evidence promoted score to ${target}.`
@@ -1663,11 +1699,6 @@ export function computeFastScore({
   }
 
   overall = clamp(overall, 0, 100)
-
-  // Previously: a curve at >55 inflated 80→86 and 90→99, which combined
-  // with the seniority over-generosity to push unrelated jobs into the
-  // "great match" band. Removed — scores now reflect the weighted sum
-  // directly, with the gates above as the only post-hoc adjustments.
 
   const now = new Date().toISOString()
   const confidence = skills.hardMissing.length === 0 && experience.score >= 0.8

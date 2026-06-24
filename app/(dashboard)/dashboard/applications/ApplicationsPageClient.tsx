@@ -35,27 +35,37 @@ type ColumnDef = {
   id: string
   label: string
   statuses: ApplicationStatus[]
-  accent: string
-  countCls: string
+  dot: string
   dropStatus: ApplicationStatus
 }
 
 const COLUMNS: ColumnDef[] = [
-  { id: "saved",        label: "Saved",     statuses: ["saved"],                   accent: "border-t-slate-400",   countCls: "bg-slate-100 text-slate-600",   dropStatus: "saved" },
-  { id: "applied",      label: "Applied",   statuses: ["applied"],                 accent: "border-t-blue-400",    countCls: "bg-blue-50 text-blue-700",      dropStatus: "applied" },
-  { id: "phone_screen", label: "Screen",    statuses: ["phone_screen"],            accent: "border-t-amber-400",   countCls: "bg-amber-50 text-amber-700",    dropStatus: "phone_screen" },
-  { id: "interview",    label: "Interview", statuses: ["interview"],               accent: "border-t-orange-400",  countCls: "bg-orange-50 text-orange-700",  dropStatus: "interview" },
-  { id: "final_round",  label: "Final",     statuses: ["final_round"],             accent: "border-t-indigo-500",  countCls: "bg-slate-50 text-slate-700",  dropStatus: "final_round" },
-  { id: "offer",        label: "Offer",     statuses: ["offer"],                   accent: "border-t-emerald-500", countCls: "bg-emerald-50 text-emerald-700", dropStatus: "offer" },
-  { id: "closed",       label: "Closed",    statuses: ["rejected", "withdrawn"],   accent: "border-t-red-400",     countCls: "bg-red-50 text-red-600",        dropStatus: "rejected" },
+  { id: "saved",        label: "Saved",     statuses: ["saved"],                 dot: "bg-slate-400",   dropStatus: "saved" },
+  { id: "applied",      label: "Applied",   statuses: ["applied"],               dot: "bg-blue-500",    dropStatus: "applied" },
+  { id: "phone_screen", label: "Screen",    statuses: ["phone_screen"],          dot: "bg-amber-500",   dropStatus: "phone_screen" },
+  { id: "interview",    label: "Interview", statuses: ["interview"],             dot: "bg-orange-500",  dropStatus: "interview" },
+  { id: "final_round",  label: "Final",     statuses: ["final_round"],           dot: "bg-indigo-500",  dropStatus: "final_round" },
+  { id: "offer",        label: "Offer",     statuses: ["offer"],                 dot: "bg-emerald-500", dropStatus: "offer" },
+  { id: "closed",       label: "Closed",    statuses: ["rejected", "withdrawn"], dot: "bg-rose-400",    dropStatus: "rejected" },
 ]
+
+// Quick-advance chain: where the hover "→" sends a card next.
+const ADVANCE_NEXT: Partial<Record<ApplicationStatus, { status: ApplicationStatus; label: string }>> = {
+  saved:        { status: "applied",      label: "Applied" },
+  applied:      { status: "phone_screen", label: "Screen" },
+  phone_screen: { status: "interview",    label: "Interview" },
+  interview:    { status: "final_round",  label: "Final" },
+  final_round:  { status: "offer",        label: "Offer" },
+}
 
 // ─── Droppable column ─────────────────────────────────────────────────────────
 
-function KanbanColumn({ col, apps, onOpen, isOver }: {
+function KanbanColumn({ col, apps, onOpen, onAdvance, onAdd, isOver }: {
   col: ColumnDef
   apps: JobApplication[]
   onOpen: (app: JobApplication) => void
+  onAdvance: (app: JobApplication) => void
+  onAdd: (status: ApplicationStatus) => void
   isOver: boolean
 }) {
   const { setNodeRef } = useDroppable({ id: col.id })
@@ -64,27 +74,130 @@ function KanbanColumn({ col, apps, onOpen, isOver }: {
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col overflow-hidden rounded-2xl border border-t-[3px] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors xl:min-h-[460px] xl:min-w-[188px]",
-        col.accent,
-        isOver ? "border-slate-300 bg-orange-50/30" : "border-slate-200"
+        "group/col flex flex-col rounded-md border bg-slate-50 transition-colors md:min-h-[520px]",
+        isOver ? "border-slate-300 bg-orange-50/40" : "border-slate-200"
       )}
     >
-      {/* Column header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-3.5 py-3">
-        <span className="text-[12px] font-semibold text-slate-700">{col.label}</span>
-        <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", col.countCls)}>
+      {/* Column header — GitHub style: status dot + name + count pill */}
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", col.dot)} aria-hidden />
+        <span className="text-[13px] font-semibold text-slate-800">{col.label}</span>
+        <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
           {apps.length}
         </span>
+        <button
+          type="button"
+          aria-label={`Add to ${col.label}`}
+          onClick={() => onAdd(col.dropStatus)}
+          className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-200/60 hover:text-slate-700"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
       </div>
 
       {/* Cards */}
-      <div className="flex flex-1 flex-col gap-2 p-2.5">
-        {apps.map((app) => (
-          <ApplicationCard key={app.id} application={app} onOpen={() => onOpen(app)} />
-        ))}
+      <div className="flex flex-1 flex-col gap-2 px-2 pb-2">
+        {apps.map((app) => {
+          const next = ADVANCE_NEXT[app.status]
+          return (
+            <ApplicationCard
+              key={app.id}
+              application={app}
+              onOpen={() => onOpen(app)}
+              onAdvance={next ? () => onAdvance(app) : undefined}
+              advanceLabel={next ? `Move to ${next.label}` : undefined}
+            />
+          )
+        })}
         {apps.length === 0 && (
-          <div className="flex flex-1 items-center justify-center">
+          <div className="m-1 flex flex-1 items-center justify-center rounded-md border border-dashed border-slate-200 py-8">
             <p className="text-[11.5px] text-slate-400">Drop here</p>
+          </div>
+        )}
+      </div>
+
+      {/* GitHub-style add-item footer */}
+      <button
+        type="button"
+        onClick={() => onAdd(col.dropStatus)}
+        className="m-2 mt-0 flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] font-medium text-slate-400 transition hover:bg-slate-200/50 hover:text-slate-600"
+      >
+        <Plus className="h-3.5 w-3.5" /> Add item
+      </button>
+    </div>
+  )
+}
+
+// ─── Mobile board (stage selector + stacked cards) ─────────────────────────────
+
+function MobileBoard({ grouped, selected, onSelect, onOpen, onAdvance, onAdd }: {
+  grouped: Record<string, JobApplication[]>
+  selected: string
+  onSelect: (id: string) => void
+  onOpen: (app: JobApplication) => void
+  onAdvance: (app: JobApplication) => void
+  onAdd: (status: ApplicationStatus) => void
+}) {
+  const col = COLUMNS.find((c) => c.id === selected) ?? COLUMNS[0]
+  const apps = col.statuses.flatMap((s) => grouped[s] ?? [])
+
+  return (
+    <div className="md:hidden">
+      {/* Stage chips */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {COLUMNS.map((c) => {
+          const count = c.statuses.flatMap((s) => grouped[s] ?? []).length
+          const active = c.id === selected
+          return (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => onSelect(c.id)}
+              aria-pressed={active}
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12px] font-semibold transition",
+                active
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+              )}
+            >
+              {c.label}
+              <span className={cn("text-[11px]", active ? "text-white/70" : "text-slate-400")}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Selected stage header + add */}
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-[13px] font-semibold text-slate-700">{col.label}</p>
+        <button
+          type="button"
+          onClick={() => onAdd(col.dropStatus)}
+          className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-slate-600 transition hover:border-slate-300"
+        >
+          <Plus className="h-3.5 w-3.5" /> Add
+        </button>
+      </div>
+
+      {/* Cards */}
+      <div className="mt-3 flex flex-col gap-2.5">
+        {apps.map((app) => {
+          const next = ADVANCE_NEXT[app.status]
+          return (
+            <ApplicationCard
+              key={app.id}
+              application={app}
+              draggable={false}
+              onOpen={() => onOpen(app)}
+              onAdvance={next ? () => onAdvance(app) : undefined}
+              advanceLabel={next ? `Move to ${next.label}` : undefined}
+            />
+          )
+        })}
+        {apps.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center text-[12px] text-slate-400">
+            Nothing in {col.label.toLowerCase()} yet
           </div>
         )}
       </div>
@@ -104,7 +217,7 @@ const STATUS_COLOR: Record<ApplicationStatus, string> = {
   applied:      "bg-blue-50 text-blue-700 border-blue-200",
   phone_screen: "bg-amber-50 text-amber-700 border-amber-200",
   interview:    "bg-orange-50 text-orange-700 border-orange-200",
-  final_round:  "bg-slate-50 text-slate-700 border-slate-200",
+  final_round:  "bg-indigo-50 text-indigo-700 border-indigo-200",
   offer:        "bg-emerald-50 text-emerald-700 border-emerald-200",
   rejected:     "bg-red-50 text-red-600 border-red-200",
   withdrawn:    "bg-slate-100 text-slate-500 border-slate-200",
@@ -196,10 +309,25 @@ export default function ApplicationsPageClient({
   const [selectedApp, setSelectedApp] = useState<JobApplication | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
   const [addDefaultStatus, setAddDefaultStatus] = useState<ApplicationStatus>("saved")
+  const [mobileStage, setMobileStage] = useState<string>("applied")
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
   )
+
+  function openAdd(status: ApplicationStatus) {
+    setAddDefaultStatus(status)
+    setShowAddModal(true)
+  }
+
+  function advance(app: JobApplication) {
+    const next = ADVANCE_NEXT[app.status]
+    if (!next) return
+    if (next.status === "offer") {
+      void confetti({ particleCount: 130, spread: 80, origin: { y: 0.55 } })
+    }
+    void moveApplication(app.id, next.status)
+  }
 
   function handleDragStart(e: DragStartEvent) {
     setActiveId(e.active.id as string)
@@ -271,7 +399,7 @@ export default function ApplicationsPageClient({
               </div>
               <button
                 type="button"
-                onClick={() => { setAddDefaultStatus("saved"); setShowAddModal(true) }}
+                onClick={() => openAdd("saved")}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-orange-500 px-4 py-2 text-[13px] font-semibold text-white shadow-sm transition hover:bg-orange-400"
               >
                 <Plus className="h-4 w-4" />
@@ -321,35 +449,50 @@ export default function ApplicationsPageClient({
 
         {/* ── Kanban ── */}
         {!isLoading && view === "kanban" && (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragEnd={handleDragEnd}
-          >
-            <div className="pb-2 xl:overflow-x-auto">
-              <div className="flex flex-col gap-3 xl:grid xl:[grid-template-columns:repeat(7,minmax(188px,1fr))] xl:min-w-[1350px]">
-                {COLUMNS.map((col) => (
-                  <KanbanColumn
-                    key={col.id}
-                    col={col}
-                    apps={col.statuses.flatMap((s) => grouped[s] ?? [])}
-                    onOpen={setSelectedApp}
-                    isOver={overColId === col.id}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
-              {activeApp && (
-                <div className="rotate-[1.5deg] opacity-95 shadow-2xl">
-                  <ApplicationCard application={activeApp} onOpen={() => {}} />
+          <>
+            {/* Desktop / tablet: draggable board */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+            >
+              <div className="hidden overflow-x-auto pb-2 md:block">
+                <div className="grid gap-3 [grid-template-columns:repeat(7,minmax(272px,1fr))] min-w-[1400px]">
+                  {COLUMNS.map((col) => (
+                    <KanbanColumn
+                      key={col.id}
+                      col={col}
+                      apps={col.statuses.flatMap((s) => grouped[s] ?? [])}
+                      onOpen={setSelectedApp}
+                      onAdvance={advance}
+                      onAdd={openAdd}
+                      isOver={overColId === col.id}
+                    />
+                  ))}
                 </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+              </div>
+
+              <DragOverlay dropAnimation={{ duration: 180, easing: "ease" }}>
+                {activeApp && (
+                  <div className="rotate-[1.5deg] opacity-95 shadow-2xl">
+                    <ApplicationCard application={activeApp} onOpen={() => {}} />
+                  </div>
+                )}
+              </DragOverlay>
+            </DndContext>
+
+            {/* Mobile: stage selector + stacked cards */}
+            <MobileBoard
+              grouped={grouped}
+              selected={mobileStage}
+              onSelect={setMobileStage}
+              onOpen={setSelectedApp}
+              onAdvance={advance}
+              onAdd={openAdd}
+            />
+          </>
         )}
 
         {/* ── Table ── */}
