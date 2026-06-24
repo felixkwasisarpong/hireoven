@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import Navbar from "@/components/layout/Navbar"
 import { getCompanyScorecard } from "@/lib/h1b/scorecard-query"
@@ -81,6 +82,22 @@ export default async function ScorecardPage({ params }: Props) {
           </div>
         )}
         <ScorecardShare data={data} />
+
+        <div className="mt-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0b2a23] to-[#0a2440] p-6 text-center">
+          <p className="text-lg font-semibold text-white">
+            How do <em>you</em> stack up at {data.company.name}?
+          </p>
+          <p className="mt-1 text-sm text-white/60">
+            Get your own sponsorability scorecard in 60 seconds.
+          </p>
+          <Link
+            href="/dashboard/scorecard"
+            className="mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 hover:bg-emerald-400 hover:text-white"
+          >
+            Get your scorecard →
+          </Link>
+        </div>
+
         <ScorecardMethodologyNote />
       </main>
     </div>
