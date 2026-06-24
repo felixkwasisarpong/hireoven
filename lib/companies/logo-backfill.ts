@@ -22,6 +22,7 @@ import type { Pool } from "pg"
 import pLimit from "p-limit"
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 import { isAtsDomain } from "@/lib/companies/ats-domains"
+import { nameTokens, domainMatchesName } from "@/lib/companies/domain-resolution"
 
 // Synthetic domain suffixes the discovery pipeline uses as dedup keys — never a
 // real website, so never a logo source.
@@ -74,6 +75,7 @@ export type LogoBackfillResult = {
   updated: number
   noRealLogo: number
   noDomain: number
+  nameMismatch: number
 }
 
 export async function backfillCompanyLogos(
@@ -87,7 +89,7 @@ export async function backfillCompanyLogos(
   const token = logoDevToken()
   if (!token) {
     // Without a publishable token we can't validate real logos; bail safely.
-    return { scanned: 0, updated: 0, noRealLogo: 0, noDomain: 0 }
+    return { scanned: 0, updated: 0, noRealLogo: 0, noDomain: 0, nameMismatch: 0 }
   }
 
   // Indexed-friendly: filter to active rows missing a logo that have *some*
@@ -124,6 +126,7 @@ export async function backfillCompanyLogos(
   let updated = 0
   let noRealLogo = 0
   let noDomain = 0
+  let nameMismatch = 0
 
   await Promise.all(
     rows.map((row) =>
@@ -131,6 +134,15 @@ export async function backfillCompanyLogos(
         const candidate = [row.domain, row.guessed_domain].find(isResolvableLogoDomain)
         if (!candidate) {
           noDomain += 1
+          return
+        }
+        // Guard against legacy/wrong stored domains (e.g. "The Norfolk Companies"
+        // pointing at pilotonline.com): the domain's own slug must carry a
+        // distinctive token from the company name. Prevents painting an
+        // unrelated brand's logo onto the company.
+        const tokens = nameTokens(row.name)
+        if (tokens.length && !domainMatchesName(candidate, tokens)) {
+          nameMismatch += 1
           return
         }
         const has = await logoDevHasRealLogo(candidate, token)
@@ -155,5 +167,5 @@ export async function backfillCompanyLogos(
     )
   )
 
-  return { scanned: rows.length, updated, noRealLogo, noDomain }
+  return { scanned: rows.length, updated, noRealLogo, noDomain, nameMismatch }
 }
