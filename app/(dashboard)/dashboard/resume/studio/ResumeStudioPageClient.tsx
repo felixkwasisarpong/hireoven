@@ -42,6 +42,7 @@ import {
   Plus,
   Redo2,
   Save,
+  Sigma,
   Sparkles,
   Star,
   Strikethrough,
@@ -58,6 +59,7 @@ import ResumeDocumentPreview, {
   type ResumePreviewSectionType,
 } from "@/components/resume/ResumeDocumentPreview"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import MetricElicitationModal from "@/components/resume/MetricElicitationModal"
 import { useToast } from "@/components/ui/ToastProvider"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
 import { buildStudioSectionChecks } from "@/lib/resume/studio-section-analysis"
@@ -809,6 +811,7 @@ type TailorRecommendedFixesPanelProps = {
   applyingId: string | null
   onApply: (fix: TailorFix) => void
   onApplyAllSafe: () => void
+  onQuantify: (fix: Extract<TailorFix, { type: "replace_bullet" }>) => void
   disabled: boolean
 }
 
@@ -818,6 +821,7 @@ function TailorRecommendedFixesPanel({
   applyingId,
   onApply,
   onApplyAllSafe,
+  onQuantify,
   disabled,
 }: TailorRecommendedFixesPanelProps) {
   if (!analysis) {
@@ -903,10 +907,23 @@ function TailorRecommendedFixesPanel({
                     </div>
                   )}
                   {fix.type === "replace_bullet" && (
-                    <div className="grid gap-1 sm:grid-cols-2">
-                      <div className="max-h-32 overflow-y-auto rounded-md bg-slate-100/90 p-1.5 whitespace-pre-wrap">Before: {fix.original || "—"}</div>
-                      <div className="max-h-32 overflow-y-auto rounded-md bg-slate-100/90 p-1.5 whitespace-pre-wrap">After: {fix.suggested}</div>
-                    </div>
+                    <>
+                      <div className="grid gap-1 sm:grid-cols-2">
+                        <div className="max-h-32 overflow-y-auto rounded-md bg-slate-100/90 p-1.5 whitespace-pre-wrap">Before: {fix.original || "—"}</div>
+                        <div className="max-h-32 overflow-y-auto rounded-md bg-slate-100/90 p-1.5 whitespace-pre-wrap">After: {fix.suggested}</div>
+                      </div>
+                      {!applied && (
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onQuantify(fix)}
+                          className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-[#5B4DFF] transition hover:border-[#5B4DFF] disabled:opacity-50"
+                        >
+                          <Sigma className="h-3 w-3" />
+                          Use my real numbers
+                        </button>
+                      )}
+                    </>
                   )}
                   {fix.type === "replace_summary" && (
                     <div className="grid gap-1 sm:grid-cols-2">
@@ -1087,6 +1104,7 @@ export default function ResumeStudioPage() {
   const [appliedFixIds, setAppliedFixIds] = useState<string[]>([])
   // Fix awaiting an in-app honesty confirmation (replaces the native window.confirm).
   const [pendingConfirmFix, setPendingConfirmFix] = useState<TailorFix | null>(null)
+  const [quantifyFix, setQuantifyFix] = useState<Extract<TailorFix, { type: "replace_bullet" }> | null>(null)
   // "Create tailored resume with no fixes applied?" in-app confirmation.
   const [showCreateNoFixesConfirm, setShowCreateNoFixesConfirm] = useState(false)
   const [analysis, setAnalysis] = useState<TailorAnalysisResult | null>(null)
@@ -1550,6 +1568,32 @@ export default function ResumeStudioPage() {
 
   function applySummaryFix(fix: Extract<TailorFix, { type: "replace_summary" }>) {
     setProfileSummary(sanitizeTailorSummaryText(fix.suggested))
+  }
+
+  // Metric elicitation: ask for the candidate's real numbers, then apply the
+  // quantified bullet through the same replace-bullet path.
+  function openQuantify(fix: Extract<TailorFix, { type: "replace_bullet" }>) {
+    if (!selectedResume?.id) {
+      pushToast({ tone: "info", title: "Save your resume first", description: "Quantifying reads your saved roles to ask the right questions." })
+      return
+    }
+    setQuantifyFix(fix)
+  }
+
+  function applyQuantifiedBullet(rewritten: string) {
+    const fix = quantifyFix
+    setQuantifyFix(null)
+    if (!fix) return
+    const matched = applyBulletFix({ ...fix, suggested: rewritten })
+    if (!matched) {
+      pushToast({ tone: "info", title: "Couldn't locate the original bullet", description: "Edit the experience section directly to apply this change." })
+      return
+    }
+    setAppliedFixIds((current) => (current.includes(fix.id) ? current : [...current, fix.id]))
+    setTailorStep("applied")
+    markDirty()
+    focusEditorSectionFromPreview("experience")
+    pushToast({ tone: "success", title: "Bullet quantified", description: "Review the change in the preview." })
   }
 
   const performTailorFix = useCallback(
@@ -3166,6 +3210,7 @@ export default function ResumeStudioPage() {
                   applyingId={applyingFixId}
                   onApply={applyTailorFix}
                   onApplyAllSafe={applyAllSafeFixes}
+                  onQuantify={openQuantify}
                   disabled={isTailoring}
                 />
                 <p className="shrink-0 rounded-xl border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
@@ -3190,6 +3235,18 @@ export default function ResumeStudioPage() {
           </div>
         )}
       </div>
+      {quantifyFix && (
+        <MetricElicitationModal
+          open
+          bullet={quantifyFix.original}
+          resumeId={selectedResume?.id ?? ""}
+          jobId={selectedTargetJob?.id ?? null}
+          experienceIndex={experienceIndexFromId(quantifyFix.experienceId)}
+          onClose={() => setQuantifyFix(null)}
+          onApply={applyQuantifiedBullet}
+        />
+      )}
+
       {pendingConfirmFix && (
         <div
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm"
