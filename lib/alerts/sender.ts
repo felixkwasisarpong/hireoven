@@ -122,8 +122,8 @@ function renderJobRow(job: JobWithCompanyContext, index: number) {
   return `
     ${divider}
     <tr>
-      <td style="vertical-align:top;padding-right:16px;width:72px;padding-bottom:20px;">${logoHtml}</td>
-      <td style="vertical-align:top;padding-bottom:20px;">
+      <td width="72" style="vertical-align:top;padding-right:16px;width:72px;padding-bottom:20px;">${logoHtml}</td>
+      <td width="100%" style="vertical-align:top;padding-bottom:20px;word-break:break-word;">
         <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:4px;">
           <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
         </div>
