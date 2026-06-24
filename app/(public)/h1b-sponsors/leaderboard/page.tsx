@@ -25,6 +25,10 @@ function parseFilters(sp: SearchParams): LeaderboardFilters {
     state: sp.state,
     industry: sp.industry,
     exclude_staffing: sp.exclude_staffing === "true",
+    layoff_risk:
+      sp.layoff_risk === "exclude_active" || sp.layoff_risk === "stable_only"
+        ? sp.layoff_risk
+        : undefined,
     cursor: sp.cursor ? Number(sp.cursor) : undefined,
   }
 }

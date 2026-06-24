@@ -4,6 +4,7 @@ import {
   getLeaderboardIndustries,
   type LeaderboardFilters as Filters,
 } from "@/lib/h1b/leaderboard"
+import { getCompanyLayoffSignalsBatch } from "@/lib/h1b/layoff-signal-query"
 import LeaderboardTable from "./LeaderboardTable"
 import LeaderboardFilters from "./LeaderboardFilters"
 import ShareLeaderboard from "./ShareLeaderboard"
@@ -48,6 +49,9 @@ export default async function LeaderboardView({
     getLeaderboardIndustries(),
   ])
 
+  // One batched query for all rows' layoff badges (no N+1).
+  const layoffSignals = await getCompanyLayoffSignalsBatch(data.results.map((r) => r.company.id))
+
   const cursor = filters.cursor ?? 0
   const jsonLd = {
     "@context": "https://schema.org",
@@ -88,7 +92,7 @@ export default async function LeaderboardView({
         lockIndustry={lockIndustry}
       />
 
-      <LeaderboardTable rows={data.results} />
+      <LeaderboardTable rows={data.results} layoffSignals={layoffSignals} />
 
       <nav className="mt-6 flex items-center justify-between text-sm">
         {cursor > 0 ? (
