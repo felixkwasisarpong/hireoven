@@ -25,6 +25,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/h1b-sponsors/leaderboard`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/h1b-sponsors/leaderboard/no-recent-layoffs`, lastModified: new Date(), changeFrequency: "daily", priority: 0.7 },
+    { url: `${base}/h1b-sponsors/cap-exempt`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 },
+    { url: `${base}/h1b-sponsors/e-verify`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.6 },
+    { url: `${base}/h1b-sponsors/lottery-rescue`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/h1b-sponsors/leaderboard/methodology`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     ...LEADERBOARD_STATES.map((s) => ({
       url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
