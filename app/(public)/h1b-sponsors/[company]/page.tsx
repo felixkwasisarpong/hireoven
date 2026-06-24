@@ -4,6 +4,8 @@ import { notFound } from "next/navigation"
 import { ArrowRight, Building2, Briefcase, CheckCircle2, FileQuestion, HelpCircle, ShieldCheck } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import RankBadge from "@/components/h1b/leaderboard/RankBadge"
+import { getCompanyH1bRank, industrySlug } from "@/lib/h1b/leaderboard"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -132,6 +134,7 @@ export default async function H1bSponsorPage({ params }: Props) {
   const c = await getCompany((await params).company)
   if (!c) notFound()
 
+  const rank = await getCompanyH1bRank(c.id)
   const faqs = faqItems(c)
   const v = VERDICT_UI[c.verdict]
   const profilePath = `/companies/${c.id}`
@@ -171,8 +174,19 @@ export default async function H1bSponsorPage({ params }: Props) {
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <nav className="mb-6 flex items-center gap-1.5 text-[13px] text-slate-500">
-          <Link href="/h1b-sponsors" className="hover:text-slate-800">H-1B sponsors</Link>
+        <nav className="mb-6 flex flex-wrap items-center gap-1.5 text-[13px] text-slate-500">
+          <Link href="/h1b-sponsors/leaderboard" className="hover:text-slate-800">All sponsors</Link>
+          {c.industry && (
+            <>
+              <span className="text-slate-300">/</span>
+              <Link
+                href={`/h1b-sponsors/leaderboard/by-industry/${industrySlug(c.industry)}`}
+                className="hover:text-slate-800"
+              >
+                {c.industry}
+              </Link>
+            </>
+          )}
           <span className="text-slate-300">/</span>
           <span className="text-slate-700">{c.name}</span>
         </nav>
@@ -198,6 +212,11 @@ export default async function H1bSponsorPage({ params }: Props) {
               <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-slate-400">
                 <Building2 className="h-3.5 w-3.5" /> {c.industry}
               </p>
+            )}
+            {rank && (
+              <div className="mt-3">
+                <RankBadge rank={rank} />
+              </div>
             )}
           </div>
         </header>

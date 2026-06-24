@@ -105,6 +105,8 @@
     "db:audit-tech-crawl-compliance:execute": "npx tsx scripts/audit-tech-crawl-compliance.ts --execute",
     "db:recompute-h1b-scores": "npx tsx scripts/recompute-company-h1b-scores.ts",
     "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute",
+    "refresh:h1b-leaderboard": "npx tsx scripts/refresh-h1b-leaderboard.ts",
+    "refresh:h1b-leaderboard:execute": "npx tsx scripts/refresh-h1b-leaderboard.ts --execute",
     "db:migrate-to-postgres": "bash scripts/db/migrate-supabase-to-postgres.sh",
     "db:compare-postgres-counts": "bash scripts/db/compare-public-counts.sh",
     "jobs:generate-normalization-examples": "npx tsx scripts/normalization/generate-example-transformations.ts",

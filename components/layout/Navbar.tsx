@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BadgePercent, BookOpen, Building2, Puzzle, Sparkles } from "lucide-react"
+import { BadgePercent, BookOpen, Building2, Puzzle, ShieldCheck, Sparkles } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import NavbarAuthCluster from "./NavbarAuthCluster"
 
@@ -25,6 +25,13 @@ export default function Navbar() {
             >
               <Building2 className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
               Companies
+            </Link>
+            <Link
+              href="/h1b-sponsors/leaderboard"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <ShieldCheck className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              H-1B Sponsors
             </Link>
             <Link
               href="/pricing"

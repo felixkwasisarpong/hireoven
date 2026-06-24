@@ -354,6 +354,36 @@ export default async function HomePage() {
         </Link>
       </section>
 
+      {/* ── H-1B sponsor leaderboard strip ──────────────────────────────── */}
+      <section className="border-b border-slate-100 bg-white px-6 py-8">
+        <Link
+          href="/h1b-sponsors/leaderboard"
+          className="group mx-auto flex max-w-5xl flex-col items-center gap-3 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-[#0b2a23] via-[#0e3a2e] to-[#0a2440] p-6 transition hover:border-emerald-400/40 sm:flex-row sm:gap-5 sm:p-5"
+        >
+          <span
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: "linear-gradient(135deg,#10b981,#34d399)" }}
+            aria-hidden
+          >
+            <ShieldCheck className="h-5 w-5 text-white" />
+          </span>
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+              Free public data
+            </p>
+            <p className="mt-1 text-[15px] font-semibold text-white">
+              {stats.jobs > 0
+                ? `Browse ${stats.jobs.toLocaleString()} jobs by H-1B sponsorship. See who actually files.`
+                : "Browse employers by H-1B sponsorship. See who actually files."}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-bold text-slate-900 transition group-hover:bg-emerald-500 group-hover:text-white">
+            View leaderboard
+            <ArrowRight className="h-3.5 w-3.5" />
+          </span>
+        </Link>
+      </section>
+
       {/* ── Core features ───────────────────────────────────────────────── */}
       <section className="relative overflow-hidden px-6 py-24"
         style={{ background: "linear-gradient(160deg,#FFF8F4 0%,#F9F8FF 45%,#F4F8FF 100%)" }}>
@@ -617,7 +647,7 @@ export default async function HomePage() {
       {/* ── Footer ──────────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-100 bg-white px-6 py-14">
         <div className="mx-auto max-w-6xl">
-          <div className="grid gap-10 md:grid-cols-[1.4fr,1fr,1fr,1fr]">
+          <div className="grid gap-10 md:grid-cols-[1.4fr,1fr,1fr,1fr,1fr]">
             <div>
               <Link href="/">
                 <HireovenLogo variant="full" className="h-10 w-auto max-w-[180px]" />
@@ -631,6 +661,14 @@ export default async function HomePage() {
               { href: "/features", label: "Features" },
               { href: "/pricing", label: "Pricing" },
               { href: "/companies", label: "Companies" },
+            ]} />
+            <FooterColumn title="H-1B Data" links={[
+              { href: "/h1b-sponsors/leaderboard", label: "Sponsor Leaderboard" },
+              { href: "/h1b-sponsors/leaderboard/by-state/CA", label: "Sponsors in California" },
+              { href: "/h1b-sponsors/leaderboard/by-state/NY", label: "Sponsors in New York" },
+              { href: "/h1b-sponsors/leaderboard/by-industry/technology", label: "Tech sponsors" },
+              { href: "/h1b-sponsors/leaderboard/by-industry/finance", label: "Finance sponsors" },
+              { href: "/h1b-sponsors/leaderboard/methodology", label: "Methodology" },
             ]} />
             <FooterColumn title="Account" links={[
               { href: "/login", label: "Sign in" },
