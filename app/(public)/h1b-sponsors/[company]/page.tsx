@@ -5,6 +5,7 @@ import { ArrowRight, Building2, Briefcase, CheckCircle2, FileQuestion, HelpCircl
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import RankBadge from "@/components/h1b/leaderboard/RankBadge"
+import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
 import { getCompanyH1bRank, industrySlug } from "@/lib/h1b/leaderboard"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
@@ -218,6 +219,15 @@ export default async function H1bSponsorPage({ params }: Props) {
                 <RankBadge rank={rank} />
               </div>
             )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <ScorecardBadge score={c.sponsorship_confidence ?? 0} />
+              <Link
+                href={`/h1b-sponsors/${companyParam(c.id, c.name)}/scorecard`}
+                className="text-sm font-medium text-slate-600 underline hover:text-slate-900"
+              >
+                View scorecard →
+              </Link>
+            </div>
           </div>
         </header>
 
