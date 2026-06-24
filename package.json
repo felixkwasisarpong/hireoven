@@ -107,6 +107,8 @@
     "db:recompute-h1b-scores:execute": "npx tsx scripts/recompute-company-h1b-scores.ts --execute",
     "refresh:h1b-leaderboard": "npx tsx scripts/refresh-h1b-leaderboard.ts",
     "refresh:h1b-leaderboard:execute": "npx tsx scripts/refresh-h1b-leaderboard.ts --execute",
+    "layoffs:import": "npx tsx scripts/import-layoffdata.ts",
+    "layoffs:import:execute": "npx tsx scripts/import-layoffdata.ts --execute",
     "db:migrate-to-postgres": "bash scripts/db/migrate-supabase-to-postgres.sh",
     "db:compare-postgres-counts": "bash scripts/db/compare-public-counts.sh",
     "jobs:generate-normalization-examples": "npx tsx scripts/normalization/generate-example-transformations.ts",
