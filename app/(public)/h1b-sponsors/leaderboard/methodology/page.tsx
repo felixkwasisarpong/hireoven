@@ -135,6 +135,40 @@ export default function MethodologyPage() {
           </div>
         </section>
 
+        <section id="personal-scorecard" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">Personal sponsorability scorecard</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              Your personal scorecard is a <strong>profile-vs-market fit</strong> signal — how your
+              resume lines up with the H-1B-sponsoring job market. It is not a guarantee, and it is
+              not a measure of your worth.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong>Skills demand</strong> — how many sponsor postings (last 12 months) want your
+                top skills.
+              </li>
+              <li>
+                <strong>Skills rarity</strong> — how rare-but-in-demand your skill stack is (a niche
+                edge). v1 uses a demand-based proxy.
+              </li>
+              <li>
+                <strong>Experience fit</strong> — how your years of experience align with your stated
+                seniority.
+              </li>
+              <li>
+                <strong>Education</strong> — models LCA approval patterns (advanced + STEM degrees,
+                work authorization).
+              </li>
+            </ul>
+            <p>
+              Each component is scored out of 25 for a total out of 100, mapped to a grade from A+ to
+              C. The lowest band is &ldquo;Building Profile&rdquo; — a common profile, never
+              &ldquo;unsponsorable.&rdquo; The score updates whenever you update your resume.
+            </p>
+          </div>
+        </section>
+
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}

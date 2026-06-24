@@ -5,6 +5,7 @@ import {
   Briefcase,
   ClipboardList,
   FileText,
+  Gauge,
   Globe,
   GraduationCap,
   LayoutGrid,
@@ -82,6 +83,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // ── Grow ─────────────────────────────────────────────────────────────────────
   { label: "Interview",      href: "/dashboard/interview",                icon: Mic,            group: "Grow", subtitle: "Practice & prep with AI" },
   { label: "Skill Gaps",     href: "/dashboard/grow/skills",              icon: GraduationCap,  group: "Grow", subtitle: "Learn what unlocks more roles" },
+  { label: "Scorecard",      href: "/dashboard/scorecard",                icon: Gauge,          group: "Grow", subtitle: "Your sponsorability score" },
   { label: "Cohorts",        href: "/dashboard/cohorts",                  icon: Users,       group: "Grow", gate: "apex_strategy", subtitle: "Peers on the same path" },
   { label: "Brand",          href: "/dashboard/brand",                    icon: TrendingUp,  group: "Grow", gate: "apex_strategy", subtitle: "Grow your LinkedIn presence" },
   { label: "Fair Chance",    href: "/dashboard/background-check",         icon: ShieldCheck, group: "Grow", gate: "apex_strategy", subtitle: "Second-chance-friendly roles" },
