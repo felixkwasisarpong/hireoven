@@ -1,5 +1,6 @@
 import Link from "next/link"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
 import type { LeaderboardRow } from "@/lib/h1b/leaderboard"
 
 function fmtPct(rate: number | null): string {
@@ -51,6 +52,7 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
             <tr>
               <th className="w-14 px-4 py-3 text-right">#</th>
               <th className="px-4 py-3">Company</th>
+              <th className="px-4 py-3">Grade</th>
               <th className="px-4 py-3 text-right">Certified (FY2025)</th>
               <th className="px-4 py-3 text-right">Cert. rate</th>
               <th className="px-4 py-3">Top states</th>
@@ -64,6 +66,11 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
                 </td>
                 <td className="px-4 py-3">
                   <CompanyCell row={row} priority={i < 10} />
+                </td>
+                <td className="px-4 py-3">
+                  <Link href={`${row.profile_url}/scorecard`}>
+                    <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
+                  </Link>
                 </td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-900">
                   {row.metrics.certified.toLocaleString()}
@@ -92,6 +99,9 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
             </span>
             <div className="min-w-0 flex-1">
               <CompanyCell row={row} priority={i < 6} />
+              <Link href={`${row.profile_url}/scorecard`} className="mt-1 inline-block">
+                <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
+              </Link>
             </div>
             <div className="shrink-0 text-right">
               <div className="font-medium tabular-nums text-slate-900">
