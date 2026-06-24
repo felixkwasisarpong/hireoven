@@ -101,6 +101,40 @@ export default function MethodologyPage() {
           </p>
         </Section>
 
+        <section id="layoffs" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">Workforce / layoff signal</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              The workforce signal on each sponsor reflects publicly reported layoff
+              activity. It is informational, not a prediction or an endorsement.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong>Data sources:</strong> U.S. Department of Labor WARN Act filings
+                (via layoffdata.com&rsquo;s public dataset) and reported layoff events.
+              </li>
+              <li>
+                <strong>Tiers:</strong> <em>No recent layoffs</em> (none in 12 months),{" "}
+                <em>Recent layoffs</em> (one event in 12 months), <em>Elevated</em> (two or
+                more events, or an accelerating trend), <em>Active</em> (an event in the
+                last 90 days or a confirmed hiring freeze).
+              </li>
+              <li>
+                <strong>Refresh:</strong> the layoff importer runs daily; counts use rolling
+                90-day and 12-month windows.
+              </li>
+              <li>
+                <strong>What it is not:</strong> a forecast, financial advice, or a judgment
+                of any company. It surfaces records that are already public. WARN covers mass
+                layoffs above state thresholds, so smaller cuts may not appear.
+              </li>
+            </ul>
+            <p>
+              Spotted an error? <a href="/support" className="underline hover:text-slate-800">Let us know</a> and we&rsquo;ll correct it.
+            </p>
+          </div>
+        </section>
+
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}

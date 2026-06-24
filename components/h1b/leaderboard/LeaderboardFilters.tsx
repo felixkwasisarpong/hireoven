@@ -66,6 +66,18 @@ export default function LeaderboardFilters({
         Exclude staffing firms
       </button>
 
+      <button
+        className={cls(params.get("layoff_risk") === "exclude_active")}
+        onClick={() =>
+          update(
+            "layoff_risk",
+            params.get("layoff_risk") === "exclude_active" ? null : "exclude_active"
+          )
+        }
+      >
+        Exclude active layoffs
+      </button>
+
       {!lockState && (
         <select
           className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600"

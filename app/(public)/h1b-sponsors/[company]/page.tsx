@@ -7,6 +7,8 @@ import CompanyLogo from "@/components/ui/CompanyLogo"
 import RankBadge from "@/components/h1b/leaderboard/RankBadge"
 import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
 import { getCompanyH1bRank, industrySlug } from "@/lib/h1b/leaderboard"
+import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
+import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -136,6 +138,7 @@ export default async function H1bSponsorPage({ params }: Props) {
   if (!c) notFound()
 
   const rank = await getCompanyH1bRank(c.id)
+  const layoffSignal = await getCompanyLayoffSignal(c.id)
   const faqs = faqItems(c)
   const v = VERDICT_UI[c.verdict]
   const profilePath = `/companies/${c.id}`
@@ -239,6 +242,12 @@ export default async function H1bSponsorPage({ params }: Props) {
             </div>
           ))}
         </section>
+
+        {layoffSignal && (
+          <div className="mt-8">
+            <LayoffSignalCard signal={layoffSignal} />
+          </div>
+        )}
 
         <div className="mt-8 flex flex-wrap gap-3">
           <Link

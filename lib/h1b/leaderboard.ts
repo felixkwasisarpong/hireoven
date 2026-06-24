@@ -20,6 +20,7 @@ export interface LeaderboardFilters {
   size?: string
   staffing_only?: boolean
   exclude_staffing?: boolean
+  layoff_risk?: "any" | "exclude_active" | "stable_only"
   min_filings?: number
   cursor?: number // rank cursor (keyset pagination)
   limit?: number // 1-50, default 25
@@ -139,6 +140,30 @@ function buildWhere(
   }
   if (f.exclude_staffing) {
     clauses.push(`is_staffing_firm = false`)
+  }
+  // Layoff-risk filters (subqueries against the live layoff tables, keyed by company_id).
+  if (f.layoff_risk === "exclude_active") {
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM company_layoff_summary cls
+         WHERE cls.company_id = h1b_leaderboard_mv.company_id
+           AND cls.has_active_freeze = true AND cls.freeze_confidence = 'confirmed')`
+    )
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM layoff_events le
+         WHERE le.company_id = h1b_leaderboard_mv.company_id
+           AND le.event_date > NOW() - INTERVAL '90 days')`
+    )
+  } else if (f.layoff_risk === "stable_only") {
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM company_layoff_summary cls
+         WHERE cls.company_id = h1b_leaderboard_mv.company_id
+           AND (cls.has_active_freeze = true OR cls.layoff_trend = 'accelerating'))`
+    )
+    clauses.push(
+      `NOT EXISTS (SELECT 1 FROM layoff_events le
+         WHERE le.company_id = h1b_leaderboard_mv.company_id
+           AND le.event_date > NOW() - INTERVAL '12 months')`
+    )
   }
 
   return clauses.length ? `WHERE ${clauses.join(" AND ")}` : ""

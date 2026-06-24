@@ -7,6 +7,8 @@ import { ScorecardHero } from "@/components/h1b/scorecard/ScorecardHero"
 import { ScorecardStats } from "@/components/h1b/scorecard/ScorecardStats"
 import { ScorecardShare } from "@/components/h1b/scorecard/ScorecardShare"
 import { ScorecardMethodologyNote } from "@/components/h1b/scorecard/ScorecardMethodologyNote"
+import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
+import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
 
 export const revalidate = 86400
 
@@ -49,6 +51,7 @@ export default async function ScorecardPage({ params }: Props) {
   if (!id) notFound()
   const data = await getCompanyScorecard(id)
   if (!data) notFound()
+  const layoffSignal = await getCompanyLayoffSignal(data.company.id)
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -72,6 +75,11 @@ export default async function ScorecardPage({ params }: Props) {
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
         <ScorecardHero data={data} />
         <ScorecardStats data={data} />
+        {layoffSignal && (
+          <div className="mt-8">
+            <LayoffSignalCard signal={layoffSignal} />
+          </div>
+        )}
         <ScorecardShare data={data} />
         <ScorecardMethodologyNote />
       </main>

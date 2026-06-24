@@ -1,7 +1,9 @@
 import Link from "next/link"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
+import { LayoffSignalBadge } from "@/components/h1b/layoffs/LayoffSignalBadge"
 import type { LeaderboardRow } from "@/lib/h1b/leaderboard"
+import type { LayoffSignalBase } from "@/lib/h1b/layoff-signal"
 
 function fmtPct(rate: number | null): string {
   return rate == null ? "n/a" : `${(rate * 100).toFixed(1)}%`
@@ -34,7 +36,13 @@ function CompanyCell({ row, priority }: { row: LeaderboardRow; priority?: boolea
   )
 }
 
-export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
+export default function LeaderboardTable({
+  rows,
+  layoffSignals,
+}: {
+  rows: LeaderboardRow[]
+  layoffSignals?: Map<string, LayoffSignalBase>
+}) {
   if (rows.length === 0) {
     return (
       <div className="rounded-lg border border-slate-200 bg-white p-8 text-center text-slate-500">
@@ -55,6 +63,7 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
               <th className="px-4 py-3">Grade</th>
               <th className="px-4 py-3 text-right">Certified (FY2025)</th>
               <th className="px-4 py-3 text-right">Cert. rate</th>
+              <th className="px-4 py-3">Workforce</th>
               <th className="px-4 py-3">Top states</th>
             </tr>
           </thead>
@@ -78,6 +87,11 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
                 <td className="px-4 py-3 text-right tabular-nums text-slate-700">
                   {fmtPct(row.metrics.cert_rate)}
                 </td>
+                <td className="px-4 py-3">
+                  {layoffSignals?.get(row.company.id) && (
+                    <LayoffSignalBadge signal={layoffSignals.get(row.company.id)!} size="sm" />
+                  )}
+                </td>
                 <td className="px-4 py-3 text-xs text-slate-500">
                   {row.metrics.top_states.slice(0, 3).join(", ")}
                 </td>
@@ -99,9 +113,15 @@ export default function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
             </span>
             <div className="min-w-0 flex-1">
               <CompanyCell row={row} priority={i < 6} />
-              <Link href={`${row.profile_url}/scorecard`} className="mt-1 inline-block">
-                <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
-              </Link>
+              <div className="mt-1 flex items-center gap-1.5">
+                <Link href={`${row.profile_url}/scorecard`} className="inline-block">
+                  <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
+                </Link>
+                {layoffSignals?.get(row.company.id) &&
+                  layoffSignals.get(row.company.id)!.level !== "stable" && (
+                    <LayoffSignalBadge signal={layoffSignals.get(row.company.id)!} size="sm" />
+                  )}
+              </div>
             </div>
             <div className="shrink-0 text-right">
               <div className="font-medium tabular-nums text-slate-900">
