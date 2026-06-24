@@ -14,6 +14,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ResumeEditSuggestion } from "@/types"
+import type { MetricQuestion } from "@/lib/resume/metric-elicitation"
 
 type ActionType = "rewrite" | "quantify" | "keyword_inject" | "expand" | "shorten"
 
@@ -50,10 +51,14 @@ export default function BulletEditor({
   onAcceptSuggestion,
   onRejectSuggestion,
 }: BulletEditorProps) {
-  const [mode, setMode] = useState<"view" | "editing" | "loading" | "suggestion">("view")
+  const [mode, setMode] = useState<
+    "view" | "editing" | "loading" | "suggestion" | "quantify-questions"
+  >("view")
   const [draft, setDraft] = useState(content)
   const [suggestion, setSuggestion] = useState<ResumeEditSuggestion | null>(null)
   const [showRejectOptions, setShowRejectOptions] = useState(false)
+  const [questions, setQuestions] = useState<MetricQuestion[]>([])
+  const [answers, setAnswers] = useState<Record<string, string>>({})
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -120,9 +125,94 @@ export default function BulletEditor({
     setMode("suggestion")
   }
 
+  // Quantify = ask the candidate for their REAL numbers, then rewrite with only
+  // those. Replaces the old placeholder-stuffing quantify action.
+  async function startQuantify() {
+    setMode("loading")
+    setShowRejectOptions(false)
+    try {
+      const response = await fetch("/api/resume/bullet/quantify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "questions",
+          resumeId,
+          bullet: content,
+          jobId,
+          experienceIndex,
+          bulletIndex,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setMode("view")
+        throw new Error(data.error ?? "Failed to generate questions")
+      }
+      const next: MetricQuestion[] = Array.isArray(data.questions) ? data.questions : []
+      if (next.length === 0) {
+        // Nothing worth asking — rewrite without numbers rather than dead-end.
+        await submitQuantify([])
+        return
+      }
+      setQuestions(next)
+      setAnswers({})
+      setMode("quantify-questions")
+    } catch {
+      setMode("view")
+    }
+  }
+
+  async function submitQuantify(answerList: { label: string; value: string }[]) {
+    setMode("loading")
+    try {
+      const response = await fetch("/api/resume/bullet/quantify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "rewrite",
+          resumeId,
+          bullet: content,
+          jobId,
+          experienceIndex,
+          bulletIndex,
+          answers: answerList,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        setMode("view")
+        throw new Error(data.error ?? "Failed to rewrite bullet")
+      }
+      const nextSuggestion: ResumeEditSuggestion = {
+        id: data.editId ?? "",
+        user_id: "",
+        resume_id: resumeId,
+        job_id: jobId ?? null,
+        section: "work_experience",
+        original_content: content,
+        suggested_content: data.suggestion,
+        edit_type: "quantify",
+        keywords_added: [],
+        was_accepted: null,
+        feedback: null,
+        context: {
+          experienceIndex,
+          bulletIndex,
+          field: "achievement",
+        },
+        created_at: new Date().toISOString(),
+      }
+      setSuggestion(nextSuggestion)
+      onQueueSuggestion?.(nextSuggestion)
+      setMode("suggestion")
+    } catch {
+      setMode("view")
+    }
+  }
+
   async function handleAccept() {
     if (!suggestion) return
-    if (onAcceptSuggestion) {
+    if (onAcceptSuggestion && suggestion.id) {
       await onAcceptSuggestion(suggestion.id)
     } else {
       onUpdate(suggestion.suggested_content)
@@ -201,7 +291,11 @@ export default function BulletEditor({
           </button>
           <button
             type="button"
-            onClick={() => void runAction((suggestion.edit_type ?? "rewrite") as ActionType)}
+            onClick={() =>
+              suggestion.edit_type === "quantify"
+                ? void startQuantify()
+                : void runAction((suggestion.edit_type ?? "rewrite") as ActionType)
+            }
             className="rounded-2xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-700 transition hover:bg-white"
           >
             Regenerate
@@ -222,6 +316,73 @@ export default function BulletEditor({
             ))}
           </div>
         )}
+      </div>
+    )
+  }
+
+  if (mode === "quantify-questions") {
+    return (
+      <div className="rounded-2xl border border-[#BAE6FD] bg-[#F5FBFF] p-4">
+        <div className="flex items-start gap-2">
+          <Sigma className="mt-0.5 h-4 w-4 text-[#0369A1]" />
+          <div>
+            <p className="text-sm font-semibold text-[#0C4A6E]">Add your real numbers</p>
+            <p className="mt-0.5 text-xs leading-5 text-gray-500">
+              Answer what you can — skip anything you don&apos;t track. We only use the numbers
+              you provide and never invent any.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs leading-5 text-gray-500 line-through decoration-gray-300">
+          {content}
+        </p>
+
+        <div className="mt-3 space-y-3">
+          {questions.map((q) => (
+            <label key={q.id} className="block">
+              <span className="text-xs font-medium text-gray-700">{q.label}</span>
+              <input
+                type="text"
+                value={answers[q.id] ?? ""}
+                onChange={(event) =>
+                  setAnswers((prev) => ({ ...prev, [q.id]: event.target.value }))
+                }
+                placeholder={q.hint}
+                className="mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none transition focus:border-[#BAE6FD]"
+              />
+            </label>
+          ))}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              void submitQuantify(
+                questions.map((q) => ({ label: q.label, value: answers[q.id] ?? "" }))
+              )
+            }
+            className="inline-flex items-center gap-2 rounded-2xl bg-[#0369A1] px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-[#075985]"
+          >
+            <Check className="h-4 w-4" />
+            Rewrite with my numbers
+          </button>
+          <button
+            type="button"
+            onClick={() => void submitQuantify([])}
+            className="rounded-2xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 transition hover:bg-white"
+          >
+            Skip — rewrite without numbers
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("view")}
+            className="rounded-2xl border border-gray-200 px-3.5 py-2 text-sm font-medium text-gray-600 transition hover:bg-white"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     )
   }
@@ -296,7 +457,7 @@ export default function BulletEditor({
                 key={label}
                 type="button"
                 title={label}
-                onClick={() => void runAction(action)}
+                onClick={() => (action === "quantify" ? void startQuantify() : void runAction(action))}
                 className={cn(
                   "rounded-xl border border-gray-200 bg-white p-2 text-gray-500 transition hover:border-[#BAE6FD] hover:text-[#0C4A6E]",
                   label === "Keywords" && missingKeywords.length === 0 && "opacity-50"
