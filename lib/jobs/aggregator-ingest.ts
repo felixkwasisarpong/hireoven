@@ -132,6 +132,10 @@ export async function ingestAggregatorJobs(
   for (const job of rawJobs) {
     if (!job.id || !job.applyUrl) continue
     if (!isValidCompanyName(job.company)) continue
+    // Reject corrupted feed titles like "coal158004195" (one lowercase word glued to
+    // a long digit run, no spaces) and empty titles — they pollute search/skill-gap.
+    const titleTrim = (job.title ?? "").trim()
+    if (!titleTrim || /^[a-z]+\d{4,}$/.test(titleTrim)) continue
     if (!seen.has(job.id)) seen.set(job.id, job)
   }
   stats.fetched = seen.size
