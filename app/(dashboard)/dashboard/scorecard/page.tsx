@@ -5,7 +5,7 @@ import { getOrComputePersonalScorecard } from "@/lib/scorecard/personal-scorecar
 import { PersonalScorecardHero } from "@/components/scorecard/PersonalScorecardHero"
 import { PersonalScorecardBreakdown } from "@/components/scorecard/PersonalScorecardBreakdown"
 import { ShareControls } from "@/components/scorecard/ShareControls"
-import { EmbedCodeGenerator } from "@/components/embed/EmbedCodeGenerator"
+import { ShareEmbedSection } from "@/components/scorecard/ShareEmbedSection"
 import { ResumeRequiredEmptyState } from "@/components/scorecard/ResumeRequiredEmptyState"
 
 export const dynamic = "force-dynamic"
@@ -19,21 +19,30 @@ export default async function MyScorecardPage() {
   if (!user) redirect("/login?next=/dashboard/scorecard")
 
   const card = await getOrComputePersonalScorecard(user.sub)
+  const year = new Date().getFullYear()
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-8">
-      {card ? (
-        <>
-          <PersonalScorecardHero card={card} />
-          <PersonalScorecardBreakdown card={card} />
-          <ShareControls card={card} />
-          {card.is_public && card.share_token && (
-            <EmbedCodeGenerator shareToken={card.share_token} />
-          )}
-        </>
-      ) : (
-        <ResumeRequiredEmptyState />
-      )}
-    </main>
+    <div className="min-h-full bg-[#f4f6f9]">
+      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
+        {card ? (
+          <>
+            <PersonalScorecardHero card={card} />
+            <PersonalScorecardBreakdown card={card} />
+            {card.is_public && card.share_token ? (
+              <ShareEmbedSection card={card} shareToken={card.share_token} hue={card.result.bucket.hue} />
+            ) : (
+              <div className="mt-6">
+                <ShareControls card={card} />
+              </div>
+            )}
+            <footer className="mt-10 text-center text-xs text-slate-400">
+              © {year} Hireoven, Inc. All rights reserved.
+            </footer>
+          </>
+        ) : (
+          <ResumeRequiredEmptyState />
+        )}
+      </main>
+    </div>
   )
 }
