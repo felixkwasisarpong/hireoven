@@ -1,6 +1,6 @@
 import { headers } from "next/headers"
 import { getPublicPersonalScorecard } from "@/lib/scorecard/personal-scorecard"
-import { resolveEmbedToken, hashSubject } from "@/lib/embed/tokens"
+import { resolveEmbedToken, resolveAttribution, resolveAccent, hashSubject } from "@/lib/embed/tokens"
 import { logEmbedImpression } from "@/lib/embed/log"
 import { resolveTheme } from "@/lib/embed/themes"
 import { PersonalScorecardWidget, UnavailableWidget } from "@/components/embed/PersonalScorecardWidget"
@@ -21,8 +21,10 @@ export default async function PersonalScorecardEmbed({
 }) {
   const { share_token } = await params
   const theme = resolveTheme(searchParams.theme)
-  const token = await resolveEmbedToken(searchParams.token)
-  const showAttribution = token ? token.showAttribution : true
+  const attrKey = searchParams.attribution_key ?? searchParams.token ?? null
+  const token = await resolveEmbedToken(attrKey)
+  const showAttribution = resolveAttribution(token, searchParams.attribution)
+  const accent = resolveAccent(token, searchParams.accent)
 
   const data = await getPublicPersonalScorecard(share_token)
 
@@ -43,9 +45,11 @@ export default async function PersonalScorecardEmbed({
     <PersonalScorecardWidget
       data={data}
       theme={theme}
+      accent={accent}
       showAttribution={showAttribution}
       baseUrl={BASE}
       shareToken={share_token}
+      attributionKey={attrKey}
     />
   )
 }

@@ -1,6 +1,6 @@
 import { headers } from "next/headers"
 import { getCompanyScorecard } from "@/lib/h1b/scorecard-query"
-import { resolveEmbedToken } from "@/lib/embed/tokens"
+import { resolveEmbedToken, resolveAttribution, resolveAccent } from "@/lib/embed/tokens"
 import { logEmbedImpression } from "@/lib/embed/log"
 import { resolveTheme, tokensFor } from "@/lib/embed/themes"
 import { CompanyScorecardWidget } from "@/components/embed/CompanyScorecardWidget"
@@ -25,8 +25,10 @@ export default async function CompanyScorecardEmbed({
 }) {
   const { company_id } = await params
   const theme = resolveTheme(searchParams.theme)
-  const token = await resolveEmbedToken(searchParams.token)
-  const showAttribution = token ? token.showAttribution : true
+  const attrKey = searchParams.attribution_key ?? searchParams.token ?? null
+  const token = await resolveEmbedToken(attrKey)
+  const showAttribution = resolveAttribution(token, searchParams.attribution)
+  const accent = resolveAccent(token, searchParams.accent)
 
   const h = headers()
   logEmbedImpression({
@@ -41,7 +43,7 @@ export default async function CompanyScorecardEmbed({
   if (!data) {
     const t = tokensFor(theme)
     return (
-      <WidgetShell theme={theme} href="/h1b-sponsors/leaderboard" showAttribution baseUrl={BASE}>
+      <WidgetShell theme={theme} href="/h1b-sponsors/leaderboard" showAttribution baseUrl={BASE} widgetType="company-scorecard">
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", textAlign: "center" }}>
           <div style={{ fontSize: 14, fontWeight: 700 }}>No scorecard yet</div>
           <div style={{ fontSize: 12.5, color: t.muted, maxWidth: 280 }}>
@@ -52,5 +54,14 @@ export default async function CompanyScorecardEmbed({
     )
   }
 
-  return <CompanyScorecardWidget data={data} theme={theme} showAttribution={showAttribution} baseUrl={BASE} />
+  return (
+    <CompanyScorecardWidget
+      data={data}
+      theme={theme}
+      accent={accent}
+      showAttribution={showAttribution}
+      baseUrl={BASE}
+      attributionKey={attrKey}
+    />
+  )
 }

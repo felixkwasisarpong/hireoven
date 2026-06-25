@@ -1,5 +1,6 @@
 import { randomBytes, createHash } from "crypto"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { sanitizeAccent } from "./themes"
 
 // Embed-token layer (Spec 07). A token is OPTIONAL on a widget URL — public
 // widgets render with attribution for anyone. A valid token tied to a paid tier
@@ -59,6 +60,28 @@ export async function resolveEmbedToken(token: string | null | undefined): Promi
     if (code === "42P01" || code === "42703") return null
     throw e
   }
+}
+
+// Whether the "Powered by Hireoven" footer must show. Free tier (or no token) →
+// always true. A paid token may suppress it via its show_attribution setting or an
+// explicit ?attribution=false. Enforced here, never trusted from the URL alone.
+export function resolveAttribution(
+  token: EmbedTokenRecord | null,
+  attributionParam: string | null | undefined
+): boolean {
+  if (!token || token.tier === "free") return true
+  if (attributionParam === "false") return false
+  return token.showAttribution
+}
+
+// A caller-supplied accent (?accent=#hex) is honored only for paid-tier tokens and
+// only when well-formed. Free tier / bad value → null (use the widget default).
+export function resolveAccent(
+  token: EmbedTokenRecord | null,
+  accentParam: string | null | undefined
+): string | null {
+  if (!token || token.tier === "free") return null
+  return sanitizeAccent(accentParam)
 }
 
 // Whether a resolved token permits the given referer origin. No allowlist = any origin.

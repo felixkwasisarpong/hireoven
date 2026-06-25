@@ -1,6 +1,6 @@
 import { headers } from "next/headers"
 import { getH1bLeaderboard, type LeaderboardFilters } from "@/lib/h1b/leaderboard"
-import { resolveEmbedToken } from "@/lib/embed/tokens"
+import { resolveEmbedToken, resolveAttribution, resolveAccent } from "@/lib/embed/tokens"
 import { logEmbedImpression } from "@/lib/embed/log"
 import { resolveTheme } from "@/lib/embed/themes"
 import { LeaderboardWidget } from "@/components/embed/LeaderboardWidget"
@@ -16,8 +16,10 @@ const STATE_RE = /^[A-Za-z]{2}$/
 
 export default async function LeaderboardEmbed({ searchParams }: { searchParams: SearchParams }) {
   const theme = resolveTheme(searchParams.theme)
-  const token = await resolveEmbedToken(searchParams.token)
-  const showAttribution = token ? token.showAttribution : true
+  const attrKey = searchParams.attribution_key ?? searchParams.token ?? null
+  const token = await resolveEmbedToken(attrKey)
+  const showAttribution = resolveAttribution(token, searchParams.attribution)
+  const accent = resolveAccent(token, searchParams.accent)
 
   const limit = Math.min(Math.max(Number(searchParams.limit) || 10, 3), 15)
   const state = searchParams.state && STATE_RE.test(searchParams.state) ? searchParams.state.toUpperCase() : undefined
@@ -41,10 +43,12 @@ export default async function LeaderboardEmbed({ searchParams }: { searchParams:
     <LeaderboardWidget
       rows={results}
       theme={theme}
+      accent={accent}
       showAttribution={showAttribution}
       baseUrl={BASE}
       title={title}
       href={href}
+      attributionKey={attrKey}
     />
   )
 }

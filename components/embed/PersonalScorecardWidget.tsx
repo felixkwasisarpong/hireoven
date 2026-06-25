@@ -16,20 +16,32 @@ const COMPONENTS: Array<{ key: keyof PublicPersonalScorecard["components"]; labe
 export function PersonalScorecardWidget({
   data,
   theme,
+  accent,
   showAttribution,
   baseUrl,
   shareToken,
+  attributionKey,
 }: {
   data: PublicPersonalScorecard
   theme: EmbedTheme
+  accent?: string | null
   showAttribution: boolean
   baseUrl: string
   shareToken: string
+  attributionKey?: string | null
 }) {
   const t = tokensFor(theme)
   const hex = gradeColor(data.bucket.hue)
   return (
-    <WidgetShell theme={theme} href={`/s/${shareToken}`} showAttribution={showAttribution} baseUrl={baseUrl}>
+    <WidgetShell
+      theme={theme}
+      accent={accent}
+      href={`/scorecard/${shareToken}`}
+      showAttribution={showAttribution}
+      baseUrl={baseUrl}
+      widgetType="personal-scorecard"
+      attributionKey={attributionKey}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <ScoreRing grade={data.bucket.grade} hex={hex} sub={`${data.total_score}/100`} />
         <div style={{ display: "flex", flexDirection: "column", minWidth: 0 }}>
@@ -57,7 +69,7 @@ export function PersonalScorecardWidget({
 export function UnavailableWidget({ theme, baseUrl }: { theme: EmbedTheme; baseUrl: string }) {
   const t = tokensFor(theme)
   return (
-    <WidgetShell theme={theme} href="/dashboard/scorecard" showAttribution baseUrl={baseUrl}>
+    <WidgetShell theme={theme} href="/dashboard/scorecard" showAttribution baseUrl={baseUrl} widgetType="personal-scorecard">
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 8px", textAlign: "center" }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>Scorecard unavailable</div>
         <div style={{ fontSize: 12.5, color: t.muted, maxWidth: 280 }}>

@@ -1,7 +1,8 @@
 // Theme tokens for embeddable widgets (Spec 07). Widgets are standalone iframes,
-// so unlike in-app public pages they own their full color surface and support a
-// caller-chosen light/dark theme. Server-rendered only — no client JS, no CSS vars
-// that depend on a parent stylesheet.
+// so they own their full color surface and support a caller-chosen light/dark/auto
+// theme. Server-rendered only — no client JS. `auto` works via a pure CSS
+// prefers-color-scheme media query (no script), so colors track the visitor's
+// system setting without a re-render.
 
 export type EmbedTheme = "light" | "dark" | "auto"
 
@@ -17,43 +18,82 @@ export interface ThemeTokens {
   link: string
 }
 
-const LIGHT: ThemeTokens = {
-  bg: "#ffffff",
-  panel: "#f8fafc",
-  border: "#e2e8f0",
-  text: "#0f172a",
-  muted: "#475569",
-  faint: "#94a3b8",
-  accent: "#059669",
-  accentText: "#ffffff",
-  link: "#0f766e",
+// All tokens resolve to CSS custom properties scoped to `.ho-embed`; the values are
+// injected per-theme by themeStyle() below. Components keep using inline styles
+// (e.g. background: t.bg) — they just point at vars now, which is what lets `auto`
+// switch with no JS.
+const VAR_TOKENS: ThemeTokens = {
+  bg: "var(--w-bg)",
+  panel: "var(--w-panel)",
+  border: "var(--w-border)",
+  text: "var(--w-text)",
+  muted: "var(--w-muted)",
+  faint: "var(--w-faint)",
+  accent: "var(--w-accent)",
+  accentText: "var(--w-accent-text)",
+  link: "var(--w-link)",
 }
 
-const DARK: ThemeTokens = {
-  bg: "#0b1220",
-  panel: "#111c30",
-  border: "rgba(148,163,184,0.18)",
-  text: "#e6edf6",
-  muted: "#9fb0c4",
-  faint: "#64748b",
-  accent: "#34d399",
-  accentText: "#04121f",
-  link: "#5eead4",
+export function tokensFor(_theme?: EmbedTheme): ThemeTokens {
+  return VAR_TOKENS
+}
+
+const LIGHT_VALS: Record<string, string> = {
+  "--w-bg": "#ffffff",
+  "--w-panel": "#f8fafc",
+  "--w-border": "#e2e8f0",
+  "--w-text": "#0f172a",
+  "--w-muted": "#475569",
+  "--w-faint": "#94a3b8",
+  "--w-accent": "#059669",
+  "--w-accent-text": "#ffffff",
+  "--w-link": "#0f766e",
+}
+
+const DARK_VALS: Record<string, string> = {
+  "--w-bg": "#0b1220",
+  "--w-panel": "#111c30",
+  "--w-border": "rgba(148,163,184,0.18)",
+  "--w-text": "#e6edf6",
+  "--w-muted": "#9fb0c4",
+  "--w-faint": "#64748b",
+  "--w-accent": "#34d399",
+  "--w-accent-text": "#04121f",
+  "--w-link": "#5eead4",
+}
+
+function block(vals: Record<string, string>, accent?: string | null): string {
+  const entries = Object.entries(vals).map(([k, v]) => `${k}:${v}`)
+  // A valid paid-tier accent overrides the default accent in every scheme.
+  if (accent) entries.push(`--w-accent:${accent}`)
+  return entries.join(";")
+}
+
+// CSS for a <style> tag scoped to `.ho-embed`. For `auto` we emit light values plus
+// a dark override behind @media (prefers-color-scheme: dark) — no JS.
+export function themeStyle(theme: EmbedTheme, accent?: string | null): string {
+  if (theme === "dark") return `.ho-embed{${block(DARK_VALS, accent)}}`
+  if (theme === "auto") {
+    return `.ho-embed{${block(LIGHT_VALS, accent)}}@media (prefers-color-scheme:dark){.ho-embed{${block(DARK_VALS, accent)}}}`
+  }
+  return `.ho-embed{${block(LIGHT_VALS, accent)}}`
 }
 
 export function resolveTheme(raw: string | null | undefined): EmbedTheme {
   if (raw === "dark" || raw === "light" || raw === "auto") return raw
-  return "light"
+  return "auto"
 }
 
-// For "auto" we render light tokens but emit a <style> media query that swaps the
-// CSS custom properties — see widgetCssVars(). Components read var(--ho-*) so a
-// single render covers both system schemes without client JS.
-export function tokensFor(theme: EmbedTheme): ThemeTokens {
-  return theme === "dark" ? DARK : LIGHT
+// Validate a caller-supplied accent (#rrggbb or #rgb). Returns null if malformed —
+// callers only apply it for paid-tier tokens (see resolveAccent in tokens.ts).
+export function sanitizeAccent(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  const v = raw.trim()
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v) ? v : null
 }
 
-// Grade hue → solid color (shared by personal + company score badges).
+// Grade hue → solid color (semantic; identical in light & dark). Used by score
+// dials and component bars, independent of the chrome accent.
 export const GRADE_HEX: Record<string, string> = {
   emerald: "#10b981",
   green: "#22c55e",

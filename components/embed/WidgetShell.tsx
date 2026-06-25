@@ -1,27 +1,38 @@
 import * as React from "react"
-import { tokensFor, type EmbedTheme } from "@/lib/embed/themes"
+import { tokensFor, themeStyle, type EmbedTheme } from "@/lib/embed/themes"
 
 // Shared chrome for every embeddable widget. Server-rendered, inline styles only —
 // the iframe document does NOT load the app stylesheet, so widgets must be fully
-// self-contained. The attribution footer is mandatory on the free tier and is
-// rendered server-side here (never toggled by client/query input).
+// self-contained. A scoped <style> injects the theme's CSS variables (which is what
+// makes `auto` track prefers-color-scheme with no JS). The attribution footer is
+// mandatory on the free tier and is rendered server-side here.
 
 export function WidgetShell({
   theme,
+  accent,
   href,
   showAttribution,
   baseUrl,
+  widgetType,
+  attributionKey,
   children,
 }: {
   theme: EmbedTheme
+  accent?: string | null
   href: string
   showAttribution: boolean
   baseUrl: string
+  widgetType: string
+  attributionKey?: string | null
   children: React.ReactNode
 }) {
   const t = tokensFor(theme)
+  const utm = `utm_source=embed&utm_medium=${widgetType}&utm_campaign=${attributionKey || "organic"}`
+  const sep = href.includes("?") ? "&" : "?"
+  const fullHref = `${baseUrl}${href}${sep}${utm}`
   return (
     <div
+      className="ho-embed"
       style={{
         fontFamily: 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
         background: t.bg,
@@ -36,11 +47,12 @@ export function WidgetShell({
         WebkitFontSmoothing: "antialiased",
       }}
     >
+      <style dangerouslySetInnerHTML={{ __html: themeStyle(theme, accent) }} />
       {children}
       {showAttribution ? (
         <a
-          href={`${baseUrl}${href}`}
-          target="_blank"
+          href={fullHref}
+          target="_top"
           rel="noopener"
           style={{
             display: "flex",

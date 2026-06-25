@@ -50,8 +50,17 @@ export default function EmbedDocsPage() {
               <code>auto</code> (follows the visitor&rsquo;s system setting).
             </li>
             <li>
-              <code>token</code> — optional partner token. Without one, widgets show a small
-              &ldquo;Powered by Hireoven&rdquo; link (always present on the free tier).
+              <code>attribution_key</code> — optional partner token (<code>pub_…</code>). Ties
+              impressions to your account; required for the paid-tier options below.
+            </li>
+            <li>
+              <code>attribution=false</code> — hide the &ldquo;Powered by Hireoven&rdquo; footer.
+              Honored only with a paid-tier <code>attribution_key</code>; ignored otherwise (the
+              footer is mandatory on the free tier).
+            </li>
+            <li>
+              <code>accent=%23rrggbb</code> — custom accent color, paid tier only. Free tier and
+              malformed values fall back to the default.
             </li>
             <li>
               Set the iframe <code>width</code>/<code>height</code> to fit your layout. Widgets are
@@ -93,6 +102,32 @@ export default function EmbedDocsPage() {
           <Snippet
             code={`<iframe src="${BASE}/embed/v1/personal-scorecard/SHARE_TOKEN?theme=light"\n  width="460" height="320" style="border:0;max-width:100%"\n  loading="lazy" title="My H-1B Scorecard"></iframe>`}
           />
+        </Section>
+
+        <Section id="platforms" title="Where to paste it">
+          <p>The widgets are plain iframes, so they work anywhere that allows embed/HTML blocks:</p>
+          <ul className="list-disc space-y-2 pl-5">
+            <li>
+              <strong>WordPress</strong> — add a <em>Custom HTML</em> block and paste the snippet.
+              (The Classic editor needs the &ldquo;Text&rdquo; tab, not &ldquo;Visual&rdquo;.)
+            </li>
+            <li>
+              <strong>Notion</strong> — paste the iframe <em>src</em> URL on its own line and choose{" "}
+              <em>Create embed</em>.
+            </li>
+            <li>
+              <strong>Webflow / Squarespace / Wix</strong> — use the built-in <em>Embed</em> /{" "}
+              <em>Code</em> element and paste the snippet.
+            </li>
+            <li>
+              <strong>Generic HTML</strong> — paste the snippet directly into your page markup.
+            </li>
+            <li>
+              <strong>GitHub README</strong> — GitHub strips iframes, so embeds don&rsquo;t render
+              there. Link your public scorecard instead:{" "}
+              <code>[My H-1B scorecard](https://hireoven.com/scorecard/SHARE_TOKEN)</code>.
+            </li>
+          </ul>
         </Section>
 
         <Section id="attribution" title="Attribution & usage">

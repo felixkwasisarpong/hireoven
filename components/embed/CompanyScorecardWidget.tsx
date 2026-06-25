@@ -17,13 +17,17 @@ function Stat({ label, value, color }: { label: string; value: string; color: st
 export function CompanyScorecardWidget({
   data,
   theme,
+  accent,
   showAttribution,
   baseUrl,
+  attributionKey,
 }: {
   data: ScorecardPayload
   theme: EmbedTheme
+  accent?: string | null
   showAttribution: boolean
   baseUrl: string
+  attributionKey?: string | null
 }) {
   const t = tokensFor(theme)
   const hex = gradeColor(data.bucket.hue)
@@ -35,7 +39,15 @@ export function CompanyScorecardWidget({
     : null
 
   return (
-    <WidgetShell theme={theme} href={data.scorecard_url} showAttribution={showAttribution} baseUrl={baseUrl}>
+    <WidgetShell
+      theme={theme}
+      accent={accent}
+      href={data.scorecard_url}
+      showAttribution={showAttribution}
+      baseUrl={baseUrl}
+      widgetType="company-scorecard"
+      attributionKey={attributionKey}
+    >
       <div style={{ display: "flex", alignItems: "center", gap: 13 }}>
         <ScoreRing grade={data.bucket.grade} hex={hex} sub={`${data.score}/100`} />
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>

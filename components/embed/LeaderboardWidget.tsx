@@ -8,21 +8,33 @@ import type { LeaderboardRow } from "@/lib/h1b/leaderboard"
 export function LeaderboardWidget({
   rows,
   theme,
+  accent,
   showAttribution,
   baseUrl,
   title,
   href,
+  attributionKey,
 }: {
   rows: LeaderboardRow[]
   theme: EmbedTheme
+  accent?: string | null
   showAttribution: boolean
   baseUrl: string
   title: string
   href: string
+  attributionKey?: string | null
 }) {
   const t = tokensFor(theme)
   return (
-    <WidgetShell theme={theme} href={href} showAttribution={showAttribution} baseUrl={baseUrl}>
+    <WidgetShell
+      theme={theme}
+      accent={accent}
+      href={href}
+      showAttribution={showAttribution}
+      baseUrl={baseUrl}
+      widgetType="leaderboard"
+      attributionKey={attributionKey}
+    >
       <div style={{ display: "flex", flexDirection: "column", gap: 1, marginBottom: 10 }}>
         <div style={{ fontSize: 14, fontWeight: 700 }}>{title}</div>
         <div style={{ fontSize: 11.5, color: t.faint }}>By certified LCA filings · DOL data</div>
