@@ -78,6 +78,15 @@ export default function LeaderboardFilters({
         Exclude active layoffs
       </button>
 
+      <button
+        className={cls(params.get("cap_exempt_only") === "true")}
+        onClick={() =>
+          update("cap_exempt_only", params.get("cap_exempt_only") === "true" ? null : "true")
+        }
+      >
+        Cap-exempt only
+      </button>
+
       {!lockState && (
         <select
           className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600"
