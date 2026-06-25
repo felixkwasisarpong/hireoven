@@ -1,5 +1,19 @@
 # Moving Postgres to its own Hetzner box (for the 200k/day ramp)
 
+> **Pre-funding? Don't buy this yet.** You already pay ~€176/mo (CPX31 €73 + CCX23
+> €103). A dedicated DB box (CCX33 €166/mo) nearly doubles that — not worth it pre-
+> revenue. First do the **free** wins on the existing 16 GB web box, which fix the
+> actual pain (connection limits / 502s aren't a RAM problem yet):
+>   1. **PgBouncer** on the web box (transaction mode) — fixes `too many clients`.
+>   2. **Tune PG for 16 GB:** shared_buffers≈4GB, effective_cache_size≈11GB, aggressive
+>      autovacuum (config below, halve the 32 GB numbers).
+>   3. **Flip `DISCOVER_FROM_DOMAINS_ENABLED=true`** + ramp discovery *gradually* (it's
+>      free — no API cost), watching load. Back off if the box strains.
+> Buy the dedicated box (rest of this doc) only once monitoring shows real RAM/IOPS
+> pressure AND revenue/funding supports it. Aim ~50–80k/day on current hardware first.
+
+
+
 Today PG shares the web box (`powerful-platypus`, **CCX23 / 16 GB / 80 GB**, Ashburn
 us-east, private `10.0.0.2`) with the Next app + MinIO. 16 GB has more headroom than
 feared, but at ~6M jobs/month the DB still wants dedicated RAM/IOPS, and co-location
