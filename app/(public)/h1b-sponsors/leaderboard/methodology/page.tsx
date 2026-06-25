@@ -198,6 +198,82 @@ export default function MethodologyPage() {
           </div>
         </section>
 
+        <section id="salaries" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">H-1B salaries</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              Salary figures are <strong>prevailing wages</strong> from certified DOL Labor Condition
+              Application (LCA) filings. The prevailing wage is the wage an employer commits to pay
+              when filing — it is <strong>not</strong> necessarily what is actually paid, and it
+              excludes bonus, equity, and sign-on.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Wages filed in hourly, weekly, bi-weekly, or monthly units are converted to an annual
+                figure before any statistic is computed; obvious data errors (outside ~$15k–$1M) are
+                dropped.
+              </li>
+              <li>
+                We show the <strong>median</strong> (p50) with the 25th and 75th percentiles, never a
+                mean — wage distributions are skewed, and the median resists outliers.
+              </li>
+              <li>
+                Every statistic shows its <strong>sample size</strong> and fiscal-year range. We do
+                not display a median computed from fewer than <strong>5 filings</strong> — those read
+                &ldquo;insufficient public data&rdquo; instead.
+              </li>
+              <li>Wage levels (I–IV) reflect the experience tier the employer filed under.</li>
+              <li>No individual filing records are shown — aggregates only. Refreshed nightly.</li>
+            </ul>
+            <p>
+              Company-scoped pages cover employers we&rsquo;ve matched to filings; role and state
+              pages aggregate all certified filings, matched or not.
+            </p>
+          </div>
+        </section>
+
+        <section id="cap-exempt" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">Cap-exempt classification</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              Under INA 214(g)(5), institutions of higher education, affiliated nonprofits, and
+              governmental/nonprofit research organizations can file H-1B petitions outside the
+              annual cap. We classify employers from public signals:
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li><strong>High</strong> — a <code>.edu</code> domain, an unambiguous university name, or a federal research lab.</li>
+              <li><strong>Medium</strong> — &ldquo;College&rdquo; in the name or an education industry.</li>
+              <li><strong>Low</strong> — a research-mission name signal we can&rsquo;t fully confirm. Shown with a &ldquo;verify with employer&rdquo; note.</li>
+            </ul>
+            <p>
+              Re-classified nightly. This is a heuristic, not legal advice — always confirm cap-exempt
+              status with the employer before relying on it for a petition.
+            </p>
+          </div>
+        </section>
+
+        <section id="e-verify" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">E-Verify status</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              E-Verify is the federal employment-eligibility program; enrollment is required for the
+              24-month STEM OPT extension. USCIS publishes participation through a daily-updated{" "}
+              <a
+                href="https://www.e-verify.gov/e-verify-employer-search"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                employer search tool
+              </a>
+              , not a bulk download, so we surface E-Verify only on employers we can match by exact
+              normalized name (no fuzzy matching — a false flag could harm a STEM OPT case). For any
+              employer not flagged here, check the official tool directly. Enrollment can change
+              between USCIS updates.
+            </p>
+          </div>
+        </section>
+
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}

@@ -19,6 +19,10 @@
 
 import { getPostgresPool } from '@/lib/postgres/server'
 import { companyLogoUrlFromDomain } from '@/lib/companies/logo-url'
+import {
+  isEducationalInstitution,
+  isMedicalOrResearchOrg,
+} from '@/lib/companies/institution-domains'
 
 export const PLACEHOLDER_DOMAIN_SUFFIX_LCA = 'lca-employer'
 export const PLACEHOLDER_DOMAIN_SUFFIX_USCIS = 'uscis-employer'
@@ -48,6 +52,14 @@ export function slugifyEmployer(name: string): string {
 }
 
 export function guessPublicDomain(displayName: string): string | null {
+  // Universities, colleges and hospitals live on .edu/.org, never the naive
+  // ".com" this guesser would emit ("auburn.com" instead of "auburn.edu"). A
+  // wrong .com produces a wrong-brand logo, which is worse than no logo — bail
+  // and let domain enrichment (which probes .edu/.org) resolve the real mark.
+  if (isEducationalInstitution(displayName) || isMedicalOrResearchOrg(displayName)) {
+    return null
+  }
+
   const cleaned = displayName
     .toLowerCase()
     // Lead-in articles before the brand name.

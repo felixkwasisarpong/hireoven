@@ -29,6 +29,8 @@ function parseFilters(sp: SearchParams): LeaderboardFilters {
       sp.layoff_risk === "exclude_active" || sp.layoff_risk === "stable_only"
         ? sp.layoff_risk
         : undefined,
+    cap_exempt_only: sp.cap_exempt_only === "true",
+    e_verify_only: sp.e_verify_only === "true",
     cursor: sp.cursor ? Number(sp.cursor) : undefined,
   }
 }

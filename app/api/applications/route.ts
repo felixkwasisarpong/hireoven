@@ -109,6 +109,14 @@ export async function POST(request: Request) {
   const now = new Date().toISOString()
   const status = body.status ?? "saved"
 
+  // match_score is an integer column — clamp + round so a fractional score
+  // (e.g. from the live match API or feed raw_data) can't 500 the insert.
+  const rawScore = typeof body.matchScore === "string" ? Number(body.matchScore) : body.matchScore
+  const matchScore =
+    typeof rawScore === "number" && Number.isFinite(rawScore)
+      ? Math.max(0, Math.min(100, Math.round(rawScore)))
+      : null
+
   const initialEntry = {
     id: randomUUID(),
     type: "status_change",
@@ -150,7 +158,7 @@ export async function POST(request: Request) {
         body.jobTitle,
         body.applyUrl ?? null,
         status === "applied" ? (body.appliedAt ?? now) : null,
-        body.matchScore ?? null,
+        matchScore,
         body.notes ?? null,
         JSON.stringify([initialEntry]),
         JSON.stringify([]),
