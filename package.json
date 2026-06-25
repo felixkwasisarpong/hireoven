@@ -44,6 +44,8 @@
     "email:milestones:execute": "tsx scripts/email-cron.ts milestones",
     "email:opt-reminders:execute": "tsx scripts/email-cron.ts opt",
     "email:queue-health:execute": "tsx scripts/email-cron.ts health",
+    "embed:refresh-events": "tsx scripts/refresh-embed-events.ts",
+    "embed:refresh-events:execute": "tsx scripts/refresh-embed-events.ts --execute",
     "seed:companies:expansion": "tsx scripts/seed-companies-expansion.ts",
     "seed:companies:expansion:dry-run": "tsx scripts/seed-companies-expansion.ts --dry-run",
     "seed:enterprise-ats": "tsx scripts/seed-enterprise-ats.ts",
