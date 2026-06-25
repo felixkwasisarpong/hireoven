@@ -11,7 +11,23 @@ Current topology:
 - harvester: `panicky-pigeon` CPX31, 8 GB, private `10.0.0.3`
 - **new db box (this doc): private `10.0.0.4`**
 
-## 1. The box
+## 0. Interim option (go live faster, defer the split)
+
+If you'd rather not stand up a new box right now, **resize the web box** —
+**CCX23 → CCX33** (16→32 GB RAM, 80→240 GB local NVMe). One click in Hetzner Cloud
+(power off → change type → power on, ~minutes). You get more RAM *and* bigger fast disk
+together, no data migration.
+
+- This is the right stopgap. It does **not** fix app/PG/MinIO contention or the single
+  point of failure, and the CCX line tops out (~CCX63), so plan the split below for
+  sustained 200k/day.
+- **Do NOT add a Cloud Volume for the DB.** Volumes are network block storage (high
+  latency) — fine for MinIO/backups/cold data, wrong for the hot jobs table. And disk
+  GB is not the bottleneck; RAM/IOPS contention is.
+- Hetzner caveat: the **disk upgrade is irreversible** (CPU/RAM can be downsized later,
+  disk cannot).
+
+## 1. The box (dedicated DB — the proper fix)
 
 Hetzner **Cloud**, **Ashburn (us-east, `ash`)** — same network zone as the existing
 boxes so it joins the existing private network with low latency.
