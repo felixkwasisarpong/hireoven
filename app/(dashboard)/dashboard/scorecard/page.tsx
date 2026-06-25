@@ -5,6 +5,7 @@ import { getOrComputePersonalScorecard } from "@/lib/scorecard/personal-scorecar
 import { PersonalScorecardHero } from "@/components/scorecard/PersonalScorecardHero"
 import { PersonalScorecardBreakdown } from "@/components/scorecard/PersonalScorecardBreakdown"
 import { ShareControls } from "@/components/scorecard/ShareControls"
+import { EmbedCodeGenerator } from "@/components/embed/EmbedCodeGenerator"
 import { ResumeRequiredEmptyState } from "@/components/scorecard/ResumeRequiredEmptyState"
 
 export const dynamic = "force-dynamic"
@@ -26,6 +27,9 @@ export default async function MyScorecardPage() {
           <PersonalScorecardHero card={card} />
           <PersonalScorecardBreakdown card={card} />
           <ShareControls card={card} />
+          {card.is_public && card.share_token && (
+            <EmbedCodeGenerator shareToken={card.share_token} />
+          )}
         </>
       ) : (
         <ResumeRequiredEmptyState />

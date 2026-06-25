@@ -45,6 +45,15 @@ function isCronAlertsPath(pathname: string): boolean {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
+  // Embeddable widget routes (Spec 07) are public, framed cross-origin, and must
+  // not carry app chrome (providers, service worker) or read session cookies. Mark
+  // them so the root layout renders a bare document, and pass through with no auth.
+  if (pathname.startsWith("/embed/v1")) {
+    const headers = new Headers(request.headers)
+    headers.set("x-hireoven-embed", "1")
+    return NextResponse.next({ request: { headers } })
+  }
+
   // We do not use Server Actions. Malformed forwarded action requests without
   // Origin can currently trip a Next 14 runtime error while trying to compute a
   // digest. Reject them before they reach the app renderer.
@@ -130,6 +139,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/admin/:path*",
+    "/embed/v1/:path*",
     "/login",
     "/signup",
     "/api/resume/:path*",

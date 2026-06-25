@@ -47,11 +47,22 @@ const nextConfig = {
         ],
       },
       {
-        source: "/:path*",
+        // Embeddable widgets (Spec 07) are excluded from the negative lookahead
+        // below so they are NOT pinned to SAMEORIGIN; this rule lets any site frame
+        // /embed/v1/* while keeping the rest of the security headers.
+        source: "/embed/v1/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
-          // Allow first-party in-app embeds (Scout side preview drawer), while
-          // still blocking third-party framing.
+          { key: "Content-Security-Policy", value: "frame-ancestors *" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+      {
+        // Everything except /embed/v1/* (negative lookahead). Third-party framing
+        // stays blocked here while first-party in-app embeds (Scout drawer) work.
+        source: "/((?!embed/v1).*)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         ],
