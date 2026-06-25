@@ -10,6 +10,9 @@ import { ScorecardShare } from "@/components/h1b/scorecard/ScorecardShare"
 import { ScorecardMethodologyNote } from "@/components/h1b/scorecard/ScorecardMethodologyNote"
 import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
+import { getCompanyWageBreakdown } from "@/lib/salaries/wage-query"
+import { getSocLabelMap } from "@/lib/salaries/soc-roles"
+import { fmtUsd } from "@/components/salaries/SalaryCard"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 
 async function getPathways(companyId: string) {
@@ -67,6 +70,8 @@ export default async function ScorecardPage({ params }: Props) {
   const data = await getCompanyScorecard(id)
   if (!data) notFound()
   const layoffSignal = await getCompanyLayoffSignal(data.company.id)
+  const wageBreakdown = await getCompanyWageBreakdown(data.company.id)
+  const wageLabels = await getSocLabelMap(wageBreakdown.roles.map((r) => r.soc_group))
   const pathways = await getPathways(data.company.id)
 
   const jsonLd = {
@@ -95,6 +100,35 @@ export default async function ScorecardPage({ params }: Props) {
           <div className="mt-8">
             <LayoffSignalCard signal={layoffSignal} />
           </div>
+        )}
+
+        {wageBreakdown.roles.length > 0 && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+            <h3 className="text-lg font-semibold text-slate-900">H-1B salaries</h3>
+            <p className="mt-1 text-sm text-slate-500">Median prevailing wage by role (filed with the DOL).</p>
+            <ul className="mt-3 space-y-2 text-sm">
+              {wageBreakdown.roles.slice(0, 5).map((r) => {
+                const lbl = wageLabels.get(r.soc_group)
+                return (
+                  <li key={r.soc_group} className="flex items-center justify-between">
+                    {lbl ? (
+                      <Link href={`/h1b-salaries/by-role/${lbl.slug}`} className="text-slate-700 hover:underline">
+                        {lbl.label}
+                      </Link>
+                    ) : (
+                      <span className="text-slate-700">{r.soc_group}</span>
+                    )}
+                    <span className="tabular-nums text-slate-900">
+                      {fmtUsd(r.p50)} <span className="text-xs text-slate-400">n={r.n}</span>
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+            <Link href="/h1b-salaries" className="mt-3 inline-block text-sm font-medium text-slate-600 underline hover:text-slate-900">
+              Explore H-1B salaries →
+            </Link>
+          </section>
         )}
 
         {pathways && (

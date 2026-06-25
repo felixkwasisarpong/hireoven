@@ -4,6 +4,9 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 import { industrySlug } from "@/lib/h1b/leaderboard"
+import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
+
+const SALARY_TOP_STATES = ["CA", "TX", "NY", "WA", "NJ", "MA", "IL", "GA", "PA", "VA"]
 
 export const dynamic = "force-dynamic"
 
@@ -29,6 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/h1b-sponsors/e-verify`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.6 },
     { url: `${base}/h1b-sponsors/lottery-rescue`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/h1b-sponsors/leaderboard/methodology`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
+    { url: `${base}/h1b-salaries`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.85 },
     ...LEADERBOARD_STATES.map((s) => ({
       url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
       lastModified: new Date(),
@@ -111,7 +115,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${base}/jobs/${j.id}`, lastModified: new Date(j.updated_at), changeFrequency: "weekly", priority: 0.6,
     }))
 
-    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...jobRoutes]
+    const salaryRoles = await getFeaturedSocRoles().catch(() => [])
+    const salaryRoleRoutes: MetadataRoute.Sitemap = salaryRoles.flatMap((r) => [
+      { url: `${base}/h1b-salaries/by-role/${r.slug}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.7 },
+      ...SALARY_TOP_STATES.map((s) => ({
+        url: `${base}/h1b-salaries/by-role/${r.slug}/by-state/${s}`,
+        lastModified: new Date(),
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+      })),
+    ])
+
+    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes]
   } catch {
     return staticRoutes
   }
