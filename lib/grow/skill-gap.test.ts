@@ -71,3 +71,38 @@ test("courseFor returns a catalog hit for known skills and a search fallback oth
   assert.match(fallback.url, /coursera\.org\/search/i)
   assert.match(fallback.title, /Obscurelang/)
 })
+
+test("alias-aware: 'JS' matches the user's 'JavaScript' (not a false gap)", () => {
+  const jobs = [
+    job("1", ["JS", "Kubernetes"]),
+    job("2", ["js", "Kubernetes"]),
+    job("3", ["javascript", "Kubernetes"]),
+  ]
+  // User has JavaScript + Kubernetes under different casings/aliases.
+  const r = computeSkillGaps(jobs, ["JavaScript", "k8s"])
+  // No gap should be reported — they already have everything (aliases collapse).
+  assert.equal(r.gaps.find((g) => /javascript/i.test(g.skill)), undefined)
+  assert.equal(r.eligibleNow, 3)
+})
+
+test("collapses golang/Go and postgres/PostgreSQL aliases", () => {
+  const jobs = [job("1", ["golang"]), job("2", ["Go"]), job("3", ["go"])]
+  const r = computeSkillGaps(jobs, [])
+  // All three postings demand the same canonical skill.
+  const go = r.gaps.find((g) => g.skill === "Go")
+  assert.ok(go)
+  assert.equal(go!.jobsRequiring, 3)
+})
+
+test("excludes implausible salaries from the comp signal", () => {
+  const jobs = [
+    job("1", ["React", "Kubernetes"], 200_000),
+    job("2", ["React", "Kubernetes"], 220_000),
+    job("3", ["React", "Kubernetes"], 10_000), // garbage/hourly mis-store — must be dropped
+  ]
+  const r = computeSkillGaps(jobs, ["react"])
+  const k = r.gaps.find((g) => g.skill === "Kubernetes")
+  assert.ok(k)
+  // median of {200k, 220k} = 210k, NOT pulled down by the 10k value.
+  assert.equal(k!.medianSalary, 210_000)
+})
