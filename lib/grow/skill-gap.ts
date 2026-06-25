@@ -10,7 +10,14 @@
  * then attach a course so the recommendation is actionable.
  *
  * Pure + unit-tested; the API does the SQL and auth. Keep it deterministic.
+ *
+ * Matching is alias-aware: both the user's skills and each posting's skills run
+ * through the shared taxonomy (normalizeSkillList / normalizeSkillKey) so "JS" ==
+ * "JavaScript", "golang" == "Go", "postgres" == "PostgreSQL" — otherwise the engine
+ * reports skills the user already has as gaps.
  */
+
+import { canonicalizeSkill, normalizeSkillKey, normalizeSkillList } from "@/lib/skills/taxonomy"
 
 /** A target-role posting reduced to what the engine needs. */
 export type SkillGapJob = {
@@ -55,8 +62,18 @@ export const MIN_JOBS_FOR_GAP = 3
 /** How many gaps to return. */
 export const MAX_GAPS = 8
 
-function normalize(s: string): string {
-  return s.trim().toLowerCase()
+/** Plausible full-time annual salary band — drops hourly/part-time/garbage values
+ *  (e.g. a "10000" or "25" mis-stored as the comp) so the pay signal isn't skewed. */
+export const SALARY_MIN_PLAUSIBLE = 20_000
+export const SALARY_MAX_PLAUSIBLE = 1_000_000
+
+function plausibleSalary(v: number | null): number | null {
+  return v != null && Number.isFinite(v) && v >= SALARY_MIN_PLAUSIBLE && v <= SALARY_MAX_PLAUSIBLE ? v : null
+}
+
+/** Taxonomy-aware comparison key: "JS" and "JavaScript" collapse to one key. */
+function skillKey(s: string): string {
+  return normalizeSkillKey(canonicalizeSkill(s))
 }
 
 function median(values: number[]): number | null {
@@ -111,19 +128,22 @@ const COURSE_CATALOG: Record<string, CatalogEntry> = {
 
 /** A course for any skill — catalog hit when we have one, else a search CTA. */
 export function courseFor(skill: string): CourseSuggestion {
-  const hit = COURSE_CATALOG[normalize(skill)]
+  const label = canonicalizeSkill(skill)
+  const hit = COURSE_CATALOG[skillKey(skill)]
   if (hit) return { provider: hit.provider, title: hit.title, url: withTag(hit.url) }
   return {
     provider: "Coursera",
-    title: `Courses for ${skill}`,
-    url: withTag(`https://www.coursera.org/search?query=${encodeURIComponent(skill)}`),
+    title: `Courses for ${label}`,
+    url: withTag(`https://www.coursera.org/search?query=${encodeURIComponent(label)}`),
   }
 }
 
 // ── Engine ─────────────────────────────────────────────────────────────────────
 
 export function computeSkillGaps(jobs: SkillGapJob[], userSkills: string[]): SkillGapResult {
-  const have = new Set(userSkills.map(normalize).filter(Boolean))
+  // Canonicalize the user's skills (alias-aware, noise-filtered) and key them.
+  const haveLabels = normalizeSkillList(userSkills)
+  const have = new Set(haveLabels.map(normalizeSkillKey))
 
   // Per missing-skill accumulators.
   type Acc = { display: string; jobs: number; oneAway: number; salaries: number[] }
@@ -132,14 +152,17 @@ export function computeSkillGaps(jobs: SkillGapJob[], userSkills: string[]): Ski
   let eligibleNow = 0
 
   for (const job of jobs) {
-    const skills = job.requiredSkills.map((s) => ({ display: s.trim(), key: normalize(s) })).filter((s) => s.key)
-    if (job.salary != null && Number.isFinite(job.salary)) allSalaries.push(job.salary)
+    // Canonical, deduped, noise-filtered posting skills (drops zip codes, "remote",
+    // etc.) and collapsed to canonical labels so aliases match the user's skills.
+    const skills = normalizeSkillList(job.requiredSkills)
+    const salary = plausibleSalary(job.salary)
+    if (salary != null) allSalaries.push(salary)
 
-    // Which listed skills does the user lack? Dedupe by key so a skill listed
-    // twice in one posting isn't counted twice.
-    const missing = new Map<string, string>() // key -> display
-    for (const s of skills) {
-      if (!have.has(s.key) && !missing.has(s.key)) missing.set(s.key, s.display)
+    // Which canonical skills does the user lack?
+    const missing = new Map<string, string>() // key -> canonical label
+    for (const label of skills) {
+      const k = normalizeSkillKey(label)
+      if (k && !have.has(k) && !missing.has(k)) missing.set(k, label)
     }
     if (missing.size === 0) {
       eligibleNow += 1
@@ -151,7 +174,7 @@ export function computeSkillGaps(jobs: SkillGapJob[], userSkills: string[]): Ski
       const acc = gaps.get(key) ?? { display, jobs: 0, oneAway: 0, salaries: [] }
       acc.jobs += 1
       if (isOneAway) acc.oneAway += 1
-      if (job.salary != null && Number.isFinite(job.salary)) acc.salaries.push(job.salary)
+      if (salary != null) acc.salaries.push(salary)
       gaps.set(key, acc)
     }
   }
