@@ -51,6 +51,15 @@ DATABASE_URL=REPLACE_ME
   0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
   0 8 * * 1-5      cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
   0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
+# ── Spec 08 email engine (host-side tsx; reuses the RESEND_* env already set here) ──
+# Reads env from the repo .env via loadEnvConfig. Snapshot must run for ≥2 weeks
+# before the weekly digest shows real movers. Webhook stays on the web box.
+ 40 5 * * *        flock -n /tmp/hireoven-email-snapshot.lock -c 'cd $HIREOVEN_REPO && npm run email:snapshot-ranks:execute >>/var/log/hireoven/email-snapshot.log 2>&1'
+ 5 * * * *         flock -n /tmp/hireoven-email-weekly.lock   -c 'cd $HIREOVEN_REPO && npm run email:weekly:execute        >>/var/log/hireoven/email-weekly.log 2>&1'
+ 5,20,35,50 * * * * flock -n /tmp/hireoven-email-layoff.lock  -c 'cd $HIREOVEN_REPO && npm run email:layoff-alerts:execute >>/var/log/hireoven/email-layoffs.log 2>&1'
+ 15 9 * * *        flock -n /tmp/hireoven-email-milestone.lock -c 'cd $HIREOVEN_REPO && npm run email:milestones:execute   >>/var/log/hireoven/email-milestones.log 2>&1'
+ 20 9 * * *        flock -n /tmp/hireoven-email-opt.lock      -c 'cd $HIREOVEN_REPO && npm run email:opt-reminders:execute >>/var/log/hireoven/email-opt.log 2>&1'
+ 13,43 * * * *     flock -n /tmp/hireoven-email-health.lock   -c 'cd $HIREOVEN_REPO && npm run email:queue-health:execute  >>/var/log/hireoven/email-health.log 2>&1'
  30 8 * * *        flock -n /tmp/hireoven-maintenance.lock -c 'cd $HIREOVEN_REPO && JOB_RETENTION_DAYS=30 JOB_RETENTION_BATCH=5000 JOB_RETENTION_MAX_BATCHES=50 bash scripts/crons.sh nightly-maintenance >>/var/log/hireoven/nightly-maintenance.log 2>&1'
 # Fresh job-board feeds: WAAS + Dice + Adzuna. JSearch stays separate because its API budget is daily.
  15 */6 * * *      flock -n /tmp/hireoven-fresh-ingest.lock -c 'cd $HIREOVEN_REPO && timeout 45m bash scripts/crons.sh fresh-job-ingest >>/var/log/hireoven/fresh-job-ingest.log 2>&1'
