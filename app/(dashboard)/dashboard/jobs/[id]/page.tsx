@@ -160,6 +160,12 @@ function looksLikeNamedSkillToken(token: string): boolean {
   if (NUMERIC_NOISE_RE.test(token)) return false
   if (NON_TECHNICAL_WORD_RE.test(token)) return false
 
+  // Recruiting/tracking hashtags from JD footers (#LI-Hybrid, #KW-1, #BI-Remote)
+  // are noise, never skills. A leading "#" is always a hashtag — the only real
+  // "#" skills (C#, F#) carry the "#" at the end, so the rule below still allows
+  // them.
+  if (token.startsWith("#")) return false
+
   // CamelCase (applies to all domains: HubSpot, Salesforce, QuickBooks, PyTorch)
   if (/^[A-Z][a-z]+[A-Z]/.test(token)) return true
 
