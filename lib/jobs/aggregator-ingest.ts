@@ -182,6 +182,12 @@ export async function ingestAggregatorJobs(
             ),
             m AS (
               SELECT pref.raw, c.id, c.job_count AS jc, (pref.prefix = pref.en) AS is_exact,
+                     (string_to_array(pref.en, ' ') && ARRAY[
+                        'services','service','technologies','technology','solutions','systems',
+                        'software','platforms','platform','group','holdings','holding','labs',
+                        'ventures','partners','consulting','international','global','worldwide',
+                        'industries','enterprises','enterprise','associates','management'
+                     ]::text[]) AS has_conn,
                      row_number() OVER (PARTITION BY pref.raw ORDER BY length(pref.prefix) DESC, c.job_count DESC NULLS LAST) AS rn
               FROM pref
               JOIN companies c ON c.name_normalized = pref.prefix
@@ -190,7 +196,7 @@ export async function ingestAggregatorJobs(
                 AND c.domain IS NOT NULL
                 AND c.domain !~ 'placeholder|discovered|^builtin-|^adzuna-|^dice-|^workable-'
             )
-       SELECT raw, id FROM m WHERE rn = 1 AND (is_exact OR jc > 0)`,
+       SELECT raw, id FROM m WHERE rn = 1 AND (is_exact OR (jc > 0 AND has_conn))`,
       [missing]
     )
     for (const row of norm.rows) if (!companyIdMap.has(row.raw)) companyIdMap.set(row.raw, row.id)
