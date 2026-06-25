@@ -10,6 +10,7 @@ import { ScorecardShare } from "@/components/h1b/scorecard/ScorecardShare"
 import { ScorecardMethodologyNote } from "@/components/h1b/scorecard/ScorecardMethodologyNote"
 import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
+import { WatchButton } from "@/components/watch/WatchButton"
 
 export const revalidate = 86400
 
@@ -74,6 +75,9 @@ export default async function ScorecardPage({ params }: Props) {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+        <div className="mb-4 flex justify-end">
+          <WatchButton companyId={data.company.id} />
+        </div>
         <ScorecardHero data={data} />
         <ScorecardStats data={data} />
         {layoffSignal && (
