@@ -25,9 +25,36 @@ function shortDate(date = new Date()): string {
   return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" }).format(date)
 }
 
+// Global "biggest movers" from week-over-week rank snapshots — the same for every
+// user, so the send cron computes it once and passes it in. Returns undefined until
+// there are two consecutive weeks of snapshots to diff.
+export async function getWeeklyMovers(now = new Date()): Promise<WeeklyDigestData["movers"] | undefined> {
+  if (!hasPostgresEnv()) return undefined
+  const pool = getPostgresPool()
+  const cur = isoWeek(now)
+  const prev = prevIsoWeek(now)
+  const { rows } = await pool.query<{ name: string; delta: number }>(
+    `SELECT c.name, (p.rank_volume - cu.rank_volume) AS delta
+     FROM leaderboard_rank_history cu
+     JOIN leaderboard_rank_history p ON p.company_id = cu.company_id AND p.iso_week = $2
+     JOIN companies c ON c.id = cu.company_id
+     WHERE cu.iso_week = $1 AND cu.rank_volume IS NOT NULL AND p.rank_volume IS NOT NULL
+       AND p.rank_volume <> cu.rank_volume
+     ORDER BY ABS(p.rank_volume - cu.rank_volume) DESC
+     LIMIT 200`,
+    [cur, prev]
+  )
+  if (!rows.length) return undefined
+  const risers = rows.filter((r) => r.delta > 0).sort((a, b) => b.delta - a.delta).slice(0, 3)
+  const fallers = rows.filter((r) => r.delta < 0).sort((a, b) => a.delta - b.delta).slice(0, 3)
+  if (!risers.length && !fallers.length) return undefined
+  return { risers, fallers }
+}
+
 export async function generateWeeklyDigest(
   userId: string,
-  unsubscribeUrl: string
+  unsubscribeUrl: string,
+  movers?: WeeklyDigestData["movers"]
 ): Promise<WeeklyDigestData | null> {
   if (!hasPostgresEnv()) return null
   const pool = getPostgresPool()
@@ -104,8 +131,10 @@ export async function generateWeeklyDigest(
   )
   if (ed.rows[0]) editorial = ed.rows[0]
 
-  // NEVER send an empty digest.
-  const hasContent = Boolean(scorecard) || (watched?.length ?? 0) > 0 || (layoffs?.length ?? 0) > 0
+  const hasMovers = Boolean(movers && (movers.risers.length || movers.fallers.length))
+
+  // NEVER send an empty digest. Movers alone is the acceptable "generic" version.
+  const hasContent = Boolean(scorecard) || (watched?.length ?? 0) > 0 || (layoffs?.length ?? 0) > 0 || hasMovers
   if (!hasContent) return null
 
   // Dynamic subject — lead with the single most interesting fact.
@@ -126,6 +155,7 @@ export async function generateWeeklyDigest(
     preheader: "Your weekly H-1B sponsorship brief.",
     scorecard,
     watched,
+    movers: hasMovers ? movers : undefined,
     layoffs,
     editorial,
     unsubscribeUrl,

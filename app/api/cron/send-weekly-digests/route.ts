@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { generateWeeklyDigest, isoWeek } from "@/lib/email/digests/weekly"
+import { generateWeeklyDigest, getWeeklyMovers, isoWeek } from "@/lib/email/digests/weekly"
 import { renderWeeklyDigest } from "@/lib/email/templates/weekly-digest"
 import { generateUnsubscribeToken } from "@/lib/email/unsubscribe"
 import { unsubscribeUrl, unsubscribePostUrl } from "@/lib/email/templates/layout"
@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
   const week = isoWeek(now)
   const pool = getPostgresPool()
 
+  // Global movers — computed once, shared by every digest this run.
+  const movers = await getWeeklyMovers(now)
+
   // Opted-in users only (explicit prefs row with weekly_digest = true).
   const { rows } = await pool.query<{
     user_id: string
@@ -74,7 +77,7 @@ export async function GET(request: NextRequest) {
     considered++
 
     const token = await generateUnsubscribeToken(u.user_id, "weekly_digest")
-    const data = await generateWeeklyDigest(u.user_id, unsubscribeUrl(token))
+    const data = await generateWeeklyDigest(u.user_id, unsubscribeUrl(token), movers)
     if (!data) {
       skippedEmpty++
       continue
