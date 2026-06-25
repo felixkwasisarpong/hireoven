@@ -163,9 +163,42 @@ export async function ingestAggregatorJobs(
     if (logoUrl && shouldBackfillLogo(row.logo_url)) logoBackfills.set(row.id, logoUrl)
   }
 
-  // Create companies for unknowns — ATS enrollment first, then placeholder.
+  // Before creating anything, resolve unknowns against EXISTING companies by
+  // normalized name (strip legal suffixes + punctuation) and whole-word leading
+  // token — e.g. "amazon.com services llc" -> "Amazon", "microsoft corporation" ->
+  // "Microsoft". This stops aggregators from spawning duplicate *.placeholder rows
+  // for companies we already have. Exact-normalized links unconditionally; the
+  // shorter leading-token only links to an established company (job_count > 0) to
+  // avoid brand-prefix false matches.
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
-  for (const normName of missing) {
+  if (missing.length > 0) {
+    const norm = await pool.query<{ raw: string; id: string }>(
+      `WITH input AS (SELECT DISTINCT unnest($1::text[]) AS raw),
+            norm AS (SELECT raw, company_name_norm(raw) AS en FROM input WHERE company_name_norm(raw) <> ''),
+            pref AS (
+              SELECT raw, en, array_to_string((string_to_array(en, ' '))[1:k], ' ') AS prefix
+              FROM norm, generate_series(1, 5) AS k
+              WHERE array_length(string_to_array(en, ' '), 1) >= k
+            ),
+            m AS (
+              SELECT pref.raw, c.id, c.job_count AS jc, (pref.prefix = pref.en) AS is_exact,
+                     row_number() OVER (PARTITION BY pref.raw ORDER BY length(pref.prefix) DESC, c.job_count DESC NULLS LAST) AS rn
+              FROM pref
+              JOIN companies c ON c.name_normalized = pref.prefix
+              WHERE length(pref.prefix) >= 4
+                AND c.is_active = true
+                AND c.domain IS NOT NULL
+                AND c.domain !~ 'placeholder|discovered|^builtin-|^adzuna-|^dice-|^workable-'
+            )
+       SELECT raw, id FROM m WHERE rn = 1 AND (is_exact OR jc > 0)`,
+      [missing]
+    )
+    for (const row of norm.rows) if (!companyIdMap.has(row.raw)) companyIdMap.set(row.raw, row.id)
+  }
+
+  // Create companies only for what's still genuinely unknown.
+  const stillMissing = companyNames.filter((n) => !companyIdMap.has(n))
+  for (const normName of stillMissing) {
     const sample = byCompany.get(normName)![0]!
     const logoUrl = resolvedLogoForJob(sample)
     try {
