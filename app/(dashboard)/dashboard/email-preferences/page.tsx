@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth/session-user"
 import { getUserEmailPreferences } from "@/lib/email/preferences"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { EmailPreferencesClient } from "@/components/email/EmailPreferencesClient"
+import { SubscribeDigestBanner } from "@/components/email/SubscribeDigestBanner"
 
 export const dynamic = "force-dynamic"
 
@@ -27,6 +28,7 @@ export default async function EmailPreferencesPage() {
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Email preferences</h1>
         <p className="mt-1 text-sm text-slate-500">Changes save automatically.</p>
+        <SubscribeDigestBanner className="mt-5" />
         <EmailPreferencesClient initialPrefs={prefs} watched={watched} />
       </main>
     </div>
