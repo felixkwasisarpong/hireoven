@@ -47,24 +47,31 @@ npx tsx scripts/render-email-previews.ts   # writes /tmp/email-previews/*.html
 Open each in Gmail (web + mobile), Apple Mail, and Outlook. Read every visible
 string. The plain-text body is printed to stdout — confirm it matches.
 
-## 5. Cron schedule (harvester box crontab — only after 1–4 pass)
+## 5. Cron schedule (HARVESTER box — runs the work off the web box)
+
+The email jobs run as `npm run …:execute` tsx scripts **on the harvester box** (8GB),
+not as web-app HTTP routes — DB reads + Resend sends stay off the 4GB web box. The
+harvester needs the same env as the web app (`DATABASE_URL`, `RESEND_API_KEY`,
+`RESEND_FROM_EMAIL`, `NEXT_PUBLIC_APP_URL`, `MAIL_PHYSICAL_ADDRESS`).
 
 ```cron
+# Leaderboard rank snapshot — daily (feeds week-over-week movers; run for ≥2 weeks first)
+30 5 * * *   cd $HIREOVEN_REPO && npm run email:snapshot-ranks:execute  >>/var/log/hireoven/email-snapshot.log 2>&1
 # Weekly digest — hourly (timezone-local 8am per user)
-0 * * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/send-weekly-digests
-# Leaderboard rank snapshot — daily (feeds week-over-week movers)
-30 5 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/snapshot-leaderboard-ranks
+0 * * * *    cd $HIREOVEN_REPO && npm run email:weekly:execute          >>/var/log/hireoven/email-weekly.log 2>&1
 # Layoff alerts — every 15 min (24h debounce inside)
-*/15 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/send-layoff-alerts
+*/15 * * * * cd $HIREOVEN_REPO && npm run email:layoff-alerts:execute   >>/var/log/hireoven/email-layoffs.log 2>&1
 # Scorecard view milestones — daily
-15 9 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/scorecard-milestones
+15 9 * * *   cd $HIREOVEN_REPO && npm run email:milestones:execute      >>/var/log/hireoven/email-milestones.log 2>&1
 # OPT / STEM-OPT expiration reminders — daily
-20 9 * * *  curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/send-opt-reminders
+20 9 * * *   cd $HIREOVEN_REPO && npm run email:opt-reminders:execute   >>/var/log/hireoven/email-opt.log 2>&1
 # Queue health / reaper — every 30 min
-*/30 * * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" https://hireoven.com/api/cron/email-queue-health
+*/30 * * * * cd $HIREOVEN_REPO && npm run email:queue-health:execute    >>/var/log/hireoven/email-health.log 2>&1
 ```
-The **Lottery Brief** is a deliberate manual one-off (no cron) — send it by hand in
-late March / early April.
+
+Only `/api/webhooks/email` stays on the web box (Resend calls it). The **Lottery
+Brief** is a deliberate manual one-off (no cron) — send it by hand in late March /
+early April.
 
 ## 6. Launch sequence (don't blast existing users)
 
