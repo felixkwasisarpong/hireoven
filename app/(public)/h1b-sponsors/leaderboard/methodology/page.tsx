@@ -169,6 +169,40 @@ export default function MethodologyPage() {
           </div>
         </section>
 
+        <section id="salaries" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">H-1B salaries</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              Salary figures are <strong>prevailing wages</strong> from certified DOL Labor Condition
+              Application (LCA) filings. The prevailing wage is the wage an employer commits to pay
+              when filing — it is <strong>not</strong> necessarily what is actually paid, and it
+              excludes bonus, equity, and sign-on.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Wages filed in hourly, weekly, bi-weekly, or monthly units are converted to an annual
+                figure before any statistic is computed; obvious data errors (outside ~$15k–$1M) are
+                dropped.
+              </li>
+              <li>
+                We show the <strong>median</strong> (p50) with the 25th and 75th percentiles, never a
+                mean — wage distributions are skewed, and the median resists outliers.
+              </li>
+              <li>
+                Every statistic shows its <strong>sample size</strong> and fiscal-year range. We do
+                not display a median computed from fewer than <strong>5 filings</strong> — those read
+                &ldquo;insufficient public data&rdquo; instead.
+              </li>
+              <li>Wage levels (I–IV) reflect the experience tier the employer filed under.</li>
+              <li>No individual filing records are shown — aggregates only. Refreshed nightly.</li>
+            </ul>
+            <p>
+              Company-scoped pages cover employers we&rsquo;ve matched to filings; role and state
+              pages aggregate all certified filings, matched or not.
+            </p>
+          </div>
+        </section>
+
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}
