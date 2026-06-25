@@ -1,16 +1,27 @@
 /**
- * Merge active companies that share the same normalized name but live under
- * different domains — only when one of the domains is clearly low-quality
- * (mangled synthetic, apex placeholder, USCIS-employer, ATS tenant) and the
- * other is a real-looking domain.
+ * Merge active companies that refer to the same employer but live under
+ * different domains — only when one domain is clearly low-quality (apex/`.placeholder`,
+ * `*-discovered` stub, USCIS-employer, or hosted-ATS tenant host) and the other
+ * is a real-looking domain.
+ *
+ * Rows are clustered by union-find over two keys, so a pair links even when the
+ * NAMES differ:
+ *   • normalized name slug ("Acme Inc" ~ "Acme"), and
+ *   • a domain-derived brand token — the ATS tenant / discovered slug
+ *     ("wgu" from wgu.wd5.myworkdayjobs.com or zigabyte.bamboohr-discovered)
+ *     matched against the real brand domain's host ("wgu" from wgu.edu).
+ * This catches abbreviation↔fullname dups ("Wgu" ↔ "Western Governors University")
+ * that pure name-slug clustering missed.
  *
  * Ambiguous clusters (two real-looking domains, e.g. snyk.com vs snyk.io) are
  * NOT merged automatically — they're printed for manual review.
  *
- * Same merge mechanics as scripts/dedupe-ats-domain-companies.ts:
- *   1. Drop dup-side jobs whose external_id already exists for the canonical.
- *   2. Repoint jobs + watchlist + other FK tables.
- *   3. Mark dup row is_active=false, duplicate_of_company_id=canonical.id.
+ * Merge mechanics:
+ *   1. Migrate harvest config onto the canonical when it lacks one and the dup
+ *      has it (so deactivating the dup doesn't stop the only real crawl).
+ *   2. Drop dup-side jobs whose external_id already exists for the canonical.
+ *   3. Repoint jobs + watchlist + other FK tables.
+ *   4. Mark dup row is_active=false, duplicate_of_company_id=canonical.id.
  *
  * Usage:
  *   npx tsx scripts/dedupe-name-based-companies.ts
@@ -24,6 +35,13 @@ loadEnvConfig(process.cwd())
 
 const args = process.argv.slice(2)
 const execute = args.includes("--execute")
+// Restrict execution to the highest-confidence PATH-1 ATS/placeholder
+// consolidations (exact brand-token match, single real domain).
+const atsOnly = args.includes("--ats-only")
+// Only merge clusters whose dup side actually carries jobs (a meaningful
+// consolidation) — skips empty-stub dups for a first conservative batch.
+const minDupJobsArg = args.find((a) => a.startsWith("--min-dup-jobs="))
+const minDupJobs = minDupJobsArg ? Number(minDupJobsArg.split("=")[1]) || 0 : 0
 
 function nameSlug(name: string): string {
   return name
@@ -36,8 +54,10 @@ type Row = {
   id: string
   name: string
   domain: string
+  ats_identifier: string | null
   job_count: number
   slug: string
+  brand: string | null
 }
 
 function hostOf(domain: string): string {
@@ -46,15 +66,80 @@ function hostOf(domain: string): string {
     .replace(/\.(com|org|net|io|co|ai|edu|gov)$/, "")
 }
 
+// Synthetic "*.<provider>-discovered" / "*.placeholder" suffixes minted by the
+// discovery pipeline when a company is found via an ATS tenant or aggregator
+// before its real domain is resolved. Mirrors CompanyLogo's PLACEHOLDER_DOMAIN_RE.
+// Matches every synthetic-suffix shape the discovery pipeline mints:
+//   *.placeholder / *.apex-placeholder / *.<provider>.ats-placeholder
+//   *.<provider>-discovered / *.<provider>.discovered
+//   *.uscis-employer / *.lca-employer
+const PLACEHOLDER_SUFFIX_RE = /[.-]placeholder$|[.-]discovered$|\.(uscis|lca)-employer$/i
+
+// Hosted-ATS domains where the leading label is the tenant (brand) slug.
+// Each entry's capture group 1 is the tenant token (e.g. wgu.wd5.myworkdayjobs.com → "wgu").
+const ATS_HOST_RES: RegExp[] = [
+  /^([a-z0-9-]+)\.wd\d+\.myworkdayjobs\.com$/i,
+  /^([a-z0-9-]+)\.greenhouse\.io$/i,
+  /^([a-z0-9-]+)\.smartrecruiters\.com$/i,
+  /^([a-z0-9-]+)\.applytojob\.com$/i,
+  /^([a-z0-9-]+)\.bamboohr\.com$/i,
+  /^([a-z0-9-]+)\.recruitee\.com$/i,
+  /^([a-z0-9-]+)\.teamtailor\.com$/i,
+  /^([a-z0-9-]+)\.icims\.com$/i,
+]
+
+function isAtsHostDomain(domain: string): boolean {
+  return ATS_HOST_RES.some((re) => re.test(domain))
+}
+
 function isLowQuality(row: Row): boolean {
   const d = row.domain.toLowerCase()
-  if (d.endsWith(".apex-placeholder")) return true
-  if (d.endsWith(".uscis-employer") || d.endsWith(".lca-employer")) return true
-  if (/\.wd\d+\.myworkdayjobs\.com$/.test(d)) return true
-  if (d.endsWith(".applytojob.com")) return true
-  if (d.endsWith(".greenhouse.io")) return true
-  if (d.endsWith(".smartrecruiters.com")) return true
+  if (PLACEHOLDER_SUFFIX_RE.test(d)) return true
+  if (isAtsHostDomain(d)) return true
   return false
+}
+
+// Brand token used to cluster rows whose *names* differ but clearly refer to
+// the same employer — the ATS tenant / discovered slug ("wgu" from
+// wgu.wd5.myworkdayjobs.com or zigabyte from zigabyte.bamboohr-discovered)
+// matches the host of the real brand domain ("wgu" from wgu.edu). Returns null
+// when no specific token can be derived. Generic tokens are too collision-prone
+// to cluster on, so they're rejected.
+const BRAND_TOKEN_STOPLIST = new Set([
+  "careers", "jobs", "apply", "www", "talent", "work", "team", "info", "the",
+  "group", "global", "inc", "corp", "hr", "people", "hiring", "join", "recruiting",
+  // Generic ATS/job-board subdomains that are NOT a tenant slug — e.g.
+  // boards.greenhouse.io / job-boards.greenhouse.io are greenhouse's shared host.
+  "boards", "jobboards", "secure", "app", "portal", "search", "my",
+])
+
+function brandToken(domain: string, atsIdentifier: string | null): string | null {
+  const d = domain.toLowerCase()
+
+  // Prefer the ATS identifier's leading segment ("wgu:wd5:External" → "wgu").
+  const idHead = (atsIdentifier ?? "").toLowerCase().split(/[:/_-]/)[0]?.trim()
+
+  let token: string | null = null
+  for (const re of ATS_HOST_RES) {
+    const m = d.match(re)
+    if (m?.[1]) { token = m[1]; break }
+  }
+  if (!token && PLACEHOLDER_SUFFIX_RE.test(d)) {
+    // Tenant is the leading label: "zigabyte.bamboohr-discovered" → "zigabyte",
+    // "360learning.lever-discovered" → "360learning". Skip mangled aggregator
+    // stubs ("adzuna-zigabyte-corporation.placeholder") whose first label has a
+    // dash — too noisy to trust.
+    const first = d.split(".")[0] ?? ""
+    if (first && !first.includes("-")) token = first
+  }
+  if (!token) token = idHead || hostOf(d)
+
+  token = (token ?? "").replace(/[^a-z0-9]/g, "")
+  // ≥3 chars keeps real short acronym brands (wgu, sap, ibm) while dropping
+  // ultra-generic 1–2 char tokens; collisions between two real domains still
+  // land in the ambiguous/needs-review bucket rather than auto-merging.
+  if (token.length < 3 || BRAND_TOKEN_STOPLIST.has(token)) return null
+  return token
 }
 
 /**
@@ -66,12 +151,8 @@ function domainScore(row: Row): number {
   let score = 0
 
   // Hard negatives — these are never canonical.
-  if (d.endsWith(".apex-placeholder")) score -= 100
-  if (d.endsWith(".uscis-employer") || d.endsWith(".lca-employer")) score -= 80
-  if (/\.wd\d+\.myworkdayjobs\.com$/.test(d)) score -= 60
-  if (d.endsWith(".applytojob.com")) score -= 60
-  if (d.endsWith(".greenhouse.io")) score -= 60
-  if (d.endsWith(".smartrecruiters.com")) score -= 60
+  if (PLACEHOLDER_SUFFIX_RE.test(d)) score -= 90
+  if (isAtsHostDomain(d)) score -= 60
 
   // Real institutional TLDs.
   if (d.endsWith(".edu")) score += 30
@@ -90,6 +171,7 @@ type Cluster = {
   canonical: Row
   dups: Row[]
   ambiguous: boolean
+  pathway: "ats" | "mangle" | null
 }
 
 async function findClusters(pool: ReturnType<typeof getPostgresPool>): Promise<Cluster[]> {
@@ -97,9 +179,10 @@ async function findClusters(pool: ReturnType<typeof getPostgresPool>): Promise<C
     id: string
     name: string
     domain: string
+    ats_identifier: string | null
     job_count: string | null
   }>(
-    `SELECT id, name, domain, COALESCE(job_count, 0)::text AS job_count
+    `SELECT id, name, domain, ats_identifier, COALESCE(job_count, 0)::text AS job_count
        FROM companies
       WHERE is_active = true
         AND duplicate_of_company_id IS NULL
@@ -107,25 +190,65 @@ async function findClusters(pool: ReturnType<typeof getPostgresPool>): Promise<C
         AND length(name) > 1`
   )
 
-  const byName = new Map<string, Row[]>()
+  // Build rows + group them by every key they expose: the normalized name slug
+  // AND a domain-derived brand token. Rows sharing ANY key are unioned into one
+  // cluster, so "Wgu" (wgu.wd5.myworkdayjobs.com) links to "Western Governors
+  // University" (wgu.edu) on the shared brand token even though their names differ.
+  const allRows: Row[] = []
+  const keyToIdx = new Map<string, number[]>()
+  const addKey = (key: string | null, idx: number) => {
+    if (!key) return
+    const arr = keyToIdx.get(key) ?? []
+    arr.push(idx)
+    keyToIdx.set(key, arr)
+  }
+
   for (const r of raw) {
     const slug = nameSlug(r.name)
-    if (!slug) continue
-    const row: Row = {
+    const brand = brandToken(r.domain, r.ats_identifier)
+    if (!slug && !brand) continue
+    const idx = allRows.length
+    allRows.push({
       id: r.id,
       name: r.name,
       domain: r.domain,
+      ats_identifier: r.ats_identifier,
       job_count: Number(r.job_count ?? "0"),
       slug,
-    }
-    const arr = byName.get(slug) ?? []
-    arr.push(row)
-    byName.set(slug, arr)
+      brand,
+    })
+    addKey(slug ? `n:${slug}` : null, idx)
+    addKey(brand ? `b:${brand}` : null, idx)
+  }
+
+  // Union-find over row indices.
+  const parent = allRows.map((_, i) => i)
+  const find = (x: number): number => {
+    while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x] }
+    return x
+  }
+  const union = (a: number, b: number) => { parent[find(a)] = find(b) }
+  for (const idxs of keyToIdx.values()) {
+    for (let i = 1; i < idxs.length; i++) union(idxs[0], idxs[i])
+  }
+
+  const components = new Map<number, Row[]>()
+  for (let i = 0; i < allRows.length; i++) {
+    const root = find(i)
+    const arr = components.get(root) ?? []
+    arr.push(allRows[i])
+    components.set(root, arr)
   }
 
   const clusters: Cluster[] = []
-  for (const [slug, rows] of byName.entries()) {
-    if (rows.length < 2) continue
+  for (const compRows of components.values()) {
+    if (compRows.length < 2) continue
+    // Need at least two distinct domains to be a real duplicate (not the same
+    // row keyed twice).
+    const distinctDomains = new Set(compRows.map((r) => r.domain.toLowerCase()))
+    if (distinctDomains.size < 2) continue
+    const rows = compRows
+    const slug = rows.map((r) => r.slug || r.brand).find(Boolean) ?? "(brand)"
 
     const scored = rows
       .map((r) => ({ row: r, score: domainScore(r) }))
@@ -135,43 +258,77 @@ async function findClusters(pool: ReturnType<typeof getPostgresPool>): Promise<C
     const dups = scored.slice(1).map((s) => s.row)
 
     // Refuse to auto-merge if the canonical itself looks low-quality (placeholder,
-    // USCIS-employer, ATS subdomain). Nothing good comes from picking a junk row
+    // discovered stub, ATS subdomain). Nothing good comes from picking a junk row
     // as the survivor — flag the cluster for manual review instead.
     const canonicalIsBad = isLowQuality(canonical)
 
-    // Each dup must be clearly worse than the canonical to auto-merge:
-    //   - it's a placeholder/USCIS/ATS row, OR
-    //   - its host is ≥6 chars longer than canonical's host AND it contains
-    //     the canonical host as a substring (i.e. it's a "fullname-baked-in"
-    //     mangled variant like andurilindustries.com vs anduril.com).
     const canonHost = hostOf(canonical.domain)
     const canonIsEduOrGov =
       canonical.domain.toLowerCase().endsWith(".edu") ||
       canonical.domain.toLowerCase().endsWith(".gov")
+    const canonBrand = brandToken(canonical.domain, canonical.ats_identifier)
+    const realRows = rows.filter((r) => !isLowQuality(r))
 
-    const allWorse = dups.every((d) => {
-      if (isLowQuality(d)) return true
-      const dHost = hostOf(d.domain)
-      // Mangled-as-substring: andurilindustries.com vs anduril.com.
-      if (dHost.length - canonHost.length >= 6 && dHost.includes(canonHost)) return true
-      // Edu/gov canonical + long synthetic .com dup (acronym .edu won't share
-      // a substring with the spelled-out .com name).
-      if (
-        canonIsEduOrGov &&
-        d.domain.toLowerCase().endsWith(".com") &&
-        dHost.length >= 15
-      ) {
-        return true
-      }
-      return false
-    })
+    // The survivor's host must anchor to its own brand token — guards against a
+    // mis-attached generic domain (e.g. "1021 Creative" whose ats_identifier is
+    // "1021creative" but whose domain is the unrelated creative.com). When the
+    // brand token comes from the host itself this is trivially true; it only
+    // trips when an ATS identifier says one brand and the domain says another.
+    const canonHostAnchored =
+      canonBrand !== null &&
+      (canonBrand.startsWith(canonHost) || canonHost.startsWith(canonBrand))
+
+    // PATH 1 — ATS/placeholder consolidation: the cluster has exactly ONE
+    // real-looking domain (the canonical) and every dup is a low-quality row
+    // whose brand token EXACTLY matches the canonical's. The exact-token gate is
+    // what keeps brand-token clustering from bridging different companies that
+    // merely share a short prefix (abacus.co ✗ abacus.bamboohr.com-of-Abacus-Wealth):
+    // such clusters carry a second real domain → realRows.length > 1 → not path1.
+    //
+    // A shared ATS tenant token alone is NOT proof of same employer — distinct
+    // companies collide on it ("Bluestone Lane" ✗ "blueStone Solutions Group",
+    // both tenant "bluestone"). So auto-merge additionally requires every dup to
+    // share the canonical's exact normalized NAME. Abbreviation↔fullname pairs
+    // (Wgu ↔ Western Governors University) and cross-company collisions then fall
+    // to the review bucket — surfaced by brand-token clustering, but not merged.
+    const path1 =
+      realRows.length === 1 &&
+      canonBrand !== null &&
+      canonHostAnchored &&
+      dups.every((d) => isLowQuality(d)) &&
+      dups.every((d) => brandToken(d.domain, d.ats_identifier) === canonBrand) &&
+      dups.every((d) => !!d.slug && d.slug === canonical.slug)
+
+    // PATH 2 — same-company mangled domain: the dup shares the canonical's exact
+    // normalized NAME and is a longer host that bakes the brand in
+    // (andurilindustries.com vs anduril.com) or a long spelled-out .com against an
+    // edu/gov canonical. Requiring an exact name-slug match stops brand-token
+    // links to differently-named companies from auto-merging.
+    //
+    // Guard against a mis-attached canonical domain (e.g. "1021 Creative" sitting
+    // on creative.com): the survivor's host must anchor to the company name —
+    // one of {host, name-slug} is a prefix of the other. Without this, the
+    // low-quality-dup fallback below would merge real jobs onto a wrong domain.
+    const canonNameAnchored =
+      !!canonical.slug &&
+      (canonical.slug.startsWith(canonHost) || canonHost.startsWith(canonical.slug))
+    const path2 =
+      canonNameAnchored &&
+      dups.every((d) => {
+        if (!d.slug || d.slug !== canonical.slug) return false
+        const dHost = hostOf(d.domain)
+        if (dHost.length - canonHost.length >= 6 && dHost.includes(canonHost)) return true
+        if (canonIsEduOrGov && d.domain.toLowerCase().endsWith(".com") && dHost.length >= 15) return true
+        return isLowQuality(d)
+      })
 
     clusters.push({
       slug,
       rows,
       canonical,
       dups,
-      ambiguous: canonicalIsBad || !allWorse,
+      ambiguous: canonicalIsBad || !(path1 || path2),
+      pathway: canonicalIsBad ? null : path1 ? "ats" : path2 ? "mangle" : null,
     })
   }
 
@@ -182,12 +339,39 @@ async function mergeOne(
   pool: ReturnType<typeof getPostgresPool>,
   canonicalId: string,
   dupId: string
-): Promise<{ moved: number; deleted: number }> {
+): Promise<{ moved: number; deleted: number; migratedConfig: boolean }> {
   const client = await pool.connect()
   let moved = 0
   let deleted = 0
+  let migratedConfig = false
   try {
     await client.query("BEGIN")
+
+    // Harvest-config migration: the real-brand-domain canonical often has
+    // ats_type set but NO ats_identifier/direct_ats_url (it falls back to a weak
+    // custom crawl), while the low-quality dup carries the working ATS tenant.
+    // Copy that config onto the canonical so deactivating the dup doesn't stop
+    // the only real crawl. Only fires when the canonical has no usable config
+    // and the dup does. careers_url stays the canonical's brand page when set
+    // (the claim query also matches on direct_ats_url).
+    const cfg = await client.query(
+      `UPDATE companies can SET
+          careers_url         = COALESCE(NULLIF(can.careers_url, ''), dup.careers_url),
+          direct_ats_url      = dup.direct_ats_url,
+          direct_ats_provider = dup.direct_ats_provider,
+          ats_type            = COALESCE(NULLIF(can.ats_type, ''), dup.ats_type),
+          ats_identifier      = dup.ats_identifier,
+          raw_ats_config      = dup.raw_ats_config,
+          next_harvest_at     = NOW(),
+          updated_at          = NOW()
+         FROM companies dup
+        WHERE can.id = $1 AND dup.id = $2
+          AND COALESCE(NULLIF(can.ats_identifier, ''), '') = ''
+          AND COALESCE(NULLIF(can.direct_ats_url, ''), '') = ''
+          AND COALESCE(NULLIF(dup.ats_identifier, ''), NULLIF(dup.direct_ats_url, ''), '') <> ''`,
+      [canonicalId, dupId]
+    )
+    migratedConfig = (cfg.rowCount ?? 0) > 0
 
     const drop = await client.query(
       `DELETE FROM jobs
@@ -255,6 +439,7 @@ async function mergeOne(
       `UPDATE companies
           SET is_active = false,
               duplicate_of_company_id = $1,
+              next_harvest_at = NULL,
               updated_at = NOW()
         WHERE id = $2`,
       [canonicalId, dupId]
@@ -268,7 +453,7 @@ async function mergeOne(
     client.release()
   }
 
-  return { moved, deleted }
+  return { moved, deleted, migratedConfig }
 }
 
 async function refreshJobCounts(
@@ -293,19 +478,27 @@ async function refreshJobCounts(
 async function main() {
   const pool = getPostgresPool()
   const clusters = await findClusters(pool)
-  const auto = clusters.filter((c) => !c.ambiguous)
   const review = clusters.filter((c) => c.ambiguous)
+  const autoAll = clusters.filter((c) => !c.ambiguous)
+  // Apply execution filters (used both for reporting and the actual merge set).
+  const auto = autoAll.filter((c) => {
+    if (atsOnly && c.pathway !== "ats") return false
+    if (minDupJobs > 0 && c.dups.reduce((s, d) => s + d.job_count, 0) < minDupJobs) return false
+    return true
+  })
 
+  const filterDesc = `${atsOnly ? " ats-only" : ""}${minDupJobs > 0 ? ` min-dup-jobs=${minDupJobs}` : ""}`
   console.log(
-    `[dedupe-name] mode=${execute ? "execute" : "dry-run"} clusters_total=${clusters.length} auto_mergeable=${auto.length} need_review=${review.length}`
+    `[dedupe-name] mode=${execute ? "execute" : "dry-run"}${filterDesc} clusters_total=${clusters.length} auto_total=${autoAll.length} auto_selected=${auto.length} need_review=${review.length}`
   )
 
+  const printLimit = args.includes("--print-all") ? auto.length : 40
   console.log("\n── Auto-mergeable (low-quality dup → real canonical) ────────")
-  for (const c of auto.slice(0, 40)) {
+  for (const c of auto.slice(0, printLimit)) {
     const dupDesc = c.dups.map((d) => `${d.name} [${d.domain}, ${d.job_count}j]`).join(" + ")
     console.log(`  ${c.canonical.name} [${c.canonical.domain}, ${c.canonical.job_count}j]  ←  ${dupDesc}`)
   }
-  if (auto.length > 40) console.log(`  …and ${auto.length - 40} more`)
+  if (auto.length > printLimit) console.log(`  …and ${auto.length - printLimit} more`)
 
   if (review.length > 0) {
     console.log("\n── Needs manual review (multiple real-looking domains) ─────")
@@ -327,6 +520,7 @@ async function main() {
   let merged = 0
   let totalMoved = 0
   let totalDeleted = 0
+  let totalConfigMigrated = 0
   const canonicalIds = new Set<string>()
   for (const c of auto) {
     for (const dup of c.dups) {
@@ -335,6 +529,7 @@ async function main() {
         merged += 1
         totalMoved += r.moved
         totalDeleted += r.deleted
+        if (r.migratedConfig) totalConfigMigrated += 1
         canonicalIds.add(c.canonical.id)
       } catch (err) {
         console.warn(
@@ -346,7 +541,7 @@ async function main() {
   }
 
   console.log(
-    `\n[dedupe-name] merging done merged=${merged} jobs_moved=${totalMoved} jobs_deleted_as_dupes=${totalDeleted}`
+    `\n[dedupe-name] merging done merged=${merged} jobs_moved=${totalMoved} jobs_deleted_as_dupes=${totalDeleted} harvest_config_migrated=${totalConfigMigrated}`
   )
 
   await refreshJobCounts(pool, [...canonicalIds])
