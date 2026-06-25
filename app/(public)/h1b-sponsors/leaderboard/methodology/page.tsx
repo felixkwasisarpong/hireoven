@@ -203,6 +203,48 @@ export default function MethodologyPage() {
           </div>
         </section>
 
+        <section id="cap-exempt" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">Cap-exempt classification</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              Under INA 214(g)(5), institutions of higher education, affiliated nonprofits, and
+              governmental/nonprofit research organizations can file H-1B petitions outside the
+              annual cap. We classify employers from public signals:
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li><strong>High</strong> — a <code>.edu</code> domain, an unambiguous university name, or a federal research lab.</li>
+              <li><strong>Medium</strong> — &ldquo;College&rdquo; in the name or an education industry.</li>
+              <li><strong>Low</strong> — a research-mission name signal we can&rsquo;t fully confirm. Shown with a &ldquo;verify with employer&rdquo; note.</li>
+            </ul>
+            <p>
+              Re-classified nightly. This is a heuristic, not legal advice — always confirm cap-exempt
+              status with the employer before relying on it for a petition.
+            </p>
+          </div>
+        </section>
+
+        <section id="e-verify" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">E-Verify status</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              E-Verify is the federal employment-eligibility program; enrollment is required for the
+              24-month STEM OPT extension. USCIS publishes participation through a daily-updated{" "}
+              <a
+                href="https://www.e-verify.gov/e-verify-employer-search"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                employer search tool
+              </a>
+              , not a bulk download, so we surface E-Verify only on employers we can match by exact
+              normalized name (no fuzzy matching — a false flag could harm a STEM OPT case). For any
+              employer not flagged here, check the official tool directly. Enrollment can change
+              between USCIS updates.
+            </p>
+          </div>
+        </section>
+
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}

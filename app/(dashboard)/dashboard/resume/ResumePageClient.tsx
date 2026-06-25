@@ -1437,7 +1437,7 @@ function LibraryRowMenu({
   )
 }
 
-function LibraryPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
+function LibraryPanel({ onTabChange }: { onTabChange: (tab: TabId, resumeId?: string) => void }) {
   const { resumes, isLoading, refresh, removeResume } = useResumeContext()
   const { pushToast } = useToast()
   const [filter, setFilter] = useState<LibraryFilter>("all")
@@ -1723,7 +1723,7 @@ function LibraryPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                           <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
                             <button
                               type="button"
-                              onClick={() => onTabChange("edit")}
+                              onClick={() => onTabChange("edit", resume.id)}
                               title="View"
                               className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                             >
@@ -1731,7 +1731,7 @@ function LibraryPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => onTabChange("edit")}
+                              onClick={() => onTabChange("edit", resume.id)}
                               title="Edit"
                               className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                             >
@@ -1810,7 +1810,7 @@ function TabRedirectPanel({
 function ResumeHubContent({ activeTab }: { activeTab: TabId }) {
   const router = useRouter()
 
-  function setTab(tab: TabId) {
+  function setTab(tab: TabId, resumeId?: string) {
     const routeByTab: Record<TabId, string> = {
       overview: "/dashboard/resume",
       library: "/dashboard/resume/library",
@@ -1818,7 +1818,11 @@ function ResumeHubContent({ activeTab }: { activeTab: TabId }) {
       edit: "/dashboard/resume/studio?mode=preview",
       tailor: "/dashboard/resume/studio?mode=tailor",
     }
-    router.push(routeByTab[tab], { scroll: false })
+    let route = routeByTab[tab]
+    if (resumeId && (tab === "edit" || tab === "generate")) {
+      route += `&resumeId=${encodeURIComponent(resumeId)}`
+    }
+    router.push(route, { scroll: false })
   }
 
   return (

@@ -9,6 +9,8 @@ import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
 import { getCompanyH1bRank, industrySlug } from "@/lib/h1b/leaderboard"
 import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
+import { CapExemptBadge } from "@/components/h1b/badges/CapExemptBadge"
+import { EverifyBadge } from "@/components/h1b/badges/EverifyBadge"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -32,6 +34,10 @@ type Row = {
   h1b_sponsor_count_1yr: number | null
   h1b_sponsor_count_3yr: number | null
   job_count: number | null
+  is_cap_exempt: boolean | null
+  cap_exempt_reason: string | null
+  cap_exempt_confidence: "high" | "medium" | "low" | null
+  is_e_verify: boolean | null
 }
 
 type Verdict = "yes" | "likely" | "unknown"
@@ -54,7 +60,8 @@ async function getCompany(param: string): Promise<CompanyData | null> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<Row>(
     `SELECT id, name, domain, logo_url, industry, sponsors_h1b, sponsorship_confidence,
-            h1b_sponsor_count_1yr, h1b_sponsor_count_3yr, job_count
+            h1b_sponsor_count_1yr, h1b_sponsor_count_3yr, job_count,
+            is_cap_exempt, cap_exempt_reason, cap_exempt_confidence, is_e_verify
        FROM companies WHERE id = $1::uuid LIMIT 1`,
     [id],
   )
@@ -220,6 +227,17 @@ export default async function H1bSponsorPage({ params }: Props) {
             {rank && (
               <div className="mt-3">
                 <RankBadge rank={rank} />
+              </div>
+            )}
+            {(c.is_cap_exempt || c.is_e_verify) && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {c.is_cap_exempt && c.cap_exempt_reason && (
+                  <CapExemptBadge
+                    reason={c.cap_exempt_reason}
+                    confidence={c.cap_exempt_confidence ?? "low"}
+                  />
+                )}
+                {c.is_e_verify && <EverifyBadge />}
               </div>
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">

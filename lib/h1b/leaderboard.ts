@@ -21,6 +21,8 @@ export interface LeaderboardFilters {
   staffing_only?: boolean
   exclude_staffing?: boolean
   layoff_risk?: "any" | "exclude_active" | "stable_only"
+  cap_exempt_only?: boolean
+  e_verify_only?: boolean
   min_filings?: number
   cursor?: number // rank cursor (keyset pagination)
   limit?: number // 1-50, default 25
@@ -163,6 +165,19 @@ function buildWhere(
       `NOT EXISTS (SELECT 1 FROM layoff_events le
          WHERE le.company_id = h1b_leaderboard_mv.company_id
            AND le.event_date > NOW() - INTERVAL '12 months')`
+    )
+  }
+
+  if (f.cap_exempt_only) {
+    clauses.push(
+      `EXISTS (SELECT 1 FROM companies c
+         WHERE c.id = h1b_leaderboard_mv.company_id AND c.is_cap_exempt = true)`
+    )
+  }
+  if (f.e_verify_only) {
+    clauses.push(
+      `EXISTS (SELECT 1 FROM companies c
+         WHERE c.id = h1b_leaderboard_mv.company_id AND c.is_e_verify = true)`
     )
   }
 

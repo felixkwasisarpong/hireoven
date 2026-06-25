@@ -13,6 +13,20 @@ import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
 import { getCompanyWageBreakdown } from "@/lib/salaries/wage-query"
 import { getSocLabelMap } from "@/lib/salaries/soc-roles"
 import { fmtUsd } from "@/components/salaries/SalaryCard"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+
+async function getPathways(companyId: string) {
+  if (!hasPostgresEnv()) return null
+  const { rows } = await getPostgresPool().query<{
+    is_cap_exempt: boolean
+    cap_exempt_reason: string | null
+    is_e_verify: boolean
+  }>(
+    `SELECT is_cap_exempt, cap_exempt_reason, is_e_verify FROM companies WHERE id = $1 LIMIT 1`,
+    [companyId]
+  )
+  return rows[0] ?? null
+}
 
 export const revalidate = 86400
 
@@ -58,6 +72,7 @@ export default async function ScorecardPage({ params }: Props) {
   const layoffSignal = await getCompanyLayoffSignal(data.company.id)
   const wageBreakdown = await getCompanyWageBreakdown(data.company.id)
   const wageLabels = await getSocLabelMap(wageBreakdown.roles.map((r) => r.soc_group))
+  const pathways = await getPathways(data.company.id)
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -116,6 +131,28 @@ export default async function ScorecardPage({ params }: Props) {
           </section>
         )}
 
+        {pathways && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+            <h3 className="text-lg font-semibold text-slate-900">Sponsorship pathways</h3>
+            <ul className="mt-3 space-y-2 text-sm">
+              {pathways.is_cap_exempt && (
+                <li className="text-slate-700">
+                  ✓ Cap-exempt: can file H-1B outside the annual lottery
+                </li>
+              )}
+              {pathways.is_e_verify && (
+                <li className="text-slate-700">
+                  ✓ E-Verify: hires eligible for the STEM OPT extension
+                </li>
+              )}
+              {!pathways.is_cap_exempt && !pathways.is_e_verify && (
+                <li className="text-slate-500">
+                  Standard H-1B sponsor (subject to the annual lottery; no STEM OPT extension)
+                </li>
+              )}
+            </ul>
+          </section>
+        )}
         <ScorecardShare data={data} />
 
         <div className="mt-8 rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0b2a23] to-[#0a2440] p-6 text-center">
