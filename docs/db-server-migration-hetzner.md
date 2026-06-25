@@ -1,13 +1,20 @@
 # Moving Postgres to its own Hetzner box (for the 200k/day ramp)
 
-Today PG shares the 4 GB web box with the Next app + MinIO — that co-location is the
-root cause of the 502s/OOMs. This moves PG to a dedicated box on the Hetzner private
-network, with PgBouncer in front. Target: comfortably absorb ~6M jobs/month.
+Today PG shares the web box (`powerful-platypus`, **CCX23 / 16 GB / 80 GB**, Ashburn
+us-east, private `10.0.0.2`) with the Next app + MinIO. 16 GB has more headroom than
+feared, but at ~6M jobs/month the DB still wants dedicated RAM/IOPS, and co-location
+keeps app/PG/MinIO contending (the 502 + `too many clients` history). This moves PG to
+its own box on the **existing** Hetzner private network, with PgBouncer in front.
+
+Current topology:
+- web: `powerful-platypus` CCX23, 16 GB, private `10.0.0.2`
+- harvester: `panicky-pigeon` CPX31, 8 GB, private `10.0.0.3`
+- **new db box (this doc): private `10.0.0.4`**
 
 ## 1. The box
 
-Hetzner **Cloud**, **same location** as the existing boxes (Hillsboro / `hil`, us-west)
-so they share a private network.
+Hetzner **Cloud**, **Ashburn (us-east, `ash`)** — same network zone as the existing
+boxes so it joins the existing private network with low latency.
 
 | Need | Pick | Why |
 |---|---|---|
@@ -18,12 +25,13 @@ Use **local NVMe** (comes with the CCX), not a Cloud Volume, for the data dir �
 are network block storage and too slow for the DB hot path. If the dataset outgrows
 local NVMe, resize up or move to a dedicated **AX** box (1–2 TB NVMe).
 
-## 2. Private network (do this first)
+## 2. Private network (already exists — just attach)
 
-1. Hetzner Cloud → Networks → create one (e.g. `hireoven-net`, `10.0.0.0/16`).
-2. Attach **all three** servers (web, harvester, new db). Each gets a `10.0.0.x` IP.
-3. Cloud Firewall on the db box: **block 5432/6432 from the public internet**; allow
-   only the web + harvester private IPs. PG must never listen on its public IP.
+Your boxes are already on a `10.0.0.x` private network (web `10.0.0.2`, harvester
+`10.0.0.3`).
+1. Create the new db box **attached to that same network** (it'll get `10.0.0.4`).
+2. Cloud Firewall on the db box: **block 5432/6432 from the public internet**; allow
+   only `10.0.0.2` + `10.0.0.3`. PG must never listen on its public IP.
 
 ## 3. Install on the db box (Ubuntu)
 
@@ -36,7 +44,7 @@ sudo apt update && sudo apt install -y postgresql-16 postgresql-contrib-16 pgbou
 ## 4. postgresql.conf (tuned for 32 GB, ingest-heavy)
 
 ```ini
-listen_addresses = 'localhost,10.0.0.X'        # private IP only
+listen_addresses = 'localhost,10.0.0.4'        # private IP only
 max_connections = 200                           # real backends; clients pool via PgBouncer
 shared_buffers = 8GB                             # ~25% RAM
 effective_cache_size = 24GB                      # ~75% RAM
@@ -70,7 +78,7 @@ app, you must pool. `/etc/pgbouncer/pgbouncer.ini`:
 [databases]
 hireoven = host=127.0.0.1 port=5432 dbname=hireoven
 [pgbouncer]
-listen_addr = 10.0.0.X
+listen_addr = 10.0.0.4
 listen_port = 6432
 auth_type = scram-sha-256
 auth_file = /etc/pgbouncer/userlist.txt
@@ -95,9 +103,9 @@ pg_dump -Fc -j 4 -h <old-host> -U hireoven hireoven -f /tmp/hireoven.dump
 # 3. create role + db on the NEW box, then restore (parallel)
 sudo -u postgres createuser hireoven --pwprompt
 sudo -u postgres createdb -O hireoven hireoven
-pg_restore -j 4 -h 10.0.0.X -U hireoven -d hireoven /tmp/hireoven.dump
+pg_restore -j 4 -h 10.0.0.4 -U hireoven -d hireoven /tmp/hireoven.dump
 # 4. sanity: row counts match for jobs/companies/employer_lca_stats
-psql -h 10.0.0.X -U hireoven hireoven -c "SELECT count(*) FROM jobs;"
+psql -h 10.0.0.4 -U hireoven hireoven -c "SELECT count(*) FROM jobs;"
 ```
 For near-zero downtime later, use **logical replication** instead (subscribe the new
 box to the old, cut over when caught up).
@@ -105,7 +113,7 @@ box to the old, cut over when caught up).
 ## 7. Cut over (Coolify)
 
 1. In Coolify, update **`DATABASE_URL`** on **both** the web app and the harvester
-   app-worker to: `postgres://hireoven:***@10.0.0.X:6432/hireoven` (PgBouncer port).
+   app-worker to: `postgres://hireoven:***@10.0.0.4:6432/hireoven` (PgBouncer port).
 2. Redeploy/restart both. Verify the site + a cron run.
 3. Re-enable harvester crons.
 4. Keep the old PG running 24–48h as a fallback; once stable, **stop PG on the web box**
