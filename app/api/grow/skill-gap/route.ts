@@ -68,7 +68,14 @@ export async function GET() {
     })
   }
 
-  const titlePatterns = desiredRoles.map((r) => `%${r}%`)
+  // Word-boundary match on title so "Engineer" doesn't pull in "Engineering" and a
+  // short role doesn't over-match. Roles with regex-unsafe symbols ("C++ Developer")
+  // fall back to a substring match. (normalized_title is a copy of title here, so
+  // matching title alone is sufficient.)
+  const escapeRe = (r: string) => r.replace(/[.^$*+?()[\]{}|\\]/g, "\\$&")
+  const wordSafe = (r: string) => /^[\p{L}\p{N} &/-]+$/u.test(r)
+  const boundaryPatterns = desiredRoles.filter(wordSafe).map((r) => `\\m${escapeRe(r)}\\M`)
+  const likePatterns = desiredRoles.filter((r) => !wordSafe(r)).map((r) => `%${r}%`)
   const needsSponsorship = profile?.needs_sponsorship === true
 
   // Live postings for the target roles. Sponsorship-only when the user needs it,
@@ -84,11 +91,11 @@ export async function GET() {
       WHERE j.is_active = true
         AND ${sqlPublishedJob("j")}
         AND j.skills IS NOT NULL AND array_length(j.skills, 1) > 0
-        AND (j.title ILIKE ANY($1::text[]) OR j.normalized_title ILIKE ANY($1::text[]))
-        AND ($2::boolean = false OR j.sponsors_h1b = true)
+        AND (j.title ~* ANY($1::text[]) OR j.title ILIKE ANY($2::text[]))
+        AND ($3::boolean = false OR j.sponsors_h1b = true)
       ORDER BY j.first_detected_at DESC
       LIMIT 1500`,
-    [titlePatterns, needsSponsorship],
+    [boundaryPatterns, likePatterns, needsSponsorship],
   ).catch(() => ({ rows: [] as JobRow[] }))
 
   const jobs: SkillGapJob[] = jobsRes.rows.map((r) => ({
