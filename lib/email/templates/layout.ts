@@ -6,7 +6,7 @@
 
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com").replace(/\/$/, "")
 // CAN-SPAM requires a valid physical postal address in every email.
-const PHYSICAL_ADDRESS = process.env.MAIL_PHYSICAL_ADDRESS ?? "Hireoven, Inc., 2261 Market St #4978, San Francisco, CA 94114"
+const PHYSICAL_ADDRESS = process.env.MAIL_PHYSICAL_ADDRESS ?? "Hireoven, 3130 4th St, Lubbock, TX 79415"
 
 export function esc(value: string): string {
   return value
