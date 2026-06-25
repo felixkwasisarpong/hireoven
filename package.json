@@ -38,6 +38,8 @@
     "maintain:companies:execute": "tsx scripts/maintain-companies.ts --execute",
     "capture:companies:continuous": "tsx scripts/capture-companies-continuous.ts",
     "capture:companies:continuous:execute": "tsx scripts/capture-companies-continuous.ts --execute",
+    "embed:refresh-events": "tsx scripts/refresh-embed-events.ts",
+    "embed:refresh-events:execute": "tsx scripts/refresh-embed-events.ts --execute",
     "seed:companies:expansion": "tsx scripts/seed-companies-expansion.ts",
     "seed:companies:expansion:dry-run": "tsx scripts/seed-companies-expansion.ts --dry-run",
     "seed:enterprise-ats": "tsx scripts/seed-enterprise-ats.ts",

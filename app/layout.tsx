@@ -9,6 +9,7 @@ import { UpgradeModalProvider } from "@/lib/context/UpgradeModalContext"
 import UpgradeModal from "@/components/gates/UpgradeModal"
 import FeedbackModal from "@/components/feedback/FeedbackModal"
 import { FeedbackModalProvider } from "@/lib/context/FeedbackModalContext"
+import { headers } from "next/headers"
 import { getSessionUser } from "@/lib/auth/session-user"
 import "./globals.css"
 
@@ -54,6 +55,16 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
+  // Embeddable widgets (Spec 07) render as a bare document: no providers, no
+  // service worker, no session read. Marked by middleware via x-hireoven-embed.
+  if (headers().get("x-hireoven-embed") === "1") {
+    return (
+      <html lang="en">
+        <body className={jakarta.variable}>{children}</body>
+      </html>
+    )
+  }
+
   const session = await getSessionUser()
   const initialUser = session
     ? { id: session.sub, email: session.email }

@@ -169,6 +169,35 @@ export default function MethodologyPage() {
           </div>
         </section>
 
+        <section id="embeds" className="mt-8 scroll-mt-24">
+          <h2 className="text-lg font-semibold text-slate-900">Embeddable widgets</h2>
+          <div className="mt-2 space-y-2 text-slate-600">
+            <p>
+              The leaderboard, company scorecards, and personal scorecards are available as{" "}
+              <Link href="/embed" className="underline hover:text-slate-800">
+                embeddable widgets
+              </Link>{" "}
+              for any site. They render server-side, set no cookies, and run no tracking script on
+              the host page.
+            </p>
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                <strong>Personal widgets</strong> are shown only while you keep your card public;
+                revoking the link replaces the widget with an &ldquo;unavailable&rdquo; card.
+              </li>
+              <li>
+                <strong>Analytics</strong> record only the embedding site&rsquo;s domain and a
+                hashed, truncated user-agent. We never store IP addresses, full URLs, or visitor
+                identities.
+              </li>
+              <li>
+                <strong>Attribution</strong> (&ldquo;Powered by Hireoven&rdquo;) is required on the
+                free tier and removable only with a partner plan.
+              </li>
+            </ul>
+          </div>
+        </section>
+
         <section id="salaries" className="mt-8 scroll-mt-24">
           <h2 className="text-lg font-semibold text-slate-900">H-1B salaries</h2>
           <div className="mt-2 space-y-2 text-slate-600">

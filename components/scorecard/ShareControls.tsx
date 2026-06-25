@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, Link2, RefreshCw } from "lucide-react"
+import { Check, Link2, RefreshCw, Share2 } from "lucide-react"
 import type { PersonalScorecard } from "@/lib/scorecard/personal-scorecard"
 
 const CONSENT_COPY =
@@ -83,8 +83,11 @@ export function ShareControls({ card }: { card: PersonalScorecard }) {
   }
 
   return (
-    <section className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
-      <h2 className="text-sm font-semibold text-slate-900">Share your scorecard</h2>
+    <section className="rounded-2xl border border-slate-200/70 bg-white p-6 shadow-[0_1px_3px_rgba(16,24,40,0.06)]">
+      <div className="flex items-center gap-2">
+        <Share2 className="h-4 w-4 text-slate-400" />
+        <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">Share your scorecard</h2>
+      </div>
 
       {card.resume_changed && (
         <div className="mt-3 flex items-center justify-between gap-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -127,23 +130,25 @@ export function ShareControls({ card }: { card: PersonalScorecard }) {
           <button
             onClick={publish}
             disabled={busy || !consented}
-            className="rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+            className="rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-600 disabled:opacity-50"
           >
             Publish public card
           </button>
         </div>
       ) : (
         <div className="mt-3 space-y-3">
-          <p className="text-sm text-slate-600">Your card is public.</p>
+          <p className="text-sm text-slate-500">Your card is public.</p>
           {publicUrl && (
-            <div className="flex flex-wrap items-center gap-2">
-              <code className="rounded bg-slate-50 px-2 py-1 text-xs text-slate-600">{publicUrl}</code>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                {publicUrl}
+              </div>
               <button
                 onClick={copy}
-                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
-                {copied ? "Copied" : "Copy link"}
+                {copied ? "Copied" : "Copy"}
               </button>
             </div>
           )}
@@ -151,14 +156,14 @@ export function ShareControls({ card }: { card: PersonalScorecard }) {
             <button
               onClick={makePrivate}
               disabled={busy}
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               Make private
             </button>
             <button
               onClick={revoke}
               disabled={busy}
-              className="rounded-full border border-slate-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               Revoke link
             </button>
