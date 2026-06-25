@@ -10,6 +10,20 @@ import { ScorecardShare } from "@/components/h1b/scorecard/ScorecardShare"
 import { ScorecardMethodologyNote } from "@/components/h1b/scorecard/ScorecardMethodologyNote"
 import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+
+async function getPathways(companyId: string) {
+  if (!hasPostgresEnv()) return null
+  const { rows } = await getPostgresPool().query<{
+    is_cap_exempt: boolean
+    cap_exempt_reason: string | null
+    is_e_verify: boolean
+  }>(
+    `SELECT is_cap_exempt, cap_exempt_reason, is_e_verify FROM companies WHERE id = $1 LIMIT 1`,
+    [companyId]
+  )
+  return rows[0] ?? null
+}
 
 export const revalidate = 86400
 
@@ -53,6 +67,7 @@ export default async function ScorecardPage({ params }: Props) {
   const data = await getCompanyScorecard(id)
   if (!data) notFound()
   const layoffSignal = await getCompanyLayoffSignal(data.company.id)
+  const pathways = await getPathways(data.company.id)
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -80,6 +95,29 @@ export default async function ScorecardPage({ params }: Props) {
           <div className="mt-8">
             <LayoffSignalCard signal={layoffSignal} />
           </div>
+        )}
+
+        {pathways && (
+          <section className="mt-8 rounded-xl border border-slate-200 bg-white p-6">
+            <h3 className="text-lg font-semibold text-slate-900">Sponsorship pathways</h3>
+            <ul className="mt-3 space-y-2 text-sm">
+              {pathways.is_cap_exempt && (
+                <li className="text-slate-700">
+                  ✓ Cap-exempt: can file H-1B outside the annual lottery
+                </li>
+              )}
+              {pathways.is_e_verify && (
+                <li className="text-slate-700">
+                  ✓ E-Verify: hires eligible for the STEM OPT extension
+                </li>
+              )}
+              {!pathways.is_cap_exempt && !pathways.is_e_verify && (
+                <li className="text-slate-500">
+                  Standard H-1B sponsor (subject to the annual lottery; no STEM OPT extension)
+                </li>
+              )}
+            </ul>
+          </section>
         )}
         <ScorecardShare data={data} />
 
