@@ -241,6 +241,14 @@ export class EverifyTableauLookup {
     return { query: name, totalRecordsFiltered: total, hits }
   }
 
+  /** Tear down and relaunch a fresh session. The USCIS Tableau session expires after
+   *  roughly an hour, after which the search box stops responding — callers should
+   *  recycle periodically and on repeated failures. */
+  async reinit(): Promise<void> {
+    await this.close()
+    await this.init()
+  }
+
   async close(): Promise<void> {
     await this.page?.close().catch(() => {})
     await this.ctx?.close().catch(() => {})
