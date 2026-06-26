@@ -45,6 +45,9 @@ function flagInt(name: string, fallback: number): number {
 
 const LIMIT = flagInt("limit", 50)
 const SETTLE_MS = flagInt("settle", 7000)
+// The USCIS Tableau session goes stale after ~an hour (~360 queries), after which
+// every lookup fails. Proactively recycle the browser well before that.
+const RECYCLE_EVERY = flagInt("recycle", 150)
 
 type Company = { id: string; name: string }
 type Cache = Record<string, { matched: boolean; everifyName?: string; state?: string | null; at: string }>
@@ -106,9 +109,24 @@ async function main() {
   try {
     for (const c of companies) {
       checked++
+
+      // Proactively recycle the session before it can go stale.
+      if (checked > 1 && checked % RECYCLE_EVERY === 0) {
+        console.log(`  … recycling browser session (after ${checked})`)
+        try { await lookup.reinit() } catch (e) { console.warn("  ! reinit failed:", e instanceof Error ? e.message : e) }
+      }
+
       let hit: EverifySearchHit | null = null
       try {
-        const res = await lookup.search(c.name)
+        // One reinit-and-retry on failure — covers a session that died early.
+        let res
+        try {
+          res = await lookup.search(c.name)
+        } catch (firstErr) {
+          console.warn(`  ↻ ${c.name}: ${firstErr instanceof Error ? firstErr.message : firstErr} — reinit + retry`)
+          await lookup.reinit()
+          res = await lookup.search(c.name)
+        }
         hit = pickMatch(c.name, res.hits)
         cache[c.id] = { matched: !!hit, everifyName: hit?.employer_name, state: hit?.state ?? null, at: new Date().toISOString() }
       } catch (err) {
