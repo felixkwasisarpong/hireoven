@@ -18,7 +18,12 @@ const LEADERBOARD_STATES = [
 ]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+  // Sitemap <loc> values MUST be absolute. `??` only catches null/undefined, so an
+  // empty/blank NEXT_PUBLIC_APP_URL (as in prod) slipped through and produced relative
+  // URLs ("/features", empty homepage) — 70k "Invalid URL" errors in Search Console.
+  // Guard on a real https origin and strip any trailing slash so `${base}/x` is clean.
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  const base = envUrl && /^https?:\/\//.test(envUrl) ? envUrl.replace(/\/+$/, "") : "https://hireoven.com"
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: base, lastModified: new Date(), changeFrequency: "daily", priority: 1.0 },
