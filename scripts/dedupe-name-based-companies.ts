@@ -435,6 +435,23 @@ async function mergeOne(
       ])
     }
 
+    // Carry the best graded sponsorship score onto the survivor. We repoint the
+    // underlying LCA/USCIS data above, but the denormalized score lives on the
+    // company row — if the *graded* row loses the merge, the survivor would keep a
+    // stale 0 and show grade F on the H-1B leaderboard despite real filings. Take
+    // the max so the canonical inherits whichever row was actually scored.
+    await client.query(
+      `UPDATE companies can SET
+          sponsorship_confidence = GREATEST(COALESCE(can.sponsorship_confidence, 0), COALESCE(dup.sponsorship_confidence, 0)),
+          sponsors_h1b           = COALESCE(can.sponsors_h1b, false) OR COALESCE(dup.sponsors_h1b, false),
+          h1b_sponsor_count_1yr  = GREATEST(COALESCE(can.h1b_sponsor_count_1yr, 0), COALESCE(dup.h1b_sponsor_count_1yr, 0)),
+          h1b_sponsor_count_3yr  = GREATEST(COALESCE(can.h1b_sponsor_count_3yr, 0), COALESCE(dup.h1b_sponsor_count_3yr, 0)),
+          updated_at             = NOW()
+         FROM companies dup
+        WHERE can.id = $1 AND dup.id = $2`,
+      [canonicalId, dupId]
+    )
+
     await client.query(
       `UPDATE companies
           SET is_active = false,

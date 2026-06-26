@@ -39,9 +39,28 @@ export type CdxQueryOptions = {
   timeoutMs?: number
 }
 
-// Update this when a new Common Crawl crawl is published.
-// Latest index list: https://index.commoncrawl.org/collinfo.json
+// Fallback used when the live index list can't be fetched. Latest list:
+// https://index.commoncrawl.org/collinfo.json
 export const DEFAULT_CC_INDEX = process.env.CC_INDEX ?? "CC-MAIN-2026-21"
+
+// Resolve the newest published Common Crawl index at runtime so miners always hit
+// the freshest crawl (a new one drops ~monthly) instead of a hardcoded stale one.
+// CC_INDEX env (explicit override) wins; on any fetch failure we fall back to the
+// constant above.
+export async function getLatestCcIndex(): Promise<string> {
+  if (process.env.CC_INDEX) return process.env.CC_INDEX
+  try {
+    const res = await fetch("https://index.commoncrawl.org/collinfo.json", {
+      signal: AbortSignal.timeout(15_000),
+    })
+    if (!res.ok) return DEFAULT_CC_INDEX
+    const cols = (await res.json()) as Array<{ id?: string }>
+    const latest = cols.find((c) => typeof c.id === "string" && /^CC-MAIN-\d{4}-\d+$/.test(c.id))?.id
+    return latest ?? DEFAULT_CC_INDEX
+  } catch {
+    return DEFAULT_CC_INDEX
+  }
+}
 // The CDX endpoint uses {index}-index suffix, NOT {index}/url.
 // Correct format: http://index.commoncrawl.org/{index}-index?url=...
 const CDX_BASE = "http://index.commoncrawl.org"

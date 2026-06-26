@@ -195,6 +195,20 @@ async function mergeOne(
       ])
     }
 
+    // 5b. Carry the best graded sponsorship score onto the survivor (data is repointed
+    // above, but the denormalized score lives on the company row — without this the
+    // survivor keeps a stale 0 and shows grade F on the leaderboard despite filings).
+    await client.query(
+      `UPDATE companies can SET
+          sponsorship_confidence = GREATEST(COALESCE(can.sponsorship_confidence,0), COALESCE(dup.sponsorship_confidence,0)),
+          sponsors_h1b           = COALESCE(can.sponsors_h1b,false) OR COALESCE(dup.sponsors_h1b,false),
+          h1b_sponsor_count_1yr  = GREATEST(COALESCE(can.h1b_sponsor_count_1yr,0), COALESCE(dup.h1b_sponsor_count_1yr,0)),
+          h1b_sponsor_count_3yr  = GREATEST(COALESCE(can.h1b_sponsor_count_3yr,0), COALESCE(dup.h1b_sponsor_count_3yr,0)),
+          updated_at             = NOW()
+         FROM companies dup WHERE can.id=$1 AND dup.id=$2`,
+      [dup.canonical_id, dup.dup_id]
+    )
+
     // 6. Mark duplicate inactive + point at canonical.
     await client.query(
       `UPDATE companies

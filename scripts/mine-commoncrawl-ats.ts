@@ -29,7 +29,7 @@ import { Pool } from "pg"
 import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import type { AtsName } from "@/lib/harvester/adapters"
-import { queryCdxForApex, normalizeCdxUrlToBoard, DEFAULT_CC_INDEX } from "@/lib/discovery/commoncrawl-cdx"
+import { queryCdxForApex, normalizeCdxUrlToBoard, DEFAULT_CC_INDEX, getLatestCcIndex } from "@/lib/discovery/commoncrawl-cdx"
 import { computeConfidence } from "@/lib/discovery/confidence-score"
 import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
 
@@ -60,7 +60,7 @@ const CDX_TARGETS: CdxTarget[] = [
 const args = process.argv.slice(2)
 const execute    = args.includes("--execute")
 const indexArg   = args.find(a => a.startsWith("--index="))?.split("=")[1]
-const ccIndex    = indexArg ?? DEFAULT_CC_INDEX
+let ccIndex      = indexArg ?? DEFAULT_CC_INDEX
 const limitArg   = Number.parseInt(args.find(a => a.startsWith("--limit="))?.split("=")[1] ?? "200000", 10)
 const cdxLimit   = Number.isFinite(limitArg) && limitArg > 0 ? limitArg : 200_000
 const atsFilter  = args.find(a => a.startsWith("--ats="))?.split("=")[1]?.split(",").map(s => s.trim()) ?? []
@@ -152,6 +152,9 @@ async function upsertCandidate(
 
 async function main() {
   const pool = new Pool({ connectionString: DATABASE_URL })
+
+  // No explicit --index/CC_INDEX → mine the newest published crawl, not a stale default.
+  if (!indexArg) ccIndex = await getLatestCcIndex()
 
   const activeTargets = atsFilter.length > 0
     ? CDX_TARGETS.filter(t => atsFilter.includes(t.ats))
