@@ -25,7 +25,7 @@ const LEADERBOARD_STATES = [
   "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
 ]
 
-async function buildEntries(): Promise<SitemapEntry[]> {
+async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }> {
   const base = siteBaseUrl()
 
   const staticRoutes: SitemapEntry[] = [
@@ -136,24 +136,29 @@ async function buildEntries(): Promise<SitemapEntry[]> {
       })),
     ])
 
-    return [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes]
+    return { entries: [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes], ok: true }
   } catch {
-    return staticRoutes
+    // DB unreachable (e.g. cold start). Return static-only but flag NOT ok so the
+    // caller refuses to cache it or emit a truncated index — see getSitemapEntries.
+    return { entries: staticRoutes, ok: false }
   }
 }
 
 // Build once per TTL window and share across the index + every chunk request, so a
 // crawl that fetches the index and N children doesn't run the heavy companies scan
 // N+1 times (the web box PG is small — see CLAUDE.md memory). Process-local cache.
+// IMPORTANT: only successful (DB-backed) builds are cached. A degraded static-only
+// build (DB cold start) must NOT poison the cache — otherwise the index would report
+// 1 chunk and silently drop ~25k URLs (which is exactly what happened in prod).
 const TTL_MS = 15 * 60 * 1000
 let cache: { at: number; entries: SitemapEntry[] } | null = null
 
-export async function getSitemapEntries(): Promise<SitemapEntry[]> {
+export async function getSitemapEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }> {
   const now = Date.now()
-  if (cache && now - cache.at < TTL_MS) return cache.entries
-  const entries = await buildEntries()
-  cache = { at: now, entries }
-  return entries
+  if (cache && now - cache.at < TTL_MS) return { entries: cache.entries, ok: true }
+  const res = await buildEntries()
+  if (res.ok) cache = { at: now, entries: res.entries }
+  return res
 }
 
 export function sitemapChunkCount(total: number): number {
