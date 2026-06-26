@@ -11,6 +11,8 @@
     "lint": "next lint",
     "test": "find lib -name '*.test.ts' -print0 | xargs -0 tsx --test --test-reporter=spec",
     "harvester:worker": "tsx scripts/harvester-worker.ts",
+    "everify:enrich": "tsx scripts/enrich-everify.ts",
+    "everify:enrich:apply": "tsx scripts/enrich-everify.ts --apply",
     "discover:crtsh": "tsx scripts/discover-crtsh.ts",
     "discover:crtsh:execute": "tsx scripts/discover-crtsh.ts --execute",
     "discover:github-seeds": "tsx scripts/discover-github-seeds.ts",

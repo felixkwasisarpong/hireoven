@@ -77,6 +77,14 @@ const nextConfig = {
         destination: "/dashboard",
         permanent: false,
       },
+      {
+        // The methodology page is nested under /leaderboard, but many external
+        // references (press, docs, Spec 02) point at the un-nested URL. Redirect
+        // so those links don't 404.
+        source: "/h1b-sponsors/methodology",
+        destination: "/h1b-sponsors/leaderboard/methodology",
+        permanent: true,
+      },
     ]
   },
 }
