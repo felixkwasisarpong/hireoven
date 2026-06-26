@@ -5,10 +5,18 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 import { industrySlug } from "@/lib/h1b/leaderboard"
 import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
+import { siteBaseUrl } from "@/lib/seo/site-url"
+
+export { siteBaseUrl }
+
+// Google caps a single sitemap at 50,000 URLs. We routinely exceed that, so the
+// routes split entries into chunks and serve a sitemap index. Keep headroom under
+// the hard limit so a growth spike between deploys can't push a chunk over.
+export const SITEMAP_CHUNK = 45000
+
+export type SitemapEntry = MetadataRoute.Sitemap[number]
 
 const SALARY_TOP_STATES = ["CA", "TX", "NY", "WA", "NJ", "MA", "IL", "GA", "PA", "VA"]
-
-export const dynamic = "force-dynamic"
 
 const LEADERBOARD_STATES = [
   "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL",
@@ -17,15 +25,10 @@ const LEADERBOARD_STATES = [
   "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
 ]
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Sitemap <loc> values MUST be absolute. `??` only catches null/undefined, so an
-  // empty/blank NEXT_PUBLIC_APP_URL (as in prod) slipped through and produced relative
-  // URLs ("/features", empty homepage) — 70k "Invalid URL" errors in Search Console.
-  // Guard on a real https origin and strip any trailing slash so `${base}/x` is clean.
-  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
-  const base = envUrl && /^https?:\/\//.test(envUrl) ? envUrl.replace(/\/+$/, "") : "https://hireoven.com"
+async function buildEntries(): Promise<SitemapEntry[]> {
+  const base = siteBaseUrl()
 
-  const staticRoutes: MetadataRoute.Sitemap = [
+  const staticRoutes: SitemapEntry[] = [
     { url: base, lastModified: new Date(), changeFrequency: "daily", priority: 1.0 },
     { url: `${base}/features`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.85 },
     { url: `${base}/extension`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
@@ -74,25 +77,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ),
     ])
 
-    const companyRoutes: MetadataRoute.Sitemap = companiesResult.rows.map((c) => ({
+    const companyRoutes: SitemapEntry[] = companiesResult.rows.map((c) => ({
       url: `${base}/companies/${c.id}`, lastModified: new Date(c.updated_at), changeFrequency: "daily", priority: 0.7,
     }))
 
-    const sponsorRoutes: MetadataRoute.Sitemap = companiesResult.rows
+    const sponsorRoutes: SitemapEntry[] = companiesResult.rows
       .filter((c) => c.sponsors_h1b || (c.h1b_sponsor_count_1yr ?? 0) > 0)
       .map((c) => ({ url: `${base}/h1b-sponsors/${companyParam(c.id, c.name)}`, lastModified: new Date(c.updated_at), changeFrequency: "weekly" as const, priority: 0.75 }))
 
-    const jobsAtRoutes: MetadataRoute.Sitemap = companiesResult.rows
+    const jobsAtRoutes: SitemapEntry[] = companiesResult.rows
       .filter((c) => (c.job_count ?? 0) > 0)
       .map((c) => ({ url: `${base}${jobsAtPath(c.id, c.name)}`, lastModified: new Date(c.updated_at), changeFrequency: "daily" as const, priority: 0.7 }))
 
-    const scorecardRoutes: MetadataRoute.Sitemap = [...companiesResult.rows]
+    const scorecardRoutes: SitemapEntry[] = [...companiesResult.rows]
       .filter((c) => c.sponsors_h1b || (c.h1b_sponsor_count_1yr ?? 0) > 0)
       .sort((a, b) => (b.sponsorship_confidence ?? 0) - (a.sponsorship_confidence ?? 0))
       .slice(0, 2000)
       .map((c) => ({ url: `${base}/h1b-sponsors/${companyParam(c.id, c.name)}/scorecard`, lastModified: new Date(c.updated_at), changeFrequency: "weekly" as const, priority: 0.6 }))
 
-    const salaryRoutes: MetadataRoute.Sitemap = companiesResult.rows
+    const salaryRoutes: SitemapEntry[] = companiesResult.rows
       .filter((c) => (c.job_count ?? 0) >= 5)
       .map((c) => ({ url: `${base}${salariesPath(c.id, c.name)}`, lastModified: new Date(c.updated_at), changeFrequency: "weekly" as const, priority: 0.7 }))
 
@@ -102,28 +105,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         industryCounts.set(c.industry, (industryCounts.get(c.industry) ?? 0) + 1)
       }
     }
-    const industryRoutes: MetadataRoute.Sitemap = [...industryCounts.entries()]
+    const industryRoutes: SitemapEntry[] = [...industryCounts.entries()]
       .filter(([, n]) => n >= 5)
       .map(([industry]) => ({ url: `${base}/h1b-sponsors/industry/${companySlug(industry)}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.65 }))
 
-    const leaderboardIndustryRoutes: MetadataRoute.Sitemap = [...industryCounts.entries()]
+    const leaderboardIndustryRoutes: SitemapEntry[] = [...industryCounts.entries()]
       .filter(([, n]) => n >= 5)
       .map(([industry]) => ({ url: `${base}/h1b-sponsors/leaderboard/by-industry/${industrySlug(industry)}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.6 }))
 
-    const cityRoutes: MetadataRoute.Sitemap = citiesResult.rows.map((c) => ({
+    const cityRoutes: SitemapEntry[] = citiesResult.rows.map((c) => ({
       url: `${base}/h1b-sponsors/in/${companySlug(c.city)}-${c.state.toLowerCase()}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.65,
     }))
 
-    const roleRoutes: MetadataRoute.Sitemap = socsResult.rows
+    const roleRoutes: SitemapEntry[] = socsResult.rows
       .filter((s) => s.soc_title)
       .map((s) => ({ url: `${base}/h1b-sponsors/role/${companySlug(s.soc_title)}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.65 }))
 
-    const jobRoutes: MetadataRoute.Sitemap = jobsResult.rows.map((j) => ({
+    const jobRoutes: SitemapEntry[] = jobsResult.rows.map((j) => ({
       url: `${base}/jobs/${j.id}`, lastModified: new Date(j.updated_at), changeFrequency: "weekly", priority: 0.6,
     }))
 
     const salaryRoles = await getFeaturedSocRoles().catch(() => [])
-    const salaryRoleRoutes: MetadataRoute.Sitemap = salaryRoles.flatMap((r) => [
+    const salaryRoleRoutes: SitemapEntry[] = salaryRoles.flatMap((r) => [
       { url: `${base}/h1b-salaries/by-role/${r.slug}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.7 },
       ...SALARY_TOP_STATES.map((s) => ({
         url: `${base}/h1b-salaries/by-role/${r.slug}/by-state/${s}`,
@@ -137,4 +140,66 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   } catch {
     return staticRoutes
   }
+}
+
+// Build once per TTL window and share across the index + every chunk request, so a
+// crawl that fetches the index and N children doesn't run the heavy companies scan
+// N+1 times (the web box PG is small — see CLAUDE.md memory). Process-local cache.
+const TTL_MS = 15 * 60 * 1000
+let cache: { at: number; entries: SitemapEntry[] } | null = null
+
+export async function getSitemapEntries(): Promise<SitemapEntry[]> {
+  const now = Date.now()
+  if (cache && now - cache.at < TTL_MS) return cache.entries
+  const entries = await buildEntries()
+  cache = { at: now, entries }
+  return entries
+}
+
+export function sitemapChunkCount(total: number): number {
+  return Math.max(1, Math.ceil(total / SITEMAP_CHUNK))
+}
+
+function xmlEscape(s: string): string {
+  return s.replace(/[<>&'"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" }[c]!))
+}
+
+type SitemapDate = Date | string | number | undefined
+function toIso(d: SitemapDate): string | null {
+  if (d == null) return null
+  const date = d instanceof Date ? d : new Date(d)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+/** Render the <sitemapindex> listing one child sitemap per chunk (absolute URLs). */
+export function buildSitemapIndexXml(base: string, chunks: number, lastmod: string): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    Array.from({ length: chunks }, (_, i) =>
+      `<sitemap><loc>${xmlEscape(`${base}/sitemap/${i}.xml`)}</loc><lastmod>${lastmod}</lastmod></sitemap>`
+    ).join("\n") +
+    `\n</sitemapindex>\n`
+  )
+}
+
+/** Render a <urlset> for one chunk of entries. */
+export function buildUrlsetXml(entries: SitemapEntry[]): string {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>\n` +
+    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+    entries
+      .map((e) => {
+        const lastmod = toIso(e.lastModified as SitemapDate)
+        return (
+          `<url><loc>${xmlEscape(String(e.url))}</loc>` +
+          (lastmod ? `<lastmod>${lastmod}</lastmod>` : "") +
+          (e.changeFrequency ? `<changefreq>${e.changeFrequency}</changefreq>` : "") +
+          (e.priority != null ? `<priority>${e.priority}</priority>` : "") +
+          `</url>`
+        )
+      })
+      .join("\n") +
+    `\n</urlset>\n`
+  )
 }
