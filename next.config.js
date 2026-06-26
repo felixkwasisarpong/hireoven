@@ -1,3 +1,13 @@
+// Resolve the CORS Allow-Origin header value. A plain `?? "*"` only catches
+// null/undefined, so a blank NEXT_PUBLIC_APP_URL (as in prod) slipped through and
+// emitted an empty Allow-Origin, which blocks every cross-origin call. Require a
+// real https origin; otherwise fall back to "*" — the original permissive default
+// for the public / embeddable API.
+function corsAllowOrigin() {
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim()
+  return envUrl && /^https?:\/\//.test(envUrl) ? envUrl.replace(/\/+$/, "") : "*"
+}
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
@@ -41,7 +51,7 @@ const nextConfig = {
         source: "/api/:path*",
         missing: [{ type: "header", key: "origin", value: "chrome-extension://.*" }],
         headers: [
-          { key: "Access-Control-Allow-Origin", value: process.env.NEXT_PUBLIC_APP_URL ?? "*" },
+          { key: "Access-Control-Allow-Origin", value: corsAllowOrigin() },
           { key: "Access-Control-Allow-Methods", value: "GET,POST,PUT,DELETE,OPTIONS" },
           { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, X-Hireoven-Extension" },
         ],
