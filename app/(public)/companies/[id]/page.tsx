@@ -24,6 +24,7 @@ import { buildCompanyImmigrationProfile, formatProfilePercent, getProfileConfide
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { getSessionUser } from "@/lib/auth/session-user"
 import { cn } from "@/lib/utils"
 import type { Company, Job } from "@/types"
 
@@ -365,6 +366,10 @@ export default async function PublicCompanyPage({ params }: Props) {
   const data = await loadCompany(id)
   if (!data) notFound()
 
+  // Logged-in visitors see real, clickable job rows; logged-out visitors keep
+  // the blurred signup teaser.
+  const isAuthenticated = Boolean(await getSessionUser())
+
   const { company, jobs, h1bRecords, profile, similarCompanies, healthSnapshot } = data
   const status = statusCopy(profile.sponsorshipHistory.sponsorsH1b, profile.sponsorshipHistory.sponsorshipConfidence)
   const sponsorConfidence = profile.sponsorshipHistory.sponsorshipConfidence
@@ -523,7 +528,35 @@ export default async function PublicCompanyPage({ params }: Props) {
                 description="Hireoven tracks these in real time — new roles appear within minutes of posting."
               />
 
-              {/* Blurred ghost rows */}
+              {isAuthenticated && jobs.length > 0 ? (
+                /* Logged in — real, clickable job rows linking to the detail page */
+                <div className="overflow-hidden rounded-xl border border-slate-200">
+                  {jobs.map((job) => (
+                    <Link
+                      key={job.id}
+                      href={`/dashboard/jobs/${job.id}`}
+                      className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 transition hover:bg-slate-50"
+                    >
+                      <div className="min-w-0 space-y-1">
+                        <p className="truncate text-[14px] font-semibold text-slate-900">{job.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-500">
+                          {(job.is_remote || job.location) && (
+                            <span className="inline-flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {job.is_remote ? "Remote" : job.location}
+                            </span>
+                          )}
+                          {job.employment_type && (
+                            <span className="capitalize">{job.employment_type.replace(/[-_]/g, " ")}</span>
+                          )}
+                        </div>
+                      </div>
+                      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+              /* Logged out (or no jobs) — blurred ghost rows + signup teaser */
               <div className="relative overflow-hidden rounded-xl border border-slate-200">
                 {(jobs.length > 0 ? jobs.slice(0, 3) : Array.from({ length: 3 })).map((_, i) => (
                   <div key={i} className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 select-none">
@@ -572,6 +605,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                   </div>
                 </div>
               </div>
+              )}
             </section>
 
             <section className={sectionCard}>
