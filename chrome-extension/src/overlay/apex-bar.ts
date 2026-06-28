@@ -13,6 +13,7 @@
 
 import { detectSite, type SupportedSite } from "../detectors/site"
 import { isProbablyJobPage } from "../detectors/site"
+import { isWorkdayAuthPage } from "../detectors/ats"
 import {
   detectApplicationForm,
   type ApplicationFormDetection,
@@ -1028,6 +1029,33 @@ const STYLES = `
     color: #c2410c;
     line-height: 1.4;
   }
+  .agent-review-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 14px;
+    background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+  .agent-review-icon { font-size: 16px; line-height: 1; flex-shrink: 0; }
+  .agent-review-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .agent-review-text strong {
+    font-size: 12px;
+    font-weight: 700;
+    color: #166534;
+    line-height: 1.3;
+  }
+  .agent-review-text span {
+    font-size: 11px;
+    color: #15803d;
+    line-height: 1.4;
+  }
 `
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -1141,12 +1169,15 @@ function sendBackgroundMessage<T>(message: unknown): Promise<T> {
 /**
  * Outcome of one agent autofill loop. `needsLogin` distinguishes a mid-flow
  * sign-in requirement (pause + wait, keep retrying) from a genuine failure
- * (give up / advance the run).
+ * (give up / advance the run). `reachedReview` means the agent filled every
+ * step and is parked on the final review page — it deliberately did NOT click
+ * submit; the user gives a 1-click confirm instead.
  */
 interface AgentLoopResult {
   submitted: boolean
   reason?: string
   needsLogin?: boolean
+  reachedReview?: boolean
 }
 
 export class ApexBar {
@@ -1259,6 +1290,11 @@ export class ApexBar {
   private confirmationTimer: ReturnType<typeof setInterval> | null = null
   private agentModeRunning: boolean = false
   private agentWaitingForLogin: boolean = false
+  // Stop-at-review handoff: the agent filled every step and is parked on the
+  // final review page waiting for the user to click submit. The run stays alive
+  // in `waiting_review`; the user's submit click navigates to the confirmation
+  // page, which re-triggers the agent and advances the run.
+  private agentWaitingForReview: boolean = false
 
   // Draggable position — null means centered (default)
   private barPosition: { left: number; bottom: number } | null = null
@@ -1713,6 +1749,14 @@ export class ApexBar {
           <div class="agent-login-text">
             <strong>Log in to continue</strong>
             <span>Apex will auto-fill your application once you're signed in.</span>
+          </div>
+        </div>` : ""}
+      ${this.agentWaitingForReview ? `
+        <div class="agent-review-banner" role="status" aria-live="polite">
+          <span class="agent-review-icon">✅</span>
+          <div class="agent-review-text">
+            <strong>Ready to submit — review &amp; click submit</strong>
+            <span>Apex filled every step. Check the form, then click the highlighted submit button. The next application opens automatically once this one is in.</span>
           </div>
         </div>` : ""}
       <div class="apex-bar" role="region" aria-label="Hireoven Apex">
@@ -2702,6 +2746,11 @@ export class ApexBar {
     const LOGIN_URL_RE = /\/(login|signin|sign-in|auth|sso|register|signup|sign-up|create-account|account\/create|create-profile|join|onboard)/
     if (LOGIN_URL_RE.test(url)) return true
 
+    // Workday gates almost every application behind sign-in / account creation
+    // first — pause on those instead of trying to "fill" the auth form as if it
+    // were the application. (See isWorkdayAuthPage for the exact signals.)
+    if (isWorkdayAuthPage()) return true
+
     // Password field present but no recognisable application form → login page.
     const hasPassword = !!document.querySelector('input[type="password"]')
     if (!hasPassword) return false
@@ -2755,6 +2804,46 @@ export class ApexBar {
     }
     cta.click()
     return true
+  }
+
+  /**
+   * Stop-at-review: visually flag the page's real submit button and scroll it
+   * into view so the user can give a 1-click confirm. Styling is applied to the
+   * page DOM (not the shadow root) via a page-level <style>, matching the same
+   * `.ho-submit-highlight` convention the legacy review panel used.
+   */
+  private highlightSubmitButton(): HTMLElement | null {
+    if (!document.getElementById("ho-submit-highlight-style")) {
+      const style = document.createElement("style")
+      style.id = "ho-submit-highlight-style"
+      style.textContent = `
+        .ho-submit-highlight {
+          outline: 2.5px solid #10b981 !important;
+          outline-offset: 3px !important;
+          box-shadow: 0 0 0 4px rgba(16,185,129,0.18) !important;
+          animation: ho-submit-pulse 1.8s ease-in-out infinite !important;
+        }
+        @keyframes ho-submit-pulse {
+          0%, 100% { box-shadow: 0 0 0 4px rgba(16,185,129,0.18); }
+          50%       { box-shadow: 0 0 0 8px rgba(16,185,129,0.06); }
+        }`
+      document.head.appendChild(style)
+    }
+    const btn = this.findBestActionButton("submit")
+    if (!btn) return null
+    btn.classList.add("ho-submit-highlight")
+    try {
+      btn.scrollIntoView({ behavior: "smooth", block: "center" })
+    } catch {
+      // best-effort
+    }
+    return btn
+  }
+
+  private clearSubmitHighlight(): void {
+    document
+      .querySelectorAll(".ho-submit-highlight")
+      .forEach((el) => el.classList.remove("ho-submit-highlight"))
   }
 
   private findBestActionButton(kind: "next" | "submit"): HTMLElement | null {
@@ -3036,22 +3125,12 @@ export class ApexBar {
       }
 
       if (result.reachedReview) {
-        const submitButton = this.findBestActionButton("submit") ?? this.findBestActionButton("next")
-        if (!submitButton) return { submitted: false, reason: "Workday review submit button not found." }
-        await this.clickAndWaitForProgress(submitButton)
-        if (this.isConfirmationPage()) return { submitted: true }
-        // Some tenants require sign-in AFTER the final submit. Treat that as a
-        // login pause (not a failure) so the run waits for the user, then the
-        // post-login re-trigger records the confirmation.
-        this.runDetection()
-        if (this.isLoginOrAccountPage()) {
-          return {
-            submitted: false,
-            needsLogin: true,
-            reason: "Sign in to Workday to finish submitting your application.",
-          }
-        }
-        return { submitted: false, reason: "Workday review submit did not reach confirmation." }
+        // Stop-at-review: the agent filled every step but does NOT click the
+        // final submit. Hand off to the user for a 1-click confirm. The caller
+        // raises the Final Review panel, highlights the real Submit button, and
+        // parks the run in `waiting_review` until the user submits (which
+        // navigates to the confirmation page and advances the run).
+        return { submitted: false, reachedReview: true }
       }
 
       const nextButton = this.findBestActionButton("next")
@@ -3069,7 +3148,7 @@ export class ApexBar {
    * when no run is active — the background ignores it unless this tab is the one
    * it is currently driving.
    */
-  private sendRunStatus(phase: "waiting_login" | "filling" | "failed", reason?: string): void {
+  private sendRunStatus(phase: "waiting_login" | "waiting_review" | "filling" | "failed", reason?: string): void {
     if (!chrome.runtime?.id) return
     chrome.runtime.sendMessage({ type: "AGENT_RUN_STATUS", phase, reason }, () => {
       void chrome.runtime.lastError
@@ -3082,6 +3161,8 @@ export class ApexBar {
    * confirmation page itself and when it lands on one after a post-submit login.
    */
   private async finishAsSubmitted(): Promise<{ handled: boolean }> {
+    this.agentWaitingForReview = false
+    this.clearSubmitHighlight()
     await this.maybeSaveProofAutomatically()
     if (chrome.runtime?.id) {
       chrome.runtime.sendMessage(
@@ -3135,6 +3216,10 @@ export class ApexBar {
 
       // If we were waiting for login and now have a form, clear the banner.
       this.agentWaitingForLogin = false
+      // A fresh fill pass is starting — drop any prior review handoff state and
+      // its submit-button highlight so they don't linger across pages.
+      this.agentWaitingForReview = false
+      this.clearSubmitHighlight()
       this.sendRunStatus("filling")
 
       // Re-triggered onto a confirmation page — typically after the user signed
@@ -3191,6 +3276,21 @@ export class ApexBar {
           : await this.runGenericAgentLoop(10)
 
       if (!result.submitted) {
+        // Stop-at-review: every step is filled and we're parked on the final
+        // review page. Do NOT submit — raise the review banner, highlight the
+        // real submit button, and keep the agent context alive (waiting:true)
+        // so the user's submit click navigates to the confirmation page, which
+        // re-triggers us and advances the run. The run is parked, not failed.
+        if (result.reachedReview) {
+          this.agentWaitingForReview = true
+          this.autofillStatus = "idle"
+          this.autofillError = null
+          this.highlightSubmitButton()
+          this.render()
+          this.sendRunStatus("waiting_review")
+          return { handled: false, waiting: true }
+        }
+
         // A mid-flow sign-in requirement (e.g. Workday account_required, or a page
         // that redirected to login between steps) is NOT a failure — pause and keep
         // the pending agent context alive so we re-trigger automatically after the
