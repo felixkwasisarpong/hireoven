@@ -5,6 +5,7 @@
   "description": "Detect and save job listings to Hireoven from any ATS.",
   "permissions": [
     "activeTab",
+    "alarms",
     "cookies",
     "storage",
     "scripting"

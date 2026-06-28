@@ -61,6 +61,8 @@ const TEXT_PATTERNS: ReadonlyArray<RegExp> = [
   /\bwe(?:'ve| have)\s+received\s+your\s+application\b/i,
   /\byour\s+application\s+is\s+(?:complete|in)\b/i,
   /\bapplication\s+complete\b/i,
+  // Workday confirmation copy: "You've submitted your application", "You have applied".
+  /\byou(?:'ve| have)\s+(?:successfully\s+)?(?:submitted|applied)\b/i,
 ]
 
 // ── ATS-specific DOM hooks ───────────────────────────────────────────────────

@@ -95,6 +95,24 @@ export function detectATS(url: string): ATSProvider {
   return "generic"
 }
 
+/**
+ * Workday gates nearly every application behind sign-in / account creation. Its
+ * auth panels carry stable automation ids, and the create-account step pairs a
+ * password with a "Verify New Password" field. The agent must recognise these
+ * so it pauses (waiting_login) instead of trying to autofill the auth form as
+ * if it were the application. Pure DOM check — safe to call on any page.
+ */
+const WORKDAY_AUTH_SELECTORS = [
+  '[data-automation-id="signInContent"]',
+  '[data-automation-id="createAccountPage"]',
+  '[data-automation-id="createAccountCheckbox"]',
+  '[data-automation-id="verifyPassword"]', // unique to account creation
+].join(",")
+
+export function isWorkdayAuthPage(doc: Document = document): boolean {
+  return !!doc.querySelector(WORKDAY_AUTH_SELECTORS)
+}
+
 export function detectPageType(): PageType {
   for (const selector of APPLICATION_FORM_INDICATORS) {
     if (document.querySelector(selector)) return "application_form"

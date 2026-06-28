@@ -1721,8 +1721,16 @@ async function handleQueueClear(): Promise<QueueActionResult> {
 
 /** Tab currently being driven by the run. Set to null right before we close it. */
 let currentRunTabId: number | null = null
-let runWatchdog: ReturnType<typeof setTimeout> | null = null
-const RUN_WATCHDOG_MS = 10 * 60 * 1000 // mirrors AGENT_CONTEXT_TTL_MS
+const RUN_WATCHDOG_MINUTES = 10 // mirrors AGENT_CONTEXT_TTL_MS
+/**
+ * The watchdog runs on a chrome.alarms timer (not setTimeout) so it survives
+ * MV3 service-worker teardown — the worker is recycled after ~30s idle, which
+ * is shorter than a typical login or final-review wait. The alarm wakes the
+ * worker; the queue item it guards is persisted, so we read it back from
+ * session storage rather than relying on in-memory state.
+ */
+const RUN_WATCHDOG_ALARM = "ho-run-watchdog"
+const RUN_WATCHDOG_KEY = "runWatchdogQueueId"
 
 /**
  * Tabs opened by a single-job "Open & Fill" (agent mode, but NOT a chained run).
@@ -1771,27 +1779,50 @@ const RUN_DONE_OR_BUSY: QueueItemStatus[] = [
   "failed",
   "applying",
   "waiting_login",
+  "waiting_user_review",
 ]
 
+/** Run statuses where the job is legitimately parked on the user, not stuck. */
+const RUN_WAITING_ON_USER: QueueItemStatus[] = ["waiting_login", "waiting_user_review"]
+
+/** Map an agent run-status phase to the queue item status it should record. */
+function phaseToQueueStatus(
+  phase: "waiting_login" | "waiting_review" | "filling" | "failed",
+): QueueItemStatus {
+  if (phase === "waiting_login") return "waiting_login"
+  if (phase === "waiting_review") return "waiting_user_review"
+  return "applying"
+}
+
 function clearRunWatchdog(): void {
-  if (runWatchdog) {
-    clearTimeout(runWatchdog)
-    runWatchdog = null
-  }
+  chrome.alarms.clear(RUN_WATCHDOG_ALARM).catch(() => {})
+  chrome.storage.session.remove(RUN_WATCHDOG_KEY).catch(() => {})
 }
 
 function armRunWatchdog(queueItemId: string): void {
-  clearRunWatchdog()
-  runWatchdog = setTimeout(() => void onRunWatchdogFired(queueItemId), RUN_WATCHDOG_MS)
+  void chrome.storage.session.set({ [RUN_WATCHDOG_KEY]: queueItemId })
+  chrome.alarms.create(RUN_WATCHDOG_ALARM, { delayInMinutes: RUN_WATCHDOG_MINUTES })
 }
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== RUN_WATCHDOG_ALARM) return
+  void (async () => {
+    const stored = await chrome.storage.session.get(RUN_WATCHDOG_KEY)
+    const queueItemId = stored[RUN_WATCHDOG_KEY]
+    if (typeof queueItemId === "string" && queueItemId) {
+      await onRunWatchdogFired(queueItemId)
+    }
+  })()
+})
 
 async function onRunWatchdogFired(queueItemId: string): Promise<void> {
   const queue = await readQueue()
   if (!queue || queue.runStatus !== "running" || queue.currentQueueId !== queueItemId) return
   const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
   if (i < 0) return
-  // Never time a job out while it is legitimately waiting for the user to log in.
-  if (queue.jobs[i].status === "waiting_login") {
+  // Never time a job out while it is legitimately parked on the user — a login
+  // wall, or the final review handoff waiting for their 1-click submit.
+  if (RUN_WAITING_ON_USER.includes(queue.jobs[i].status)) {
     armRunWatchdog(queueItemId)
     return
   }
@@ -1895,7 +1926,7 @@ async function handleQueueStopRun(): Promise<QueueActionResult> {
   queue.runStatus = "idle"
   if (queue.currentQueueId) {
     const i = queue.jobs.findIndex((j) => j.queueId === queue.currentQueueId)
-    if (i >= 0 && (queue.jobs[i].status === "applying" || queue.jobs[i].status === "waiting_login")) {
+    if (i >= 0 && (queue.jobs[i].status === "applying" || RUN_WAITING_ON_USER.includes(queue.jobs[i].status))) {
       queue.jobs[i] = { ...queue.jobs[i], status: "queued" }
     }
   }
@@ -1930,7 +1961,7 @@ async function handleQueueOpenJob(queueId: string): Promise<QueueActionResult> {
 }
 
 async function handleAgentRunStatus(
-  phase: "waiting_login" | "filling" | "failed",
+  phase: "waiting_login" | "waiting_review" | "filling" | "failed",
   reason: string | undefined,
   senderTabId: number | undefined,
 ): Promise<import("./types").AgentRunStatusAck> {
@@ -1949,7 +1980,7 @@ async function handleAgentRunStatus(
         failReason: reason ?? "Agent could not complete this application",
       })
     } else {
-      await setQueueItemStatus(queueId, phase === "waiting_login" ? "waiting_login" : "applying")
+      await setQueueItemStatus(queueId, phaseToQueueStatus(phase))
     }
     return accept
   }
@@ -1966,8 +1997,9 @@ async function handleAgentRunStatus(
     return accept
   }
 
-  await setQueueItemStatus(queue.currentQueueId, phase === "waiting_login" ? "waiting_login" : "applying")
-  // Re-arm the watchdog so a login wait (or fresh page) doesn't trip the timeout.
+  await setQueueItemStatus(queue.currentQueueId, phaseToQueueStatus(phase))
+  // Re-arm the watchdog so a login wait, review handoff, or fresh page doesn't
+  // trip the timeout. (onRunWatchdogFired re-arms again for user-parked states.)
   armRunWatchdog(queue.currentQueueId)
   return accept
 }

@@ -662,11 +662,13 @@ export interface AgentApplicationSubmittedAck {
 export interface AgentRunStatusMessage {
   type: "AGENT_RUN_STATUS"
   /**
-   * waiting_login → blocked on a sign-in / account page (run pauses, no advance).
-   * filling       → an application form was found and autofill is underway.
-   * failed        → a non-recoverable problem on this job (run advances past it).
+   * waiting_login  → blocked on a sign-in / account page (run pauses, no advance).
+   * waiting_review → every step filled; parked on the final review page for the
+   *                  user's 1-click submit (run pauses, no advance, no timeout).
+   * filling        → an application form was found and autofill is underway.
+   * failed         → a non-recoverable problem on this job (run advances past it).
    */
-  phase: "waiting_login" | "filling" | "failed"
+  phase: "waiting_login" | "waiting_review" | "filling" | "failed"
   reason?: string
 }
 
