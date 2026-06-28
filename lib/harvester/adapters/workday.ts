@@ -76,6 +76,16 @@ const DETAIL_TIMEOUT_MS = Math.max(
   1_000,
   Number.parseInt(process.env.HARVESTER_WORKDAY_DETAIL_TIMEOUT_MS ?? "8000", 10)
 )
+// Overall per-company wall-clock budget. A single slow Workday tenant (up to 50
+// paginated POSTs + per-job detail) can otherwise burn the worker's whole 300s
+// tick watchdog and starve the other 9 companies claimed in the same batch —
+// the observed `company_hang` / `tick_timeout` pattern on big boards (Northrop
+// Grumman, Accenture, Visa, …). When the budget is exhausted we stop early and
+// return a partial harvest; the remaining pages/details backfill next cycle.
+const COMPANY_DEADLINE_MS = Math.max(
+  20_000,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_COMPANY_DEADLINE_MS ?? "75000", 10)
+)
 
 type WorkdayLocation = { descriptor?: string }
 
@@ -463,7 +473,8 @@ function mapRawJob(parsed: ParsedSlug, raw: WorkdayPosting): (HarvestedJob & { e
 async function enrichWithDetail(
   parsed: ParsedSlug,
   jobs: Array<HarvestedJob & { externalPath: string | undefined }>,
-  ctx: HarvestCtx
+  ctx: HarvestCtx,
+  deadline: number
 ): Promise<void> {
   if (DETAIL_MAX_JOBS === 0) return
   // Skip jobs that already have a real description in the DB — the cap
@@ -480,6 +491,9 @@ async function enrichWithDetail(
   await Promise.all(
     targets.map((job) =>
       limit(async () => {
+        // Once the per-company budget is spent, drop the remaining queued
+        // detail fetches so the detail phase can't run unbounded past it.
+        if (Date.now() > deadline) return
         const detail = await fetchWorkdayJobDetail(parsed, job.externalPath!, ctx)
         if (!detail) return
         if (detail.description && detail.description.length > (job.description?.length ?? 0)) {
@@ -521,8 +535,12 @@ export const workdayAdapter: AtsAdapter = {
     let upstreamLatencyMs = 0
     let offset = 0
     let pageCount = 0
+    const deadline = Date.now() + COMPANY_DEADLINE_MS
 
     while (pageCount < MAX_PAGES) {
+      // Stop paginating once the per-company budget is spent — return what we
+      // have rather than letting one slow tenant eat the whole tick.
+      if (Date.now() > deadline) break
       pageCount += 1
       const result = await postWorkdayListing(
         url,
@@ -554,8 +572,12 @@ export const workdayAdapter: AtsAdapter = {
     // listing-only `bulletFields` is too sparse for matching/skills
     // extraction. Capped at DETAIL_MAX_JOBS per board, DETAIL_CONCURRENCY
     // parallel — env-tunable for operators tuning throughput vs richness.
+    // Per-job detail phase. It self-limits against the same deadline: any
+    // fetches still queued when the budget runs out are dropped, so a slow
+    // tenant can't run detail unbounded past the per-company budget. Listing
+    // (titles, locations, apply URLs) is already captured above either way.
     const detailStart = Date.now()
-    await enrichWithDetail(parsed, jobs, ctx)
+    await enrichWithDetail(parsed, jobs, ctx, deadline)
     upstreamLatencyMs += Date.now() - detailStart
 
     return {
