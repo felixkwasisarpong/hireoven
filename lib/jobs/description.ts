@@ -1054,7 +1054,7 @@ async function fetchGreenhouseDescriptionFromUrl(url: URL): Promise<string | nul
  * Infer a provider hint from the apply URL so that `extractJobDescriptionFromHtml`
  * can use ATS-specific content anchors. Returns undefined for unknown providers.
  */
-function detectProviderFromUrl(url: URL): string | undefined {
+export function detectProviderFromUrl(url: URL): string | undefined {
   const host = url.hostname.toLowerCase()
   if (host.includes("greenhouse.io") || host.includes("boards.greenhouse")) return "greenhouse"
   if (host.includes("lever.co")) return "lever"

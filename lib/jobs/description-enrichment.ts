@@ -2,6 +2,10 @@ import pLimit from "p-limit"
 import type { Pool } from "pg"
 import { fetchJobDescription } from "@/lib/jobs/description"
 import {
+  createBrowserDescriptionFetcher,
+  type BrowserDescriptionFetcher,
+} from "@/lib/jobs/description-browser"
+import {
   normalizePersistedJobRecord,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
@@ -46,6 +50,26 @@ const DEFAULT_STALE_PROCESSING_MS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_STALE_MS ?? "900000", 10)
 )
 
+// --- Playwright fallback (off by default) -----------------------------------
+// When the plain HTTP fetch returns nothing usable, optionally re-try the URL
+// in a real browser. Heavy, so it's opt-in and tightly bounded: a small
+// concurrency, a per-run ceiling, and a short per-page timeout keep it from
+// pegging the shared harvester box (4 vCPU / 8 GB). See description-browser.ts.
+const BROWSER_FALLBACK_ENABLED =
+  process.env.JOB_DESCRIPTION_ENRICHMENT_BROWSER === "true"
+const BROWSER_FALLBACK_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BROWSER_CONCURRENCY ?? "3", 10)
+)
+const BROWSER_FALLBACK_MAX_PER_RUN = Math.max(
+  0,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BROWSER_MAX ?? "150", 10)
+)
+const BROWSER_FALLBACK_TIMEOUT_MS = Math.max(
+  3_000,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BROWSER_TIMEOUT_MS ?? "10000", 10)
+)
+
 const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
   "ashby",
   "bamboohr",
@@ -66,12 +90,18 @@ type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
 }
 
+type Outcome = "published" | "enriched" | "failed"
+
 export type DescriptionEnrichmentResult = {
   processed: number
   enriched: number
   published: number
   failed: number
   skipped: number
+  /** Jobs that fell through HTTP and were retried in a browser this run. */
+  browserAttempted?: number
+  /** Of those, how many the browser fallback resolved. */
+  browserEnriched?: number
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -394,31 +424,102 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
     return { processed: 0, enriched: 0, published: 0, failed: 0, skipped: ids.length }
   }
 
-  const outcomes = await runWithConcurrency(
+  const finalizeSuccess = async (
+    job: DescriptionEnrichmentJob,
+    description: string
+  ): Promise<Outcome> => {
+    const status = await updateSuccess(pool, job, description, runId)
+    return status === "published" ? "published" : "enriched"
+  }
+
+  // Phase 1 — plain HTTP fetch. Successes are persisted immediately; the cheap
+  // failures are collected for the (optional) browser retry rather than being
+  // marked failed right away.
+  const settled: Outcome[] = []
+  const needsBrowser: DescriptionEnrichmentJob[] = []
+  const httpResults = await runWithConcurrency(
     jobs.map((job) => async () => {
       const description = await fetchJobDescription(job.apply_url, timeoutMs)
-      if (!description || description.trim().length < minDescriptionChars) {
-        await markFailure(
-          pool,
-          job,
-          runId,
-          description ? "description_too_short" : "description_fetch_failed",
-          maxAttempts
-        )
-        return "failed" as const
+      if (description && description.trim().length >= minDescriptionChars) {
+        return { done: true as const, outcome: await finalizeSuccess(job, description) }
       }
-
-      const status = await updateSuccess(pool, job, description, runId)
-      return status === "published" ? "published" as const : "enriched" as const
+      return { done: false as const, job }
     }),
     concurrency
   )
+  for (const result of httpResults) {
+    if (result.done) settled.push(result.outcome)
+    else needsBrowser.push(result.job)
+  }
+
+  // Phase 2 — browser fallback (opt-in, bounded). Only the jobs HTTP couldn't
+  // resolve reach here, and only up to BROWSER_FALLBACK_MAX_PER_RUN are rendered
+  // so the box is never flooded. Anything not handled is marked failed so it
+  // retries on a later cycle (and retires after maxAttempts).
+  let browserAttempted = 0
+  let browserEnriched = 0
+  const failWithReason = async (job: DescriptionEnrichmentJob, reason: string) => {
+    await markFailure(pool, job, runId, reason, maxAttempts)
+    settled.push("failed")
+  }
+
+  let fetcher: BrowserDescriptionFetcher | null = null
+  if (BROWSER_FALLBACK_ENABLED && BROWSER_FALLBACK_MAX_PER_RUN > 0 && needsBrowser.length > 0) {
+    try {
+      fetcher = await createBrowserDescriptionFetcher()
+    } catch {
+      fetcher = null
+    }
+  }
+
+  if (fetcher) {
+    const toRender = needsBrowser.slice(0, BROWSER_FALLBACK_MAX_PER_RUN)
+    const overflow = needsBrowser.slice(BROWSER_FALLBACK_MAX_PER_RUN)
+    browserAttempted = toRender.length
+    try {
+      const limit = pLimit(BROWSER_FALLBACK_CONCURRENCY)
+      const rendered = await Promise.all(
+        toRender.map((job) =>
+          limit(async () => {
+            let description: string | null = null
+            try {
+              description = await fetcher!.fetch(job.apply_url, BROWSER_FALLBACK_TIMEOUT_MS)
+            } catch {
+              description = null
+            }
+            if (description && description.trim().length >= minDescriptionChars) {
+              return finalizeSuccess(job, description)
+            }
+            await markFailure(
+              pool,
+              job,
+              runId,
+              description ? "description_too_short" : "browser_fetch_failed",
+              maxAttempts
+            )
+            return "failed" as Outcome
+          })
+        )
+      )
+      settled.push(...rendered)
+      browserEnriched = rendered.filter((o) => o !== "failed").length
+      // Jobs past the per-run ceiling: fail now, retry next cycle.
+      for (const job of overflow) await failWithReason(job, "description_fetch_failed")
+    } finally {
+      await fetcher.close()
+    }
+  } else {
+    // Browser disabled or unavailable — original behavior for HTTP failures.
+    for (const job of needsBrowser) await failWithReason(job, "description_fetch_failed")
+  }
 
   return {
     processed: jobs.length,
-    enriched: outcomes.filter((outcome) => outcome === "enriched" || outcome === "published").length,
-    published: outcomes.filter((outcome) => outcome === "published").length,
-    failed: outcomes.filter((outcome) => outcome === "failed").length,
+    enriched: settled.filter((outcome) => outcome === "enriched" || outcome === "published").length,
+    published: settled.filter((outcome) => outcome === "published").length,
+    failed: settled.filter((outcome) => outcome === "failed").length,
     skipped: ids.length - jobs.length,
+    browserAttempted,
+    browserEnriched,
   }
 }
