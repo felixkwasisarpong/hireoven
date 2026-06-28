@@ -89,7 +89,18 @@ export async function GET(
     return NextResponse.json({ error: "Resume not found" }, { status: 404 })
   }
 
-  if (resume.storage_path) {
+  // Only stream the stored object for a *pristine* upload. Once a resume has
+  // been edited in place, tailored, or duplicated-then-edited, its structured
+  // columns are the source of truth and the stored file is stale — duplicates
+  // even share the parent's storage_path, so streaming it would hand back the
+  // ORIGINAL (e.g. the active resume) instead of the one the user picked.
+  // In those cases fall through to regeneration from the resume's own columns.
+  const storedFileIsStale =
+    Boolean(resume.content_modified) ||
+    Boolean(resume.parent_resume_id) ||
+    Boolean(resume.tailored_for_job_id)
+
+  if (resume.storage_path && !storedFileIsStale) {
     try {
       const object = await getResumeObject(resume.storage_path)
       // Resolve a real MIME type. MinIO stores uploads as application/octet-stream
