@@ -46,6 +46,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/sharp ./node_modules/sharp
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@img ./node_modules/@img
 
+# Playwright is used as the browser fallback in the description-enrichment worker
+# (JOB_DESCRIPTION_ENRICHMENT_BROWSER). It's imported dynamically, so the Next
+# standalone tracer drops the module — copy it explicitly like sharp — and the
+# runner has no browser binary, so install chromium + its system libraries here.
+# Using the copied module's own CLI guarantees the chromium revision matches the
+# installed playwright version. Mirrors Dockerfile.harvester.
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/playwright ./node_modules/playwright
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/playwright-core ./node_modules/playwright-core
+RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
+  && node node_modules/playwright/cli.js install --with-deps chromium \
+  && chmod -R go+rX $PLAYWRIGHT_BROWSERS_PATH
+
 USER nextjs
 EXPOSE 3000
 
