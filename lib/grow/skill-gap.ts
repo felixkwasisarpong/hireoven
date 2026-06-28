@@ -17,7 +17,13 @@
  * reports skills the user already has as gaps.
  */
 
-import { canonicalizeSkill, normalizeSkillKey, normalizeSkillList } from "@/lib/skills/taxonomy"
+import {
+  canonicalizeSkill,
+  isKnownSkill,
+  isSoftSkill,
+  normalizeSkillKey,
+  normalizeSkillList,
+} from "@/lib/skills/taxonomy"
 
 /** A target-role posting reduced to what the engine needs. */
 export type SkillGapJob = {
@@ -74,6 +80,17 @@ function plausibleSalary(v: number | null): number | null {
 /** Taxonomy-aware comparison key: "JS" and "JavaScript" collapse to one key. */
 function skillKey(s: string): string {
   return normalizeSkillKey(canonicalizeSkill(s))
+}
+
+/**
+ * A posting's required skills reduced to ones we'd actually recommend learning:
+ * canonicalized + noise-filtered (normalizeSkillList), then gated to genuine
+ * taxonomy skills and stripped of generic soft skills. This is what keeps
+ * non-skills ("Visual Merchandising", "Attention to Detail") and unlearnable
+ * fluff ("Communication") out of the gap list — the user's complaint.
+ */
+function actionableSkills(raw: string[]): string[] {
+  return normalizeSkillList(raw).filter((s) => isKnownSkill(s) && !isSoftSkill(s))
 }
 
 function median(values: number[]): number | null {
@@ -152,9 +169,13 @@ export function computeSkillGaps(jobs: SkillGapJob[], userSkills: string[]): Ski
   let eligibleNow = 0
 
   for (const job of jobs) {
-    // Canonical, deduped, noise-filtered posting skills (drops zip codes, "remote",
-    // etc.) and collapsed to canonical labels so aliases match the user's skills.
-    const skills = normalizeSkillList(job.requiredSkills)
+    // Canonical, deduped, noise-filtered posting skills, then gated to genuine
+    // learnable skills (taxonomy-known, no generic soft skills) so the gap list
+    // never surfaces non-skills or unactionable fluff.
+    const skills = actionableSkills(job.requiredSkills)
+    // A posting with no recognized hard skills carries no usable signal — don't
+    // let it inflate eligibleNow or the target-set math.
+    if (skills.length === 0) continue
     const salary = plausibleSalary(job.salary)
     if (salary != null) allSalaries.push(salary)
 

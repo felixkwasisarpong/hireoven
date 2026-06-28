@@ -94,6 +94,47 @@ test("collapses golang/Go and postgres/PostgreSQL aliases", () => {
   assert.equal(go!.jobsRequiring, 3)
 })
 
+test("drops non-taxonomy tokens that aren't real skills, even above the demand floor", () => {
+  // "Visual Merchandising" / "Attention to Detail" leak in from broad upstream
+  // extractors. They read as ordinary English so the noise filter can't catch
+  // them — the taxonomy gate must.
+  const jobs = [
+    job("1", ["React", "Visual Merchandising", "Attention to Detail"]),
+    job("2", ["React", "Visual Merchandising", "Attention to Detail"]),
+    job("3", ["React", "Visual Merchandising", "Attention to Detail"]),
+    job("4", ["React", "Kubernetes"]),
+    job("5", ["React", "Kubernetes"]),
+    job("6", ["React", "Kubernetes"]),
+  ]
+  const r = computeSkillGaps(jobs, ["react"])
+  assert.equal(r.gaps.find((g) => /merchandising|attention/i.test(g.skill)), undefined)
+  // Genuine skills still surface.
+  assert.ok(r.gaps.find((g) => g.skill === "Kubernetes"))
+})
+
+test("does not surface generic soft skills as learnable gaps", () => {
+  const jobs = [
+    job("1", ["Kubernetes", "Communication", "Leadership"]),
+    job("2", ["Kubernetes", "Communication", "Leadership"]),
+    job("3", ["Kubernetes", "Communication", "Leadership"]),
+  ]
+  const r = computeSkillGaps(jobs, [])
+  assert.ok(r.gaps.find((g) => g.skill === "Kubernetes"))
+  assert.equal(r.gaps.find((g) => /communication|leadership/i.test(g.skill)), undefined)
+})
+
+test("a posting whose only missing skill is noise counts as eligible, not a gap", () => {
+  // User has every *real* skill; the posting's extra "Cashier" token is noise.
+  const jobs = [
+    job("1", ["React", "Cashier"]),
+    job("2", ["React", "Cashier"]),
+    job("3", ["React", "Cashier"]),
+  ]
+  const r = computeSkillGaps(jobs, ["react"])
+  assert.equal(r.gaps.length, 0)
+  assert.equal(r.eligibleNow, 3)
+})
+
 test("excludes implausible salaries from the comp signal", () => {
   const jobs = [
     job("1", ["React", "Kubernetes"], 200_000),
