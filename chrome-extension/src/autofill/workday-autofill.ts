@@ -250,6 +250,40 @@ function normText(raw: string | null | undefined): string {
     .trim()
 }
 
+/**
+ * True when a yes/no question asks whether the candidate has worked for / been
+ * employed by this company before — including the common Workday phrasing
+ * "Have you been previously employed by {company} or its sub-brands - …?".
+ * These default to "No" (a genuine returning employee corrects it in manual
+ * review) so we don't burn an AI round-trip or leave the required radio blank.
+ * Guarded against "previous employer" obligation wording and relative/family
+ * questions, which are different. Exported for unit testing.
+ */
+export function isReturningEmployerQuestion(question: string): boolean {
+  const q = normText(question)
+  if (!q) return false
+  if (q.includes("previous employer") || q.includes("relative") || q.includes("family")) {
+    return false
+  }
+  return (
+    q.includes("previous employee") ||
+    q.includes("former employee") ||
+    q.includes("current or former employee") ||
+    q.includes("previously been employed") ||
+    q.includes("previously employed") ||
+    q.includes("been employed by") ||
+    q.includes("currently or previously employed") ||
+    q.includes("currently or previously worked") ||
+    q.includes("ever been employed by") ||
+    q.includes("currently employed by") ||
+    q.includes("ever worked for") ||
+    q.includes("ever worked with") ||
+    q.includes("ever worked at") ||
+    q.includes("worked with us") ||
+    q.includes("worked here")
+  )
+}
+
 function isVisible(el: Element | null): boolean {
   if (!(el instanceof HTMLElement)) return false
   if (el.hidden) return false
@@ -3227,29 +3261,10 @@ class WorkdayAutofillRunner {
     ) {
       return false
     }
-    // "Have you ever worked for / with us?" / "Are you a previous employee?" →
-    // default No. Avoids an AI round-trip; a returning employee can correct it
-    // via manual review. Guarded against "previous employer" (handled above) and
-    // relative/family wording so we don't mis-answer a different question.
-    if (
-      (q.includes("previous employee") ||
-        q.includes("former employee") ||
-        q.includes("current or former employee") ||
-        q.includes("previously been employed") ||
-        q.includes("currently or previously employed") ||
-        q.includes("currently or previously worked") ||
-        q.includes("ever been employed by") ||
-        q.includes("currently employed by") ||
-        q.includes("ever worked for") ||
-        q.includes("ever worked with") ||
-        q.includes("ever worked at") ||
-        q.includes("worked with us") ||
-        q.includes("worked here")) &&
-      !q.includes("relative") &&
-      !q.includes("family")
-    ) {
-      return false
-    }
+    // "Have you ever worked for / with us?" / "Have you been previously employed
+    // by {company}?" → default No. Avoids an AI round-trip and never leaves the
+    // required radio blank; a genuine returning employee corrects it in review.
+    if (isReturningEmployerQuestion(question)) return false
     if (q.includes("conditional job offer") && q.includes("withdrawn")) return false
     if (q.includes("discharged") || q.includes("terminated") || q.includes("resigned without notice")) return false
     if (q.includes("immediate family member relationship") || q.includes("immediate family relationship")) return false
