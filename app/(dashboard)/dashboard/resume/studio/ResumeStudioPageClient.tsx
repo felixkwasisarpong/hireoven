@@ -3047,7 +3047,12 @@ export default function ResumeStudioPage() {
             />
           </div>
         ) : (
-          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] xl:grid-cols-[minmax(0,0.8fr)_minmax(320px,0.7fr)_minmax(560px,1fr)]">
+          // 2-up (form + fixes) until there's genuinely room for the inline
+          // preview. The dashboard sidebar eats ~256px, so an xl viewport only
+          // leaves ~1024px of content — too tight for 3 columns, which collapsed
+          // the form column and overlapped its fields. The 3rd (preview) column
+          // only switches on at 2xl, where the form keeps a 360px floor.
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.8fr)] 2xl:grid-cols-[minmax(360px,0.85fr)_minmax(300px,0.7fr)_minmax(540px,1fr)]">
             <section className="space-y-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <ResumeSelect
                 resumes={resumes}
@@ -3219,7 +3224,7 @@ export default function ResumeStudioPage() {
               </div>
             </div>
 
-            <div className="hidden xl:contents">
+            <div className="hidden 2xl:contents">
               <StickyResumePreview
                 title="Tailored Resume Preview"
                 badge="Draft tailored resume"
