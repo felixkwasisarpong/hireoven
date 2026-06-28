@@ -891,6 +891,19 @@ export function canonicalizeSkill(value: string) {
 }
 
 /**
+ * True only when the value maps to a curated taxonomy definition (label or
+ * alias). Upstream extractors (the broad SKILL_DICTIONARY, raw job `skills`
+ * arrays) leak role-specific phrases and non-skills that `canonicalizeSkill`
+ * passes through verbatim and `isPlausibleSkill` can't catch because they read
+ * as ordinary English. Callers that must surface *genuine* skills — e.g. the
+ * skill-gap recommender — gate on this so noise never reaches the user.
+ */
+export function isKnownSkill(value: string): boolean {
+  if (!value?.trim()) return false
+  return BY_KEY.has(normalizeSkillKey(value))
+}
+
+/**
  * Reject obvious non-skills that bleed in from upstream extractors:
  * zip codes, LinkedIn boilerplate tags, country/work-mode tokens, etc.
  * Run against the canonicalized value so taxonomy-mapped legit skills
