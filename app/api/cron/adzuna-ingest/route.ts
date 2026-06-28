@@ -224,6 +224,7 @@ export async function GET(request: NextRequest) {
     harvestBumped: 0,
     canonicalCompanyMatches: 0,
     truncatedHidden: 0,
+    skippedHiddenInsert: 0,
     duplicateFingerprintSkipped: 0,
     duplicateFingerprintRefreshed: 0,
   }
@@ -516,6 +517,14 @@ export async function GET(request: NextRequest) {
            rawData, existingId]
         )
         stats.updated++
+      } else if (publicationStatus === "hidden_low_quality") {
+        // A brand-new Adzuna job that would be hidden adds no feed value: the
+        // description is a ~500-char teaser and the redirect is WAF-blocked, so
+        // it can never be enriched or published. Company discovery and the
+        // freshness-signal bump already happened above (company-level), so we
+        // skip persisting the dead row entirely rather than bloating the table
+        // with a listing no user will ever see.
+        stats.skippedHiddenInsert++
       } else {
         await pool.query(
           `INSERT INTO jobs (
