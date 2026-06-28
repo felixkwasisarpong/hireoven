@@ -44,7 +44,8 @@ async function ensureResumeLifecycleColumns() {
        ADD COLUMN IF NOT EXISTS resume_score INTEGER,
        ADD COLUMN IF NOT EXISTS primary_role TEXT,
        ADD COLUMN IF NOT EXISTS seniority_level TEXT,
-       ADD COLUMN IF NOT EXISTS industries JSONB`
+       ADD COLUMN IF NOT EXISTS industries JSONB,
+       ADD COLUMN IF NOT EXISTS content_modified BOOLEAN DEFAULT false`
   )
 }
 
@@ -257,6 +258,9 @@ export async function PATCH(
     updates.raw_text = buildResumeRawText(nextResume)
     Object.assign(updates, deriveResumeFields(nextResume))
     updates.ats_score = buildResumeScoreBreakdown(nextResume).atsReadability
+    // Content now diverges from any uploaded file — downloads/previews must
+    // regenerate from these columns rather than stream the stale stored object.
+    updates.content_modified = true
   }
 
   if (Object.keys(updates).length === 0) {

@@ -78,8 +78,40 @@ async function ensureResumeColumns(pool: ReturnType<typeof getPostgresPool>) {
        ADD COLUMN IF NOT EXISTS additional_sections JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ,
+       ADD COLUMN IF NOT EXISTS content_modified BOOLEAN DEFAULT false,
        ALTER COLUMN file_url DROP NOT NULL,
        ALTER COLUMN storage_path DROP NOT NULL`
+  )
+}
+
+/**
+ * Backfill `content_modified` for THIS user's existing resumes. A duplicate
+ * copies its parent's storage_path, so before `content_modified` existed those
+ * tailored/duplicated copies streamed the parent's (often the active) file on
+ * download. Flagging non-primary copies that share a storage_path with another
+ * of the user's resumes forces them to regenerate from their own columns.
+ * User-scoped + indexed on user_id, and only touches rows not already flagged,
+ * so it stays light enough for the web box.
+ */
+async function backfillContentModifiedForUser(
+  pool: ReturnType<typeof getPostgresPool>,
+  userId: string
+) {
+  await pool.query(
+    `UPDATE resumes r
+       SET content_modified = true
+     WHERE r.user_id = $1
+       AND r.content_modified IS NOT TRUE
+       AND r.is_primary = false
+       AND r.storage_path IS NOT NULL
+       AND r.storage_path <> ''
+       AND EXISTS (
+         SELECT 1 FROM resumes o
+         WHERE o.user_id = $1
+           AND o.storage_path = r.storage_path
+           AND o.id <> r.id
+       )`,
+    [userId]
   )
 }
 
@@ -96,6 +128,7 @@ export async function GET() {
   try {
     const pool = getPostgresPool()
     await ensureResumeColumns(pool)
+    await backfillContentModifiedForUser(pool, user.id)
     const result = await pool.query<Resume>(
       `SELECT *
        FROM resumes

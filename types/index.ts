@@ -1180,6 +1180,15 @@ export type Resume = {
   ats_score?: number | null;
   raw_text: string | null;
   archived_at?: string | null;
+  // Set true once the resume's structured content diverges from its stored
+  // file (in-place edits, tailoring, or a duplicate that was edited). When
+  // true the download/preview endpoints regenerate from these columns instead
+  // of streaming the now-stale uploaded object.
+  content_modified?: boolean | null;
+  parent_resume_id?: string | null;
+  tailored_for_job_id?: string | null;
+  tailored_for_company?: string | null;
+  tailored_for_role?: string | null;
   created_at: string;
   updated_at: string;
 };

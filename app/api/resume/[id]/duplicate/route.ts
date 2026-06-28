@@ -21,7 +21,8 @@ async function ensureResumeLifecycleColumns() {
        ADD COLUMN IF NOT EXISTS resume_score INTEGER,
        ADD COLUMN IF NOT EXISTS primary_role TEXT,
        ADD COLUMN IF NOT EXISTS seniority_level TEXT,
-       ADD COLUMN IF NOT EXISTS industries JSONB`
+       ADD COLUMN IF NOT EXISTS industries JSONB,
+       ADD COLUMN IF NOT EXISTS content_modified BOOLEAN DEFAULT false`
   )
 }
 
@@ -87,13 +88,14 @@ export async function POST(
       resume_score,
       ats_score,
       raw_text,
-      archived_at
+      archived_at,
+      content_modified
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, false,
       $8, $9, $10, $11, $12, $13, $14, $15,
       $16, $17, $18::jsonb, $19::jsonb, $20::jsonb,
       $21::jsonb, $22::jsonb, $23, $24, $25,
-      $26::text[], $27::text[], $28, $29, $30, NULL
+      $26::text[], $27::text[], $28, $29, $30, NULL, true
     )
     RETURNING *`,
     [
