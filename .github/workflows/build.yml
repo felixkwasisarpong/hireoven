@@ -66,8 +66,36 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # Pull docker.io base images (node, debian) through Google's mirror.
+          # Docker Hub intermittently times out from GitHub runners
+          # ("registry-1.docker.io: context deadline exceeded"), failing the
+          # build; mirror.gcr.io is far more reliable for `library/*` images.
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Build and push app
+        id: build-app
+        continue-on-error: true
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta-app.outputs.tags }}
+          labels: ${{ steps.meta-app.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NEXT_PUBLIC_APP_URL=${{ vars.NEXT_PUBLIC_APP_URL }}
+            NEXT_PUBLIC_LOGO_DEV_TOKEN=${{ vars.NEXT_PUBLIC_LOGO_DEV_TOKEN }}
+            NEXT_PUBLIC_WAITLIST_MODE=${{ vars.NEXT_PUBLIC_WAITLIST_MODE || 'true' }}
+
+      # Retry once on a transient registry/network blip. The first attempt's
+      # successful layers are cached (type=gha), so the retry is fast.
+      - name: Build and push app (retry)
+        if: steps.build-app.outcome == 'failure'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -83,6 +111,20 @@ jobs:
             NEXT_PUBLIC_WAITLIST_MODE=${{ vars.NEXT_PUBLIC_WAITLIST_MODE || 'true' }}
 
       - name: Build and push harvester
+        id: build-harvester
+        continue-on-error: true
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.harvester
+          push: true
+          tags: ${{ steps.meta-harvester.outputs.tags }}
+          labels: ${{ steps.meta-harvester.outputs.labels }}
+          cache-from: type=gha,scope=harvester
+          cache-to: type=gha,mode=max,scope=harvester
+
+      - name: Build and push harvester (retry)
+        if: steps.build-harvester.outcome == 'failure'
         uses: docker/build-push-action@v5
         with:
           context: .
