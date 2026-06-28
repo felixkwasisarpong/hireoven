@@ -177,11 +177,12 @@ async function fetchPage(
 
 export const workableAdapter: AtsAdapter = {
   name: "workable",
-  // apply.workable.com rate-limits hard (429) under bursts — at concurrency 8
-  // across N worker instances the effective parallelism (8×N) trips it the
-  // moment many boards come due together. 2 keeps total parallelism modest;
-  // env-overridable via HARVESTER_WORKABLE_CONCURRENCY.
-  concurrency: envConcurrency("workable", 2),
+  // apply.workable.com rate-limits hard (429) — and the limit is per-IP, so the
+  // 6 in-process workers share one bucket: concurrency 2 means up to 12 parallel
+  // requests, which trips it constantly (observed ~850 http_429 / 2k ticks).
+  // Dropped to 1 (≤6 cluster-wide) to stop the 429 storm; env-overridable via
+  // HARVESTER_WORKABLE_CONCURRENCY.
+  concurrency: envConcurrency("workable", 1),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
