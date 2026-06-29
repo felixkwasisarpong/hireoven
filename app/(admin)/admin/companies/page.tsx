@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   Building2,
   Download,
@@ -58,10 +58,14 @@ const ATS_OPTIONS = [
 
 export default function AdminCompaniesPage() {
   const { pushToast } = useToast()
+  const PAGE_SIZE = 50
   const [companies, setCompanies] = useState<Company[]>([])
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
   const [latestCrawls, setLatestCrawls] = useState<Map<string, CrawlLog>>(new Map())
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
   const [atsFilter, setAtsFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [healthFilter, setHealthFilter] = useState("all")
@@ -70,10 +74,19 @@ export default function AdminCompaniesPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setLoading(true)
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(PAGE_SIZE),
+      sort,
+      status: statusFilter,
+    })
+    if (debouncedSearch.trim()) params.set("q", debouncedSearch.trim())
+    if (atsFilter) params.set("ats", atsFilter)
+
     const [companiesRes, crawlRes] = await Promise.all([
-      fetch("/api/admin/companies"),
+      fetch(`/api/admin/companies?${params.toString()}`),
       fetch("/api/admin/crawl-logs"),
     ])
 
@@ -83,8 +96,9 @@ export default function AdminCompaniesPage() {
       return
     }
 
-    const { companies: companiesData } = (await companiesRes.json()) as {
+    const { companies: companiesData, total: totalCount } = (await companiesRes.json()) as {
       companies: Company[]
+      total: number
     }
     const crawlData: CrawlLog[] = crawlRes.ok
       ? ((await crawlRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
@@ -96,46 +110,38 @@ export default function AdminCompaniesPage() {
     }
 
     setCompanies(companiesData ?? [])
+    setTotal(totalCount ?? 0)
     setLatestCrawls(map)
+    setSelected([])
     setLoading(false)
-  }
+  }, [page, debouncedSearch, atsFilter, statusFilter, sort, pushToast])
+
+  // Debounce the search box; any filter/sort change resets to the first page.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch, atsFilter, statusFilter, sort])
 
   useEffect(() => {
     void loadData()
-  }, [])
+  }, [loadData])
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // Search / ATS / status / sort are server-side; only the crawl-health filter
+  // (which depends on the separately-loaded crawl logs) is applied client-side,
+  // and only to the current page.
   const visibleCompanies = useMemo(() => {
-    const filtered = companies.filter((company) => {
-      const q = search.trim().toLowerCase()
-      const matchesSearch =
-        !q ||
-        company.name.toLowerCase().includes(q) ||
-        company.domain.toLowerCase().includes(q)
-      const matchesAts = !atsFilter || company.ats_type === atsFilter
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "active" && company.is_active) ||
-        (statusFilter === "inactive" && !company.is_active)
+    if (healthFilter === "all") return companies
+    return companies.filter((company) => {
       const crawl = latestCrawls.get(company.id) ?? null
-      const health = getHealth(company, crawl)
-      const matchesHealth = healthFilter === "all" || health.tone === healthFilter
-      return matchesSearch && matchesAts && matchesStatus && matchesHealth
+      return getHealth(company, crawl).tone === healthFilter
     })
-
-    return filtered.sort((a, b) => {
-      if (sort === "domain") return a.domain.localeCompare(b.domain)
-      if (sort === "ats") return (a.ats_type ?? "").localeCompare(b.ats_type ?? "")
-      if (sort === "status") return Number(b.is_active) - Number(a.is_active)
-      if (sort === "last_crawled")
-        return (
-          new Date(b.last_crawled_at ?? 0).getTime() -
-          new Date(a.last_crawled_at ?? 0).getTime()
-        )
-      if (sort === "job_count") return b.job_count - a.job_count
-      if (sort === "h1b") return b.sponsorship_confidence - a.sponsorship_confidence
-      return a.name.localeCompare(b.name)
-    })
-  }, [atsFilter, companies, healthFilter, latestCrawls, search, sort, statusFilter])
+  }, [companies, healthFilter, latestCrawls])
 
   async function toggleCompany(company: Company, nextValue: boolean) {
     setBusyId(company.id)
@@ -380,7 +386,7 @@ export default function AdminCompaniesPage() {
           {/* Right-side: count + sort */}
           <div className="ml-auto flex items-center gap-3">
             <span className="text-xs text-gray-400">
-              {formatNumber(visibleCompanies.length)} companies
+              {formatNumber(total)} companies
             </span>
             <select
               value={sort}
@@ -615,6 +621,39 @@ export default function AdminCompaniesPage() {
           </table>
         )}
       </div>
+
+      {/* ── Pagination ──────────────────────────────────────── */}
+      {!loading && total > 0 && (
+        <div className="flex items-center justify-between border-t border-gray-100 px-8 py-4">
+          <p className="text-xs text-gray-400">
+            Showing{" "}
+            <span className="font-medium text-gray-600">
+              {formatNumber((page - 1) * PAGE_SIZE + 1)}–
+              {formatNumber(Math.min(page * PAGE_SIZE, total))}
+            </span>{" "}
+            of <span className="font-medium text-gray-600">{formatNumber(total)}</span>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Previous
+            </button>
+            <span className="text-xs text-gray-500 tabular-nums">
+              Page {formatNumber(page)} of {formatNumber(totalPages)}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:border-gray-300 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Floating bulk bar ───────────────────────────────── */}
       {selected.length > 0 && (
