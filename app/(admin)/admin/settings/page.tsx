@@ -454,7 +454,7 @@ export default function AdminSettingsPage() {
   async function exportAllData() {
     setBusyAction("export")
     const [companies, jobs, notifications, crawlLogs, settings] = await Promise.all([
-      fetch("/api/admin/companies").then((r) => r.json()),
+      fetch("/api/admin/companies?format=options").then((r) => r.json()),
       fetch("/api/jobs?limit=5000").then((r) => r.json()),
       fetch("/api/admin/alert-notifications").then((r) => r.json()),
       fetch("/api/admin/crawl-logs").then((r) => r.json()),

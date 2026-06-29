@@ -18,9 +18,21 @@ export async function GET(request: NextRequest) {
   const access = await assertAdminAccess()
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status })
 
+  const sp = request.nextUrl.searchParams
+
+  // Lightweight "all id+name" mode for company pickers / lookups (h1b linker,
+  // settings export) that genuinely need every company, not a page. Restores the
+  // pre-pagination behavior for those callers without un-paginating the table.
+  if (sp.get("format") === "options") {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<Pick<Company, "id" | "name">>(
+      `SELECT id, name FROM companies ORDER BY name`
+    )
+    return NextResponse.json({ companies: rows })
+  }
+
   // Paginated + filtered server-side. The companies table is ~60k rows; loading
   // it whole hung the page (huge payload + tens of thousands of DOM rows).
-  const sp = request.nextUrl.searchParams
   const page = Math.max(1, Number.parseInt(sp.get("page") ?? "1", 10) || 1)
   const limit = Math.min(200, Math.max(1, Number.parseInt(sp.get("limit") ?? "50", 10) || 50))
   const offset = (page - 1) * limit
