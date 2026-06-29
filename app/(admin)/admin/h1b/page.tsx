@@ -227,7 +227,8 @@ export default function AdminH1BPage() {
     setLoading(true)
     const [recordsRes, companiesRes] = await Promise.all([
       fetch("/api/admin/h1b"),
-      fetch("/api/admin/companies"),
+      // The company-link picker needs every company, not a paginated page.
+      fetch("/api/admin/companies?format=options"),
     ])
 
     if (!recordsRes.ok || !companiesRes.ok) {

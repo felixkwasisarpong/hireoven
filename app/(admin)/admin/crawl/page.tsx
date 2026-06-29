@@ -19,10 +19,15 @@ function isFailureLikeStatus(status: string) {
   return status === "failed" || status === "blocked" || status === "bad_url" || status === "fetch_error"
 }
 
+// The /api/admin/crawl-logs response joins the company onto each row.
+type CrawlLogWithCompany = CrawlLog & {
+  company: Pick<Company, "id" | "name" | "ats_type"> | null
+}
+
 export default function AdminCrawlMonitorPage() {
   const { pushToast } = useToast()
   const [companies, setCompanies] = useState<Company[]>([])
-  const [logs, setLogs] = useState<CrawlLog[]>([])
+  const [logs, setLogs] = useState<CrawlLogWithCompany[]>([])
   const [settings, setSettings] = useState<Record<string, unknown>>({
     intervalMinutes: 30,
     paused: false,
@@ -37,23 +42,31 @@ export default function AdminCrawlMonitorPage() {
 
   async function loadData() {
     setLoading(true)
-    const [companiesRes, logsRes, settingsRes] = await Promise.all([
-      fetch("/api/admin/companies"),
+    // Don't fetch the (paginated) /api/admin/companies just to resolve names —
+    // it returns only one page, which left every row showing "Unknown company".
+    // crawl-logs already joins each row's company; derive the lookup from that.
+    const [logsRes, settingsRes] = await Promise.all([
       fetch("/api/admin/crawl-logs"),
       fetch("/api/admin/system-settings"),
     ])
 
-    const companiesData: Company[] = companiesRes.ok
-      ? ((await companiesRes.json()) as { companies: Company[] }).companies
-      : []
-    const logsData: CrawlLog[] = logsRes.ok
-      ? ((await logsRes.json()) as { crawlLogs: CrawlLog[] }).crawlLogs
+    const logsData: CrawlLogWithCompany[] = logsRes.ok
+      ? ((await logsRes.json()) as { crawlLogs: CrawlLogWithCompany[] }).crawlLogs
       : []
     const settingsData: SystemSetting[] = settingsRes.ok
       ? ((await settingsRes.json()) as { settings: SystemSetting[] }).settings
       : []
 
-    setCompanies(companiesData)
+    const companyById = new Map<string, Company>()
+    for (const log of logsData) {
+      if (log.company && !companyById.has(log.company.id)) {
+        companyById.set(log.company.id, log.company as Company)
+      }
+    }
+
+    setCompanies(
+      [...companyById.values()].sort((a, b) => a.name.localeCompare(b.name))
+    )
     setLogs(logsData)
 
     const crawlSettings = settingsData.find((s) => s.key === "crawl")
