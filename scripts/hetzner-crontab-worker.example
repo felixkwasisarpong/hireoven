@@ -106,3 +106,17 @@ DATABASE_URL=REPLACE_ME
 # Crunchbase — PAID (no free API tier as of 2025). Left OFF by default. Set
 # CRUNCHBASE_API_KEY and uncomment to enable:
 #  0 4 * * 4        flock -n /tmp/hireoven-cb.lock -c 'cd $HIREOVEN_REPO && timeout 60m npm run discover:crunchbase:execute >>/var/log/hireoven/discover-crunchbase.log 2>&1'
+# ── E-Verify enrichment (host-side tsx + headless Chromium) ──────────────────────
+# Drives the USCIS E-Verify search tool one company at a time (no public API/bulk
+# download) to flip companies.is_e_verify for top H1B sponsors — powers
+# /h1b-sponsors/e-verify. Conservative: exact normalized-name match, "Open" status
+# only (a false flag can harm a STEM OPT case). Skips already-flagged companies, so
+# each run shrinks. E-Verify enrollment changes slowly → MONTHLY is plenty.
+#
+# Kept gentle on the box (this is the only headless-browser cron here):
+#   - single browser, sequential queries (one Chromium, ~0.5-1 GB peak)
+#   - nice -n 19 + ionice -c3  → lowest CPU/IO priority; yields to crawl/ingest/enrich
+#   - timeout 10h + flock       → bounded; never overlaps a prior slow run
+#   - off-peak (03:30, 1st of month)
+# One-time setup on this box:  npx playwright install --with-deps chromium
+ 30 3 1 * *        flock -n /tmp/hireoven-everify.lock -c 'cd $HIREOVEN_REPO && timeout 10h nice -n 19 ionice -c3 npm run everify:enrich:apply -- --limit=5000 >>/var/log/hireoven/everify-enrich.log 2>&1'
