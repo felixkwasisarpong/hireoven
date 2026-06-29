@@ -2,7 +2,8 @@ import type { Pool, PoolClient } from "pg"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { normalizeCrawlerJobForPersistence } from "@/lib/jobs/normalization"
-import { publicationStatusForNormalization } from "@/lib/jobs/publication"
+import { publicationStatusForNormalization, publicationStatusForInsert } from "@/lib/jobs/publication"
+import { counter } from "@/lib/observability/metrics"
 import { hashContent, type HarvestedJob } from "@/lib/harvester/adapters/_base"
 
 /**
@@ -367,6 +368,7 @@ function buildPersistRow(args: {
   job: HarvestedJob
   companyMeta: BulkPersistInput["companyMeta"]
   crawledAtIso: string
+  sourceAts: string
   existing?: ExistingJobStateForPersist | null
 }): PersistRow | null {
   const { job, companyMeta, crawledAtIso } = args
@@ -378,96 +380,156 @@ function buildPersistRow(args: {
   const usedExistingDescriptionFallback =
     !usableIncomingDescription && Boolean(existing.description)
 
-  const normalization = normalizeCrawlerJobForPersistence({
-    rawJob: {
-      externalId: job.externalId,
-      title: job.title,
-      url: job.applyUrl,
-      description: descriptionForNormalization ?? undefined,
-      location: job.location,
-      postedAt: job.postedAt,
-      company: companyMeta.name,
-      companyDomain: companyMeta.domain,
-      companyLogo: null,
-      workMode: job.workMode ?? null,
-      employmentType: job.employmentType ?? null,
-      salaryRange: null,
-      salaryMin: job.salaryMin ?? null,
-      salaryMax: job.salaryMax ?? null,
-      salaryCurrency: job.salaryCurrency ?? null,
-      matchScore: null,
-      matchLabel: null,
-      matchedSkills: null,
-      missingSkills: null,
-      sponsorshipSignal: null,
-      companySummary: null,
-      companyFoundedYear: null,
-      companyEmployeeCount: null,
-      companyIndustry: null,
-      easyApply: null,
-      activelyHiring: null,
-      topApplicantSignal: null,
-      companyVerified: null,
-    },
-    crawledAtIso,
-    existing,
-  })
+  // Normalization can throw on pathological inputs. Never let one bad job poison
+  // the batch: on failure we log and fall back to a minimal-but-valid row that
+  // still carries raw_data (so nothing is lost) at publication_status
+  // 'visible_basic'. raw_data is ALWAYS populated either way.
+  try {
+    const normalization = normalizeCrawlerJobForPersistence({
+      rawJob: {
+        externalId: job.externalId,
+        title: job.title,
+        url: job.applyUrl,
+        description: descriptionForNormalization ?? undefined,
+        location: job.location,
+        postedAt: job.postedAt,
+        company: companyMeta.name,
+        companyDomain: companyMeta.domain,
+        companyLogo: null,
+        workMode: job.workMode ?? null,
+        employmentType: job.employmentType ?? null,
+        salaryRange: null,
+        salaryMin: job.salaryMin ?? null,
+        salaryMax: job.salaryMax ?? null,
+        salaryCurrency: job.salaryCurrency ?? null,
+        matchScore: null,
+        matchLabel: null,
+        matchedSkills: null,
+        missingSkills: null,
+        sponsorshipSignal: null,
+        companySummary: null,
+        companyFoundedYear: null,
+        companyEmployeeCount: null,
+        companyIndustry: null,
+        easyApply: null,
+        activelyHiring: null,
+        topApplicantSignal: null,
+        companyVerified: null,
+      },
+      crawledAtIso,
+      existing,
+    })
 
-  const cols = normalization.nextColumns
+    const cols = normalization.nextColumns
 
-  const rawData: RawDataPayload = {
-    source: "harvester",
-    adapter: normalization.canonical.source.adapter,
-    ...normalization.rawSnapshot,
-    raw: {
-      title: job.title,
-      url: job.applyUrl,
-      description: descriptionForNormalization,
-      location: job.location ?? null,
-      posted_at: job.postedAt ?? null,
+    const rawData: RawDataPayload = {
+      source: "harvester",
+      adapter: normalization.canonical.source.adapter,
+      ...normalization.rawSnapshot,
+      raw: {
+        title: job.title,
+        url: job.applyUrl,
+        description: descriptionForNormalization,
+        location: job.location ?? null,
+        posted_at: job.postedAt ?? null,
+        external_id: job.externalId,
+      },
+      normalization: {
+        version: normalization.canonical.schema_version,
+        normalized_at: normalization.canonical.normalized_at,
+        confidence_score: normalization.canonical.validation.confidence_score,
+        completeness_score: normalization.canonical.validation.completeness_score,
+        requires_review: normalization.canonical.validation.requires_review,
+        issues: normalization.canonical.validation.issues,
+      },
+      normalized: normalization.canonical,
+      structured_job: normalization.structuredData,
+      view: { page: normalization.pageView, card: normalization.cardView },
+    }
+
+    const description = cols.description ?? salvageHarvesterDescription(job.description)
+    const skills = cols.skills ?? []
+
+    return {
       external_id: job.externalId,
-    },
-    normalization: {
-      version: normalization.canonical.schema_version,
-      normalized_at: normalization.canonical.normalized_at,
-      confidence_score: normalization.canonical.validation.confidence_score,
-      completeness_score: normalization.canonical.validation.completeness_score,
-      requires_review: normalization.canonical.validation.requires_review,
-      issues: normalization.canonical.validation.issues,
-    },
-    normalized: normalization.canonical,
-    structured_job: normalization.structuredData,
-    view: { page: normalization.pageView, card: normalization.cardView },
-  }
-
-  const description = cols.description ?? salvageHarvesterDescription(job.description)
-  const skills = cols.skills ?? []
-
-  return {
-    external_id: job.externalId,
-    title: job.title.trim(),
-    normalized_title: cols.normalized_title ?? null,
-    apply_url: job.applyUrl,
-    location: cols.location ?? null,
-    description,
-    employment_type: cols.employment_type ?? null,
-    seniority_level: cols.seniority_level ?? null,
-    is_remote: Boolean(cols.is_remote),
-    is_hybrid: Boolean(cols.is_hybrid),
-    requires_authorization: cols.requires_authorization ?? null,
-    salary_min: cols.salary_min ?? null,
-    salary_max: cols.salary_max ?? null,
-    salary_currency: cols.salary_currency ?? null,
-    skills,
-    sponsors_h1b: cols.sponsors_h1b ?? null,
-    sponsorship_score: cols.sponsorship_score ?? null,
-    visa_language_detected: cols.visa_language_detected ?? null,
-    publication_status: publicationStatusForNormalization(normalization),
-    posted_at: normalizedPostedAt,
-    content_hash: usedExistingDescriptionFallback
-      ? hashContent([job.contentHash, descriptionForNormalization?.slice(0, 4_000)])
-      : job.contentHash,
-    raw_data: rawData,
+      title: job.title.trim(),
+      normalized_title: cols.normalized_title ?? null,
+      apply_url: job.applyUrl,
+      location: cols.location ?? null,
+      description,
+      employment_type: cols.employment_type ?? null,
+      seniority_level: cols.seniority_level ?? null,
+      is_remote: Boolean(cols.is_remote),
+      is_hybrid: Boolean(cols.is_hybrid),
+      requires_authorization: cols.requires_authorization ?? null,
+      salary_min: cols.salary_min ?? null,
+      salary_max: cols.salary_max ?? null,
+      salary_currency: cols.salary_currency ?? null,
+      skills,
+      sponsors_h1b: cols.sponsors_h1b ?? null,
+      sponsorship_score: cols.sponsorship_score ?? null,
+      visa_language_detected: cols.visa_language_detected ?? null,
+      // New inserts use visible_basic / visible_enriched (never the legacy
+      // pending_enrichment). Quality verdict → mapped status.
+      publication_status: publicationStatusForInsert({
+        normalizationStatus: publicationStatusForNormalization(normalization),
+      }),
+      posted_at: normalizedPostedAt,
+      content_hash: usedExistingDescriptionFallback
+        ? hashContent([job.contentHash, descriptionForNormalization?.slice(0, 4_000)])
+        : job.contentHash,
+      raw_data: rawData,
+    }
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        event: "persist_normalize_failed",
+        externalId: job.externalId,
+        company: companyMeta.name,
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    )
+    counter("normalize.failure", {
+      atsType: args.sourceAts,
+      reason: (err instanceof Error ? err.message : String(err)).slice(0, 60),
+    })
+    const description = descriptionForNormalization ?? null
+    const fallbackRawData: RawDataPayload = {
+      source: "harvester",
+      raw: {
+        title: job.title,
+        url: job.applyUrl,
+        description: descriptionForNormalization,
+        location: job.location ?? null,
+        posted_at: job.postedAt ?? null,
+        external_id: job.externalId,
+      },
+      normalization_error: err instanceof Error ? err.message : String(err),
+    } as unknown as RawDataPayload
+    return {
+      external_id: job.externalId,
+      title: job.title.trim(),
+      normalized_title: null,
+      apply_url: job.applyUrl,
+      location: job.location ?? null,
+      description,
+      employment_type: null,
+      seniority_level: null,
+      is_remote: false,
+      is_hybrid: false,
+      requires_authorization: false,
+      salary_min: null,
+      salary_max: null,
+      salary_currency: null,
+      skills: [],
+      sponsors_h1b: null,
+      sponsorship_score: null,
+      visa_language_detected: null,
+      publication_status: "visible_basic",
+      posted_at: normalizedPostedAt,
+      content_hash: job.contentHash,
+      raw_data: fallbackRawData,
+    }
   }
 }
 
@@ -539,6 +601,7 @@ async function deactivateMissingJobs(args: {
     await pool.query(
       `UPDATE jobs
        SET is_active = false,
+           publication_status = 'hidden_expired',
            updated_at = $1::timestamptz,
            closed_at = COALESCE(closed_at, $1::timestamptz)
        WHERE id = ANY($2::uuid[])`,
@@ -600,10 +663,14 @@ export async function persistJobsBulk(
       job,
       companyMeta,
       crawledAtIso,
+      sourceAts,
       existing: existingByExternalId.get(job.externalId) ?? null,
     })
     if (built) rows.push(built)
   }
+
+  // Publication-status distribution of the batch we're about to persist.
+  for (const r of rows) counter("jobs.publication_status", { value: r.publication_status })
 
   // Chunk the upsert. The whole payload is sent as a single $5::jsonb param,
   // which means one mega-batch (~4k jobs × 4 KB descriptions ≈ 15 MB JSON)
@@ -635,6 +702,10 @@ export async function persistJobsBulk(
   }
   const written = inserted + updated
   const unchanged = deduped.length - written
+
+  if (inserted > 0) counter("jobs.persisted", { atsType: sourceAts, status: "inserted" }, inserted)
+  if (updated > 0) counter("jobs.persisted", { atsType: sourceAts, status: "updated" }, updated)
+  if (unchanged > 0) counter("jobs.persisted", { atsType: sourceAts, status: "unchanged" }, unchanged)
 
   await deactivateMissingJobs({
     pool,

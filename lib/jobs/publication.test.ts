@@ -4,6 +4,7 @@ import {
   hasUsablePublicJobContent,
   isLikelyCompanyBoilerplateOnly,
   publicationStatusForJob,
+  publicationStatusForInsert,
   sqlPublishedJob,
 } from "@/lib/jobs/publication"
 
@@ -90,4 +91,36 @@ Requirements include experience with Microsoft Sentinel, KQL, and Python.
 
 test("sqlPublishedJob emits a null-safe predicate", () => {
   assert.equal(sqlPublishedJob("j"), "COALESCE(j.publication_status, 'published') = 'published'")
+})
+
+test("publicationStatusForInsert maps quality → new visible/hidden states", () => {
+  // valid + good content → visible_enriched
+  assert.equal(publicationStatusForInsert({ normalizationStatus: "published" }), "visible_enriched")
+  // valid + needs enrichment → visible_basic (never the legacy pending_enrichment)
+  assert.equal(publicationStatusForInsert({ normalizationStatus: "pending_enrichment" }), "visible_basic")
+  // boilerplate-only stays hidden_low_quality
+  assert.equal(publicationStatusForInsert({ normalizationStatus: "hidden_low_quality" }), "hidden_low_quality")
+  // invalid / duplicate flags take precedence
+  assert.equal(publicationStatusForInsert({ invalid: true, normalizationStatus: "published" }), "hidden_invalid")
+  assert.equal(publicationStatusForInsert({ duplicate: true, normalizationStatus: "published" }), "hidden_duplicate")
+})
+
+test("sqlPublishedJob respects FEED_USE_NEW_STATUS", () => {
+  const prev = process.env.FEED_USE_NEW_STATUS
+  try {
+    delete process.env.FEED_USE_NEW_STATUS
+    assert.equal(sqlPublishedJob("jobs"), "COALESCE(jobs.publication_status, 'published') = 'published'")
+
+    process.env.FEED_USE_NEW_STATUS = "false"
+    assert.equal(sqlPublishedJob("jobs"), "COALESCE(jobs.publication_status, 'published') = 'published'")
+
+    process.env.FEED_USE_NEW_STATUS = "true"
+    assert.equal(
+      sqlPublishedJob("jobs"),
+      "COALESCE(jobs.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')"
+    )
+  } finally {
+    if (prev === undefined) delete process.env.FEED_USE_NEW_STATUS
+    else process.env.FEED_USE_NEW_STATUS = prev
+  }
 })

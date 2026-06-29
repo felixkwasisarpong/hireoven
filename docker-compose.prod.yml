@@ -119,6 +119,13 @@ services:
       VAPID_EMAIL: ${VAPID_EMAIL}
       WAITLIST_ONLY: ${WAITLIST_ONLY:-true}
       CRON_SECRET: ${CRON_SECRET}
+      # Discovery pipeline — all optional (code defaults apply when unset).
+      # FEED_USE_NEW_STATUS must be passed through here for the Phase-5 feed flip
+      # to take effect (explicit env allowlist; Coolify alone is not enough).
+      FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
+      AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
+      AGGREGATOR_BACKSOLVE_BUDGET_MS: ${AGGREGATOR_BACKSOLVE_BUDGET_MS:-150000}
+      ATS_RESOLVE_TIMEOUT_MS: ${ATS_RESOLVE_TIMEOUT_MS:-10000}
       # Careerjet ingest (careerjet-ingest cron runs here via Coolify)
       CAREERJET_AFFILIATE_ID: ${CAREERJET_AFFILIATE_ID}
       CAREERJET_AFFID: ${CAREERJET_AFFID}
@@ -209,6 +216,13 @@ services:
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
       VAPID_EMAIL: ${VAPID_EMAIL}
       CRON_SECRET: ${CRON_SECRET}
+      # Discovery pipeline — all optional (code defaults apply when unset).
+      # FEED_USE_NEW_STATUS must be passed through here for the Phase-5 feed flip
+      # to take effect (explicit env allowlist; Coolify alone is not enough).
+      FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
+      AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
+      AGGREGATOR_BACKSOLVE_BUDGET_MS: ${AGGREGATOR_BACKSOLVE_BUDGET_MS:-150000}
+      ATS_RESOLVE_TIMEOUT_MS: ${ATS_RESOLVE_TIMEOUT_MS:-10000}
       USAJOBS_API_KEY: ${USAJOBS_API_KEY}
       USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
       # Aggregator ingest crons — set only the ones you run:

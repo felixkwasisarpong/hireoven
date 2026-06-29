@@ -30,7 +30,11 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { detectAdapter, type AtsName } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
-import { computeConfidence } from "@/lib/discovery/confidence-score"
+import { computeConfidence, fastPathDecision } from "@/lib/discovery/confidence-score"
+import { enrollTenantAsCompany } from "@/lib/discovery/enroll-tenant-as-company"
+import { resolveApplyUrlToAtsTenant } from "@/lib/discovery/resolve-apply-url-to-tenant"
+import { CANDIDATE_PRIORITY_ORDER_SQL } from "@/lib/discovery/candidate-priority"
+import { counter } from "@/lib/observability/metrics"
 import { isUsaLocation } from "@/lib/discovery/usa-confirm"
 import { generateSlugCandidates } from "@/lib/discovery/slug-candidates"
 import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
@@ -143,6 +147,53 @@ async function holdCandidate(
     .catch(() => { /* non-fatal */ })
 }
 
+/**
+ * Fast-path retry_later: a real but empty board from a high-trust ATS. Register
+ * the tenant (so we remember the board exists and recheck it) without creating
+ * a company. Requires the ats_tenants table (add-ats-tenants migration).
+ */
+async function registerTenantForRetry(
+  pool: Pool,
+  args: { ats: AtsName; slug: string; confidence: number; jobCount: number; name: string }
+) {
+  const careersUrl = canonicalCareersUrl(args.ats, args.slug)
+  await pool
+    .query(
+      `INSERT INTO ats_tenants
+         (ats_type, ats_identifier, source_url, source_type, company_name_guess,
+          confidence, job_count, status, last_checked_at, next_check_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'retry_later', now(), now() + interval '7 days')
+       ON CONFLICT (ats_type, ats_identifier) DO UPDATE
+         SET confidence      = GREATEST(ats_tenants.confidence, EXCLUDED.confidence),
+             job_count       = EXCLUDED.job_count,
+             status          = CASE WHEN ats_tenants.status = 'enrolled' THEN ats_tenants.status ELSE 'retry_later' END,
+             last_checked_at = now(),
+             next_check_at   = now() + interval '7 days',
+             updated_at      = now()`,
+      [args.ats, args.slug, careersUrl, `discover-tenants:${args.ats}`, args.name, args.confidence, args.jobCount]
+    )
+    .catch(() => { /* non-fatal — table may not exist yet */ })
+  counter("tenant.retry_later", { atsType: args.ats, sourceType: "discover-tenants", reason: "empty_board" })
+}
+
+/**
+ * Record a resolution attempt against the placeholder: bump the attempt counter
+ * and stamp the cooldown. On success, clear last_resolution_failed_at; on
+ * failure, set it (drives the priority penalty + 24h short cooldown).
+ */
+async function markResolution(pool: Pool, companyId: string, success: boolean): Promise<void> {
+  await pool
+    .query(
+      `UPDATE companies SET
+         resolution_attempts = COALESCE(resolution_attempts, 0) + 1,
+         last_resolution_attempted_at = now(),
+         last_resolution_failed_at = CASE WHEN $2 THEN NULL ELSE now() END
+       WHERE id = $1`,
+      [companyId, success]
+    )
+    .catch(() => { /* non-fatal bookkeeping */ })
+}
+
 export async function GET(req: NextRequest) {
   if (!requireCronAuth(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -150,29 +201,32 @@ export async function GET(req: NextRequest) {
   const startedAt = Date.now()
   const pool = getPostgresPool()
 
-  // Claim a batch from the probe queue (highest job_count first) and mark it
-  // probed immediately so concurrent/next runs don't re-claim the same rows.
-  const { rows: batch } = await pool.query<{ id: string; name: string }>(
-    `UPDATE companies SET ats_probe_attempted_at = now()
+  // Claim a batch from the probe queue, ordered by a priority score (apply-url
+  // and real-domain placeholders with jobs first; chronic failures sink). The
+  // claim atomically stamps last_resolution_attempted_at so concurrent/next runs
+  // skip these rows; the 1-hour cooldown lets a placeholder be retried later
+  // (with a growing resolution_attempts penalty). The dead/duplicate/name guards
+  // are retained from the previous query. Each row carries one sample apply_url
+  // so the loop can backsolve before falling back to slug enumeration.
+  const { rows: batch } = await pool.query<{ id: string; name: string; apply_url: string | null }>(
+    `UPDATE companies SET last_resolution_attempted_at = now()
       WHERE id IN (
-        SELECT id FROM companies
-         WHERE ats_type IS NULL AND ats_probe_attempted_at IS NULL
-           AND duplicate_of_company_id IS NULL
-           AND name IS NOT NULL AND length(trim(name)) >= 2
-           AND status != 'dead'
-           AND (
-             is_active = true
-             -- Also probe inactive placeholder companies from discovery crons
-             -- (Builtin, aggregator ingest) that have a real guessable name.
-             -- Their domain may be a sentinel but slug generation uses the name.
-             OR (is_active = false AND job_count > 0)
-             OR discovered_via IS NOT NULL
-           )
-         ORDER BY job_count DESC NULLS LAST
+        SELECT c.id FROM companies c
+         WHERE c.ats_type IS NULL
+           AND c.is_active = false
+           AND c.duplicate_of_company_id IS NULL
+           AND c.status <> 'dead'
+           AND c.name IS NOT NULL AND length(trim(c.name)) >= 2
+           AND (c.last_resolution_attempted_at IS NULL
+                OR c.last_resolution_attempted_at < now() - interval '1 hour')
+         ORDER BY (${CANDIDATE_PRIORITY_ORDER_SQL}) DESC, COALESCE(c.job_count, 0) DESC
          LIMIT $1
          FOR UPDATE SKIP LOCKED
       )
-      RETURNING id, name`,
+      RETURNING id, name,
+        (SELECT j.apply_url FROM jobs j
+          WHERE j.company_id = companies.id AND j.apply_url IS NOT NULL
+          LIMIT 1) AS apply_url`,
     [batchSize()]
   )
 
@@ -219,8 +273,36 @@ export async function GET(req: NextRequest) {
       limit(async () => {
         if (budgetHit) return
         if (Date.now() - startedAt > TIME_BUDGET_MS) { budgetHit = true; return }
-        const slugs = generateSlugCandidates(company.name).slice(0, MAX_SLUGS_PER_NAME)
         processed.add(company.id)
+        let resolved = false
+        try {
+        // Behavior 1: if this placeholder's jobs carry an apply URL, backsolve it
+        // first — it's cheaper and more precise than slug enumeration. If the
+        // backsolver resolves the board, skip slug probing entirely.
+        if (company.apply_url) {
+          const r = await resolveApplyUrlToAtsTenant(company.apply_url, "discover-tenants")
+          if (r.success && r.confidence >= 60 && r.atsType && r.atsIdentifier) {
+            const res = await enrollTenantAsCompany(pool, {
+              atsType: r.atsType,
+              atsIdentifier: r.atsIdentifier,
+              confidence: r.confidence,
+              jobCount: r.jobCount,
+              sourceUrl: company.apply_url,
+              sourceType: "discover-tenants:apply-url",
+              companyNameGuess: company.name,
+              domainGuess: r.domainGuess,
+            }).catch(() => null)
+            if (res) {
+              if (res.created) enrolled += 1
+              known.add(`${r.atsType}:${r.atsIdentifier.toLowerCase()}`)
+              resolved = true
+              return
+            }
+          }
+          // Backsolver didn't resolve → fall through to slug probing.
+        }
+
+        const slugs = generateSlugCandidates(company.name).slice(0, MAX_SLUGS_PER_NAME)
         if (slugs.length === 0) return
 
         for (const ats of PROBE_ATSES) {
@@ -234,7 +316,50 @@ export async function GET(req: NextRequest) {
               return probe(ats, slug)
             })
             noteWaf(ats, result.kind === "waf")
-            if (result.kind !== "hit" || result.jobsFound === 0) continue
+            if (result.kind !== "hit") continue
+
+            const candidateName = humanizeSeedSlug(ats, slug) || company.name
+
+            // Fast path: a clean board response from a high-trust ATS is
+            // conclusive. ≥1 job ⇒ enroll directly (skip the heuristic score);
+            // an empty board ⇒ register the tenant for a later recheck.
+            const fast = fastPathDecision({
+              atsType: ats,
+              endpointStatus: result.jobsFound >= 1 ? "ok" : "empty",
+              jobCount: result.jobsFound,
+            })
+
+            // Only fast-enroll US/Canada-confirmed boards. A board with jobs but
+            // no US/CA listings is out-of-market for this product; let it fall
+            // through to computeConfidence, which rejects it (usaRejected) exactly
+            // as before. (Deliberate guard — the spec's fastPathDecision ignores
+            // geography.)
+            if (fast.decision === "enroll" && result.usaConfirmed) {
+              const res = await enrollTenantAsCompany(pool, {
+                atsType: ats,
+                atsIdentifier: slug,
+                confidence: fast.confidence,
+                jobCount: result.jobsFound,
+                sourceType: `discover-tenants:${ats}`,
+                companyNameGuess: candidateName,
+              }).catch(() => null)
+              if (res?.created) enrolled += 1
+              known.add(`${ats}:${slug.toLowerCase()}`)
+              if (res) resolved = true
+              return
+            }
+
+            if (fast.decision === "retry_later") {
+              await registerTenantForRetry(pool, {
+                ats, slug, confidence: fast.confidence, jobCount: result.jobsFound, name: candidateName,
+              })
+              held += 1
+              return
+            }
+
+            // Fall through: empty already handled above; a no-job hit has nothing
+            // to score, and a non-US hit with jobs goes through the full gate.
+            if (result.jobsFound === 0) continue
 
             const { score, decision, rejectedReason } = computeConfidence({
               atsMatch: true, apiHttp200: true, jobsFound: result.jobsFound,
@@ -247,9 +372,10 @@ export async function GET(req: NextRequest) {
             })
 
             if (decision === "enroll") {
-              if (await enroll(pool, { ats, slug, name: humanizeSeedSlug(ats, slug) || company.name })) {
+              if (await enroll(pool, { ats, slug, name: candidateName })) {
                 enrolled += 1
                 known.add(`${ats}:${slug.toLowerCase()}`)
+                resolved = true
               }
             } else {
               await holdCandidate(pool, {
@@ -261,6 +387,11 @@ export async function GET(req: NextRequest) {
             // A company lives on one ATS — stop probing once matched.
             return
           }
+        }
+        } finally {
+          // Record the attempt (counter + cooldown). Skipped for budget bail-outs
+          // above (they return before this try block).
+          await markResolution(pool, company.id, resolved)
         }
       })
     )
