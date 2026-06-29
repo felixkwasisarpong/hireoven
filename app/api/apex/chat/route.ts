@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { NextRequest, NextResponse } from "next/server"
+import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { logApiUsage } from "@/lib/admin/usage"
 import { createClient } from "@/lib/supabase/server"
 import { getApexContext, formatApexContextForClaude } from "@/lib/apex/context"
@@ -1148,7 +1149,7 @@ export async function POST(request: NextRequest) {
                INNER JOIN jobs j ON j.id = jms.job_id
               WHERE jms.user_id = $1
                 AND j.is_active = true
-                AND COALESCE(j.publication_status, 'published') = 'published'
+                AND ${sqlPublishedJob("j")}
               ORDER BY jms.overall_score DESC
               LIMIT 8`,
             [user.id]

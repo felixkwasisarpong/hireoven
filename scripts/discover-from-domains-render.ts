@@ -168,26 +168,41 @@ async function resolveOne(
 
 async function main() {
   const pool = getPostgresPool()
-  const claimSql = `
-    SELECT id, name, domain FROM companies
-     WHERE ats_type IS NULL
+  const predicate = `
+       ats_type IS NULL
        AND render_resolve_attempted_at IS NULL
        AND duplicate_of_company_id IS NULL
        AND domain LIKE '%.%' AND domain NOT ILIKE '%.placeholder'
        AND domain NOT ILIKE 'adzuna-%' AND domain NOT ILIKE 'dice-%'
        AND domain NOT ILIKE '%.invalid' AND domain !~* '-discovered$'
-       AND domain !~* '\\.(builtin|glassdoor)-discovery$'
-     ORDER BY ${RANDOM ? "random()" : "job_count DESC NULLS LAST"}
-     LIMIT $1
-     FOR UPDATE SKIP LOCKED`
+       AND domain !~* '\\.(builtin|glassdoor)-discovery$'`
+  const orderBy = RANDOM ? "random()" : "job_count DESC NULLS LAST"
 
+  // --apply claims the batch atomically: a single-column CTE feeds the UPDATE
+  // (Postgres rejects `id IN (SELECT id, name, domain …)`), and FOR UPDATE SKIP
+  // LOCKED lets parallel runs claim disjoint rows. Dry-run just reads.
   const { rows: batch } = APPLY
     ? await pool.query<Company>(
-        `UPDATE companies SET render_resolve_attempted_at = now()
-          WHERE id IN (${claimSql}) RETURNING id, name, domain`,
+        `WITH claimed AS (
+           SELECT id FROM companies
+            WHERE ${predicate}
+            ORDER BY ${orderBy}
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED
+         )
+         UPDATE companies c SET render_resolve_attempted_at = now()
+           FROM claimed
+          WHERE c.id = claimed.id
+          RETURNING c.id, c.name, c.domain`,
         [BATCH]
       )
-    : await pool.query<Company>(claimSql, [BATCH])
+    : await pool.query<Company>(
+        `SELECT id, name, domain FROM companies
+          WHERE ${predicate}
+          ORDER BY ${orderBy}
+          LIMIT $1`,
+        [BATCH]
+      )
 
   console.log(`${APPLY ? "claimed" : "sample"}: ${batch.length} real-domain unmatched companies  (render resolver, concurrency ${CONCURRENCY})\n`)
   if (batch.length === 0) { await pool.end(); return }

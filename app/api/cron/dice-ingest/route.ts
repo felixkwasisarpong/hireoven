@@ -17,7 +17,7 @@ import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
-import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-url"
+import { backsolveAggregatorCompany } from "@/lib/jobs/aggregator-backsolve"
 import {
   DiceApiError,
   searchDiceAllPages,
@@ -43,6 +43,10 @@ export const maxDuration = 300
 // Previously 400 — bumped after observing search batches returning 500+ new
 // rows in a single tick, causing the overflow to land as summary-only until
 // the next cron run.
+// Per-company backsolve makes network calls; cap concurrency and stop opening
+// new ones once we approach the budget so the cron tick still finishes.
+const BACKSOLVE_CONCURRENCY = Number(process.env.AGGREGATOR_BACKSOLVE_CONCURRENCY ?? "4")
+const BACKSOLVE_BUDGET_MS = Number(process.env.AGGREGATOR_BACKSOLVE_BUDGET_MS ?? "150000")
 const DICE_ENRICH_CONCURRENCY = Number(process.env.DICE_ENRICH_CONCURRENCY ?? "3")
 const DICE_ENRICH_MAX_PER_RUN = Number(process.env.DICE_ENRICH_MAX_PER_RUN ?? "800")
 const DICE_ENRICH_STALE_LENGTH = 800
@@ -93,10 +97,12 @@ export async function GET(request: NextRequest) {
     : parseDiceCountryCodes(process.env.DICE_COUNTRY_CODES)
 
   const pool = getPostgresPool()
+  const startedAt = Date.now()
   const stats: Record<string, number> = {
     queries: 0, fetched: 0, inserted: 0, updated: 0, errors: 0,
     upstreamErrors: 0, providerBlocked: 0, countries: countryCodes.length,
     enrichmentAttempted: 0, enriched: 0, enrichFail: 0,
+    backsolveEnrolled: 0, backsolveRetryLater: 0, backsolvePlaceholder: 0, backsolveDeadlineSkipped: 0,
   }
 
   // Dedupe across queries by Dice job ID
@@ -162,43 +168,67 @@ export async function GET(request: NextRequest) {
     companyIdMap.set(row.name, row.id)
   }
 
-  // Create companies for any that don't exist yet.
-  // Try ATS detection from apply URL first — if the job links directly to
-  // Greenhouse/Lever/Ashby/etc., create a real harvestable row instead of
-  // a placeholder that discover-tenants may never resolve.
+  // Create companies for any that don't exist yet. Jobs with an apply URL go
+  // through the backsolver (resolve the real ATS board → enroll a harvestable
+  // company); jobs without one keep the legacy placeholder path. Backsolving is
+  // network-bound, so it runs at bounded concurrency and stops opening new work
+  // once we approach the budget (the next tick picks up the rest).
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
-  for (const normName of missing) {
-    const jobs = byCompany.get(normName)!
-    const sample = jobs[0]
+
+  // Legacy placeholder insert, tagged with discovered_via for measurement.
+  const insertPlaceholder = async (normName: string, discoveredVia: string) => {
+    const sample = byCompany.get(normName)![0]
     try {
-      // Attempt ATS detection from the apply URL
-      const enrolled = await enrollFromApplyUrl(pool, {
-        companyName: sample.company,
-        applyUrl: sample.applyUrl,
-        source: "dice",
-      })
-      if (enrolled) {
-        companyIdMap.set(normName, enrolled.id)
-        continue
-      }
-      // Fall back to placeholder
       const res = await pool.query<{ id: string }>(
-        `INSERT INTO companies (name, domain, careers_url, is_active, raw_ats_config)
-         VALUES ($1, $2, $3, false, $4)
-         ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name
+        `INSERT INTO companies (name, domain, careers_url, is_active, discovered_via, raw_ats_config)
+         VALUES ($1, $2, $3, false, $4, $5)
+         ON CONFLICT (domain) DO UPDATE
+           SET name = EXCLUDED.name,
+               discovered_via = COALESCE(companies.discovered_via, EXCLUDED.discovered_via)
          RETURNING id`,
         [
           sample.company,
           deriveDomain(sample.companyPageUrl ?? sample.applyUrl, sample.company),
           sample.companyPageUrl ?? `https://www.dice.com/jobs/q-${encodeURIComponent(sample.company)}`,
+          discoveredVia,
           JSON.stringify({ source: "dice", crawl_allowed: false }),
         ]
       )
       if (res.rows[0]) companyIdMap.set(normName, res.rows[0].id)
     } catch {
-      // If domain conflict can't resolve, skip this company's jobs
+      // Domain conflict can't resolve — skip this company's jobs (retried next tick).
     }
   }
+
+  const backsolveLimit = pLimit(BACKSOLVE_CONCURRENCY)
+  await Promise.all(
+    missing.map((normName) =>
+      backsolveLimit(async () => {
+        // Past the budget: don't open new network work — drop to a fast
+        // placeholder so jobs still land; discover-tenants resolves the ATS later.
+        if (Date.now() - startedAt > BACKSOLVE_BUDGET_MS) {
+          stats.backsolveDeadlineSkipped++
+          await insertPlaceholder(normName, "dice-deadline")
+          return
+        }
+        const sample = byCompany.get(normName)![0]
+        const outcome = await backsolveAggregatorCompany(pool, {
+          source: "dice",
+          applyUrl: sample.applyUrl,
+          companyName: sample.company,
+        })
+        if (outcome.kind === "enrolled") {
+          companyIdMap.set(normName, outcome.companyId)
+          stats.backsolveEnrolled++
+        } else if (outcome.kind === "retry_later") {
+          stats.backsolveRetryLater++ // no company this tick
+        } else {
+          stats.backsolvePlaceholder++
+          await insertPlaceholder(normName, outcome.discoveredVia)
+        }
+      })
+    )
+  )
 
   // Bulk-check which external_ids already exist + how long their stored
   // description is. We use the length to decide whether to spend a detail

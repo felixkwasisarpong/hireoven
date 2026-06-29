@@ -25,9 +25,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
+import { backsolveAggregatorCompany } from "@/lib/jobs/aggregator-backsolve"
 import {
   AdzunaApiError,
   adzunaContractToEmploymentType,
@@ -45,6 +47,11 @@ import type { EmploymentType } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
+
+// Per-company backsolve makes network calls; cap concurrency and stop opening
+// new ones once we approach the budget so the cron tick still finishes.
+const BACKSOLVE_CONCURRENCY = Number(process.env.AGGREGATOR_BACKSOLVE_CONCURRENCY ?? "4")
+const BACKSOLVE_BUDGET_MS = Number(process.env.AGGREGATOR_BACKSOLVE_BUDGET_MS ?? "150000")
 
 const DEFAULT_QUERIES = [
   // Engineering & Tech
@@ -227,7 +234,12 @@ export async function GET(request: NextRequest) {
     skippedHiddenInsert: 0,
     duplicateFingerprintSkipped: 0,
     duplicateFingerprintRefreshed: 0,
+    backsolveEnrolled: 0,
+    backsolveRetryLater: 0,
+    backsolvePlaceholder: 0,
+    backsolveDeadlineSkipped: 0,
   }
+  const startedAt = Date.now()
 
   // Dedupe across queries by Adzuna job ID
   const seen = new Map<string, AdzunaJob>()
@@ -312,29 +324,64 @@ export async function GET(request: NextRequest) {
     if (best.ats_type && best.is_active) harvestedCompanyIds.add(best.id)
   }
 
-  // Create placeholder companies for unknowns so the FK is satisfied.
-  // discover-tenants will resolve their ATS on its next run.
+  // Resolve unknown companies. Jobs with an apply URL go through the backsolver
+  // (resolve the real ATS board → enroll a harvestable company); jobs without
+  // one keep the legacy placeholder path. Backsolving is network-bound, so it
+  // runs at bounded concurrency and falls back to a fast placeholder once we
+  // approach the budget (the next tick / discover-tenants handles the rest).
   const missing = companyNames.filter((n) => !companyIdMap.has(n))
-  for (const normName of missing) {
+
+  const insertPlaceholder = async (normName: string, discoveredVia: string) => {
     const sample = byCompany.get(normName)![0]
     try {
       const res = await pool.query<{ id: string }>(
-        `INSERT INTO companies (name, domain, careers_url, is_active, raw_ats_config)
-         VALUES ($1, $2, $3, false, $4)
-         ON CONFLICT (domain) DO UPDATE SET name = EXCLUDED.name
+        `INSERT INTO companies (name, domain, careers_url, is_active, discovered_via, raw_ats_config)
+         VALUES ($1, $2, $3, false, $4, $5)
+         ON CONFLICT (domain) DO UPDATE
+           SET name = EXCLUDED.name,
+               discovered_via = COALESCE(companies.discovered_via, EXCLUDED.discovered_via)
          RETURNING id`,
         [
           sample.company,
           deriveDomain(sample.company),
           `https://www.adzuna.com/search?q=${encodeURIComponent(sample.company)}`,
+          discoveredVia,
           JSON.stringify({ source: "adzuna", crawl_allowed: false }),
         ]
       )
       if (res.rows[0]) companyIdMap.set(normName, res.rows[0].id)
     } catch {
-      // Domain conflict — skip this company's jobs
+      // Domain conflict — skip this company's jobs (retried next tick).
     }
   }
+
+  const backsolveLimit = pLimit(BACKSOLVE_CONCURRENCY)
+  await Promise.all(
+    missing.map((normName) =>
+      backsolveLimit(async () => {
+        if (Date.now() - startedAt > BACKSOLVE_BUDGET_MS) {
+          stats.backsolveDeadlineSkipped++
+          await insertPlaceholder(normName, "adzuna-deadline")
+          return
+        }
+        const sample = byCompany.get(normName)![0]
+        const outcome = await backsolveAggregatorCompany(pool, {
+          source: "adzuna",
+          applyUrl: sample.applyUrl,
+          companyName: sample.company,
+        })
+        if (outcome.kind === "enrolled") {
+          companyIdMap.set(normName, outcome.companyId)
+          stats.backsolveEnrolled++
+        } else if (outcome.kind === "retry_later") {
+          stats.backsolveRetryLater++ // no company this tick
+        } else {
+          stats.backsolvePlaceholder++
+          await insertPlaceholder(normName, outcome.discoveredVia)
+        }
+      })
+    )
+  )
 
   // Bulk-check which external_ids already exist
   const allExternalIds = [...seen.values()].map((j) => `adzuna:${j.id}`)

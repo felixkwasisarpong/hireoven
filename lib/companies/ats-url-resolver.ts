@@ -230,10 +230,14 @@ function firstWorkdayMatch(html: string): { tenant: string; shard: string; site:
 }
 
 /**
- * Resolve a careers landing page (wrapper) to its direct ATS endpoint.
- * Returns null when no embedded ATS can be detected.
+ * Resolve a careers landing page (wrapper) to its direct ATS endpoint by
+ * scanning its HTML for embedded ATS links/iframes/form actions. Returns null
+ * when no embedded ATS can be detected.
+ *
+ * Exported for reuse by the apply-URL backsolver
+ * ([[resolve-apply-url-to-tenant]]); also used internally by resolveDirectAtsUrl.
  */
-function detectAtsInHtml(html: string): ResolvedAtsUrl | null {
+export function detectAtsInHtml(html: string): ResolvedAtsUrl | null {
   const gh = firstMatch(html, GREENHOUSE_PATTERNS)
   if (gh && gh.id !== "embed") {
     return {

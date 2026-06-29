@@ -135,6 +135,58 @@ export function publicationStatusForNormalization(
   })
 }
 
+/**
+ * Extended publication states (added in the ats_tenants migration). The legacy
+ * 'published' / 'pending_enrichment' remain valid for already-existing rows.
+ */
+export type ExtendedPublicationStatus =
+  | JobPublicationStatus
+  | "visible_basic"
+  | "visible_enriched"
+  | "hidden_invalid"
+  | "hidden_duplicate"
+  | "hidden_expired"
+
+/**
+ * publication_status for a freshly-persisted harvested job. New inserts never use
+ * the legacy 'pending_enrichment'; they are 'visible_basic' (shown, awaiting
+ * enrichment) or 'visible_enriched' (shown, good content), with hidden_* for
+ * invalid/duplicate. `normalizationStatus` is the quality verdict from
+ * publicationStatusForNormalization (mapped: published→enriched, the rest→basic).
+ */
+export function publicationStatusForInsert(input: {
+  invalid?: boolean
+  duplicate?: boolean
+  normalizationStatus: JobPublicationStatus
+}): ExtendedPublicationStatus {
+  if (input.invalid) return "hidden_invalid"
+  if (input.duplicate) return "hidden_duplicate"
+  switch (input.normalizationStatus) {
+    case "published":
+      return "visible_enriched"
+    case "hidden_low_quality":
+      return "hidden_low_quality"
+    case "pending_enrichment":
+    default:
+      return "visible_basic"
+  }
+}
+
+/** Rule-2 upgrade: bump a basic row to enriched once enrichment fills it in. */
+export const SQL_UPGRADE_TO_VISIBLE_ENRICHED =
+  "UPDATE jobs SET publication_status = 'visible_enriched', updated_at = now() WHERE id = $1 AND publication_status = 'visible_basic'"
+
+/**
+ * Feed visibility predicate. Behind FEED_USE_NEW_STATUS (default off) so the
+ * persist-side status changes can ship before the feed switches over.
+ *   off → legacy: only 'published' is visible
+ *   on  → 'published' + 'visible_basic' + 'visible_enriched' are visible
+ * (is_active is asserted separately by each caller, as today.)
+ */
 export function sqlPublishedJob(alias = "jobs"): string {
-  return `COALESCE(${alias}.publication_status, 'published') = 'published'`
+  const col = `COALESCE(${alias}.publication_status, 'published')`
+  if (process.env.FEED_USE_NEW_STATUS === "true") {
+    return `${col} IN ('published', 'visible_basic', 'visible_enriched')`
+  }
+  return `${col} = 'published'`
 }

@@ -47,6 +47,16 @@ const TARGETS: Target[] = [
 
   // Pocket (YC W26) — inactive; currently a YC bookface S3 image. Real domain heypocket.com.
   { id: "aa848ae9-c6dd-416f-a848-7ee65fdae52d", label: "Pocket (W26)", brandDomain: "heypocket.com" },
+
+  // Cal Poly Pomona — 6 dupes of one institution → cpp.edu. One row wrongly used
+  // ca.com (CA Technologies) because its domain is the ATS ca.icims.com; four are
+  // uscis/lca-employer placeholders with no logo.
+  { id: "6e1961c9-d4f1-4110-a637-1052e7456dc3", label: "Cal Poly Pomona (icims, was ca.com)", brandDomain: "cpp.edu" },
+  { id: "6fffb419-fae9-42f5-8ee5-e25cf12b776c", label: "Cal Poly Pomona (uscis-employer)", brandDomain: "cpp.edu" },
+  { id: "48631988-eb69-497a-836c-89e58e9a213f", label: "Cal Poly Pomona (uscis-employer 2)", brandDomain: "cpp.edu" },
+  { id: "525f9b15-1289-4f13-bd32-c5bc70b6efe0", label: "Cal Poly Pomona (uscis-employer 3)", brandDomain: "cpp.edu" },
+  { id: "802f3c4b-dc3c-4cd6-b2cf-b33cabab3d70", label: "Cal Poly Pomona (cpp.edu canonical)", brandDomain: "cpp.edu" },
+  { id: "d62ceb42-d968-4a18-ba98-9cfd24641cac", label: "Cal Poly Pomona (lca-employer)", brandDomain: "cpp.edu" },
 ]
 
 async function main() {

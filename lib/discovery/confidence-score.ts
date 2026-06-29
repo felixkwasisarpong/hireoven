@@ -58,6 +58,50 @@ export type ScoreResult = {
   rejectedReason: string | null
 }
 
+/**
+ * ATSes with a cheap, reliable public listing endpoint — a clean job-count from
+ * one of these is conclusive on its own, so we skip the full heuristic score.
+ */
+const FAST_PATH_ATS = new Set([
+  "greenhouse", "lever", "ashby", "smartrecruiters",
+  "workable", "bamboohr", "recruitee", "teamtailor",
+])
+
+export interface FastPathInput {
+  atsType: string | null
+  endpointStatus: "ok" | "empty" | "error" | "unknown"
+  jobCount: number
+}
+
+export interface FastPathResult {
+  fastPath: boolean
+  confidence: number
+  decision: "enroll" | "retry_later" | "reject" | "fallthrough"
+}
+
+/**
+ * Short-circuit for high-trust ATSes whose board endpoint we already hit. A
+ * confirmed board with ≥1 job is an immediate enroll (confidence 90); a real
+ * but empty board is a retry_later (confidence 60). Anything else — unknown
+ * ATS, error, or unexpected status — returns `fallthrough` so the caller runs
+ * the full computeConfidence heuristic instead.
+ */
+export function fastPathDecision(input: FastPathInput): FastPathResult {
+  if (!input.atsType || !FAST_PATH_ATS.has(input.atsType)) {
+    return { fastPath: false, confidence: 0, decision: "fallthrough" }
+  }
+  if (input.endpointStatus === "ok" && input.jobCount >= 1) {
+    return { fastPath: true, confidence: 90, decision: "enroll" }
+  }
+  if (input.endpointStatus === "empty") {
+    return { fastPath: true, confidence: 60, decision: "retry_later" }
+  }
+  if (input.endpointStatus === "error") {
+    return { fastPath: false, confidence: 0, decision: "fallthrough" }
+  }
+  return { fastPath: false, confidence: 0, decision: "fallthrough" }
+}
+
 export function computeConfidence(f: ScoreFactors): ScoreResult {
   const factors: Partial<Record<keyof ScoreFactors, number>> = {}
   let score = 0
