@@ -79,12 +79,6 @@ function asNumber(value: unknown) {
   return 0
 }
 
-function average(values: Array<number | null | undefined>) {
-  const filtered = values.filter((value): value is number => typeof value === "number")
-  if (!filtered.length) return 0
-  return Math.round(filtered.reduce((sum, value) => sum + value, 0) / filtered.length)
-}
-
 async function listAdminUsers() {
   const pool = getPostgresPool()
   const result = await pool.query<{
@@ -122,7 +116,6 @@ export async function getDashboardStats(): Promise<AdminStats> {
     jobsWeek,
     alertsToday,
     crawlAgg,
-    crawlDurationsToday,
   ] = await Promise.all([
     pool.query<{ c: string }>(`SELECT COUNT(*)::text AS c FROM companies`),
     pool.query<{ c: string }>(
@@ -147,15 +140,15 @@ export async function getDashboardStats(): Promise<AdminStats> {
       `SELECT COUNT(*)::text AS c FROM alert_notifications WHERE sent_at >= $1::timestamptz`,
       [dayStart]
     ),
-    pool.query<{ total: string; failed: string }>(
+    // Aggregate the duration in SQL — pulling every row of today's crawl_logs
+    // (a 5.9M-row, fast-growing table) into JS just to average was a top cause
+    // of the overview being slow.
+    pool.query<{ total: string; failed: string; avg_duration: number | null }>(
       `SELECT COUNT(*)::text AS total,
-              COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed
+              COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed,
+              AVG(duration_ms)::float AS avg_duration
        FROM crawl_logs
        WHERE crawled_at >= $1::timestamptz`,
-      [dayStart]
-    ),
-    pool.query<{ duration_ms: number | null }>(
-      `SELECT duration_ms FROM crawl_logs WHERE crawled_at >= $1::timestamptz`,
       [dayStart]
     ),
   ])
@@ -177,30 +170,27 @@ export async function getDashboardStats(): Promise<AdminStats> {
     alertsSentToday: Number(alertsToday.rows[0]?.c ?? 0),
     crawlsToday: Number(crawlAgg.rows[0]?.total ?? 0),
     failedCrawlsToday,
-    averageCrawlDuration: average(
-      crawlDurationsToday.rows.map((crawl: { duration_ms: number | null }) => crawl.duration_ms)
-    ),
+    averageCrawlDuration: Math.round(Number(crawlAgg.rows[0]?.avg_duration ?? 0)),
   }
 }
 
 export async function getCrawlHealth(): Promise<CrawlHealth> {
   const pool = getPostgresPool()
   const failedWindow = subHours(24)
-  const [latest, failedAgg, durations, noJobs, settingsRows] = await Promise.all([
+  const [latest, failedAgg, noJobs, settingsRows] = await Promise.all([
     pool.query<CrawlLog>(
       `SELECT id, company_id, status, jobs_found, new_jobs, error_message, duration_ms, crawled_at
        FROM crawl_logs
        ORDER BY crawled_at DESC NULLS LAST
        LIMIT 1`
     ),
-    pool.query<{ failed: string }>(
-      `SELECT COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed
+    // COUNT + AVG in one pass over the indexed 24h window — replaces a second
+    // query that shipped every row's duration_ms to JS just to average it.
+    pool.query<{ failed: string; avg_duration: number | null }>(
+      `SELECT COUNT(*) FILTER (WHERE status IN ('failed', 'blocked', 'bad_url', 'fetch_error'))::text AS failed,
+              AVG(duration_ms)::float AS avg_duration
        FROM crawl_logs
        WHERE crawled_at >= $1::timestamptz`,
-      [failedWindow]
-    ),
-    pool.query<{ duration_ms: number | null }>(
-      `SELECT duration_ms FROM crawl_logs WHERE crawled_at >= $1::timestamptz`,
       [failedWindow]
     ),
     pool.query<{ c: string }>(
@@ -260,9 +250,7 @@ export async function getCrawlHealth(): Promise<CrawlHealth> {
     nextScheduledCrawl,
     crawlerStatus,
     failedCrawlsLast24Hours: failedCount,
-    averageCrawlDuration: average(
-      durations.rows.map((crawl: { duration_ms: number | null }) => crawl.duration_ms)
-    ),
+    averageCrawlDuration: Math.round(Number(failedAgg.rows[0]?.avg_duration ?? 0)),
     companiesWithZeroJobs: Number(noJobs.rows[0]?.c ?? 0),
   }
 }
@@ -289,7 +277,30 @@ export async function getAPIUsage(): Promise<APIUsage> {
   }
 }
 
+// The overview aggregates the 969k-row jobs and 5.9M-row crawl_logs tables.
+// It's admin-only and viewed occasionally, so a short TTL cache (with
+// single-flight so two simultaneous admins don't both recompute) makes repeat
+// loads instant and bounds the DB load. Per-process; a few seconds stale is fine.
+const OVERVIEW_TTL_MS = 30_000
+let overviewCache: { at: number; payload: AdminOverviewPayload } | null = null
+let overviewInflight: Promise<AdminOverviewPayload> | null = null
+
 export async function getAdminOverviewPayload(): Promise<AdminOverviewPayload> {
+  const now = Date.now()
+  if (overviewCache && now - overviewCache.at < OVERVIEW_TTL_MS) return overviewCache.payload
+  if (overviewInflight) return overviewInflight
+  overviewInflight = computeAdminOverviewPayload()
+    .then((payload) => {
+      overviewCache = { at: Date.now(), payload }
+      return payload
+    })
+    .finally(() => {
+      overviewInflight = null
+    })
+  return overviewInflight
+}
+
+async function computeAdminOverviewPayload(): Promise<AdminOverviewPayload> {
   const pool = getPostgresPool()
   const [stats, crawlHealth, apiUsage, reliability, crawlLogs, recentJobs, settingsRows] = await Promise.all([
     getDashboardStats(),
