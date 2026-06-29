@@ -64,7 +64,8 @@ run_many() {
 # salary-digest      0 5 * * *         run api/cron/salary-digest
 # warn-act           0 6 * * *         run api/cron/warn-act
 # deliver-checkins   0 9 * * *         run api/cron/deliver-checkins
-# nightly-maintenance 30 8 * * *       run pipeline-cleanup -> job-retention -> purge-dead-crawled-companies -> refresh-title-suggestions
+# nightly-maintenance 30 8 * * *       run pipeline-cleanup -> job-retention -> refresh-title-suggestions
+# purge-dead-crawled-companies 45 8 * * * run api/cron/purge-dead-crawled-companies  # mark dead boards status='dead' so the harvester stops crawling them
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # fresh-job-ingest   15 */6 * * *      run waas -> dice -> adzuna
 # jsearch-ingest     45 5 * * *        run api/cron/jsearch-ingest
@@ -90,6 +91,7 @@ case "${1:-}" in
   crawl-enrichment)  run api/crawl/enrichment ;;
   job-description-enrichment) run "api/cron/job-description-enrichment?batch=${JOB_DESCRIPTION_ENRICHMENT_BATCH:-100}&concurrency=${JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY:-4}" ;;
   job-retention)     run "api/cron/job-retention?days=${JOB_RETENTION_DAYS:-30}&batch=${JOB_RETENTION_BATCH:-5000}&maxBatches=${JOB_RETENTION_MAX_BATCHES:-50}" ;;
+  purge-dead-crawled-companies) run "api/cron/purge-dead-crawled-companies?minEmptyCrawls=${PURGE_DEAD_MIN_EMPTY_CRAWLS:-20}&mode=${PURGE_DEAD_MODE:-dead}&maxBatches=${PURGE_DEAD_MAX_BATCHES:-20}" ;;
   pipeline-cleanup)  run "api/cron/pipeline-cleanup?days=${PIPELINE_CLEANUP_DAYS:-7}" ;;
   refresh-title-suggestions) run api/cron/refresh-title-suggestions ;;
   instant-notify)    run api/cron/instant-notify ;;
@@ -155,7 +157,6 @@ case "${1:-}" in
     run_many "nightly-maintenance" \
       "api/cron/pipeline-cleanup?days=${PIPELINE_CLEANUP_DAYS:-7}" \
       "api/cron/job-retention?days=${JOB_RETENTION_DAYS:-30}&batch=${JOB_RETENTION_BATCH:-5000}&maxBatches=${JOB_RETENTION_MAX_BATCHES:-50}" \
-      "api/cron/purge-dead-crawled-companies?minEmptyCrawls=${PURGE_DEAD_MIN_EMPTY_CRAWLS:-20}&mode=${PURGE_DEAD_MODE:-dead}&maxBatches=${PURGE_DEAD_MAX_BATCHES:-20}" \
       api/cron/refresh-title-suggestions
     ;;
   all)
