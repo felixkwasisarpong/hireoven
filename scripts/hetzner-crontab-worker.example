@@ -62,6 +62,12 @@ DATABASE_URL=REPLACE_ME
  20 9 * * *        flock -n /tmp/hireoven-email-opt.lock      -c 'cd $HIREOVEN_REPO && npm run email:opt-reminders:execute >>/var/log/hireoven/email-opt.log 2>&1'
  13,43 * * * *     flock -n /tmp/hireoven-email-health.lock   -c 'cd $HIREOVEN_REPO && npm run email:queue-health:execute  >>/var/log/hireoven/email-health.log 2>&1'
  30 8 * * *        flock -n /tmp/hireoven-maintenance.lock -c 'cd $HIREOVEN_REPO && JOB_RETENTION_DAYS=30 JOB_RETENTION_BATCH=5000 JOB_RETENTION_MAX_BATCHES=50 bash scripts/crons.sh nightly-maintenance >>/var/log/hireoven/nightly-maintenance.log 2>&1'
+# Dead-board self-clean: harvestable companies we crawl every cycle for nothing
+# (>=20 consecutive empty crawls, zero active jobs, nothing seen in 30 days) ->
+# status='dead' so the harvester stops claiming them (reversible; visa sponsors
+# preserved). Runs at 08:45, right after nightly-maintenance deletes their stale
+# jobs (so freshly job-less companies are caught the same morning).
+ 45 8 * * *        flock -n /tmp/hireoven-purge-dead.lock -c 'cd $HIREOVEN_REPO && PURGE_DEAD_MIN_EMPTY_CRAWLS=20 PURGE_DEAD_MODE=dead bash scripts/crons.sh purge-dead-crawled-companies >>/var/log/hireoven/purge-dead-crawled.log 2>&1'
 # Fresh job-board feeds: WAAS + Dice + Adzuna. JSearch stays separate because its API budget is daily.
  15 */6 * * *      flock -n /tmp/hireoven-fresh-ingest.lock -c 'cd $HIREOVEN_REPO && timeout 45m bash scripts/crons.sh fresh-job-ingest >>/var/log/hireoven/fresh-job-ingest.log 2>&1'
  45 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh jsearch-ingest     >>/var/log/hireoven/jsearch-ingest.log 2>&1
