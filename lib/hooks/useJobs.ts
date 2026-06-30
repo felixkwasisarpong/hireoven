@@ -16,14 +16,28 @@ const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
 /** Avoid unbounded Supabase round-trips when client-side filters discard most rows. */
 const MAX_FETCH_CHUNKS = 14
+/**
+ * Match/Relevant serve a fixed, stably-ranked candidate pool from the server.
+ * Pull the whole pool in ONE request and paginate it locally via `visibleCount`,
+ * instead of re-fetching (and re-ranking) the full pool on every scroll page —
+ * which would hammer the shared PG box. Mirrors CANDIDATE_CEILING in
+ * /api/match/feed; the server caps the response there regardless.
+ */
+const MATCH_POOL_SIZE = 1500
+
+function chunkSizeForFetch(filters: JobFilters, searchQuery: string): number {
+  if (filters.sort === "match" || filters.sort === "relevant") return MATCH_POOL_SIZE
+  return searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
+}
 
 function effectiveWithinForSort(filters: JobFilters): JobFilters["within"] {
-  // Match/relevant sort (incl. Apex Focus Mode) caps the candidate set to a
-  // recency window so scoring stays bounded. 24h was too tight: users with
-  // narrow filters (specific titles + remote + sponsorship) routinely had zero
-  // jobs in the last day and hit a dead-end empty feed. 7d keeps the feed
-  // "recent" while giving those combinations room to surface matches.
-  if (filters.sort === "match" || filters.sort === "relevant") return "7d"
+  // Match/relevant are "fresh fit" surfaces scoped to the last 24h — the same
+  // window the toolbar shows as locked. Scroll/"load more" now paginates the
+  // ENTIRE 24h window (the server candidate pool grows with offset), so the feed
+  // surfaces every fresh job in the day instead of a thin capped slice. Narrow
+  // filter combinations may show few jobs in a given day — that's the intended
+  // 24h-strict behaviour.
+  if (filters.sort === "match" || filters.sort === "relevant") return "24h"
   return filters.within
 }
 
@@ -270,15 +284,25 @@ function sortJobs(rows: JobWithMatchScore[], filters: JobFilters, searchQuery: s
     }
 
     if (filters.sort === "relevant") {
-      const leftScore = textScore(left) * 3 + freshnessScore(left.first_detected_at)
-      const rightScore = textScore(right) * 3 + freshnessScore(right.first_detected_at)
+      // Mirror the server blend in /api/match/feed (relevanceBlend): profile
+      // match score (×4) + search-text relevance (×3) + freshness (×0.5). Keep
+      // the weights identical to the server so the order doesn't flash on paint.
+      const blend = (job: JobWithMatchScore) =>
+        (job.match_score?.overall_score ?? 0) * 4 +
+        textScore(job) * 3 +
+        freshnessScore(job.first_detected_at) * 0.5
+      const leftScore = blend(left)
+      const rightScore = blend(right)
       if (rightScore !== leftScore) return rightScore - leftScore
     }
 
-    return (
+    const byFreshness =
       new Date(right.first_detected_at).getTime() -
       new Date(left.first_detected_at).getTime()
-    )
+    if (byFreshness !== 0) return byFreshness
+    // Deterministic final tiebreaker (matches the server: id DESC) so the order
+    // is total and stable across paginated chunks.
+    return right.id < left.id ? -1 : right.id > left.id ? 1 : 0
   })
 }
 
@@ -351,7 +375,7 @@ export function useJobs(
 
   const fetchChunk = useCallback(
     async (offset: number) => {
-      const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
+      const chunkSize = chunkSizeForFetch(filters, searchQuery)
       const requiresClientOnlyFiltering = hasClientOnlyPersonalizedFilters(filters)
       const effectiveWithin = effectiveWithinForSort(filters)
 
@@ -368,9 +392,14 @@ export function useJobs(
         }
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
         if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
-        // Tell the server when we're in Best Match — it drops the saved-jobs
-        // UNION in that mode so the surface stays "fresh fit only".
-        if (filters.sort === "match") params.set("sort", "match")
+        // Tell the server which ranked surface we're on. Best Match drops the
+        // saved-jobs UNION (fresh fit only) and orders by score; Most Relevant
+        // orders by the score+text+freshness blend. Both need the sort on the
+        // server so the first paint is correctly ranked before the client
+        // re-sorts with the same comparator.
+        if (filters.sort === "match" || filters.sort === "relevant") {
+          params.set("sort", filters.sort)
+        }
         if (filters.locationQuery?.trim()) {
           params.set("location", filters.locationQuery.trim())
         }
@@ -467,7 +496,7 @@ export function useJobs(
         let nextRows = reset ? [] : allJobsRef.current
         let nextOffset = reset ? 0 : offsetRef.current
         let exhausted = reset ? false : exhaustedRef.current
-        const chunkSize = searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
+        const chunkSize = chunkSizeForFetch(filters, searchQuery)
 
         let chunksFetched = 0
         while (
