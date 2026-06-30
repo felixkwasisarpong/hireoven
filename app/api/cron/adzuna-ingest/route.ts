@@ -53,6 +53,13 @@ export const maxDuration = 300
 const BACKSOLVE_CONCURRENCY = Number(process.env.AGGREGATOR_BACKSOLVE_CONCURRENCY ?? "4")
 const BACKSOLVE_BUDGET_MS = Number(process.env.AGGREGATOR_BACKSOLVE_BUDGET_MS ?? "150000")
 
+// Truncated Adzuna jobs are normally dropped (their ~500-char teaser can't be
+// shown). With ADZUNA_ENRICH_TRUNCATED=true we instead persist them hidden as
+// 'pending_enrichment', so the description-enrichment cron's Playwright fallback
+// (which clears Adzuna's WAF — plain fetch gets 403) can fetch the full JD and
+// promote them. Requires JOB_DESCRIPTION_ENRICHMENT_BROWSER=true on the worker.
+const ENRICH_TRUNCATED = process.env.ADZUNA_ENRICH_TRUNCATED === "true"
+
 const DEFAULT_QUERIES = [
   // Engineering & Tech
   "software engineer",
@@ -232,6 +239,7 @@ export async function GET(request: NextRequest) {
     canonicalCompanyMatches: 0,
     truncatedHidden: 0,
     skippedHiddenInsert: 0,
+    insertedPendingEnrichment: 0,
     duplicateFingerprintSkipped: 0,
     duplicateFingerprintRefreshed: 0,
     backsolveEnrolled: 0,
@@ -564,36 +572,42 @@ export async function GET(request: NextRequest) {
            rawData, existingId]
         )
         stats.updated++
-      } else if (publicationStatus === "hidden_low_quality") {
-        // A brand-new Adzuna job that would be hidden adds no feed value: the
-        // description is a ~500-char teaser and the redirect is WAF-blocked, so
-        // it can never be enriched or published. Company discovery and the
-        // freshness-signal bump already happened above (company-level), so we
-        // skip persisting the dead row entirely rather than bloating the table
-        // with a listing no user will ever see.
-        stats.skippedHiddenInsert++
       } else {
-        await pool.query(
-          `INSERT INTO jobs (
-             company_id, title, normalized_title, location, is_remote, is_hybrid,
-             employment_type, seniority_level, description, apply_url, external_id,
-             salary_min, salary_max, salary_currency,
-             requires_authorization, sponsors_h1b, sponsorship_score,
-             visa_language_detected, skills, publication_status,
-             is_active, last_seen_at, first_detected_at,
-             created_at, updated_at, raw_data
-           ) VALUES (
-             $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-             true, NOW(), $21, NOW(), NOW(), $22
-           )`,
-          [companyId, job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
-           nc.employment_type, nc.seniority_level, nc.description, job.applyUrl, externalId,
-           nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
-           nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
-           nc.visa_language_detected, nc.skills, publicationStatus,
-           firstDetected, rawData]
-        )
-        stats.inserted++
+        // Decide the status for a brand-new Adzuna job. A would-be hidden
+        // (truncated teaser) job is normally dropped — but with ENRICH_TRUNCATED
+        // we persist it as 'pending_enrichment' (hidden from the feed) so the
+        // enrichment cron's Playwright fallback can fetch the full JD from the
+        // redirect and promote it. Jobs we already harvest directly stay dropped.
+        let insertStatus: string | null = publicationStatus
+        if (publicationStatus === "hidden_low_quality") {
+          insertStatus = ENRICH_TRUNCATED && !redundantHarvested ? "pending_enrichment" : null
+        }
+        if (insertStatus === null) {
+          stats.skippedHiddenInsert++
+        } else {
+          await pool.query(
+            `INSERT INTO jobs (
+               company_id, title, normalized_title, location, is_remote, is_hybrid,
+               employment_type, seniority_level, description, apply_url, external_id,
+               salary_min, salary_max, salary_currency,
+               requires_authorization, sponsors_h1b, sponsorship_score,
+               visa_language_detected, skills, publication_status,
+               is_active, last_seen_at, first_detected_at,
+               created_at, updated_at, raw_data
+             ) VALUES (
+               $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+               true, NOW(), $21, NOW(), NOW(), $22
+             )`,
+            [companyId, job.title, nc.normalized_title, nc.location, nc.is_remote, nc.is_hybrid,
+             nc.employment_type, nc.seniority_level, nc.description, job.applyUrl, externalId,
+             nc.salary_min, nc.salary_max, nc.salary_currency ?? "USD",
+             nc.requires_authorization, nc.sponsors_h1b, nc.sponsorship_score,
+             nc.visa_language_detected, nc.skills, insertStatus,
+             firstDetected, rawData]
+          )
+          if (insertStatus === "pending_enrichment") stats.insertedPendingEnrichment++
+          else stats.inserted++
+        }
       }
     } catch (err) {
       console.error(`[adzuna-ingest] failed to upsert job ${job.id}:`, err)
