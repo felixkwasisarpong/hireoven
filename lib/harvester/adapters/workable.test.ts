@@ -97,8 +97,44 @@ test("workable: detail-fetch fills the JD when the list omits it", async () => {
   assert.ok(job.description?.includes("C++"))
 })
 
+test("workable: maps the 2026 v3 schema (published date, workplace, location object)", async () => {
+  // Live v3 list rows now use `published` (not published_on/created_at),
+  // `workplace` (not just the `remote` bool), and a nested `location` object —
+  // and omit the description entirely (served from the v2 detail endpoint).
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    if (init?.method === "POST") {
+      return fakeJsonResponse({
+        total: 1,
+        results: [{
+          id: "55074",
+          shortcode: "0ABEBEE8FE",
+          title: "Senior ML Engineer",
+          state: "published",
+          published: "2026-06-25T00:00:00.000Z",
+          workplace: "hybrid",
+          remote: false,
+          location: { city: "Boulder", region: "Colorado", country: "United States" },
+        }],
+        nextPage: null,
+      })
+    }
+    return fakeJsonResponse({ description: "<p>" + "x".repeat(400) + "</p>" })
+  }) as unknown as HarvestCtx["fetchImpl"]
+
+  const result = await workableAdapter.fetchJobs({
+    slug: "scitec",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(result.jobs.length, 1)
+  const job = result.jobs[0]
+  assert.equal(job.postedAt, "2026-06-25T00:00:00.000Z", "postedAt read from `published`")
+  assert.equal(job.workMode, "hybrid", "workMode read from `workplace`")
+  assert.equal(job.location, "Boulder, Colorado, United States", "location from nested object")
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
-const LIVE_SLUG = process.env.HARVESTER_LIVE_WORKABLE_SLUG ?? "loomly"
+const LIVE_SLUG = process.env.HARVESTER_LIVE_WORKABLE_SLUG ?? "scitec"
 const LIVE_LATENCY_BUDGET_MS = Number.parseInt(
   process.env.HARVESTER_LIVE_LATENCY_BUDGET_MS ?? "10000",
   10
