@@ -167,6 +167,59 @@ async function fetchSearchPage(
   }
 }
 
+// Some Eightfold tenants (e.g. HSBC, Bayer) don't expose the session-gated
+// `/api/pcsx/search` dialect (it 403s even with a valid cookie+CSRF) and instead
+// serve the open `/api/apply/v2/jobs` dialect — the same one Netflix uses. This
+// fetches that dialect and normalizes rows into the shared EightfoldPosition shape
+// so the rest of the pipeline (mapPosition, detail enrichment) is unchanged.
+type ApplyV2Position = {
+  id?: number | string
+  name?: string
+  location?: string
+  locations?: string[]
+  t_update?: number
+  canonicalPositionUrl?: string
+  display_job_id?: string
+  work_location_option?: string
+}
+type ApplyV2Response = { count?: number; positions?: ApplyV2Position[] }
+
+async function fetchApplyV2Page(
+  start: number,
+  session: SessionInfo,
+  ctx: HarvestCtx
+): Promise<{ positions: EightfoldPosition[]; total: number; latencyMs: number } | null> {
+  const url =
+    `https://${session.host}/api/apply/v2/jobs` +
+    `?domain=${encodeURIComponent(session.domain)}&num=${PAGE_SIZE}&start=${start}&sort_by=timestamp`
+  const doFetch = ctx.fetchImpl ?? harvesterFetch
+  const startedAt = Date.now()
+  try {
+    const resp = await doFetch(url, { headers: makeHeaders(session) })
+    const latencyMs = Date.now() - startedAt
+    if (!resp.ok) return null
+    const data: ApplyV2Response = await resp.json()
+    if (!Array.isArray(data.positions)) return null
+    const positions: EightfoldPosition[] = data.positions.map((p) => ({
+      id: p.id,
+      name: p.name,
+      displayJobId: p.display_job_id,
+      locations:
+        Array.isArray(p.locations) && p.locations.length
+          ? p.locations
+          : p.location
+            ? [p.location]
+            : [],
+      postedTs: p.t_update, // unix seconds, like postedTs
+      positionUrl: p.canonicalPositionUrl,
+      workLocationOption: p.work_location_option,
+    }))
+    return { positions, total: data.count ?? positions.length, latencyMs }
+  } catch {
+    return null
+  }
+}
+
 async function fetchPositionDetail(
   positionId: number | string,
   session: SessionInfo,
@@ -263,8 +316,15 @@ export const eightfoldAdapter: AtsAdapter = {
       throw err
     }
 
-    // Page 1 to get total count
-    const firstPage = await fetchSearchPage(0, session, ctx)
+    // Page 0 to get total count. Try the pcsx/search dialect first; if the tenant
+    // doesn't support it (HSBC/Bayer return 403 even with a valid session), fall
+    // back to the open apply/v2 dialect and use it for every subsequent page.
+    let dialect: "pcsx" | "applyv2" = "pcsx"
+    let firstPage = await fetchSearchPage(0, session, ctx)
+    if (!firstPage) {
+      firstPage = await fetchApplyV2Page(0, session, ctx)
+      if (firstPage) dialect = "applyv2"
+    }
     if (!firstPage) {
       const err = new Error(`eightfold: search page 0 failed for ${slug}`)
       ;(err as Error & { status?: number | null }).status = null
@@ -283,7 +343,10 @@ export const eightfoldAdapter: AtsAdapter = {
 
     // Fetch remaining pages sequentially (session cookies, CSRF tied to session)
     for (let page = 1; page < totalPages; page++) {
-      const result = await fetchSearchPage(page * PAGE_SIZE, session, ctx)
+      const result =
+        dialect === "pcsx"
+          ? await fetchSearchPage(page * PAGE_SIZE, session, ctx)
+          : await fetchApplyV2Page(page * PAGE_SIZE, session, ctx)
       if (!result) break
       totalLatencyMs += result.latencyMs
       for (const pos of result.positions) {
