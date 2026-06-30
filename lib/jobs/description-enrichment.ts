@@ -42,6 +42,15 @@ const DEFAULT_MIN_DESCRIPTION_CHARS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_MIN_CHARS ?? "120", 10)
 )
 
+// When enrichment can't improve a job but it already carries a usable description
+// (e.g. Adzuna's ~500-char truncated snippet), publish that snippet as
+// `visible_basic` on retire instead of hiding the whole job — a partial JD with a
+// working apply link beats no listing. Set to 0 to restore hide-on-fail.
+const PUBLISH_USABLE_ON_RETIRE_CHARS = Math.max(
+  0,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_PUBLISH_USABLE_CHARS ?? "300", 10)
+)
+
 // Jobs claimed but left in `processing` longer than this are considered stale
 // (the run that claimed them crashed/was killed) and become eligible again.
 // Without this, a single interrupted batch strands those jobs in
@@ -293,10 +302,16 @@ export async function markFailure(
   // it leaves the retry pool and stops being counted. A later re-crawl/harvest
   // that finds a description re-publishes it.
   const retired = attempts >= maxAttempts
+  // On retire, salvage jobs that already have a usable (if truncated) description
+  // by publishing the snippet as visible_basic rather than hiding them. Jobs with
+  // no real description still go to hidden_low_quality.
   await pool.query(
     `UPDATE jobs
         SET raw_data = $2::jsonb,
-            publication_status = CASE WHEN $3::boolean THEN 'hidden_low_quality' ELSE publication_status END,
+            publication_status = CASE
+              WHEN $3::boolean AND $4 > 0 AND length(COALESCE(description, '')) >= $4 THEN 'visible_basic'
+              WHEN $3::boolean THEN 'hidden_low_quality'
+              ELSE publication_status END,
             updated_at = NOW()
       WHERE id = $1::uuid`,
     [
@@ -314,6 +329,7 @@ export async function markFailure(
         },
       }),
       retired,
+      PUBLISH_USABLE_ON_RETIRE_CHARS,
     ]
   )
 }
