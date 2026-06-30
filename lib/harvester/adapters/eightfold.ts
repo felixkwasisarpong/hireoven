@@ -40,6 +40,8 @@ function intEnv(name: string, dflt: number): number {
 const MAX_PAGES = intEnv("HARVESTER_EIGHTFOLD_MAX_PAGES", 200)
 const DETAIL_MAX_JOBS = intEnv("HARVESTER_EIGHTFOLD_DETAIL_MAX_JOBS", 150)
 const DETAIL_CONCURRENCY = intEnv("HARVESTER_EIGHTFOLD_DETAIL_CONCURRENCY", 4)
+// apply/v2 list pages are stateless, so they're fetched concurrently.
+const APPLYV2_PAGE_CONCURRENCY = intEnv("HARVESTER_EIGHTFOLD_APPLYV2_CONCURRENCY", 6)
 
 type EightfoldPosition = {
   id?: number | string
@@ -352,17 +354,34 @@ export const eightfoldAdapter: AtsAdapter = {
       if (job) seen.set(job.externalId, job)
     }
 
-    // Fetch remaining pages sequentially (session cookies, CSRF tied to session)
-    for (let page = 1; page < totalPages; page++) {
-      const result =
-        dialect === "pcsx"
-          ? await fetchSearchPage(page * PAGE_SIZE, session, ctx)
-          : await fetchApplyV2Page(page * PAGE_SIZE, session, ctx)
-      if (!result) break
-      totalLatencyMs += result.latencyMs
-      for (const pos of result.positions) {
+    const ingest = (positions: EightfoldPosition[]) => {
+      for (const pos of positions) {
         const job = mapPosition(pos, session.host)
         if (job && !seen.has(job.externalId)) seen.set(job.externalId, job)
+      }
+    }
+
+    if (dialect === "applyv2") {
+      // apply/v2 pages are stateless (no CSRF chain), so fetch them concurrently —
+      // a large tenant like HSBC is ~160 pages and would blow the per-company
+      // timeout if walked one-at-a-time.
+      const pageNums = Array.from({ length: totalPages - 1 }, (_, i) => i + 1)
+      const limiter = pLimit(APPLYV2_PAGE_CONCURRENCY)
+      const results = await Promise.all(
+        pageNums.map((page) => limiter(() => fetchApplyV2Page(page * PAGE_SIZE, session, ctx))),
+      )
+      for (const result of results) {
+        if (!result) continue
+        totalLatencyMs += result.latencyMs
+        ingest(result.positions)
+      }
+    } else {
+      // pcsx pages share session cookies + CSRF, so they must stay sequential.
+      for (let page = 1; page < totalPages; page++) {
+        const result = await fetchSearchPage(page * PAGE_SIZE, session, ctx)
+        if (!result) break
+        totalLatencyMs += result.latencyMs
+        ingest(result.positions)
       }
     }
 

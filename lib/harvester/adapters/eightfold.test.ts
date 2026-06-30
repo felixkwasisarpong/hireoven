@@ -96,3 +96,34 @@ test("eightfold: falls back to the apply/v2 dialect when pcsx/search 403s", asyn
     "apply/v2 dialect must skip the pcsx detail pass",
   )
 })
+
+test("eightfold: apply/v2 walks every page concurrently (large tenant)", async () => {
+  // 25 positions across 3 pages (10/10/5). The concurrent walk must collect all.
+  const makePage = (start: number, n: number) => ({
+    count: 25,
+    positions: Array.from({ length: n }, (_, i) => ({
+      id: start + i + 1,
+      name: `Role ${start + i + 1}`,
+      location: "Remote",
+      canonicalPositionUrl: `https://x.eightfold.ai/careers/job/${start + i + 1}`,
+    })),
+  })
+  const fetchImpl = (async (url: string | URL | Request) => {
+    const u = String(url)
+    if (u.includes("/careers") && !u.includes("/api/")) {
+      return htmlResponse("_vs=v; Path=/", '<meta name="_csrf" content="t">')
+    }
+    if (u.includes("/api/pcsx/search")) return jsonResponse({}, false, 403)
+    if (u.includes("/api/apply/v2/jobs")) {
+      const start = Number(new URL(u).searchParams.get("start"))
+      return jsonResponse(makePage(start, start === 20 ? 5 : 10))
+    }
+    return jsonResponse({}, false, 403)
+  }) as unknown as HarvestCtx["fetchImpl"]
+
+  const result = await eightfoldAdapter.fetchJobs({
+    slug: "big",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+  assert.equal(result.jobs.length, 25, "collected all 3 pages")
+})
