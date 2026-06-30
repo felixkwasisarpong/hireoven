@@ -52,6 +52,8 @@ type EightfoldPosition = {
   workLocationOption?: string
   positionUrl?: string
   publicUrl?: string
+  /** Only the apply/v2 dialect ships the JD inline on the listing row. */
+  jobDescription?: string
 }
 
 type EightfoldSearchResponse = {
@@ -181,6 +183,7 @@ type ApplyV2Position = {
   canonicalPositionUrl?: string
   display_job_id?: string
   work_location_option?: string
+  job_description?: string
 }
 type ApplyV2Response = { count?: number; positions?: ApplyV2Position[] }
 
@@ -213,6 +216,7 @@ async function fetchApplyV2Page(
       postedTs: p.t_update, // unix seconds, like postedTs
       positionUrl: p.canonicalPositionUrl,
       workLocationOption: p.work_location_option,
+      jobDescription: p.job_description, // inline JD — no detail round-trip needed
     }))
     return { positions, total: data.count ?? positions.length, latencyMs }
   } catch {
@@ -283,6 +287,12 @@ function mapPosition(pos: EightfoldPosition, host: string): HarvestedJob | null 
   const location = pos.locations?.filter(Boolean).join(", ") || undefined
   const postedAt = pos.postedTs ? new Date(pos.postedTs * 1000).toISOString() : undefined
   const workMode = mapWorkMode(pos.workLocationOption)
+  const description = pos.jobDescription ? stripHtml(pos.jobDescription) : undefined
+
+  // Only fold the JD into the hash when present (apply/v2) so pcsx rows — whose
+  // description arrives later via the detail pass — keep their original hash.
+  const hashInputs = [title, applyUrl, location, workMode, postedAt]
+  if (description) hashInputs.push(description.slice(0, 2_000))
 
   return {
     externalId: `eightfold:${id}`,
@@ -291,7 +301,8 @@ function mapPosition(pos: EightfoldPosition, host: string): HarvestedJob | null 
     location,
     postedAt,
     workMode,
-    contentHash: hashContent([title, applyUrl, location, workMode, postedAt]),
+    description,
+    contentHash: hashContent(hashInputs),
   }
 }
 
@@ -357,10 +368,16 @@ export const eightfoldAdapter: AtsAdapter = {
 
     const allJobs = Array.from(seen.values())
 
-    // Enrich with full descriptions
-    const needDetail = ctx.alreadyDescribedIds
-      ? allJobs.filter((j) => !ctx.alreadyDescribedIds!.has(j.externalId))
-      : allJobs
+    // Enrich with full descriptions via the pcsx detail endpoint. Skipped for the
+    // apply/v2 dialect: those rows already carry the JD inline, and pcsx detail
+    // 403s on those tenants — so the pass would be ~150 wasted requests that blow
+    // the per-company timeout (the original HSBC/Bayer hang).
+    const needDetail =
+      dialect === "applyv2"
+        ? []
+        : ctx.alreadyDescribedIds
+          ? allJobs.filter((j) => !ctx.alreadyDescribedIds!.has(j.externalId))
+          : allJobs
 
     if (DETAIL_MAX_JOBS > 0 && needDetail.length > 0) {
       const limiter = pLimit(DETAIL_CONCURRENCY)
