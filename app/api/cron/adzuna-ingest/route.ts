@@ -30,6 +30,7 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
 import { backsolveAggregatorCompany } from "@/lib/jobs/aggregator-backsolve"
+import { counter } from "@/lib/observability/metrics"
 import {
   AdzunaApiError,
   adzunaContractToEmploymentType,
@@ -605,8 +606,10 @@ export async function GET(request: NextRequest) {
              nc.visa_language_detected, nc.skills, insertStatus,
              firstDetected, rawData]
           )
-          if (insertStatus === "pending_enrichment") stats.insertedPendingEnrichment++
-          else stats.inserted++
+          if (insertStatus === "pending_enrichment") {
+            stats.insertedPendingEnrichment++
+            counter("adzuna.enrich.pending_inserted")
+          } else stats.inserted++
         }
       }
     } catch (err) {
