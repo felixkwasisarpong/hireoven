@@ -19,6 +19,7 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { classifyCareersPageHtml } from "@/lib/companies/careers-url-discovery"
 import { detectAdapter } from "@/lib/harvester/adapters"
+import { harvesterFetch } from "@/lib/harvester/http-agent"
 import {
   extractAtsCandidates,
   generateEnterpriseAtsSearchQueries,
@@ -97,7 +98,7 @@ function candidateUrls(domain: string, existingCareersUrl?: string | null): stri
 
 async function probeUrl(url: string): Promise<ProbeResult> {
   try {
-    const response = await fetch(url, {
+    const response = await harvesterFetch(url, {
       method: "GET",
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; HireovenAtsDiscovery/1.0; +https://hireoven.com)",

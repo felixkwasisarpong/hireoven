@@ -2,6 +2,7 @@ import type { Pool } from "pg"
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 import { guessPublicDomain } from "@/lib/companies/placeholder-from-employer"
 import { normalizeCompanyName, companySlug } from "@/lib/harvester/discovery/glassdoor/name-normalization"
+import { harvesterFetch } from "@/lib/harvester/http-agent"
 import { RobotsCache } from "@/lib/harvester/discovery/glassdoor/robots"
 import { GlassdoorRateLimiter } from "@/lib/harvester/discovery/glassdoor/rate-limiter"
 import { parseBuiltinCompanies, builtinPageHasCompanies } from "./parser"
@@ -189,7 +190,7 @@ export async function runBuiltinDiscoveryWorker(opts: { pool: Pool; fetchImpl?: 
   if (disabled()) return { ...summary, status: "disabled" }
 
   const pool = opts.pool
-  const fetchImpl = opts.fetchImpl ?? fetch
+  const fetchImpl = opts.fetchImpl ?? harvesterFetch
   const userAgent = process.env.BUILTIN_DISCOVERY_USER_AGENT ?? DEFAULT_USER_AGENT
   // The sitemap has ~7.8k browse pages; cap how many we seed, and how many we
   // crawl per run (rate-limited, so ~20/run keeps each run inside the budget).

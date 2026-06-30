@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { mapJoobleJob, searchJoobleJobs, stableIdFromUrl } from "@/lib/sources/jooble"
+import { mapJoobleJob, searchJoobleAllPages, searchJoobleJobs, stableIdFromUrl } from "@/lib/sources/jooble"
 
 const rawJob = {
   id: 555,
@@ -79,4 +79,54 @@ test("searchJoobleJobs filters junk rows to nothing", async () => {
     fetchImpl: fetchImpl as typeof fetch,
   })
   assert.equal(result.jobs.length, 0)
+})
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+
+/** Returns a fetchImpl that serves `fullPages` pages of 20 unique jobs, then a short page. */
+function pagedFetch(fullPages: number, shortPageSize = 5, totalCount = 999) {
+  return (async (_url: string | URL | Request, init?: RequestInit) => {
+    const page = Number(JSON.parse(String(init?.body)).page)
+    const size = page <= fullPages ? 20 : shortPageSize
+    const jobs = Array.from({ length: size }, (_, i) => ({
+      id: `p${page}-${i}`,
+      title: "Engineer",
+      link: `https://jooble.org/away/p${page}-${i}`,
+      company: "Co",
+    }))
+    return new Response(JSON.stringify({ jobs, totalCount }))
+  }) as unknown as typeof fetch
+}
+
+test("searchJoobleAllPages walks pages until a short page and dedupes by id", async () => {
+  const result = await searchJoobleAllPages({
+    keywords: "x",
+    apiKey: "TEST_KEY",
+    maxPages: 5,
+    fetchImpl: pagedFetch(2), // 2 full pages of 20, then a short page of 5
+  })
+  assert.equal(result.pagesFetched, 3) // page 1, 2 (full), 3 (short → stop)
+  assert.equal(result.jobs.length, 45) // 20 + 20 + 5, all unique
+})
+
+test("searchJoobleAllPages stops at maxPages even when results keep coming", async () => {
+  const result = await searchJoobleAllPages({
+    keywords: "x",
+    apiKey: "TEST_KEY",
+    maxPages: 2,
+    fetchImpl: pagedFetch(10), // always full pages
+  })
+  assert.equal(result.pagesFetched, 2)
+  assert.equal(result.jobs.length, 40)
+})
+
+test("searchJoobleAllPages stops once the API's claimed total is reached", async () => {
+  const result = await searchJoobleAllPages({
+    keywords: "x",
+    apiKey: "TEST_KEY",
+    maxPages: 9,
+    fetchImpl: pagedFetch(9, 20, 40), // full pages but totalCount caps at 40
+  })
+  assert.equal(result.pagesFetched, 2) // 40 collected after 2 pages → stop
+  assert.equal(result.jobs.length, 40)
 })

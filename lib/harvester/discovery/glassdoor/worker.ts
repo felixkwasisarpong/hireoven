@@ -2,6 +2,7 @@ import type { Pool, PoolClient } from "pg"
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 import { guessPublicDomain } from "@/lib/companies/placeholder-from-employer"
 import { buildGlassdoorSearchUrl, loadGlassdoorDiscoveryConfig, type GlassdoorDiscoveryConfig } from "./config"
+import { harvesterFetch } from "@/lib/harvester/http-agent"
 import { detectGlassdoorBlockSignal } from "./block-signals"
 import { companySlug, normalizeCompanyName } from "./name-normalization"
 import { parseGlassdoorCompanyCandidates, type GlassdoorParsedCompany } from "./parser"
@@ -458,7 +459,7 @@ export async function runGlassdoorDiscoveryWorker(
   const config = options.config ?? loadGlassdoorDiscoveryConfig()
   const limits = runtimeLimits()
   const userAgent = options.userAgent ?? process.env.GLASSDOOR_USER_AGENT ?? DEFAULT_USER_AGENT
-  const fetchImpl = options.fetchImpl ?? fetch
+  const fetchImpl = options.fetchImpl ?? harvesterFetch
   const lockClient = await tryAcquireWorkerLock(pool)
 
   if (!lockClient) {

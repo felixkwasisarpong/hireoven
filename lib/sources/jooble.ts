@@ -17,6 +17,8 @@
 
 const JOOBLE_BASE = "https://jooble.org/api"
 const REQUEST_TIMEOUT_MS = 12_000
+/** Jooble returns ~20 results per page; a short page means the result set is exhausted. */
+const JOOBLE_PAGE_SIZE = 20
 
 export interface JoobleJob {
   id: string
@@ -80,6 +82,48 @@ export async function searchJoobleJobs(opts: JoobleSearchOptions): Promise<Joobl
   const body = await res.json() as { jobs?: RawJoobleJob[]; totalCount?: number }
   const jobs = (body.jobs ?? []).map(mapJoobleJob).filter(Boolean) as JoobleJob[]
   return { jobs, count: body.totalCount ?? jobs.length, page }
+}
+
+export interface JoobleAllPagesOptions extends Omit<JoobleSearchOptions, "page"> {
+  /** Maximum pages to walk per query (default 3). */
+  maxPages?: number
+}
+
+export interface JoobleAllPagesResult extends JoobleSearchResult {
+  /** Pages actually fetched before exhaustion or the cap. */
+  pagesFetched: number
+}
+
+/**
+ * Walk Jooble's paginated results for a single query, deduping by id. Stops when
+ * a page comes back empty, the API's claimed total is reached, a short final
+ * page appears, or `maxPages` is hit — whichever comes first. The single-page
+ * `searchJoobleJobs` left ~95% of each result set on the table.
+ */
+export async function searchJoobleAllPages(opts: JoobleAllPagesOptions): Promise<JoobleAllPagesResult> {
+  const maxPages = Math.max(1, opts.maxPages ?? 3)
+  const seen = new Set<string>()
+  const jobs: JoobleJob[] = []
+  let count = 0
+  let pagesFetched = 0
+
+  for (let page = 1; page <= maxPages; page++) {
+    const res = await searchJoobleJobs({ ...opts, page })
+    pagesFetched++
+    count = res.count
+    if (res.jobs.length === 0) break
+
+    for (const job of res.jobs) {
+      if (seen.has(job.id)) continue
+      seen.add(job.id)
+      jobs.push(job)
+    }
+
+    if (count > 0 && jobs.length >= count) break // collected everything the API claims
+    if (res.jobs.length < JOOBLE_PAGE_SIZE) break // short page → no more results
+  }
+
+  return { jobs, count: count || jobs.length, page: pagesFetched, pagesFetched }
 }
 
 // ── Raw API shape ─────────────────────────────────────────────────────────────
