@@ -71,6 +71,30 @@ const BROWSER_FALLBACK_TIMEOUT_MS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BROWSER_TIMEOUT_MS ?? "10000", 10)
 )
 
+/**
+ * Resolve `p`, or `fallback` if it hasn't settled within `ms`. Unlike a plain
+ * Promise.race this never rejects and clears its timer, so a hung promise can't
+ * keep the event loop alive or leak. Used to cap browser renders whose
+ * underlying Playwright calls have no enforceable timeout.
+ */
+function withHardTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve(fallback)
+    }, ms)
+    const finish = (value: T) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      resolve(value)
+    }
+    p.then(finish, () => finish(fallback))
+  })
+}
+
 const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
   "ashby",
   "bamboohr",
@@ -490,7 +514,17 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
           limit(async () => {
             let description: string | null = null
             try {
-              description = await fetcher!.fetch(job.apply_url, BROWSER_FALLBACK_TIMEOUT_MS)
+              // Hard wall-clock cap around the whole fetch. fetcher.fetch bounds
+              // page.goto, but context.newPage()/page.content()/page.close() have
+              // no Playwright timeout — if chromium wedges, those hang forever and
+              // a single stuck render makes this Promise.all never resolve, hanging
+              // the endpoint (and freezing the flock-guarded cron queue). The race
+              // guarantees every job settles within the timeout + slack.
+              description = await withHardTimeout(
+                fetcher!.fetch(job.apply_url, BROWSER_FALLBACK_TIMEOUT_MS),
+                BROWSER_FALLBACK_TIMEOUT_MS + 5_000,
+                null
+              )
             } catch {
               description = null
             }
@@ -513,7 +547,8 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
       // Jobs past the per-run ceiling: fail now, retry next cycle.
       for (const job of overflow) await failWithReason(job, "description_fetch_failed")
     } finally {
-      await fetcher.close()
+      // close() can also hang on a wedged browser — bound it so the run returns.
+      await withHardTimeout(fetcher.close(), 10_000, undefined)
     }
   } else {
     // Browser disabled or unavailable — original behavior for HTTP failures.

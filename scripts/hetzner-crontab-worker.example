@@ -38,9 +38,11 @@ DATABASE_URL=REPLACE_ME
  20 1,13 * * *     cd $HIREOVEN_REPO && npm run capture:companies:continuous:execute -- --states-per-run=8 --state-limit=60 --state-min-certified=5 >>/var/log/hireoven/capture-companies-continuous.log 2>&1
 # Recommended deep sweep lane for crawler-only territory (off-peak):
  45 2 * * *      flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 90m bash scripts/crons.sh crawl-full-non-ats >>/var/log/hireoven/crawl-full-non-ats.log 2>&1'
-# Description enrichment — now near-empty (auto-retire keeps the pending floor at
-# zero), but keep it running to publish fresh crawler jobs within ~5 min.
- */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=500 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
+# Description enrichment — drains pending_enrichment (incl. Adzuna recovery, which
+# needs the Playwright fallback). `timeout -k 10 280` bounds the run under the 5-min
+# interval so a wedged browser render can never hold the flock and freeze the queue;
+# batch=120 keeps a single bounded run from over-claiming jobs into `processing`.
+ */5 * * * *       flock -n /tmp/hireoven-enrich.lock -c 'cd $HIREOVEN_REPO && JOB_DESCRIPTION_ENRICHMENT_BATCH=120 JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY=12 timeout -k 10 280 bash scripts/crons.sh job-description-enrichment >>/var/log/hireoven/job-description-enrichment.log 2>&1'
   0 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh ghost-scan         >>/var/log/hireoven/ghost-scan.log 2>&1
   5 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh timing-refresh     >>/var/log/hireoven/timing-refresh.log 2>&1
  10 */6 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh cohort-refresh     >>/var/log/hireoven/cohort-refresh.log 2>&1
