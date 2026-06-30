@@ -35,6 +35,7 @@ import { discoverHostsForApex } from "@/lib/harvester/discovery/crtsh"
 import { resolveWorkdaySite } from "@/lib/harvester/discovery/workday-resolver"
 import { fetchAndExtract, DEFAULT_SEED_SOURCES } from "@/lib/harvester/discovery/github-seeds"
 import { humanizeSeedSlug } from "@/lib/discovery/seed-slug"
+import { counter } from "@/lib/observability/metrics"
 import type { AtsName } from "@/lib/harvester/adapters"
 import type { Pool } from "pg"
 
@@ -67,18 +68,38 @@ const CRTSH_PROBE_CONCURRENCY = 2
 
 type AdapterDetection = NonNullable<ReturnType<typeof detectAdapter>>
 
-/** True when the board at `url` (or pre-detected adapter) has >= 1 live job. */
-async function boardHasJobs(url: string, det: AdapterDetection | null = detectAdapter(url)): Promise<boolean> {
-  if (!det) return false
+type ProbeResult = "has_jobs" | "empty" | "error"
+
+/**
+ * Probe the board at `url` and classify the outcome. Critically this separates
+ * "the board reachably returned zero jobs" (`empty`) from "we couldn't reach it"
+ * (`error` — timeout, WAF block, network fault). Collapsing the two — as the old
+ * boolean did — let a systematically-blocked ATS host (e.g. every greenhouse
+ * board blocked from the datacenter IP) masquerade as "no companies have jobs",
+ * silently discarding valid candidates. Each outcome is metered so a block shows
+ * up as an `error` spike in discovery-stats instead of vanishing.
+ */
+async function probeBoard(url: string, det: AdapterDetection | null = detectAdapter(url)): Promise<ProbeResult> {
+  if (!det) return "error"
+  const ats = det.adapter.name
   try {
     const res = await det.adapter.fetchJobs({
       slug: det.slug,
       ctx: { etag: null, lastModified: null, timeoutMs: PROBE_TIMEOUT_MS },
     })
-    return res.jobs.length > 0
-  } catch {
-    return false
+    const result: ProbeResult = res.jobs.length > 0 ? "has_jobs" : "empty"
+    counter("discover.board_probe", { ats, result })
+    return result
+  } catch (err) {
+    const reason = err instanceof Error && /abort|timeout/i.test(err.name) ? "timeout" : "fetch_error"
+    counter("discover.board_probe", { ats, result: "error", reason })
+    return "error"
   }
+}
+
+/** True only when the board reachably returned >= 1 live job (probe errors → false). */
+async function boardHasJobs(url: string, det: AdapterDetection | null = detectAdapter(url)): Promise<boolean> {
+  return (await probeBoard(url, det)) === "has_jobs"
 }
 
 // ─── Stage 1: apply_url ATS detection ────────────────────────────────────────

@@ -15,6 +15,8 @@
  * for the public listing/detail pages.
  */
 
+import { harvesterFetch } from "@/lib/harvester/http-agent"
+
 const WAAS_BASE = "https://www.workatastartup.com"
 
 const WAAS_UA =
@@ -131,7 +133,7 @@ function extractInertiaProps<T = unknown>(html: string): T | null {
   }
 }
 
-async function fetchWaasHtml(path: string, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+async function fetchWaasHtml(path: string, fetchImpl: typeof fetch = harvesterFetch): Promise<string | null> {
   const url = path.startsWith("http") ? path : `${WAAS_BASE}${path}`
   try {
     const res = await fetchImpl(url, {

@@ -25,7 +25,24 @@ import { enrollFromApplyUrl } from "@/lib/harvester/discovery/enroll-from-apply-
 import { isValidCompanyName } from "@/lib/sources/company-name-guard"
 import { normalizePersistedJobRecord } from "@/lib/jobs/normalization"
 import { publicationStatusForNormalization } from "@/lib/jobs/publication"
+import { counter } from "@/lib/observability/metrics"
 import type { EmploymentType } from "@/types"
+
+/**
+ * Record per-source ingest health so a source whose upstream silently broke
+ * (returns 200 but fetched ~0) is distinguishable from a healthy one in
+ * discovery-stats. `runs` increments every call; a source with runs>0 and
+ * fetched≈0 over 24h is the tell. Emitted on every return path.
+ */
+function emitIngestHealth(stats: IngestStats): void {
+  const source = stats.source
+  counter("source.ingest.runs", { source })
+  counter("source.ingest.fetched", { source }, stats.fetched)
+  counter("source.ingest.inserted", { source }, stats.inserted)
+  counter("source.ingest.updated", { source }, stats.updated)
+  counter("source.ingest.hidden_low_quality", { source }, stats.hiddenLowQuality)
+  counter("source.ingest.upsert_errors", { source }, stats.errors)
+}
 
 /** Normalized job shape every aggregator source maps into. */
 export interface AggregatorJob {
@@ -139,7 +156,10 @@ export async function ingestAggregatorJobs(
     if (!seen.has(job.id)) seen.set(job.id, job)
   }
   stats.fetched = seen.size
-  if (seen.size === 0) return stats
+  if (seen.size === 0) {
+    emitIngestHealth(stats)
+    return stats
+  }
 
   // Group by normalized company name.
   const byCompany = new Map<string, AggregatorJob[]>()
@@ -429,5 +449,6 @@ export async function ingestAggregatorJobs(
     console.error(`[${source}-ingest] harvest bump failed:`, err)
   }
 
+  emitIngestHealth(stats)
   return stats
 }

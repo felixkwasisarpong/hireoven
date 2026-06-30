@@ -10,13 +10,15 @@
  *   JOOBLE_SEARCH_QUERIES — comma-separated keywords (default list below)
  *   JOOBLE_LOCATION       — optional location filter
  *   JOOBLE_MAX_QUERIES    — max queries per run (default: 8)
+ *   JOOBLE_PAGES_PER_QUERY — pages to walk per query (default: 3)
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { searchJoobleJobs, type JoobleJob } from "@/lib/sources/jooble"
+import { searchJoobleAllPages, type JoobleJob } from "@/lib/sources/jooble"
 import { ingestAggregatorJobs } from "@/lib/jobs/aggregator-ingest"
+import { counter } from "@/lib/observability/metrics"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -44,6 +46,7 @@ export async function GET(request: NextRequest) {
   const queryOverride = url.searchParams.get("q")
   const location = url.searchParams.get("location") ?? process.env.JOOBLE_LOCATION ?? undefined
   const maxQueries = Number(url.searchParams.get("maxQueries") ?? process.env.JOOBLE_MAX_QUERIES ?? "8")
+  const maxPages = Math.max(1, Number(url.searchParams.get("maxPages") ?? process.env.JOOBLE_PAGES_PER_QUERY ?? "3"))
   const queries = queryOverride
     ? [queryOverride]
     : (process.env.JOOBLE_SEARCH_QUERIES ?? "")
@@ -56,20 +59,23 @@ export async function GET(request: NextRequest) {
 
   const all: JoobleJob[] = []
   let queryErrors = 0
+  let pagesFetched = 0
   for (const keywords of queries) {
     try {
-      const { jobs } = await searchJoobleJobs({ keywords, location })
+      const { jobs, pagesFetched: pages } = await searchJoobleAllPages({ keywords, location, maxPages })
       all.push(...jobs)
+      pagesFetched += pages
     } catch (err) {
       console.error(`[jooble-ingest] query "${keywords}" failed:`, err)
       queryErrors++
+      counter("source.fetch.error", { source: "jooble" })
     }
   }
 
   try {
     const pool = getPostgresPool()
     const stats = await ingestAggregatorJobs(pool, "jooble", all, { minDescriptionChars: 300 })
-    return NextResponse.json({ ok: true, queryErrors, ...stats })
+    return NextResponse.json({ ok: true, queryErrors, pagesFetched, ...stats })
   } catch (err) {
     console.error("[jooble-ingest] ingest failed:", err)
     return NextResponse.json({ ok: false, error: String(err) }, { status: 500 })

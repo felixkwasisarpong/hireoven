@@ -36,6 +36,17 @@ export interface DiscoveryStats {
     promoted: number
     conversion_rate: number
   }
+  /** Per-source ingest health (24h). A source with runs>0 but fetched≈0 — or a
+   *  nonzero fetch_errors — silently broke upstream while still returning 200. */
+  source_ingest: Record<string, SourceIngestStats>
+  /** discover-companies board probes (24h): separates a reachably-empty board
+   *  from an unreachable one (timeout/WAF). A spike in `error` ≈ an IP block. */
+  board_probe: {
+    has_jobs: number
+    empty: number
+    error: number
+    error_rate: number
+  }
 }
 
 interface SourceStats {
@@ -49,6 +60,15 @@ interface AtsStats {
   backsolve_success: number
   tenants_enrolled: number
   jobs_persisted: number
+}
+interface SourceIngestStats {
+  runs: number
+  fetched: number
+  inserted: number
+  updated: number
+  hidden_low_quality: number
+  upsert_errors: number
+  fetch_errors: number
 }
 
 export async function buildDiscoveryStats(pool: Pool): Promise<DiscoveryStats> {
@@ -138,7 +158,36 @@ export async function buildDiscoveryStats(pool: Pool): Promise<DiscoveryStats> {
     conversion_rate: adzAttempted > 0 ? round(adzPromoted / adzAttempted) : 0,
   }
 
-  return { generatedAt: snap.generatedAt, last24h, by_source, by_ats, adzuna_enrich }
+  // ── Per-source ingest health ──
+  const ingestSources = new Set<string>(
+    labelValues(snap, ["source.ingest.runs", "source.fetch.error"], "source"),
+  )
+  const source_ingest: Record<string, SourceIngestStats> = {}
+  for (const s of ingestSources) {
+    source_ingest[s] = {
+      runs: sumCounter(snap, "source.ingest.runs", { source: s }),
+      fetched: sumCounter(snap, "source.ingest.fetched", { source: s }),
+      inserted: sumCounter(snap, "source.ingest.inserted", { source: s }),
+      updated: sumCounter(snap, "source.ingest.updated", { source: s }),
+      hidden_low_quality: sumCounter(snap, "source.ingest.hidden_low_quality", { source: s }),
+      upsert_errors: sumCounter(snap, "source.ingest.upsert_errors", { source: s }),
+      fetch_errors: sumCounter(snap, "source.fetch.error", { source: s }),
+    }
+  }
+
+  // ── Board probe outcomes ──
+  const probeHasJobs = sumCounter(snap, "discover.board_probe", { result: "has_jobs" })
+  const probeEmpty = sumCounter(snap, "discover.board_probe", { result: "empty" })
+  const probeError = sumCounter(snap, "discover.board_probe", { result: "error" })
+  const probeTotal = probeHasJobs + probeEmpty + probeError
+  const board_probe = {
+    has_jobs: probeHasJobs,
+    empty: probeEmpty,
+    error: probeError,
+    error_rate: probeTotal > 0 ? round(probeError / probeTotal) : 0,
+  }
+
+  return { generatedAt: snap.generatedAt, last24h, by_source, by_ats, adzuna_enrich, source_ingest, board_probe }
 }
 
 function round(n: number): number {

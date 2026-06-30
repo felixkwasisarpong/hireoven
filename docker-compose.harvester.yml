@@ -85,6 +85,16 @@ services:
       # Routes Dice fetches through a residential/clean-IP proxy (Dice WAF-blocks
       # datacenter IPs). e.g. http://5.161.53.248:8888 (tinyproxy on the webbox).
       DICE_PROXY_URL: ${DICE_PROXY_URL:-}
+      # Routes harvesterFetch (ATS board probes, builtin/glassdoor/WaaS workers,
+      # careers + domain discovery probes) through a proxy for hosts matching
+      # HARVESTER_PROXY_HOSTS. Leave HARVESTER_PROXY_URL unset for direct fetch.
+      # WARNING: keep the host list targeted to known-WAF hosts — funnelling
+      # high-volume ATS hosts (greenhouse/lever) through one proxy IP will get
+      # that IP blocked. Default proxies Workday only.
+      HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
+      HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
+      # Pages Jooble walks per query (was single-page; raise if quota allows).
+      JOOBLE_PAGES_PER_QUERY: ${JOOBLE_PAGES_PER_QUERY:-3}
       AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
       AGGREGATOR_BACKSOLVE_BUDGET_MS: ${AGGREGATOR_BACKSOLVE_BUDGET_MS:-150000}
       ATS_RESOLVE_TIMEOUT_MS: ${ATS_RESOLVE_TIMEOUT_MS:-10000}

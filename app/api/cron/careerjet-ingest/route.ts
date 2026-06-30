@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { ingestAggregatorJobs, type AggregatorJob } from "@/lib/jobs/aggregator-ingest"
+import { counter } from "@/lib/observability/metrics"
 
 export const runtime = "nodejs"
 export const maxDuration = 300
@@ -213,6 +214,7 @@ export async function GET(request: NextRequest) {
       } catch (err) {
         console.error(`[careerjet-ingest] query "${q}" (${country.key}) failed:`, err)
         fetchErrors++
+        counter("source.fetch.error", { source: "careerjet" })
       }
     }
   }

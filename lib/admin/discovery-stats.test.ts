@@ -55,6 +55,16 @@ describe("buildDiscoveryStats", () => {
     counter("adzuna.enrich.pending_inserted", undefined, 10)
     counter("description_enrichment.result", { source: "adzuna", status: "published" }, 6)
     counter("description_enrichment.result", { source: "adzuna", status: "pending_enrichment" }, 2)
+    // Per-source ingest health: themuse healthy, jooble upstream-broken (ran but fetched 0 + errors).
+    counter("source.ingest.runs", { source: "themuse" }, 3)
+    counter("source.ingest.fetched", { source: "themuse" }, 95)
+    counter("source.ingest.inserted", { source: "themuse" }, 40)
+    counter("source.ingest.runs", { source: "jooble" }, 2)
+    counter("source.fetch.error", { source: "jooble" }, 5)
+    // Board probes: extra ats/reason labels must not break subset-match sums.
+    counter("discover.board_probe", { ats: "greenhouse", result: "has_jobs" }, 10)
+    counter("discover.board_probe", { ats: "lever", result: "empty" }, 6)
+    counter("discover.board_probe", { ats: "greenhouse", result: "error", reason: "timeout" }, 4)
 
     const stats = await buildDiscoveryStats(fakePool())
 
@@ -101,6 +111,20 @@ describe("buildDiscoveryStats", () => {
     assert.equal(stats.adzuna_enrich.enriched_attempted, 8) // 6 published + 2 pending
     assert.equal(stats.adzuna_enrich.promoted, 6)
     assert.equal(stats.adzuna_enrich.conversion_rate, round(6 / 8))
+
+    // Per-source ingest health
+    assert.equal(stats.source_ingest.themuse!.fetched, 95)
+    assert.equal(stats.source_ingest.themuse!.inserted, 40)
+    assert.equal(stats.source_ingest.themuse!.fetch_errors, 0)
+    assert.equal(stats.source_ingest.jooble!.runs, 2)
+    assert.equal(stats.source_ingest.jooble!.fetched, 0) // ran but fetched nothing → broken
+    assert.equal(stats.source_ingest.jooble!.fetch_errors, 5)
+
+    // Board probes (subset-match across extra ats/reason labels)
+    assert.equal(stats.board_probe.has_jobs, 10)
+    assert.equal(stats.board_probe.empty, 6)
+    assert.equal(stats.board_probe.error, 4)
+    assert.equal(stats.board_probe.error_rate, round(4 / 20))
   })
 
   it("handles an empty window without throwing", async () => {

@@ -48,6 +48,7 @@ import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
+import { harvesterFetch } from "@/lib/harvester/http-agent"
 import { discoverCareersUrl, type DiscoveryProbe } from "@/lib/companies/careers-url-discovery"
 import { resolveDirectAtsUrl } from "@/lib/companies/ats-url-resolver"
 import { resolveCompanyDomainFromName, nameTokens, domainMatchesName } from "@/lib/companies/domain-resolution"
@@ -145,7 +146,7 @@ async function plainFetchHtml(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, {
+    const res = await harvesterFetch(url, {
       redirect: "follow",
       signal: controller.signal,
       headers: { "user-agent": USER_AGENT, accept: "text/html,application/xhtml+xml" },
