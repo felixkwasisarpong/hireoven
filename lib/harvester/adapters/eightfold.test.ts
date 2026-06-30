@@ -42,6 +42,7 @@ test("eightfold: falls back to the apply/v2 dialect when pcsx/search 403s", asyn
         canonicalPositionUrl: "https://portal.careers.hsbc.com/careers/job/111",
         display_job_id: "A1",
         work_location_option: "remote",
+        job_description: "<p>Build trading systems in C++.</p>",
       },
       {
         id: 222,
@@ -88,4 +89,10 @@ test("eightfold: falls back to the apply/v2 dialect when pcsx/search 403s", asyn
   assert.equal(j.applyUrl, "https://portal.careers.hsbc.com/careers/job/111")
   assert.equal(j.workMode, "remote")
   assert.equal(j.postedAt, new Date(1782796640 * 1000).toISOString())
+  // apply/v2 carries the JD inline — captured directly, no pcsx detail round-trip
+  assert.match(j.description ?? "", /Build trading systems in C\+\+/)
+  assert.ok(
+    !seen.some((u) => u.includes("/api/pcsx/position_details")),
+    "apply/v2 dialect must skip the pcsx detail pass",
+  )
 })
