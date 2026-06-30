@@ -103,7 +103,13 @@ const ORACLE_MAX_JOBS = Math.max(
 const PHENOM_DEFAULT_PAGE_SIZE = 10
 const PHENOM_MAX_JOBS = 240
 const GOOGLE_RESULTS_PAGE_SIZE = 20
-const GOOGLE_MAX_JOBS = 200
+// Pagination self-terminates when Google runs out of results, so this cap is
+// just a safety ceiling. Was a hardcoded 200 — far below Google's real US board
+// (thousands), throttling one of the highest-volume firms. Env-tunable now.
+const GOOGLE_MAX_JOBS = Math.max(
+  GOOGLE_RESULTS_PAGE_SIZE,
+  Number.parseInt(process.env.CRAWLER_GOOGLE_MAX_JOBS ?? "2000", 10),
+)
 const ICIMS_JIBE_PAGE_SIZE = 100
 const ICIMS_JIBE_MAX_JOBS = 500
 const TCS_SEARCH_PAGE_SIZE = 10
