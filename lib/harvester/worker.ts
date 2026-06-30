@@ -222,6 +222,12 @@ const SUPPORTED_ATS_TYPES = [
   "usajobs",
   "infosys",
   "apple",
+  // Purpose-built big-firm adapters: registered + page-deep, but were absent from
+  // the claim allowlist so eightfold/netflix companies were never picked up by the
+  // 15s harvester loop (only the hourly custom crawler, if at all). Amazon/Microsoft
+  // route via URL detection already; these two have no matching careers_url pattern.
+  "eightfold",
+  "netflix",
 ]
 
 type ClaimedRow = {
