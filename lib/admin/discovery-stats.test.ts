@@ -51,6 +51,10 @@ describe("buildDiscoveryStats", () => {
     counter("jobs.persisted", { atsType: "greenhouse", status: "inserted" }, 7)
     counter("jobs.publication_status", { value: "visible_basic" }, 5)
     counter("ats_rate_limit.throttled", { atsType: "greenhouse" }, 4)
+    // Adzuna enrich recovery: 10 queued, 8 attempted, 6 promoted to published.
+    counter("adzuna.enrich.pending_inserted", undefined, 10)
+    counter("description_enrichment.result", { source: "adzuna", status: "published" }, 6)
+    counter("description_enrichment.result", { source: "adzuna", status: "pending_enrichment" }, 2)
 
     const stats = await buildDiscoveryStats(fakePool())
 
@@ -91,6 +95,12 @@ describe("buildDiscoveryStats", () => {
     // by_ats breakdown
     assert.equal(stats.by_ats.greenhouse!.tenants_enrolled, 1)
     assert.equal(stats.by_ats.greenhouse!.jobs_persisted, 7)
+
+    // Adzuna truncated-job recovery conversion
+    assert.equal(stats.adzuna_enrich.pending_inserted, 10)
+    assert.equal(stats.adzuna_enrich.enriched_attempted, 8) // 6 published + 2 pending
+    assert.equal(stats.adzuna_enrich.promoted, 6)
+    assert.equal(stats.adzuna_enrich.conversion_rate, round(6 / 8))
   })
 
   it("handles an empty window without throwing", async () => {

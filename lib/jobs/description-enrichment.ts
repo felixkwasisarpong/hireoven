@@ -1,5 +1,6 @@
 import pLimit from "p-limit"
 import type { Pool } from "pg"
+import { counter } from "@/lib/observability/metrics"
 import { fetchJobDescription } from "@/lib/jobs/description"
 import {
   createBrowserDescriptionFetcher,
@@ -374,6 +375,12 @@ async function updateSuccess(
       }),
     ]
   )
+
+  // Conversion signal: which source's pending jobs got enriched, and to what
+  // status ('published' = promoted into the feed). Powers the discovery-stats
+  // Adzuna enrich conversion rate.
+  const src = typeof rawData.source === "string" ? rawData.source : "unknown"
+  counter("description_enrichment.result", { source: src, status })
 
   return status
 }

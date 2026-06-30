@@ -28,6 +28,14 @@ export interface DiscoveryStats {
   }
   by_source: Record<string, SourceStats>
   by_ats: Record<string, AtsStats>
+  /** Adzuna truncated-job recovery: how many were queued for enrichment and how
+   *  many got promoted into the feed (24h, from in-process metrics). */
+  adzuna_enrich: {
+    pending_inserted: number
+    enriched_attempted: number
+    promoted: number
+    conversion_rate: number
+  }
 }
 
 interface SourceStats {
@@ -119,7 +127,18 @@ export async function buildDiscoveryStats(pool: Pool): Promise<DiscoveryStats> {
     }
   }
 
-  return { generatedAt: snap.generatedAt, last24h, by_source, by_ats }
+  // Adzuna truncated-job recovery conversion (24h, in-process metrics).
+  const adzPending = sumCounter(snap, "adzuna.enrich.pending_inserted")
+  const adzAttempted = sumCounter(snap, "description_enrichment.result", { source: "adzuna" })
+  const adzPromoted = sumCounter(snap, "description_enrichment.result", { source: "adzuna", status: "published" })
+  const adzuna_enrich = {
+    pending_inserted: adzPending,
+    enriched_attempted: adzAttempted,
+    promoted: adzPromoted,
+    conversion_rate: adzAttempted > 0 ? round(adzPromoted / adzAttempted) : 0,
+  }
+
+  return { generatedAt: snap.generatedAt, last24h, by_source, by_ats, adzuna_enrich }
 }
 
 function round(n: number): number {
