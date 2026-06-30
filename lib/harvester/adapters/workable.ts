@@ -261,7 +261,16 @@ export const workableAdapter: AtsAdapter = {
           { ...ctx, etag: null, lastModified: null },
           { maxAttempts: 2 }
         )
-        if (res.kind !== "ok") continue
+        if (res.kind !== "ok") {
+          // Workable rate-limits per IP across the whole board host, so once we
+          // see a 429/403 the rest of this pass is doomed — and continuing fires
+          // dozens more retried-with-backoff requests, which is exactly what
+          // blows the per-company budget into the 300s watchdog and deepens the
+          // cluster-wide 429 storm. Stop enriching this crawl; alreadyDescribedIds
+          // lets us resume cleanly next time. Other errors: skip just this job.
+          if (res.status === 429 || res.status === 403) break
+          continue
+        }
         upstreamLatency += res.upstreamLatencyMs
         const full = buildDescription(res.data)
         if (full && full.length > (job.description?.length ?? 0)) {
