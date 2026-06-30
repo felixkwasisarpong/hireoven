@@ -114,7 +114,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   ashby: 60_000,
   usajobs: 60_000,
   icims: 60_000,
-  apple: 120_000,
+  apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
   amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
   microsoft: 240_000, // ~146 search pages (10/page) + a detail-fetch budget
   netflix: 120_000, // ~52 list pages (10/page, Eightfold) + a detail-fetch budget

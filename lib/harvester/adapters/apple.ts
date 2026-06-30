@@ -32,7 +32,7 @@ const PAGE_RENDER_WAIT_MS = 20_000
 // Search returns ~25/page. Env-tunable; default 60 (~1.5k). Raise to capture
 // more of Apple's full board — but Apple is Playwright-rendered (slow), so raise
 // the per-company timeout alongside or the crawl will time out and get demoted.
-const MAX_PAGES = Math.max(1, Number.parseInt(process.env.HARVESTER_APPLE_MAX_PAGES ?? "60", 10))
+const MAX_PAGES = Math.max(1, Number.parseInt(process.env.HARVESTER_APPLE_MAX_PAGES ?? "100", 10))
 const DETAIL_MAX_JOBS = Math.max(
   0,
   Number.parseInt(process.env.HARVESTER_APPLE_DETAIL_MAX_JOBS ?? "60", 10)
