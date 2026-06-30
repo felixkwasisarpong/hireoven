@@ -48,9 +48,13 @@ type WorkableRawJob = {
   location?: { city?: string; region?: string; country?: string } | string
   telecommuting?: boolean
   remote?: boolean
+  // v3 (2026) renamed the work-mode signal to `workplace`: on_site | remote | hybrid.
+  workplace?: string
   employment_type?: string
   created_at?: string
   published_on?: string
+  // v3 (2026) renamed the publish date from `published_on`/`created_at` to `published`.
+  published?: string
   state?: string
 }
 
@@ -112,6 +116,13 @@ function pickLocation(raw: WorkableRawJob): string | undefined {
   return parts.length ? parts.join(", ") : undefined
 }
 
+function pickWorkMode(raw: WorkableRawJob): string | undefined {
+  const wp = raw.workplace?.toLowerCase()
+  if (wp === "remote" || raw.telecommuting || raw.remote) return "remote"
+  if (wp === "hybrid") return "hybrid"
+  return undefined
+}
+
 function buildDescription(raw: WorkableRawJob): string | undefined {
   const segments = [
     raw.description,
@@ -135,8 +146,8 @@ function mapRawJob(slug: string, raw: WorkableRawJob): HarvestedJob | null {
     `https://apply.workable.com/${encodeURIComponent(slug)}/j/${encodeURIComponent(externalKey)}/`
   const description = buildDescription(raw)
   const location = pickLocation(raw)
-  const postedAt = raw.published_on ?? raw.created_at ?? undefined
-  const workMode = raw.telecommuting || raw.remote ? "remote" : undefined
+  const postedAt = raw.published_on ?? raw.published ?? raw.created_at ?? undefined
+  const workMode = pickWorkMode(raw)
 
   const contentHash = hashContent([
     raw.title,
