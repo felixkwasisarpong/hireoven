@@ -123,6 +123,9 @@ services:
       # FEED_USE_NEW_STATUS must be passed through here for the Phase-5 feed flip
       # to take effect (explicit env allowlist; Coolify alone is not enough).
       FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
+      # Routes Dice fetches through a residential/clean-IP proxy (Dice WAF-blocks
+      # datacenter IPs). e.g. http://5.161.53.248:8888 (tinyproxy on the webbox).
+      DICE_PROXY_URL: ${DICE_PROXY_URL:-}
       AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
       AGGREGATOR_BACKSOLVE_BUDGET_MS: ${AGGREGATOR_BACKSOLVE_BUDGET_MS:-150000}
       ATS_RESOLVE_TIMEOUT_MS: ${ATS_RESOLVE_TIMEOUT_MS:-10000}
@@ -220,6 +223,9 @@ services:
       # FEED_USE_NEW_STATUS must be passed through here for the Phase-5 feed flip
       # to take effect (explicit env allowlist; Coolify alone is not enough).
       FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
+      # Routes Dice fetches through a residential/clean-IP proxy (Dice WAF-blocks
+      # datacenter IPs). e.g. http://5.161.53.248:8888 (tinyproxy on the webbox).
+      DICE_PROXY_URL: ${DICE_PROXY_URL:-}
       AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
       AGGREGATOR_BACKSOLVE_BUDGET_MS: ${AGGREGATOR_BACKSOLVE_BUDGET_MS:-150000}
       ATS_RESOLVE_TIMEOUT_MS: ${ATS_RESOLVE_TIMEOUT_MS:-10000}
