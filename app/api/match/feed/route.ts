@@ -52,6 +52,41 @@ function parseList<T extends string>(value: string | null) {
   return value?.split(",").map((item) => item.trim()).filter(Boolean) as T[] | undefined
 }
 
+// ── "Most relevant" blend ─────────────────────────────────────────────────────
+// Relevant = profile match score + search-text relevance + freshness, so a
+// strong-but-slightly-older match beats a fresh weak one, while a typed query
+// still pulls exact title/company hits to the top. These helpers mirror the
+// client comparator in lib/hooks/useJobs.ts EXACTLY so the server's first paint
+// and the client's re-sort agree (no reorder flash). Keep them in sync.
+function freshnessRelevanceScore(timestamp: string | Date | null | undefined): number {
+  if (!timestamp) return 0
+  const minutes = Math.max(1, Math.floor((Date.now() - new Date(timestamp).getTime()) / 60_000))
+  return Math.max(0, 500 - minutes)
+}
+
+function textRelevanceScore(job: JobWithMatchScore, query: string): number {
+  if (!query) return 0
+  const title = `${job.title ?? ""} ${job.normalized_title ?? ""}`.toLowerCase().trim()
+  const company = job.company?.name?.toLowerCase() ?? ""
+  const location = job.location?.toLowerCase() ?? ""
+  const skills = job.skills?.join(" ").toLowerCase() ?? ""
+  let score = 0
+  if (title === query) score += 80
+  else if (title.startsWith(query)) score += 55
+  else if (title.includes(query)) score += 40
+  if (company.includes(query)) score += 28
+  if (skills.includes(query)) score += 22
+  if (location.includes(query)) score += 12
+  return score
+}
+
+// Weights: score (0–100)×4 leads, text (0–~142)×3 dominates on a query match,
+// freshness (0–500)×0.5 keeps recent jobs lifted without burying strong matches.
+function relevanceBlend(job: JobWithMatchScore, query: string): number {
+  const score = job.match_score?.overall_score ?? 0
+  return score * 4 + textRelevanceScore(job, query) * 3 + freshnessRelevanceScore(job.first_detected_at) * 0.5
+}
+
 function matchesSearch(job: JobWithMatchScore, query: string) {
   if (
     matchesSearchQuery(
@@ -111,22 +146,46 @@ export async function GET(request: NextRequest) {
   // extension shows up immediately.
   const sortMode = sp.get("sort") ?? ""
   const isBestMatch = sortMode === "match"
+  const isRelevant = sortMode === "relevant"
   const computeScores =
     sp.get("computeScores") === "1" || sp.get("compute_scores") === "1"
-  const limit = Math.min(80, parseInt(sp.get("limit") ?? "24", 10))
+  // Match/Relevant rank by score/blend rather than fetch order, so they serve a
+  // fixed, stably-ranked candidate pool and let the client paginate it locally
+  // (see fetchLimit below). They may request the whole pool in one page; every
+  // other sort streams in small chunks. The computeScores path (/matches
+  // real-time scoring) is excluded — it keeps its small, cheap growing pool so
+  // synchronous scoring stays fast.
+  const needsStablePool = (isBestMatch || isRelevant) && !computeScores
+  const maxLimit = needsStablePool ? 1500 : 80
+  const limit = Math.min(maxLimit, parseInt(sp.get("limit") ?? "24", 10))
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10))
   const minScore = Number(sp.get("minScore") ?? "0")
   const hasTextSearch = Boolean(q.trim() || location)
   const fetchMultiplier = hasTextSearch ? 3 : 2
-  // Best Match scores the freshest N jobs and shows the top `limit`. A single
-  // Adzuna ingest inserts thousands of rows with near-identical
-  // first_detected_at — enough to fill the entire freshest window with
-  // unbranded `*.placeholder` companies and crowd real, logo-bearing employers
-  // out of the candidate pool entirely. Widen the pool so those real companies
-  // stay in scoring contention (and surface above generic placeholder jobs).
+  // The feed now paginates through the ENTIRE freshness window via "load more" /
+  // infinite scroll instead of dead-ending at a small cap (the old 160/220 hid
+  // everything past ~page 11).
+  //
+  // CANDIDATE_CEILING is a safety bound for the shared 4 GB PG box, not a product
+  // cap: a single Adzuna ingest can drop tens of thousands of rows with
+  // near-identical first_detected_at, and an unbounded fetch would pull the whole
+  // day. 1500 covers any realistic personalized 24h window while keeping each
+  // request's fetch bounded. The computeScores path (/matches real-time scoring)
+  // stays small — it scores synchronously and must stay fast.
+  const CANDIDATE_CEILING = computeScores ? 160 : 1500
   const candidateFloor = isBestMatch && computeScores ? 80 : 60
-  const candidateCap = isBestMatch && computeScores ? 160 : 220
-  const fetchLimit = Math.min(candidateCap, Math.max(limit + offset, candidateFloor) * fetchMultiplier)
+  // Match/Relevant rank by score/blend, NOT by fetch order, so a growing pool
+  // would let an older high-score job enter only after the scroll offset has
+  // passed where it ranks — it would never surface. They need a STABLE pool:
+  // fetch a fixed candidate set (the freshest CANDIDATE_CEILING in the window),
+  // rank it once, and serve every page as a consistent slice of that ranking —
+  // so "load more" walks the complete ranked set top to bottom.
+  //
+  // Freshest's sort order IS its fetch order, so a cheap growing prefix is both
+  // stable and complete there — no need to pull the full pool on first paint.
+  const fetchLimit = needsStablePool
+    ? CANDIDATE_CEILING
+    : Math.min(CANDIDATE_CEILING, Math.max(limit + offset, candidateFloor) * fetchMultiplier)
 
   const pool = getPostgresPool()
   const where: string[] = ["jobs.is_active = true", sqlPublishedJob("jobs"), sqlJobLocatedInUsa("jobs")]
@@ -206,7 +265,7 @@ export async function GET(request: NextRequest) {
        LEFT JOIN companies ON companies.id = jobs.company_id
        LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
        WHERE ${where.join(" AND ")}
-       ORDER BY jobs.first_detected_at DESC NULLS LAST
+       ORDER BY jobs.first_detected_at DESC NULLS LAST, jobs.id DESC
        LIMIT ${limitParam}`
     : `WITH base AS (
          SELECT ${JOB_FEED_COLUMNS}, to_jsonb(companies.*) AS company,
@@ -223,7 +282,7 @@ export async function GET(request: NextRequest) {
          LEFT JOIN companies ON companies.id = jobs.company_id
          LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
          WHERE ${where.join(" AND ")}
-         ORDER BY jobs.first_detected_at DESC NULLS LAST
+         ORDER BY jobs.first_detected_at DESC NULLS LAST, jobs.id DESC
          LIMIT ${limitParam}
        ),
        saved AS (
@@ -328,6 +387,7 @@ export async function GET(request: NextRequest) {
   // path blended `overall*0.75 + freshness*0.25` into a `final_rank`,
   // which allowed a fresh 85% to outrank a 95% from 3 days ago — confusing
   // when the UI badge labels the higher-% card as the best match.
+  const relevanceQuery = q.trim().toLowerCase()
   const ranked = jobs
     .map((job) => {
       const matchScore = scoreMap.get(job.id) ?? null
@@ -360,11 +420,19 @@ export async function GET(request: NextRequest) {
         const a = left.match_score?.overall_score ?? -1
         const b = right.match_score?.overall_score ?? -1
         if (a !== b) return b - a
+      } else if (isRelevant) {
+        // Most relevant: score + text + freshness blend (see relevanceBlend).
+        const a = relevanceBlend(left, relevanceQuery)
+        const b = relevanceBlend(right, relevanceQuery)
+        if (a !== b) return b - a
       }
-      return (
+      const byFreshness =
         new Date(right.first_detected_at).getTime() -
         new Date(left.first_detected_at).getTime()
-      )
+      if (byFreshness !== 0) return byFreshness
+      // Deterministic final tiebreaker so the ranked order is total and stable
+      // across paginated requests (Adzuna inserts many near-identical timestamps).
+      return right.id < left.id ? -1 : right.id > left.id ? 1 : 0
     })
 
   const paginated = ranked.slice(offset, offset + limit).map(job => ({

@@ -517,14 +517,12 @@ export default function DashboardFeedToolbar({
               aria-label="Sort jobs"
             >
               {SORT_OPTIONS.map((opt) => {
-                // "Most relevant" without a search query collapses to
-                // freshest-within-24h — disable it so users don't pick a
-                // sort that promises something it can't deliver until they
-                // type a query.
-                const disabled = opt.value === "relevant" && !searchQuery.trim()
+                // "Most relevant" now works without a search query: it blends
+                // profile match score + freshness (and text relevance when a
+                // query is present), so it's a meaningful ranking on its own.
                 return (
-                  <option key={opt.value} value={opt.value} disabled={disabled}>
-                    {disabled ? `${opt.label} — search first` : opt.label}
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
                   </option>
                 )
               })}
