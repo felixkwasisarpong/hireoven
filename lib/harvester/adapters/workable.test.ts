@@ -97,6 +97,37 @@ test("workable: detail-fetch fills the JD when the list omits it", async () => {
   assert.ok(job.description?.includes("C++"))
 })
 
+test("workable: detail-pass bails on the first 429 instead of hammering every job", async () => {
+  // 3 jobs with empty list descriptions would normally fire 3 detail fetches.
+  // Workable's limit is per-IP across the whole host, so once one detail call
+  // 429s, continuing just deepens the storm + burns the watchdog budget. The
+  // pass must stop after the first 429 (here: 1 job × 2 attempts = 2 GETs, not 6+).
+  let detailGets = 0
+  const fetchImpl = (async (_url: string, init: RequestInit) => {
+    if (init?.method === "POST") {
+      return fakeJsonResponse({
+        total: 3,
+        results: [
+          { id: "1", title: "A", shortcode: "AAA", description: "" },
+          { id: "2", title: "B", shortcode: "BBB", description: "" },
+          { id: "3", title: "C", shortcode: "CCC", description: "" },
+        ],
+        nextPage: null,
+      })
+    }
+    detailGets += 1
+    return { ok: false, status: 429, headers: { get: (h: string) => (h === "retry-after" ? "0" : null) }, json: async () => ({}) } as unknown as Response
+  }) as unknown as HarvestCtx["fetchImpl"]
+
+  const result = await workableAdapter.fetchJobs({
+    slug: "acme",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(result.jobs.length, 3, "list jobs still returned")
+  assert.equal(detailGets, 2, "stopped after the first job's 429 (2 attempts), did not hammer all 3")
+})
+
 test("workable: maps the 2026 v3 schema (published date, workplace, location object)", async () => {
   // Live v3 list rows now use `published` (not published_on/created_at),
   // `workplace` (not just the `remote` bool), and a nested `location` object —
