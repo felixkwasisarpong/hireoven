@@ -6,11 +6,24 @@
  * Override via DICE_API_KEY env var if they rotate it.
  */
 
+import { ProxyAgent } from "undici"
+
 const DICE_SEARCH_URL = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search"
 const PAGE_SIZE = 100
 const REQUEST_TIMEOUT_MS = 12_000
 // Public key from Dice's own frontend bundle (NEXT_PUBLIC_JOB_SEARCH_API_KEY)
 const DICE_API_KEY = process.env.DICE_API_KEY ?? "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCgLN3gVmyObZ"
+
+// Dice WAF-blocks datacenter IPs (the harvester box gets 403 on every call while
+// the same key/headers return 200 from a residential IP). Set DICE_PROXY_URL to a
+// residential/proxy egress (http://user:pass@host:port) to route Dice through it.
+// Inert when unset — Dice simply stays blocked until a proxy is provided.
+const DICE_PROXY_URL = process.env.DICE_PROXY_URL?.trim() || ""
+const DICE_DISPATCHER = DICE_PROXY_URL ? new ProxyAgent(DICE_PROXY_URL) : undefined
+// node/undici fetch accepts `dispatcher` at runtime though it's absent from DOM types.
+function withDiceProxy(init: RequestInit): RequestInit {
+  return DICE_DISPATCHER ? ({ ...init, dispatcher: DICE_DISPATCHER } as RequestInit) : init
+}
 
 // Dice rate-limits/WAF-blocks bursts from datacenter IPs (the cron fires ~20
 // queries × multiple pages). Pace requests and retry 403/429/5xx with backoff so
@@ -96,7 +109,7 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
   for (let attempt = 1; attempt <= DICE_MAX_RETRIES; attempt += 1) {
     let res: Response | null = null
     try {
-      res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      res = await fetch(url, withDiceProxy({ headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
     } catch {
       res = null // network error / timeout — treat as retryable
     }
@@ -262,14 +275,14 @@ export async function fetchDiceJobDetail(
 
   let response: Response
   try {
-    response = await doFetch(detailsPageUrl, {
+    response = await doFetch(detailsPageUrl, withDiceProxy({
       headers: {
         Accept: "text/html,application/xhtml+xml",
         "User-Agent": DICE_DETAIL_UA,
         Referer: "https://www.dice.com/",
       },
       signal: AbortSignal.timeout(timeoutMs),
-    })
+    }))
   } catch {
     return { kind: "network_error" }
   }
