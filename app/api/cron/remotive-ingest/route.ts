@@ -1,7 +1,7 @@
 /**
  * GET /api/cron/remotive-ingest
  *
- * Pulls remote jobs from Remotive (https://remotive.io/api/remote-jobs).
+ * Pulls remote jobs from Remotive (https://remotive.com/api/remote-jobs).
  * Free, no API key required. Returns remote-only roles across all categories.
  *
  * Persistence is delegated to the shared aggregator pipeline
@@ -56,7 +56,7 @@ type RemotiveJob = {
 }
 
 async function fetchRemotiveJobs(category: string, limit: number): Promise<RemotiveJob[]> {
-  const url = `https://remotive.io/api/remote-jobs?category=${encodeURIComponent(category)}&limit=${limit}`
+  const url = `https://remotive.com/api/remote-jobs?category=${encodeURIComponent(category)}&limit=${limit}`
   const res = await fetch(url, {
     headers: { Accept: "application/json", "User-Agent": "Hireoven/1.0" },
     signal: AbortSignal.timeout(20_000),

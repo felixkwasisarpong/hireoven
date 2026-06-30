@@ -6,7 +6,7 @@
  * Override via DICE_API_KEY env var if they rotate it.
  */
 
-import { ProxyAgent } from "undici"
+import { ProxyAgent, fetch as undiciFetch } from "undici"
 
 const DICE_SEARCH_URL = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search"
 const PAGE_SIZE = 100
@@ -20,6 +20,7 @@ const DICE_API_KEY = process.env.DICE_API_KEY ?? "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCg
 // Inert when unset — Dice simply stays blocked until a proxy is provided.
 const DICE_PROXY_URL = process.env.DICE_PROXY_URL?.trim() || ""
 const DICE_DISPATCHER = DICE_PROXY_URL ? new ProxyAgent(DICE_PROXY_URL) : undefined
+const fetchDiceUpstream = undiciFetch as unknown as typeof fetch
 // node/undici fetch accepts `dispatcher` at runtime though it's absent from DOM types.
 function withDiceProxy(init: RequestInit): RequestInit {
   return DICE_DISPATCHER ? ({ ...init, dispatcher: DICE_DISPATCHER } as RequestInit) : init
@@ -109,7 +110,7 @@ export async function searchDiceJobs(opts: DiceSearchOptions): Promise<DiceSearc
   for (let attempt = 1; attempt <= DICE_MAX_RETRIES; attempt += 1) {
     let res: Response | null = null
     try {
-      res = await fetch(url, withDiceProxy({ headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
+      res = await fetchDiceUpstream(url, withDiceProxy({ headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }))
     } catch {
       res = null // network error / timeout — treat as retryable
     }
@@ -270,7 +271,7 @@ export async function fetchDiceJobDetail(
   detailsPageUrl: string,
   opts: FetchDiceDescriptionOptions = {}
 ): Promise<DiceDetailResult> {
-  const doFetch = opts.fetchImpl ?? fetch
+  const doFetch = opts.fetchImpl ?? fetchDiceUpstream
   const timeoutMs = Math.max(1_000, opts.timeoutMs ?? DICE_DETAIL_TIMEOUT_MS)
 
   let response: Response

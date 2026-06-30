@@ -23,6 +23,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { fetch as undiciFetch } from "undici"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { ingestAggregatorJobs, type AggregatorJob } from "@/lib/jobs/aggregator-ingest"
@@ -85,6 +86,12 @@ const CAREERJET_COUNTRIES: Record<CareerJetCountry["key"], CareerJetCountry> = {
   ca: { key: "ca", location: "Canada", localeCode: "en_CA" },
 }
 
+const fetchCareerJetUpstream = undiciFetch as unknown as typeof fetch
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | undefined {
+  return values.map((value) => value?.trim()).find((value): value is string => Boolean(value))
+}
+
 function parseCareerJetCountries(raw: string | null | undefined): CareerJetCountry[] {
   const requested = (raw ?? "us,ca")
     .split(",")
@@ -127,7 +134,7 @@ async function fetchCareerJetPage(
   })
   const url = `https://search.api.careerjet.net/v4/query?${params}`
   const credentials = Buffer.from(`${affiliateId}:`).toString("base64")
-  const res = await fetch(url, {
+  const res = await fetchCareerJetUpstream(url, {
     headers: {
       Accept: "application/json",
       Authorization: `Basic ${credentials}`,
@@ -162,7 +169,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const affiliateId = process.env.CAREERJET_AFFILIATE_ID ?? process.env.CAREERJET_AFFID
+  const affiliateId = firstNonEmpty(process.env.CAREERJET_AFFILIATE_ID, process.env.CAREERJET_AFFID)
   if (!affiliateId) {
     return NextResponse.json({
       skipped: true,
@@ -177,9 +184,7 @@ export async function GET(request: NextRequest) {
   const userAgent = request.headers.get("user-agent") || "Hireoven/1.0"
   // CareerJet v4 requires a Referer matching the affiliate's registered domain.
   const referer =
-    process.env.CAREERJET_REFERER ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
+    firstNonEmpty(process.env.CAREERJET_REFERER, process.env.NEXT_PUBLIC_APP_URL, process.env.NEXT_PUBLIC_SITE_URL) ??
     "https://hireoven.com"
   const countryOverride = sp.get("country")
   const countries = countryOverride
