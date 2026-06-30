@@ -12,7 +12,7 @@ const DICE_SEARCH_URL = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs
 const PAGE_SIZE = 100
 const REQUEST_TIMEOUT_MS = 12_000
 // Public key from Dice's own frontend bundle (NEXT_PUBLIC_JOB_SEARCH_API_KEY)
-const DICE_API_KEY = process.env.DICE_API_KEY ?? "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCgLN3gVmyObZ"
+const DICE_API_KEY = process.env.DICE_API_KEY?.trim() || "1xgTdC84Vj5OI6cr4BBnH9v8rEJOCgLN3gVmyObZ"
 
 // Dice WAF-blocks datacenter IPs (the harvester box gets 403 on every call while
 // the same key/headers return 200 from a residential IP). Set DICE_PROXY_URL to a
