@@ -47,7 +47,7 @@ test("loadWorkerConfig: falls back on garbage env", () => {
 test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters", () => {
   assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 60_000)
   assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 60_000)
-  assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 120_000)
+  assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 280_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
 })
 
@@ -151,6 +151,8 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "usajobs",
     "infosys",
     "apple",
+    "eightfold",
+    "netflix",
   ])
 
   assert.equal(result.length, 1)

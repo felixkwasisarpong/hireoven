@@ -114,7 +114,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   ashby: 60_000,
   usajobs: 60_000,
   icims: 60_000,
-  apple: 120_000,
+  apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
   amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
   microsoft: 240_000, // ~146 search pages (10/page) + a detail-fetch budget
   netflix: 120_000, // ~52 list pages (10/page, Eightfold) + a detail-fetch budget
@@ -222,6 +222,12 @@ const SUPPORTED_ATS_TYPES = [
   "usajobs",
   "infosys",
   "apple",
+  // Purpose-built big-firm adapters: registered + page-deep, but were absent from
+  // the claim allowlist so eightfold/netflix companies were never picked up by the
+  // 15s harvester loop (only the hourly custom crawler, if at all). Amazon/Microsoft
+  // route via URL detection already; these two have no matching careers_url pattern.
+  "eightfold",
+  "netflix",
 ]
 
 type ClaimedRow = {
