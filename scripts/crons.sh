@@ -16,7 +16,14 @@ run() {
   local path="$1"
   local status=0
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Running $path"
-  curl -sf -X "$method" "$APP_URL/$path" \
+  # Opt-in hard cap on a single request. Without it a hung endpoint (e.g. a
+  # wedged browser-enrichment batch) makes curl wait forever, and under a
+  # `flock -n` cron that freezes every later run. Empty = no cap (long crawl/
+  # ingest crons that legitimately run for many minutes set their own outer
+  # `timeout`). Set CRON_MAX_TIME on per-cron lines that should self-bound.
+  local maxtime=()
+  [ -n "${CRON_MAX_TIME:-}" ] && maxtime=(--max-time "$CRON_MAX_TIME")
+  curl -sf "${maxtime[@]}" -X "$method" "$APP_URL/$path" \
     -H "Authorization: Bearer $CRON_SECRET" || status=$?
   if [ "$status" -ne 0 ]; then
     echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Failed $path (curl exit $status)" >&2
