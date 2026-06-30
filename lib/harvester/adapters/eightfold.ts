@@ -38,6 +38,11 @@ function intEnv(name: string, dflt: number): number {
 }
 
 const MAX_PAGES = intEnv("HARVESTER_EIGHTFOLD_MAX_PAGES", 200)
+// pcsx pages are walked sequentially (session/CSRF chain), so a large tenant
+// (Starbucks ~21k = 200 pages) blows the per-company timeout → company_hang and 0
+// jobs persisted. Cap pcsx lower so the sequential walk + detail pass fits 240s;
+// apply/v2 stays at MAX_PAGES since it's fetched concurrently.
+const PCSX_MAX_PAGES = intEnv("HARVESTER_EIGHTFOLD_PCSX_MAX_PAGES", 120)
 const DETAIL_MAX_JOBS = intEnv("HARVESTER_EIGHTFOLD_DETAIL_MAX_JOBS", 150)
 const DETAIL_CONCURRENCY = intEnv("HARVESTER_EIGHTFOLD_DETAIL_CONCURRENCY", 4)
 // apply/v2 list pages are stateless, so they're fetched concurrently.
@@ -345,7 +350,8 @@ export const eightfoldAdapter: AtsAdapter = {
     }
 
     const totalPositions = firstPage.total
-    const totalPages = Math.min(MAX_PAGES, Math.ceil(totalPositions / PAGE_SIZE))
+    const pageCap = dialect === "applyv2" ? MAX_PAGES : PCSX_MAX_PAGES
+    const totalPages = Math.min(pageCap, Math.ceil(totalPositions / PAGE_SIZE))
     let totalLatencyMs = firstPage.latencyMs
 
     const seen = new Map<string, HarvestedJob>()
