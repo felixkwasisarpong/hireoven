@@ -211,7 +211,9 @@ async function main() {
       let created = 0
       let linked = 0
       let failed = 0
-      const CONCURRENCY = 6
+      // Network-latency-bound against a remote prod DB — raise concurrency to
+      // amortize round-trips. JOBHIVE_IMPORT_CONCURRENCY overrides (default 6).
+      const CONCURRENCY = Math.max(1, Number.parseInt(process.env.JOBHIVE_IMPORT_CONCURRENCY ?? "6", 10))
       let idx = 0
       async function worker() {
         while (idx < importable.length) {
