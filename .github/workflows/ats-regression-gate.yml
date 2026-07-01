@@ -1,0 +1,57 @@
+name: ATS adapter regression gate
+
+# Nightly differential check: run the jobhive-ts replica and the harvester's own
+# adapters against the same live ATS boards and fail if any adapter shows a
+# *systemic* divergence (silent zero, or a small fraction of the replica's
+# coverage). This is exactly the class of bug that looks like an "empty board"
+# and never trips a unit test — teamtailor returning 0, workday/oracle capping.
+#
+# Not a PR gate (live endpoints are too flaky for that) — it runs on a schedule
+# and on demand. Both crawlers share the harvester transport (--shared-transport)
+# so a CI-IP block hits both sides equally and is skipped, not mis-flagged.
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # 06:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      ats:
+        description: "Comma-separated ATS to check (blank = all replica-covered)"
+        required: false
+      perAts:
+        description: "Boards sampled per ATS"
+        required: false
+        default: "4"
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Run differential regression gate
+        env:
+          # If a residential proxy secret is set, workday/workable egress through
+          # it (same as prod); otherwise both sides go direct and a blocked ATS
+          # is skipped rather than mis-flagged.
+          HARVESTER_PROXY_URL: ${{ secrets.HARVESTER_PROXY_URL }}
+          HARVESTER_PROXY_HOSTS: ${{ vars.HARVESTER_PROXY_HOSTS || 'myworkdayjobs.com,apply.workable.com,jobs.workable.com' }}
+        run: >
+          npx tsx tools/jobhive-ts/benchmark.ts
+          --ats "${{ github.event.inputs.ats || 'greenhouse,lever,ashby,smartrecruiters,workable,workday,recruitee,teamtailor,personio,bamboohr,oraclecloud' }}"
+          --per-ats "${{ github.event.inputs.perAts || '4' }}"
+          --timeout 120000
+          --shared-transport
+          --gate
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: tools/jobhive-ts/out/
+          if-no-files-found: ignore
