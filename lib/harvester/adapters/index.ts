@@ -24,6 +24,10 @@ import { leverAdapter } from "@/lib/harvester/adapters/lever"
 import { oraclecloudAdapter } from "@/lib/harvester/adapters/oraclecloud"
 import { smartrecruitersAdapter } from "@/lib/harvester/adapters/smartrecruiters"
 import { personioAdapter } from "@/lib/harvester/adapters/personio"
+import { pinpointAdapter } from "@/lib/harvester/adapters/pinpoint"
+import { recruiterboxAdapter } from "@/lib/harvester/adapters/recruiterbox"
+import { gemAdapter } from "@/lib/harvester/adapters/gem"
+import { cornerstoneAdapter } from "@/lib/harvester/adapters/cornerstone"
 import { recruiteeAdapter } from "@/lib/harvester/adapters/recruitee"
 import { successfactorsAdapter } from "@/lib/harvester/adapters/successfactors"
 import { taleoAdapter } from "@/lib/harvester/adapters/taleo"
@@ -54,6 +58,10 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   teamtailor: teamtailorAdapter,
   personio: personioAdapter,
   bamboohr: bamboohrAdapter,
+  pinpoint: pinpointAdapter,
+  recruiterbox: recruiterboxAdapter,
+  gem: gemAdapter,
+  cornerstone: cornerstoneAdapter,
   breezy: breezyAdapter,
   jazzhr: jazzhrAdapter,
   jobvite: jobviteAdapter,
