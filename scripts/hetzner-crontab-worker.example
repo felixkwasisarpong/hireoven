@@ -78,6 +78,10 @@ DATABASE_URL=REPLACE_ME
   0 */12 * * *     flock -n /tmp/hireoven-aggregator-ingest.lock -c 'cd $HIREOVEN_REPO && timeout 75m bash scripts/crons.sh aggregator-job-ingest >>/var/log/hireoven/aggregator-job-ingest.log 2>&1'
   0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh discover-companies >>/var/log/hireoven/discover-companies.log 2>&1
   0 */2 * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh discover-tenants   >>/var/log/hireoven/discover-tenants.log 2>&1
+# Company-first ATS sweep — probes the ~39k weak/unmatched companies against the
+# platforms (eightfold, greenhouse, lever, ashby, smartrecruiters) and enrols any
+# with a live board. Rotates via ats_sweep_at. CRON_MAX_TIME guards a hung probe.
+ */20 * * * *      flock -n /tmp/hireoven-ats-sweep.lock -c 'cd $HIREOVEN_REPO && CRON_MAX_TIME=290 bash scripts/crons.sh discover-ats-sweep >>/var/log/hireoven/discover-ats-sweep.log 2>&1'
  30 */4 * * *      flock -n /tmp/hireoven-ats-discovery.lock -c 'cd $HIREOVEN_REPO && CAREERS_DISCOVERY_BATCH=10 bash scripts/crons.sh ats-discovery-sweep >>/var/log/hireoven/ats-discovery-sweep.log 2>&1'
  30 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh glassdoor-discovery >>/var/log/hireoven/glassdoor-discovery.log 2>&1
 # ── Off-box enumeration (host-side tsx, like the capture task above — uses DATABASE_URL, NOT a 300s route) ──
