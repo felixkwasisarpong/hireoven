@@ -147,10 +147,15 @@ test("oraclecloud: extracts detail description from meta tags", () => {
   assert.match(description, /deliveries don't just move packages/)
 })
 
-test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
+test("oraclecloud: fetchJobs paginates by TotalJobsCount, ignoring the misleading outer hasMore", async () => {
+  // Regression: Oracle's top-level `hasMore` describes the singleton OUTER
+  // envelope (always false), NOT the inner requisitionList. Trusting it
+  // truncated every multi-page tenant to the first page. Both pages here carry
+  // hasMore:false, but TotalJobsCount=3 — the adapter must still fetch page 1.
   const page0 = {
     items: [
       {
+        TotalJobsCount: 3,
         requisitionList: [
           {
             Id: 1,
@@ -167,11 +172,12 @@ test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
         ],
       },
     ],
-    hasMore: true,
+    hasMore: false,
   }
   const page1 = {
     items: [
       {
+        TotalJobsCount: 3,
         requisitionList: [
           {
             Id: 3,
@@ -213,7 +219,7 @@ test("oraclecloud: fetchJobs paginates until hasMore=false", async () => {
     ctx: { etag: null, lastModified: null, fetchImpl },
   })
 
-  assert.equal(listingCalls, 2, "should stop after hasMore=false")
+  assert.equal(listingCalls, 2, "should paginate to page 1 via TotalJobsCount despite outer hasMore=false, then stop once all 3 are collected")
   assert.equal(detailCalls, 3, "should detail-fetch jobs with missing or too-short listing descriptions")
   assert.equal(result.sourceAts, "oraclecloud")
   assert.equal(result.sourceAtsSlug, "eeho.fa.us2:CX_1")
