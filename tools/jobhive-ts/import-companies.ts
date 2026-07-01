@@ -51,16 +51,16 @@ const PLATFORM_MAP: Record<string, AtsName | null> = {
   rippling: "rippling",
   workday: "workday", // ats_identifier derived from the careers URL
   oracle: "oraclecloud", // ats_identifier derived from the careers URL
-  // No harvester adapter → NOT importable (would need a new adapter first):
-  breezy: null,
-  cornerstone: null,
-  gem: null,
-  pinpoint: null,
-  recruiterbox: null,
+  // Adapters added 2026-07-01 (PRs #298 / #299):
+  breezy: "breezy",
+  gem: "gem",
+  pinpoint: "pinpoint",
+  recruiterbox: "recruiterbox",
+  cornerstone: "cornerstone", // ats_identifier ({slug}:{site_id}) derived from the URL
 }
 
 /** Platforms whose ats_identifier must be parsed out of the full careers URL. */
-const URL_DERIVED = new Set<AtsName>(["workday", "oraclecloud"])
+const URL_DERIVED = new Set<AtsName>(["workday", "oraclecloud", "cornerstone"])
 
 type CsvRow = { name: string; slug: string; url: string }
 function readCsv(platform: string): CsvRow[] {
@@ -211,7 +211,9 @@ async function main() {
       let created = 0
       let linked = 0
       let failed = 0
-      const CONCURRENCY = 6
+      // Network-latency-bound against a remote prod DB — raise concurrency to
+      // amortize round-trips. JOBHIVE_IMPORT_CONCURRENCY overrides (default 6).
+      const CONCURRENCY = Math.max(1, Number.parseInt(process.env.JOBHIVE_IMPORT_CONCURRENCY ?? "6", 10))
       let idx = 0
       async function worker() {
         while (idx < importable.length) {
