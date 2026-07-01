@@ -12,6 +12,7 @@ export type AtsName =
   | "teamtailor"
   | "personio"
   | "bamboohr"
+  | "breezy"
   | "jazzhr"
   | "jobvite"
   | "icims"
