@@ -1,6 +1,7 @@
 import type { AtsAdapter, AtsName } from "@/lib/harvester/adapters/_base"
 import { ashbyAdapter } from "@/lib/harvester/adapters/ashby"
 import { bamboohrAdapter } from "@/lib/harvester/adapters/bamboohr"
+import { breezyAdapter } from "@/lib/harvester/adapters/breezy"
 import { appleAdapter } from "@/lib/harvester/adapters/apple"
 import { amazonAdapter } from "@/lib/harvester/adapters/amazon"
 import { microsoftAdapter } from "@/lib/harvester/adapters/microsoft"
@@ -53,6 +54,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   teamtailor: teamtailorAdapter,
   personio: personioAdapter,
   bamboohr: bamboohrAdapter,
+  breezy: breezyAdapter,
   jazzhr: jazzhrAdapter,
   jobvite: jobviteAdapter,
   icims: icimsAdapter,
