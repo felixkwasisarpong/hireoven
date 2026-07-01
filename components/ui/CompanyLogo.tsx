@@ -276,6 +276,17 @@ export default function CompanyLogo({
     return false
   }
 
+  // A cached image is already `complete` before React attaches `onLoad`, so
+  // `onLoad` never fires and the logo would stay hidden (opacity-0) behind the
+  // monogram — which is exactly why common brands (Amazon, Oracle, …) rendered
+  // as initials. Reconcile from a ref on mount.
+  function reconcileCachedImage(node: HTMLImageElement | null) {
+    if (!node || loaded) return
+    if (node.complete && node.naturalWidth > 0) {
+      if (!handleSmallImage(node.naturalWidth, node.naturalHeight)) setLoaded(true)
+    }
+  }
+
   return (
     <div
       className={cn(
@@ -287,6 +298,7 @@ export default function CompanyLogo({
       {viaNext ? (
         <Image
           key={src}
+          ref={reconcileCachedImage}
           src={src}
           alt={companyName}
           fill
@@ -312,6 +324,7 @@ export default function CompanyLogo({
         // eslint-disable-next-line @next/next/no-img-element
         <img
           key={src}
+          ref={reconcileCachedImage}
           src={src}
           alt={companyName}
           loading={priority ? "eager" : "lazy"}
