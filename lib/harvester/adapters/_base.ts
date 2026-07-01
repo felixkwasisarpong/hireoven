@@ -16,6 +16,7 @@ export type AtsName =
   | "pinpoint"
   | "recruiterbox"
   | "cornerstone"
+  | "breezy"
   | "jazzhr"
   | "jobvite"
   | "icims"

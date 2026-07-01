@@ -28,8 +28,35 @@ import { harvesterFetch } from "@/lib/harvester/http-agent"
  */
 
 const PAGE_LIMIT = 20
-const MAX_PAGES = 50 // 1000 postings/board ceiling
+const MAX_PAGES = 50 // legacy naive-pagination ceiling (kept for the budget default)
 const DEFAULT_LOCALE = "en-US"
+
+// --- Facet subdivision (breaks Workday's 2,000-per-query cap) ---------------
+// Workday caps a query's reported `total` at 2,000 and silently wraps pagination
+// back to page 1 past offset 2,000 — so naive pagination can NEVER collect more
+// than 2K unique jobs from a tenant, no matter the page ceiling. When a query
+// reports the cap we subdivide by a facet (each child query has its own ≤2K cap;
+// dedup by externalId absorbs overlap). Priority mirrors jobhive: broad "area of
+// work" first, then time-type, then location, then the high-cardinality
+// skills facet as a last resort.
+const QUERY_TOTAL_CAP = 2000
+const MAX_SUBDIVISION_DEPTH = 4
+const SUBDIVISION_FACETS = ["jobFamilyGroup", "timeType", "locations", "workerSubType"]
+// Hard ceiling on POSTs per company so one huge tenant (Accenture ~60k) can't
+// run unbounded — it partial-harvests within the deadline and backfills next
+// cycle. Defaults to 400 pages (~8k jobs), far above the old 1k cap.
+const MAX_TOTAL_PAGES = Math.max(
+  MAX_PAGES,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_MAX_PAGES ?? "400", 10)
+)
+// Concurrency for listing POSTs within a single company. Workday is routed
+// through the residential proxy (see http-agent); a small pool keeps the
+// subdivision fast enough to finish inside COMPANY_DEADLINE_MS without tripping
+// the WAF. The cross-company adapter concurrency is separate (see below).
+const LISTING_CONCURRENCY = Math.max(
+  1,
+  Number.parseInt(process.env.HARVESTER_WORKDAY_LISTING_CONCURRENCY ?? "4", 10)
+)
 // Workday's WAF flags obvious bot UAs; a real-browser UA + matching
 // Origin/Referer headers reduce 403s on stricter tenants.
 const DEFAULT_USER_AGENT =
@@ -98,9 +125,14 @@ type WorkdayPosting = {
   bulletFields?: string[]
 }
 
+type WorkdayFacetValue = { id?: string; count?: number }
+type WorkdayFacet = { facetParameter?: string; values?: WorkdayFacetValue[] }
+
 type WorkdayListingResponse = {
   total?: number
   jobPostings?: WorkdayPosting[]
+  // Facet buckets with per-value counts — used to subdivide capped tenants.
+  facets?: WorkdayFacet[]
 }
 
 type ParsedSlug = {
@@ -516,6 +548,145 @@ async function enrichWithDetail(
   )
 }
 
+/**
+ * Choose the best facet to subdivide a capped query on. Skips facets already
+ * applied (re-applying just hits the cap again) and single-value facets. Tries
+ * the priority list first, then falls back to the highest-cardinality facet
+ * (typically the multi-tag skills facet — its counts oversum the total, but each
+ * query still returns a valid subset and dedup absorbs the overlap).
+ */
+function pickFacet(
+  facets: WorkdayFacet[],
+  alreadyApplied: Set<string>
+): [string, string[]] | null {
+  const byParam = new Map<string, string[]>()
+  for (const facet of facets) {
+    const param = facet.facetParameter
+    const values = facet.values ?? []
+    if (!param || alreadyApplied.has(param) || values.length < 2) continue
+    const ids = values
+      .filter((v) => v.id && (v.count ?? 0) > 0)
+      .map((v) => v.id as string)
+    if (ids.length >= 2) byParam.set(param, ids)
+  }
+  for (const preferred of SUBDIVISION_FACETS) {
+    const ids = byParam.get(preferred)
+    if (ids) return [preferred, ids]
+  }
+  let best: [string, string[]] | null = null
+  for (const [param, ids] of byParam) {
+    if (!best || ids.length > best[1].length) best = [param, ids]
+  }
+  return best
+}
+
+type MappedJob = HarvestedJob & { externalPath: string | undefined }
+
+/**
+ * Fully harvest a tenant's listing, subdividing by facet when a query hits the
+ * 2,000 cap. Bounded by `deadline` (wall-clock) and MAX_TOTAL_PAGES (request
+ * budget); on either bound it returns a partial set. Only the very first POST
+ * throws (so the worker's WAF / circuit-breaker logic still sees page-1
+ * failures); every later failure degrades to a partial harvest.
+ */
+async function harvestListing(
+  parsed: ParsedSlug,
+  url: string,
+  ctx: HarvestCtx,
+  deadline: number
+): Promise<{ jobs: MappedJob[]; upstreamLatencyMs: number }> {
+  const limit = pLimit(LISTING_CONCURRENCY)
+  const seen = new Set<string>()
+  const jobs: MappedJob[] = []
+  let pagesUsed = 0
+  let upstreamLatencyMs = 0
+  let firstPage = true
+
+  const absorb = (postings: WorkdayPosting[]) => {
+    for (const raw of postings) {
+      const mapped = mapRawJob(parsed, raw)
+      if (!mapped) continue
+      if (seen.has(mapped.externalId)) continue
+      seen.add(mapped.externalId)
+      jobs.push(mapped)
+    }
+  }
+
+  const overBudget = () => Date.now() > deadline || pagesUsed >= MAX_TOTAL_PAGES
+
+  // One listing POST. Wrapping ONLY the network call in the limiter (never the
+  // recursion) avoids the classic nested-pLimit deadlock. Returns null on any
+  // non-first error or when the budget is spent.
+  async function doPost(
+    appliedFacets: Record<string, string[]>,
+    offset: number
+  ): Promise<WorkdayListingResponse | null> {
+    if (overBudget()) return null
+    pagesUsed += 1
+    const result = await limit(() =>
+      postWorkdayListing(url, { appliedFacets, limit: PAGE_LIMIT, offset, searchText: "" }, ctx)
+    )
+    upstreamLatencyMs += result.upstreamLatencyMs
+    if (result.kind === "error") {
+      if (firstPage) {
+        firstPage = false
+        const err = new Error(`workday fetch failed: ${result.reason}`)
+        ;(err as Error & { status?: number | null }).status = result.status
+        throw err
+      }
+      return null
+    }
+    firstPage = false
+    return result.data
+  }
+
+  // Fan out pages [PAGE_LIMIT, min(total, cap)) concurrently.
+  async function fanOutPages(appliedFacets: Record<string, string[]>, total: number) {
+    const ceiling = Math.min(total, QUERY_TOTAL_CAP)
+    const offsets: number[] = []
+    for (let o = PAGE_LIMIT; o < ceiling; o += PAGE_LIMIT) offsets.push(o)
+    await Promise.all(
+      offsets.map(async (o) => {
+        const data = await doPost(appliedFacets, o)
+        if (data?.jobPostings) absorb(data.jobPostings)
+      })
+    )
+  }
+
+  async function exhaust(appliedFacets: Record<string, string[]>, depth: number): Promise<void> {
+    if (overBudget()) return
+    const first = await doPost(appliedFacets, 0)
+    if (!first) return
+    const total = first.total ?? 0
+    absorb(first.jobPostings ?? [])
+    if (total <= PAGE_LIMIT) return
+
+    // Below the cap → paginate normally, no subdivision needed.
+    if (total < QUERY_TOTAL_CAP) {
+      await fanOutPages(appliedFacets, total)
+      return
+    }
+
+    // At the cap → try to subdivide by an unused facet.
+    if (depth < MAX_SUBDIVISION_DEPTH) {
+      const facet = pickFacet(first.facets ?? [], new Set(Object.keys(appliedFacets)))
+      if (facet) {
+        const [param, values] = facet
+        await Promise.all(
+          values.map((valueId) => exhaust({ ...appliedFacets, [param]: [valueId] }, depth + 1))
+        )
+        return
+      }
+    }
+
+    // Capped but no facet left (or max depth) → take the capped 2,000.
+    await fanOutPages(appliedFacets, QUERY_TOTAL_CAP)
+  }
+
+  await exhaust({}, 0)
+  return { jobs, upstreamLatencyMs }
+}
+
 export const workdayAdapter: AtsAdapter = {
   name: "workday",
   // Each tenant is its own host + slow paginated POSTs (30-60s per board).
@@ -531,42 +702,14 @@ export const workdayAdapter: AtsAdapter = {
     }
 
     const url = listingUrl(parsed)
-    const jobs: Array<HarvestedJob & { externalPath: string | undefined }> = []
-    let upstreamLatencyMs = 0
-    let offset = 0
-    let pageCount = 0
     const deadline = Date.now() + COMPANY_DEADLINE_MS
 
-    while (pageCount < MAX_PAGES) {
-      // Stop paginating once the per-company budget is spent — return what we
-      // have rather than letting one slow tenant eat the whole tick.
-      if (Date.now() > deadline) break
-      pageCount += 1
-      const result = await postWorkdayListing(
-        url,
-        { appliedFacets: {}, limit: PAGE_LIMIT, offset, searchText: "" },
-        ctx
-      )
-      upstreamLatencyMs += result.upstreamLatencyMs
-
-      if (result.kind === "error") {
-        if (pageCount === 1) {
-          const err = new Error(`workday fetch failed: ${result.reason}`)
-          ;(err as Error & { status?: number | null }).status = result.status
-          throw err
-        }
-        break
-      }
-
-      const postings = result.data.jobPostings ?? []
-      if (postings.length === 0) break
-      for (const raw of postings) {
-        const mapped = mapRawJob(parsed, raw)
-        if (mapped) jobs.push(mapped)
-      }
-      if (postings.length < PAGE_LIMIT) break
-      offset += PAGE_LIMIT
-    }
+    // Phase 1: harvest the listing, subdividing by facet on capped tenants so we
+    // break past the 2,000-per-query wrap. Bounded by the deadline + page budget;
+    // the first page's failure still throws (WAF / circuit-breaker signal).
+    const listing = await harvestListing(parsed, url, ctx, deadline)
+    const jobs = listing.jobs
+    let upstreamLatencyMs = listing.upstreamLatencyMs
 
     // Phase 2: fetch per-job detail to populate full descriptions. The
     // listing-only `bulletFields` is too sparse for matching/skills
