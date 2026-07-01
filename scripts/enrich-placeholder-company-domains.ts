@@ -160,7 +160,7 @@ async function main() {
     SELECT DISTINCT c.id, c.name, c.domain
     FROM companies c
     JOIN jobs j ON j.company_id = c.id AND j.is_active = true
-    WHERE (c.domain LIKE '%placeholder' OR c.domain LIKE '%-discovered')
+    WHERE (c.domain LIKE '%placeholder' OR c.domain LIKE '%-discovered' OR c.domain LIKE '%-tenant')
       AND (c.logo_url IS NULL OR c.logo_url = '')
     ORDER BY c.name
     ${LIMIT > 0 ? `LIMIT ${LIMIT}` : ""}
