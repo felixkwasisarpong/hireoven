@@ -78,6 +78,10 @@ function generateCandidates(name: string): string[] {
   const hyphen = words.join("-")
   const first  = words[0]
   const twoW   = words.slice(0, 2).join("")
+  // Full name WITHOUT suffix-stripping ("colibrigroup", "goodamerican") — tried
+  // first, because stripping "Group"/"Partners"/"American" often drops a real
+  // brand word and lands on an unrelated company's domain (colibri.com, good.com).
+  const rawSlug = name.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "")
 
   const seen = new Set<string>()
   const out: string[] = []
@@ -94,6 +98,9 @@ function generateCandidates(name: string): string[] {
   // unrelated companies that happen to own the generic first word. Missing a few
   // "Brand + descriptor" hits (Accenture Infrastructure → accenture.com) is the
   // acceptable cost of never mis-branding.
+  // Full-name-with-suffix first (fixes the over-strip mis-brand), then the
+  // suffix-stripped whole-name variants.
+  if (rawSlug !== slug && rawSlug.length >= 4) push(`${rawSlug}.com`)
   push(`${slug}.com`)
   if (twoW !== slug) push(`${twoW}.com`)
   if (hyphen !== slug) push(`${hyphen}.com`)
