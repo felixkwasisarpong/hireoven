@@ -88,15 +88,15 @@ function generateCandidates(name: string): string[] {
     if (!seen.has(t)) { seen.add(t); out.push(t) }
   }
 
+  // Only whole-name candidates — full slug, first-two-words, hyphenated. The
+  // first-word-only fallback is deliberately omitted: "Colorado Coalition for
+  // the Homeless" → colorado.com and "Boston Imaging" → boston.com mis-brand to
+  // unrelated companies that happen to own the generic first word. Missing a few
+  // "Brand + descriptor" hits (Accenture Infrastructure → accenture.com) is the
+  // acceptable cost of never mis-branding.
   push(`${slug}.com`)
   if (twoW !== slug) push(`${twoW}.com`)
   if (hyphen !== slug) push(`${hyphen}.com`)
-  // First-word-only fallback is the riskiest (a short/numeric prefix like "21st"
-  // in "21st Century Home Health" resolves to an unrelated brand's 21st.com).
-  // Only use it when the first word is distinctive enough (>=5 chars, not numeric).
-  if (first && first !== slug && first.length >= 5 && !/^\d+$/.test(first)) {
-    push(`${first}.com`)
-  }
 
   return out
 }
