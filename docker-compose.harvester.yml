@@ -57,9 +57,12 @@ services:
       # proxy IP itself; a rotating pool is the real scale answer for ~5k boards.
       HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-2}
       # Detail-pass volume — Workable v3 omits the JD from the list, so the pass
-      # fetches /api/v2 per new job. Lower MAX_JOBS / raise DELAY if 429s persist.
-      HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-50}
-      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-200}
+      # fetches /api/v2 per new job. This is the 429 amplifier, so keep it gentle:
+      # 20 jobs @ 800ms with concurrency 2 ≈ ~2.5 req/s through the proxy IP, well
+      # under the ~10 req/s that got the raw datacenter IP rate-capped. JDs beyond
+      # 20/board fill over subsequent crawls (alreadyDescribedIds).
+      HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-20}
+      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-800}
       # Route adapter fetches whose host matches HARVESTER_PROXY_HOSTS through a
       # clean-IP proxy (e.g. the webbox tinyproxy). Workday AND Workable 429/403
       # the datacenter IP; the proxy gives them a separate rate budget. Default
