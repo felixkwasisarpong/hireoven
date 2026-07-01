@@ -96,6 +96,7 @@ type Args = {
   timeoutMs: number
   company: string | null
   sharedTransport: boolean
+  gate: boolean
 }
 function parseArgs(argv: string[]): Args {
   const get = (flag: string) => {
@@ -111,6 +112,9 @@ function parseArgs(argv: string[]): Args {
     // Route the replica through the harvester's own transport (harvesterFetch)
     // so proxy-routed adapters egress identically — only parsing differs.
     sharedTransport: argv.includes("--shared-transport"),
+    // Regression-gate mode: exit non-zero if an ATS shows a systemic divergence
+    // (harvester silently returning ~0 vs a live replica). For CI.
+    gate: argv.includes("--gate"),
   }
 }
 
@@ -295,6 +299,63 @@ async function main() {
   writeFileSync(join(OUT, "benchmark.json"), JSON.stringify(rows, null, 2))
   writeFileSync(join(OUT, "benchmark.md"), renderMarkdown(rows))
   console.log(`\nWrote ${join(OUT, "benchmark.md")} and benchmark.json`)
+
+  if (args.gate) runGate(rows)
+}
+
+/**
+ * Regression gate. Flags an ATS only for the *systemic* failure modes the
+ * replica was built to catch — not normal count drift between two sequential
+ * live fetches. Two failure classes, both grounded in real bugs we found:
+ *
+ *   - "silent zero"  — the harvester returns 0 on ALL of an ATS's live boards
+ *     while the replica finds jobs (the teamtailor `items`-key bug).
+ *   - "systemic cap" — enough volume to judge, yet the harvester collects a
+ *     small fraction of the replica (the workday 2k-cap / oracle 50-cap bugs).
+ *
+ * An ATS whose sample has no live boards (replica found 0 everywhere — dead
+ * sample or a network blip) is skipped, not failed, so CI doesn't flap.
+ */
+function runGate(rows: Array<Record<string, unknown>>): void {
+  const byAts = new Map<string, Array<Record<string, unknown>>>()
+  for (const r of rows) {
+    const k = r.ats as string
+    if (!byAts.has(k)) byAts.set(k, [])
+    byAts.get(k)!.push(r)
+  }
+
+  let failed = false
+  console.log("\n=== Regression gate ===")
+  for (const [ats, rs] of byAts) {
+    const live = rs.filter((r) => Number(r.replicaCount) > 0)
+    const replicaJobs = live.reduce((a, r) => a + Number(r.replicaCount), 0)
+    const harvesterJobs = live.reduce((a, r) => a + Number(r.harvesterCount), 0)
+    const ratio = replicaJobs > 0 ? harvesterJobs / replicaJobs : 1
+    const pct = `${Math.round(ratio * 100)}%`
+
+    if (live.length === 0) {
+      console.log(`  –  ${ats.padEnd(16)} skip: no live boards in sample`)
+      continue
+    }
+    if (live.length >= 2 && live.every((r) => Number(r.harvesterCount) === 0)) {
+      failed = true
+      console.log(`  ✗  ${ats.padEnd(16)} FAIL: harvester=0 on all ${live.length} live boards (replica ${replicaJobs}) — adapter likely broken`)
+      continue
+    }
+    if (replicaJobs >= 100 && ratio < 0.4) {
+      failed = true
+      console.log(`  ✗  ${ats.padEnd(16)} FAIL: coverage ${pct} (${harvesterJobs}/${replicaJobs}) — likely a pagination cap`)
+      continue
+    }
+    console.log(`  ✓  ${ats.padEnd(16)} ok: ${pct} coverage (${harvesterJobs}/${replicaJobs}) over ${live.length} boards`)
+  }
+
+  if (failed) {
+    console.log("\nGATE FAILED — a harvester adapter is systematically under-returning vs the replica.")
+    process.exitCode = 1
+  } else {
+    console.log("\nGATE PASSED — no systemic divergence.")
+  }
 }
 
 function renderMarkdown(rows: Array<Record<string, unknown>>): string {

@@ -132,3 +132,13 @@ DATABASE_URL=REPLACE_ME
 #   - off-peak (03:30, 1st of month)
 # One-time setup on this box:  npx playwright install --with-deps chromium
  30 3 1 * *        flock -n /tmp/hireoven-everify.lock -c 'cd $HIREOVEN_REPO && timeout 10h nice -n 19 ionice -c3 npm run everify:enrich:apply -- --limit=5000 >>/var/log/hireoven/everify-enrich.log 2>&1'
+# ── Nightly ATS adapter regression gate (host-side tsx; jobhive-ts differential harness) ──
+# Runs the replica vs the harvester's OWN adapters against live boards and exits
+# non-zero on a *systemic* divergence — an adapter silently returning ~0 vs the
+# replica (the teamtailor/workday/oracle "empty board" bug class). Runs HERE, not
+# GitHub Actions, so workday/workable egress through the harvester's residential
+# proxy (read live from the running harvester container via `docker exec printenv`).
+# On failure it touches /var/log/hireoven/ats-regression-gate.FAILED (cleared on a
+# pass) so monitoring can alert. Needs the harness on this box — keep /opt/hireoven
+# `git pull`ed (the gate runs whatever tools/jobhive-ts is checked out).
+ 50 7 * * *        flock -n /tmp/hireoven-ats-gate.lock -c 'cd $HIREOVEN_REPO && C=$(docker ps --filter name=harvester --format "{{.Names}}" | head -1) && HARVESTER_PROXY_URL="$(docker exec $C printenv HARVESTER_PROXY_URL 2>/dev/null)" HARVESTER_PROXY_HOSTS="$(docker exec $C printenv HARVESTER_PROXY_HOSTS 2>/dev/null)" timeout 300 node_modules/.bin/tsx tools/jobhive-ts/benchmark.ts --ats greenhouse,lever,ashby,smartrecruiters,workable,workday,recruitee,teamtailor,personio,bamboohr,oraclecloud --per-ats 4 --timeout 120000 --shared-transport --gate >>/var/log/hireoven/ats-regression-gate.log 2>&1 && rm -f /var/log/hireoven/ats-regression-gate.FAILED || touch /var/log/hireoven/ats-regression-gate.FAILED'
