@@ -148,6 +148,7 @@ case "${1:-}" in
   jooble-ingest)     run api/cron/jooble-ingest ;;
   discover-companies) run api/cron/discover-companies ;;
   discover-tenants)  run api/cron/discover-tenants ;;
+  discover-ats-sweep) run "api/cron/discover-ats-sweep?batch=${DISCOVER_ATS_SWEEP_BATCH:-40}&concurrency=${DISCOVER_ATS_SWEEP_CONCURRENCY:-5}" ;;
   discover-from-domains) run "api/cron/discover-from-domains?batch=${DISCOVER_FROM_DOMAINS_BATCH:-100}&concurrency=${DISCOVER_FROM_DOMAINS_CONCURRENCY:-8}&resolveBatch=${DISCOVER_FROM_DOMAINS_RESOLVE_BATCH:-50}&resolveConcurrency=${DISCOVER_FROM_DOMAINS_RESOLVE_CONCURRENCY:-6}" ;;
   careers-url-discovery) run "api/cron/careers-url-discovery?batch=${CAREERS_DISCOVERY_BATCH:-10}" ;;
   ats-discovery-sweep)
