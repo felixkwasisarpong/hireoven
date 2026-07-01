@@ -350,6 +350,20 @@ export function mapResponseToJobs(
   return jobs
 }
 
+/**
+ * The authoritative job count for the whole board, nested inside the singleton
+ * wrapper item (`items[0].TotalJobsCount`). This — NOT the response's top-level
+ * `hasMore` (which describes the 1-element outer envelope and is always false) —
+ * is what pagination must be driven by. Absent on some older pods.
+ */
+function totalJobsCount(response: OracleRequisitionsResponse): number | null {
+  const items = Array.isArray(response.items) ? response.items : []
+  for (const item of items) {
+    if (typeof item.TotalJobsCount === "number") return item.TotalJobsCount
+  }
+  return null
+}
+
 async function enrichMissingDescriptions(
   jobs: HarvestedJob[],
   ctx: HarvestCtx
@@ -453,11 +467,14 @@ export const oraclecloudAdapter: AtsAdapter = {
         all.set(job.externalId, job)
         added += 1
       }
-      // Trust the API's `hasMore` flag when present. Some older pods omit it;
-      // fall back to "page came back short of the limit" only in that case.
-      const hasMoreField = result.data.hasMore
+      // Paginate by the board's real job count (`items[0].TotalJobsCount`).
+      // The response's top-level `hasMore` refers to the singleton OUTER
+      // envelope (always false), so trusting it truncated every multi-page
+      // tenant to the first 50. Fall back to "page came back full" only when
+      // the count is absent (older pods).
+      const totalJobs = totalJobsCount(result.data)
       const hasMore =
-        typeof hasMoreField === "boolean" ? hasMoreField : pageJobs.length >= PAGE_LIMIT
+        totalJobs != null ? all.size < totalJobs : pageJobs.length >= PAGE_LIMIT
       if (!hasMore || added === 0) break
     }
 

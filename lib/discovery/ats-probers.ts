@@ -55,6 +55,28 @@ async function getJson<T>(url: string, doFetch: FetchLike, init?: RequestInit): 
   }
 }
 
+async function probeWorkable(slug: string, doFetch: FetchLike): Promise<AtsProbeHit | null> {
+  // Workable is path-based (apply.workable.com/{slug}) on ONE shared domain, so
+  // crt.sh subdomain-scanning can never discover its tenants — company-first
+  // probing is the only way. POST v3 accounts/jobs returns {results, total}.
+  try {
+    const r = await doFetch(`https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs`, {
+      method: "POST",
+      headers: { "user-agent": BROWSER_UA, "content-type": "application/json", accept: "application/json" },
+      body: "{}",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+    if (!r.ok) return null
+    const d = (await r.json()) as { total?: number; results?: unknown[] }
+    const n = d?.total ?? d?.results?.length ?? 0
+    if (n < 1) return null
+    const url = `https://apply.workable.com/${slug}/`
+    return { atsType: "workable", identifier: slug, careersUrl: url, directAtsUrl: url, jobCount: n }
+  } catch {
+    return null
+  }
+}
+
 async function probeGreenhouse(slug: string, doFetch: FetchLike): Promise<AtsProbeHit | null> {
   const d = await getJson<{ jobs?: unknown[] }>(
     `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`,
@@ -151,8 +173,14 @@ export interface Prober {
   probe: (slug: string, doFetch: FetchLike) => Promise<AtsProbeHit | null>
 }
 
-/** Ordered: eightfold first (the untapped platform-first blind spot). */
+/**
+ * Ordered so the platforms crt.sh CANNOT discover come first — Workable and
+ * Eightfold are the real blind spots (Workable is path-based on one shared
+ * domain; Eightfold was never a crt.sh target). greenhouse/lever/ashby/SR are
+ * mostly caught platform-first already, so they're the fallback.
+ */
 export const PROBERS: Prober[] = [
+  { atsType: "workable", probe: probeWorkable },
   { atsType: "eightfold", probe: probeEightfold },
   { atsType: "greenhouse", probe: probeGreenhouse },
   { atsType: "lever", probe: probeLever },

@@ -99,6 +99,79 @@ test("workday: fetchWorkdayJobDetail preserves section and bullet structure", as
   assert.equal(detail.location, "Oklahoma City, OK, United States")
 })
 
+test("workday: subdivides a capped tenant by facet to break the 2,000 cap", async () => {
+  // Regression guard: Workday caps a query's reported total at 2,000 and wraps
+  // pagination past it. A capped query must be subdivided by facet, or the board
+  // silently truncates at ~1-2k jobs. Mock reports the base query at the cap with
+  // a jobFamilyGroup facet; each facet child reports a small, fully-paginable set.
+  const makePostings = (prefix: string, offset: number, count: number) =>
+    Array.from({ length: count }, (_, i) => ({
+      externalPath: `/job/${prefix}-${offset + i}`,
+      title: `${prefix} Job ${offset + i}`,
+    }))
+
+  const fetchImpl = (async (_url: string, init: { body?: string; method?: string }) => {
+    // Detail GETs have no body — return an empty detail payload (no-op enrich).
+    if (!init?.body) {
+      return new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    }
+    const body = JSON.parse(init.body) as {
+      offset?: number
+      appliedFacets?: { jobFamilyGroup?: string[] }
+    }
+    const offset = body.offset ?? 0
+    const jfg = body.appliedFacets?.jobFamilyGroup?.[0]
+
+    let total: number
+    let prefix: string
+    if (!jfg) {
+      total = 2000 // the cap → must subdivide
+      prefix = "base"
+    } else if (jfg === "eng") {
+      total = 40
+      prefix = "eng"
+    } else {
+      total = 25
+      prefix = "sales"
+    }
+    const pageCount = Math.min(20, Math.max(0, total - offset))
+    const payload = {
+      total,
+      jobPostings: makePostings(prefix, offset, pageCount),
+      facets: jfg
+        ? []
+        : [
+            {
+              facetParameter: "jobFamilyGroup",
+              values: [
+                { id: "eng", count: 40 },
+                { id: "sales", count: 25 },
+              ],
+            },
+          ],
+    }
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }) as unknown as typeof fetch
+
+  const result = await workdayAdapter.fetchJobs({
+    slug: "acme:wd1:External",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  // base page-0 (20) + eng (40) + sales (25) = 85 unique jobs — unreachable
+  // without subdivision (a single capped query yields at most its own pages).
+  assert.equal(result.jobs.length, 85)
+  const ids = result.jobs.map((j) => j.externalId)
+  assert.ok(ids.some((id) => id.includes("eng")), "expected eng-facet jobs")
+  assert.ok(ids.some((id) => id.includes("sales")), "expected sales-facet jobs")
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
 const LIVE_SLUG =
   process.env.HARVESTER_LIVE_WORKDAY_SLUG ?? "nvidia:wd5:NVIDIAExternalCareerSite"

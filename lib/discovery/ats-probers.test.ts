@@ -44,6 +44,23 @@ test("probeCompanyForAts: finds an eightfold board via careers + pcsx count", as
   assert.match(hit.directAtsUrl, /vodafone\.eightfold\.ai/)
 })
 
+test("probeCompanyForAts: finds a Workable board (path-based, crt.sh-invisible)", async () => {
+  const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
+    const u = String(url)
+    if (u.includes("apply.workable.com/api/v3/accounts/acme/jobs") && init?.method === "POST") {
+      return json({ total: 27, results: [] })
+    }
+    return json({}, false)
+  }) as unknown as typeof fetch
+
+  const hit = await probeCompanyForAts("Acme Inc", fetchImpl)
+  assert.ok(hit)
+  assert.equal(hit.atsType, "workable")
+  assert.equal(hit.identifier, "acme")
+  assert.equal(hit.jobCount, 27)
+  assert.match(hit.careersUrl, /apply\.workable\.com\/acme/)
+})
+
 test("probeCompanyForAts: falls through to greenhouse when eightfold is empty", async () => {
   const fetchImpl = (async (url: string | URL | Request) => {
     const u = String(url)

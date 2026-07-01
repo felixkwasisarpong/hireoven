@@ -18,27 +18,39 @@ import {
  * need it.
  */
 
-type TeamtailorJob = {
+/**
+ * `/jobs.json` is a JSON Feed 1.1 document — jobs are under `items`, each with a
+ * schema.org `_jobposting` extension carrying structured location / date /
+ * employment-type. (The older `{ jobs: [...] }` shape this adapter used to parse
+ * never actually existed on this endpoint, so it returned zero jobs on every
+ * board.)
+ */
+type SchemaPlace = {
+  address?: {
+    addressLocality?: string
+    addressRegion?: string
+    addressCountry?: string
+  }
+}
+type SchemaJobPosting = {
+  employmentType?: string | string[]
+  datePosted?: string
+  jobLocationType?: string
+  jobLocation?: SchemaPlace | SchemaPlace[]
+}
+type TeamtailorItem = {
   id?: string | number
   title?: string
-  pitch?: string
-  body?: string
-  apply_url?: string
-  full_url?: string
   url?: string
-  location?: { name?: string; city?: string; country?: string; remote_status?: string }
-  remote_status?: string
-  department?: { name?: string }
-  role?: { name?: string }
-  employment_type?: string
-  language?: string
-  created_at?: string
-  published_at?: string
-  status?: string
+  content_html?: string
+  content_text?: string
+  date_published?: string
+  date_modified?: string
+  _jobposting?: SchemaJobPosting
 }
 
 type TeamtailorResponse = {
-  jobs?: TeamtailorJob[]
+  items?: TeamtailorItem[]
 }
 
 function endpointFor(slug: string): string {
@@ -96,37 +108,46 @@ function stripHtml(value: string | undefined | null): string | undefined {
   return text || undefined
 }
 
-function pickLocation(raw: TeamtailorJob): string | undefined {
-  const loc = raw.location
-  if (!loc) return undefined
-  if (loc.name?.trim()) return loc.name.trim()
-  const parts = [loc.city, loc.country].map((p) => p?.trim()).filter(Boolean)
-  return parts.length ? parts.join(", ") : undefined
+function pickLocation(raw: TeamtailorItem): string | undefined {
+  const jl = raw._jobposting?.jobLocation
+  const first = Array.isArray(jl) ? jl[0] : jl
+  const addr = first?.address
+  if (!addr) return undefined
+  const parts = [addr.addressLocality, addr.addressRegion, addr.addressCountry]
+    .map((p) => p?.trim())
+    .filter((p): p is string => Boolean(p))
+  // De-dupe (locality and region are frequently identical, e.g. "Malmö, Malmö").
+  const seen = new Set<string>()
+  const deduped = parts.filter((p) => (seen.has(p) ? false : (seen.add(p), true)))
+  return deduped.length ? deduped.join(", ") : undefined
 }
 
-function pickWorkMode(raw: TeamtailorJob): string | undefined {
-  const status = (raw.remote_status ?? raw.location?.remote_status ?? "").toLowerCase()
-  if (!status) return undefined
-  if (status.includes("remote")) return "remote"
-  if (status.includes("hybrid")) return "hybrid"
+function pickWorkMode(raw: TeamtailorItem): string | undefined {
+  const type = raw._jobposting?.jobLocationType?.toUpperCase()
+  if (type === "TELECOMMUTE") return "remote"
   return undefined
 }
 
-function mapRawJob(slug: string, raw: TeamtailorJob): HarvestedJob | null {
-  if (!raw.id || !raw.title) return null
-  if (raw.status && raw.status.toLowerCase() !== "published") return null
+// schema.org employmentType → our convention (already close: FULL_TIME / PART_TIME
+// / CONTRACTOR / INTERN / TEMPORARY / OTHER). Normalize CONTRACTOR → CONTRACT.
+function pickEmploymentType(raw: TeamtailorItem): string | undefined {
+  const et = raw._jobposting?.employmentType
+  const value = (Array.isArray(et) ? et[0] : et)?.trim().toUpperCase()
+  if (!value) return undefined
+  if (value === "CONTRACTOR") return "CONTRACT"
+  return value
+}
 
-  const description = [stripHtml(raw.pitch), stripHtml(raw.body)]
-    .filter((s): s is string => Boolean(s))
-    .join("\n\n") || undefined
+function mapRawJob(slug: string, raw: TeamtailorItem): HarvestedJob | null {
+  if (!raw.id || !raw.title) return null
+
+  const description = stripHtml(raw.content_html) ?? stripHtml(raw.content_text)
   const applyUrl =
-    raw.apply_url?.trim() ||
-    raw.full_url?.trim() ||
-    raw.url?.trim() ||
-    `https://${slug}.teamtailor.com/jobs/${raw.id}`
+    raw.url?.trim() || `https://${slug}.teamtailor.com/jobs/${raw.id}`
   const location = pickLocation(raw)
-  const postedAt = raw.published_at ?? raw.created_at ?? undefined
+  const postedAt = raw.date_published ?? raw._jobposting?.datePosted ?? undefined
   const workMode = pickWorkMode(raw)
+  const employmentType = pickEmploymentType(raw)
 
   const contentHash = hashContent([
     raw.title,
@@ -134,7 +155,7 @@ function mapRawJob(slug: string, raw: TeamtailorJob): HarvestedJob | null {
     location,
     postedAt,
     workMode,
-    raw.employment_type,
+    employmentType,
     description?.slice(0, 4_000),
   ])
 
@@ -146,7 +167,7 @@ function mapRawJob(slug: string, raw: TeamtailorJob): HarvestedJob | null {
     location,
     postedAt,
     workMode,
-    employmentType: raw.employment_type ?? undefined,
+    employmentType,
     contentHash,
   }
 }
@@ -177,9 +198,9 @@ export const teamtailorAdapter: AtsAdapter = {
       throw err
     }
 
-    const rawJobs = result.data?.jobs ?? []
+    const rawItems = result.data?.items ?? []
     const jobs: HarvestedJob[] = []
-    for (const raw of rawJobs) {
+    for (const raw of rawItems) {
       const mapped = mapRawJob(slug, raw)
       if (mapped) jobs.push(mapped)
     }
