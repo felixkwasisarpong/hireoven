@@ -27,7 +27,14 @@ const limitArg    = argv.find(a => a.startsWith("--limit="))
 const concArg     = argv.find(a => a.startsWith("--concurrency="))
 const LIMIT       = limitArg ? Number(limitArg.split("=")[1]) : 0
 const CONCURRENCY = Math.max(1, Math.min(20, Number(concArg?.split("=")[1] ?? "8")))
+// Safe mode: only the cleanly-named ATS-imported (*-tenant) companies — never the
+// junky adzuna/dice *placeholder / *-discovered stubs, whose slug-ish names
+// mis-guess to unrelated live domains (e.g. "550 Niagara…" → 550.com).
+const TENANT_ONLY = argv.includes("--tenant-only")
 const PROBE_TIMEOUT_MS = 6_000
+// A real logo.dev brand mark is a substantial PNG; a parked/unknown domain
+// returns 404 (fallback=404) or a tiny blank. Reject anything smaller.
+const LOGO_MARK_MIN_BYTES = 700
 const LOGO_TOKEN  = process.env.LOGO_DEV_TOKEN ?? process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN ?? ""
 
 // ─── Legal suffix normalization ───────────────────────────────────────────────
@@ -81,10 +88,15 @@ function generateCandidates(name: string): string[] {
     if (!seen.has(t)) { seen.add(t); out.push(t) }
   }
 
+  // Only whole-name candidates — full slug, first-two-words, hyphenated. The
+  // first-word-only fallback is deliberately omitted: "Colorado Coalition for
+  // the Homeless" → colorado.com and "Boston Imaging" → boston.com mis-brand to
+  // unrelated companies that happen to own the generic first word. Missing a few
+  // "Brand + descriptor" hits (Accenture Infrastructure → accenture.com) is the
+  // acceptable cost of never mis-branding.
   push(`${slug}.com`)
   if (twoW !== slug) push(`${twoW}.com`)
   if (hyphen !== slug) push(`${hyphen}.com`)
-  if (first && first !== slug) push(`${first}.com`)
 
   return out
 }
@@ -128,6 +140,30 @@ async function resolveDomain(name: string): Promise<string | null> {
   return null
 }
 
+/**
+ * True only when logo.dev actually has a real brand mark for `domain`.
+ * `fallback=404` makes logo.dev return 404 instead of a generated monogram when
+ * it has no logo, so a live-but-generic domain (parked, wrong-company) is
+ * rejected — the key guard against mis-branding a name that guessed to the wrong
+ * live domain.
+ */
+async function hasLogoMark(domain: string): Promise<boolean> {
+  const url = `https://img.logo.dev/${encodeURIComponent(domain)}?token=${LOGO_TOKEN}&size=128&format=png&fallback=404`
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS)
+  try {
+    const res = await fetch(url, { signal: ctrl.signal })
+    if (res.status !== 200) return false
+    if (!(res.headers.get("content-type") ?? "").startsWith("image/")) return false
+    const bytes = (await res.arrayBuffer()).byteLength
+    return bytes >= LOGO_MARK_MIN_BYTES
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // ─── Concurrency helper ───────────────────────────────────────────────────────
 
 async function pMap<T, R>(
@@ -156,11 +192,17 @@ async function main() {
 
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
+  // Safe mode: only *-tenant companies with a real (non-slug) name — an upper-case
+  // letter or a space distinguishes "10x Genomics" from a bare slug like "abd".
+  const domainFilter = TENANT_ONLY
+    ? `c.domain LIKE '%-tenant' AND (c.name ~ '[A-Z]' OR c.name ~ ' ')`
+    : `(c.domain LIKE '%placeholder' OR c.domain LIKE '%-discovered' OR c.domain LIKE '%-tenant')`
+
   const { rows: companies } = await pool.query<{ id: string; name: string; domain: string }>(`
     SELECT DISTINCT c.id, c.name, c.domain
     FROM companies c
     JOIN jobs j ON j.company_id = c.id AND j.is_active = true
-    WHERE (c.domain LIKE '%placeholder' OR c.domain LIKE '%-discovered')
+    WHERE ${domainFilter}
       AND (c.logo_url IS NULL OR c.logo_url = '')
     ORDER BY c.name
     ${LIMIT > 0 ? `LIMIT ${LIMIT}` : ""}
@@ -178,6 +220,15 @@ async function main() {
 
     if (!domain) {
       console.log(`${progress} ✗ ${company.name}`)
+      failed++
+      return
+    }
+
+    // Only store when logo.dev actually has a mark for the resolved domain —
+    // rejects live-but-wrong / parked domains that would render a wrong or blank
+    // logo. This is the guard that stops name-guess mis-branding.
+    if (!(await hasLogoMark(domain))) {
+      console.log(`${progress} ⊘ ${company.name} → ${domain} (no logo.dev mark)`)
       failed++
       return
     }
