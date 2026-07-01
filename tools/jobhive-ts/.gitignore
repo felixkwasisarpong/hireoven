@@ -1,0 +1,4 @@
+# Reference copies of jobhive's Python sources — fetched on demand, not vendored.
+ref/
+# Benchmark run artifacts.
+out/
