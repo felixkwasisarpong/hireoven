@@ -50,14 +50,22 @@ services:
       HARVESTER_ASHBY_CONCURRENCY: ${HARVESTER_ASHBY_CONCURRENCY:-2}
       HARVESTER_GREENHOUSE_CONCURRENCY: ${HARVESTER_GREENHOUSE_CONCURRENCY:-3}
       HARVESTER_LEVER_CONCURRENCY: ${HARVESTER_LEVER_CONCURRENCY:-2}
-      # 1, not 2: apply.workable.com rate-limits per IP, so 6 instances x 2 = 12
-      # parallel requests trips a 429 storm. The adapter's own default is 1; this
-      # compose default was silently overriding it back to 2.
-      HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-1}
+      # apply.workable.com rate-limits HARD per IP (429 on every request from the
+      # datacenter IP), which starved ~90% of enrolled workable boards. Fix: route
+      # apply.workable.com through HARVESTER_PROXY_HOSTS below (a clean IP with its
+      # own budget), which lets concurrency go back above 1. Watch for 429s on the
+      # proxy IP itself; a rotating pool is the real scale answer for ~5k boards.
+      HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-2}
       # Detail-pass volume — Workable v3 omits the JD from the list, so the pass
       # fetches /api/v2 per new job. Lower MAX_JOBS / raise DELAY if 429s persist.
       HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-50}
       HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-200}
+      # Route adapter fetches whose host matches HARVESTER_PROXY_HOSTS through a
+      # clean-IP proxy (e.g. the webbox tinyproxy). Workday AND Workable 429/403
+      # the datacenter IP; the proxy gives them a separate rate budget. Default
+      # includes both so the harvester box's crawl of those two isn't IP-blocked.
+      HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
+      HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com,apply.workable.com,jobs.workable.com}
       HARVESTER_TEAMTAILOR_CONCURRENCY: ${HARVESTER_TEAMTAILOR_CONCURRENCY:-1}
       HARVESTER_RECRUITEE_CONCURRENCY: ${HARVESTER_RECRUITEE_CONCURRENCY:-2}
       HARVESTER_SMARTRECRUITERS_CONCURRENCY: ${HARVESTER_SMARTRECRUITERS_CONCURRENCY:-1}
