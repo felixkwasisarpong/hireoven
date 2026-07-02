@@ -31,7 +31,25 @@ export async function getBalance(userId: string, plan: Plan | null): Promise<Cre
     ? (Date.now() - new Date(lastGrant).getTime()) / 86_400_000
     : Infinity
 
-  const shouldGrant = plan === "pro_max" && daysSinceGrant >= GRANT_INTERVAL_DAYS
+  // Launch offer: a Pro Max sub bought with a credit-withholding promo (LAUNCH)
+  // has interview_credit_hold_until set to its first renewal. Suppress the free
+  // monthly grant while now < hold; it resumes automatically at renewal (the
+  // timestamp is then in the past). Non-launch subs have no hold and are unaffected.
+  let onLaunchHold = false
+  if (plan === "pro_max") {
+    const holdRes = await pool.query<{ interview_credit_hold_until: string | null }>(
+      `SELECT interview_credit_hold_until
+         FROM subscriptions
+        WHERE user_id = $1 AND status IN ('active', 'trialing')
+        ORDER BY current_period_end DESC NULLS LAST
+        LIMIT 1`,
+      [userId]
+    )
+    const holdUntil = holdRes.rows[0]?.interview_credit_hold_until ?? null
+    onLaunchHold = Boolean(holdUntil && new Date(holdUntil).getTime() > Date.now())
+  }
+
+  const shouldGrant = plan === "pro_max" && !onLaunchHold && daysSinceGrant >= GRANT_INTERVAL_DAYS
   if (shouldGrant) {
     await grantCredits(userId, PRO_MAX_MONTHLY_GRANT, "monthly_pro_max_grant")
   }

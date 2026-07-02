@@ -63,12 +63,25 @@ export type PlanKey = keyof typeof PLAN_DATA
  */
 export const RESTRICTED_PROMO_CODES: Record<
   string,
-  { plans: PlanKey[]; intervals: BillingInterval[]; message: string }
+  {
+    plans: PlanKey[]
+    intervals: BillingInterval[]
+    message: string
+    /**
+     * When true, a subscription created with this code does NOT receive the Pro
+     * Max free live-interview credit during its first (discounted) billing period.
+     * The credit starts at the first renewal (full price). Enforced via
+     * subscriptions.interview_credit_hold_until (set in the Stripe webhook, read
+     * in lib/apex/interview/credits.ts).
+     */
+    withholdsInterviewCreditFirstPeriod?: boolean
+  }
 > = {
   LAUNCH: {
     plans: ["pro_max"],
     intervals: ["monthly"],
     message: "The LAUNCH offer is for Pro Max monthly only.",
+    withholdsInterviewCreditFirstPeriod: true,
   },
 }
 

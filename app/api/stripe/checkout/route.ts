@@ -62,6 +62,7 @@ export async function POST(request: Request) {
   // Invalid/expired codes return a 400 so the client surfaces the error before
   // redirecting; manual entry via Stripe Checkout still works as a fallback.
   let promotionCodeId: string | null = null
+  let appliedPromoCode: string | null = null
   if (promoCodeRaw) {
     const code = promoCodeRaw.toUpperCase()
     // Plan/interval-restricted codes (e.g. LAUNCH = Pro Max monthly only). Stripe
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
       )
     }
     promotionCodeId = promo.id
+    appliedPromoCode = code
   }
 
   // Student auto-discount: if the user has a verified .edu email AND no
@@ -185,6 +187,7 @@ export async function POST(request: Request) {
       interval,
       amountCents: String(getPlanAmountCents(plan as PlanKey, interval as BillingInterval)),
       ...(promotionCodeId ? { promotionCodeId } : {}),
+      ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {}),
     },
   }
 
