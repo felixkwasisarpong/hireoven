@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
-import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPlanAmountCents, STUDENT_DISCOUNT_ENABLED, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
@@ -98,7 +98,9 @@ export async function POST(request: Request) {
   // user-supplied promo code already won, attach the configured student
   // promotion code. STRIPE_STUDENT_PROMOTION_CODE_ID is set in env after the
   // promotion code is created in the Stripe dashboard.
-  if (!promotionCodeId && process.env.STRIPE_STUDENT_PROMOTION_CODE_ID) {
+  // Gated by STUDENT_DISCOUNT_ENABLED — disabled for launch, but the code path
+  // is preserved so it can be flipped back on without a rewrite.
+  if (STUDENT_DISCOUNT_ENABLED && !promotionCodeId && process.env.STRIPE_STUDENT_PROMOTION_CODE_ID) {
     const studentRow = await pool.query<{ is_student: boolean }>(
       `SELECT is_student FROM profiles WHERE id = $1`,
       [user.id]

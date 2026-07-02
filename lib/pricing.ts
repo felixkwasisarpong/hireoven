@@ -1,5 +1,16 @@
 export type BillingInterval = "monthly" | "yearly"
 
+/**
+ * Student-discount kill-switch. When false, the .edu verification UI is hidden
+ * and STRIPE_STUDENT_PROMOTION_CODE_ID is NOT auto-attached at checkout — but the
+ * whole verification flow (routes, is_student flag, Stripe path) stays intact, so
+ * flipping this back to true re-enables it with no other changes.
+ *
+ * Disabled for the public launch in favour of the first-month LAUNCH promo code
+ * (a typed Stripe promotion code, handled by the existing promo-code path).
+ */
+export const STUDENT_DISCOUNT_ENABLED = false
+
 export const PLAN_DATA = {
   free: {
     name: "Free",
