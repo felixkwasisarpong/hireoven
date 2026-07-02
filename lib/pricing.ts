@@ -55,6 +55,23 @@ export const PLAN_DATA = {
 
 export type PlanKey = keyof typeof PLAN_DATA
 
+/**
+ * Promo codes limited to a specific plan + interval, enforced in the checkout
+ * route. Stripe coupons in the current API can't scope to a single price (Pro Max
+ * monthly and yearly share one product), so the LAUNCH first-month offer is held
+ * to Pro Max monthly here instead of at the Stripe level.
+ */
+export const RESTRICTED_PROMO_CODES: Record<
+  string,
+  { plans: PlanKey[]; intervals: BillingInterval[]; message: string }
+> = {
+  LAUNCH: {
+    plans: ["pro_max"],
+    intervals: ["monthly"],
+    message: "The LAUNCH offer is for Pro Max monthly only.",
+  },
+}
+
 export function getSignupUrl(plan: PlanKey, interval: BillingInterval): string {
   if (plan === "free") return "/signup"
   const params = new URLSearchParams({ plan, interval })
