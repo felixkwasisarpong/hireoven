@@ -19,7 +19,13 @@
 import type { Pool } from "pg"
 import type { AtsName } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
+import { resolveRealDomainFromCareers } from "@/lib/companies/company-domain-extractor"
 import { counter } from "@/lib/observability/metrics"
+
+// Flag-gated: extract the company's real domain from its careers page at
+// enroll time instead of minting a `<tenant>.<ats>-tenant` sentinel. Off by
+// default; enable with HARVEST_EXTRACT_DOMAIN=1 (or "true").
+const EXTRACT_DOMAIN_ENABLED = /^(1|true)$/i.test(process.env.HARVEST_EXTRACT_DOMAIN ?? "")
 
 export interface EnrollTenantInput {
   atsType: string
@@ -134,8 +140,17 @@ export async function enrollTenantAsCompany(
   //    unique constraint is the existing dedup: ON CONFLICT (domain) enriches a
   //    pre-existing row (e.g. a real-domain placeholder) with the ATS pair.
   const careersUrl = buildCareersUrl(atsType, atsIdentifier, input.sourceUrl)
-  const domain = input.domainGuess ?? `${atsIdentifier}.${atsType}-tenant`
   const name = input.companyNameGuess ?? atsIdentifier
+  // Prefer a caller-provided domain; else try to extract the real one from the
+  // careers page (flag-gated, best-effort, never blocks). A recovered real
+  // domain also lets the ON CONFLICT (domain) below dedup into an existing
+  // canonical company instead of creating a blank duplicate.
+  let extractedDomain: string | null = null
+  if (!input.domainGuess && EXTRACT_DOMAIN_ENABLED) {
+    extractedDomain = await resolveRealDomainFromCareers(careersUrl, name).catch(() => null)
+    if (extractedDomain) counter("tenant.domain_extracted", { atsType, sourceType })
+  }
+  const domain = input.domainGuess ?? extractedDomain ?? `${atsIdentifier}.${atsType}-tenant`
   const freshnessTier = freshnessTierFor(input.jobCount)
   const discoveredVia = `tenant:${input.sourceType ?? "unknown"}`
 
