@@ -191,6 +191,9 @@ export default function BillingPageClient({
   const [promoLabel, setPromoLabel] = useState<string | null>(null)
   const [promoError, setPromoError] = useState<string | null>(null)
   const [promoChecking, setPromoChecking] = useState(false)
+  // Direct-to-Stripe launch: /dashboard/billing?checkout=pro_max&promo=LAUNCH
+  const [launchState, setLaunchState] = useState<"idle" | "loading" | "error">("idle")
+  const [launchError, setLaunchError] = useState<string | null>(null)
   const [studentStatus, setStudentStatus] = useState<{ isStudent: boolean; email: string | null } | null>(null)
   const [studentEmailInput, setStudentEmailInput] = useState("")
   const [studentCodeInput, setStudentCodeInput] = useState("")
@@ -223,6 +226,46 @@ export default function BillingPageClient({
         .finally(() => setUsageLoaded(true))
     }
   }, [billingLoaded, usageLoaded])
+
+  // Deep links from the promo banner:
+  //   ?checkout=pro_max&promo=LAUNCH → go STRAIGHT to Stripe with the code applied
+  //   ?promo=LAUNCH                  → just pre-fill/validate the code on the page
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const promo = params.get("promo")?.trim()
+    if (params.get("checkout") === "pro_max") {
+      setLaunchState("loading")
+      void (async () => {
+        try {
+          const res = await fetch("/api/stripe/checkout", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              plan: "pro_max",
+              interval: "monthly",
+              ...(promo ? { promoCode: promo.toUpperCase() } : {}),
+            }),
+          })
+          const data = (await res.json().catch(() => null)) as { url?: string; error?: string } | null
+          if (res.ok && data?.url) {
+            window.location.href = data.url
+            return
+          }
+          setLaunchError(data?.error ?? "Couldn't start checkout. Please try the plan buttons below.")
+          setLaunchState("error")
+        } catch {
+          setLaunchError("Couldn't reach checkout. Please try again.")
+          setLaunchState("error")
+        }
+      })()
+      return
+    }
+    if (promo) {
+      setPromoInput(promo.toUpperCase())
+      void validatePromo(promo)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (historyLoaded || !shouldLoadHistory) return
@@ -301,8 +344,8 @@ export default function BillingPageClient({
     }
   }
 
-  async function validatePromo() {
-    const raw = promoInput.trim()
+  async function validatePromo(codeArg?: string) {
+    const raw = (codeArg ?? promoInput).trim()
     if (!raw) {
       setPromoError("Enter a code.")
       return
@@ -503,6 +546,17 @@ export default function BillingPageClient({
 
   return (
     <div className="app-page">
+      {launchState === "loading" && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/90 backdrop-blur-sm">
+          <Loader2 className="h-7 w-7 animate-spin text-[#FF5C18]" />
+          <p className="text-sm font-medium text-slate-600">Redirecting to secure checkout…</p>
+        </div>
+      )}
+      {launchState === "error" && launchError && (
+        <div className="mx-auto mb-2 max-w-3xl px-4 pt-4">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-[13px] text-rose-700">{launchError}</div>
+        </div>
+      )}
       <div className="app-shell max-w-3xl">
         <div className="mb-6">
           <Link href="/dashboard" className="subpage-back">

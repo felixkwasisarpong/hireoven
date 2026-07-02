@@ -946,6 +946,9 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   trial_end TIMESTAMPTZ,
   cancel_at_period_end BOOLEAN DEFAULT false,
   cancellation_feedback JSONB,
+  -- Launch offer: when set, the free Pro Max live-interview credit is withheld
+  -- until this timestamp (the first renewal). See lib/apex/interview/credits.ts.
+  interview_credit_hold_until TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
