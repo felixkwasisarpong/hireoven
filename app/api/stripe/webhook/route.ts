@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import type { Pool } from "pg"
-import { getPlanAmountCents, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPlanAmountCents, RESTRICTED_PROMO_CODES, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
 
 export const runtime = "nodejs"
@@ -214,6 +214,21 @@ export async function POST(request: NextRequest) {
         trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
         cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
       })
+
+      // Launch offer: a Pro Max sub bought with a credit-withholding promo (LAUNCH)
+      // does NOT get the free live-interview credit during its first (discounted)
+      // period. Hold it until the first renewal (current_period_end); credits.ts
+      // reads this and skips the monthly grant while now < hold.
+      const appliedCode = session.metadata?.promoCode
+      const promoRule = appliedCode ? RESTRICTED_PROMO_CODES[appliedCode] : undefined
+      if (promoRule?.withholdsInterviewCreditFirstPeriod && planForPricing === "pro_max") {
+        await pool.query(
+          `UPDATE subscriptions
+              SET interview_credit_hold_until = $2, updated_at = now()
+            WHERE stripe_subscription_id = $1`,
+          [sub.id, new Date(period.end * 1000)],
+        )
+      }
       break
     }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
-import { getPlanAmountCents, STUDENT_DISCOUNT_ENABLED, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPlanAmountCents, RESTRICTED_PROMO_CODES, STUDENT_DISCOUNT_ENABLED, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 
@@ -62,8 +62,22 @@ export async function POST(request: Request) {
   // Invalid/expired codes return a 400 so the client surfaces the error before
   // redirecting; manual entry via Stripe Checkout still works as a fallback.
   let promotionCodeId: string | null = null
+  let appliedPromoCode: string | null = null
   if (promoCodeRaw) {
     const code = promoCodeRaw.toUpperCase()
+    // Plan/interval-restricted codes (e.g. LAUNCH = Pro Max monthly only). Stripe
+    // coupons can't scope to a single price here, so enforce it before attaching.
+    const restriction = RESTRICTED_PROMO_CODES[code]
+    if (
+      restriction &&
+      (!restriction.plans.some((p) => p === plan) ||
+        !restriction.intervals.some((i) => i === interval))
+    ) {
+      return NextResponse.json(
+        { error: restriction.message, code: "PROMO_PLAN_MISMATCH" },
+        { status: 400 }
+      )
+    }
     const promoLookup = await stripe.promotionCodes.list({
       code,
       active: true,
@@ -92,6 +106,7 @@ export async function POST(request: Request) {
       )
     }
     promotionCodeId = promo.id
+    appliedPromoCode = code
   }
 
   // Student auto-discount: if the user has a verified .edu email AND no
@@ -172,6 +187,7 @@ export async function POST(request: Request) {
       interval,
       amountCents: String(getPlanAmountCents(plan as PlanKey, interval as BillingInterval)),
       ...(promotionCodeId ? { promotionCodeId } : {}),
+      ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {}),
     },
   }
 
