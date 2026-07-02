@@ -22,7 +22,7 @@ import {
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import FeatureRow from "@/components/pricing/FeatureRow"
 import { cn } from "@/lib/utils"
-import { getPlanAmountCents, PLAN_COMPARISON_ROWS, type BillingInterval, type PlanKey } from "@/lib/pricing"
+import { getPlanAmountCents, PLAN_COMPARISON_ROWS, STUDENT_DISCOUNT_ENABLED, type BillingInterval, type PlanKey } from "@/lib/pricing"
 import {
   FEATURE_QUOTAS,
   METERED_FEATURE_KEYS,
@@ -520,8 +520,9 @@ export default function BillingPageClient({
         </header>
 
         {/* ── Student verification (lifted above plan card so it's the first
-              call-to-action for free / pro users arriving from a discount banner) ── */}
-        {currentPlan !== "pro_max" && (
+              call-to-action for free / pro users arriving from a discount banner) ──
+              Gated by STUDENT_DISCOUNT_ENABLED — hidden for launch, code preserved. */}
+        {STUDENT_DISCOUNT_ENABLED && currentPlan !== "pro_max" && (
           <section
             id="student-verify"
             className="mb-5 overflow-hidden rounded-2xl border-2 border-slate-200 bg-slate-50/40 shadow-[0_2px_12px_rgba(15,23,42,0.04)]"
@@ -1019,7 +1020,7 @@ export default function BillingPageClient({
                         void validatePromo()
                       }
                     }}
-                    placeholder="LAUNCH50"
+                    placeholder="LAUNCH"
                     className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 font-mono text-sm uppercase tracking-wider text-slate-800 outline-none transition focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FFD2B8]"
                     autoCapitalize="characters"
                     autoCorrect="off"
@@ -1056,7 +1057,7 @@ export default function BillingPageClient({
             description={
               promoCode
                 ? `Promo ${promoCode} will be applied at checkout. ${promoLabel ?? ""}`
-                : studentStatus?.isStudent
+                : STUDENT_DISCOUNT_ENABLED && studentStatus?.isStudent
                   ? "Student discount (30% off) will be applied automatically at checkout."
                   : "Unlock AI resume tools, autofill, deep analyses, and unlimited alerts."
             }
@@ -1073,7 +1074,7 @@ export default function BillingPageClient({
             description={
               promoCode
                 ? `Promo ${promoCode} will be applied at checkout. ${promoLabel ?? ""}`
-                : studentStatus?.isStudent
+                : STUDENT_DISCOUNT_ENABLED && studentStatus?.isStudent
                   ? "Student discount (30% off) will be applied automatically at checkout."
                   : "Live voice interviews, Apex strategy, and unlimited AI usage."
             }
