@@ -121,6 +121,11 @@ services:
       PG_POOL_MAX: ${HARVESTER_WORKABLE_PG_POOL_MAX:-5}
       HARVESTER_USE_NEW_ADAPTERS: ${HARVESTER_USE_NEW_ADAPTERS:-true}
       HARVESTER_INCLUDE_ADAPTERS: workable
+      # MUST be empty here. The main harvester sets a global
+      # HARVESTER_EXCLUDE_ADAPTERS=workable (Coolify injects it into every
+      # service); if it leaks in, include(workable) - exclude(workable) = []
+      # and this worker claims nothing (claimAdapters:[]). Shadow it to "".
+      HARVESTER_EXCLUDE_ADAPTERS: ""
       HARVESTER_INSTANCES: ${HARVESTER_WORKABLE_INSTANCES:-1}
       HARVESTER_TOTAL_CLAIM_BUDGET: ${HARVESTER_WORKABLE_TOTAL_CLAIM_BUDGET:-1}
       HARVESTER_CONCURRENCY: ${HARVESTER_WORKABLE_DEFAULT_CONCURRENCY:-1}
