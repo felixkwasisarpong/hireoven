@@ -25,6 +25,7 @@ const TIER_INTERVAL_ENV: Record<string, string> = {
 }
 
 const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
+const DEFAULT_RATE_LIMIT_COOLDOWN_SEC = 900
 const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
 const DEFAULT_HTTP_404_COOLDOWN_SEC = 604_800 // 7 days — board is gone
 const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
@@ -86,6 +87,12 @@ function http403CooldownSeconds(env: Record<string, string | undefined> = proces
   return DEFAULT_HTTP_403_COOLDOWN_SEC
 }
 
+function rateLimitCooldownSeconds(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt(env.HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 60) return raw
+  return DEFAULT_RATE_LIMIT_COOLDOWN_SEC
+}
+
 function http404CooldownSeconds(env: Record<string, string | undefined> = process.env): number {
   const raw = Number.parseInt(env.HARVESTER_HTTP_404_COOLDOWN_SECONDS ?? "", 10)
   if (Number.isFinite(raw) && raw >= 300) return raw
@@ -100,6 +107,14 @@ function isHttp403Error(message: string): boolean {
 function isHttp404Error(message: string): boolean {
   const lower = message.toLowerCase()
   return lower.includes("http_404") || lower.includes("http 404") || lower.includes("not found")
+}
+
+function isRateLimitError(message: string): boolean {
+  const lower = message.toLowerCase()
+  return lower.includes("http_429") ||
+    lower.includes("http 429") ||
+    lower.includes("too many requests") ||
+    lower.includes("rate limit")
 }
 
 // 422 from Workday CXS means the {tenant}:{wd}:{site} slug no longer maps to a
@@ -400,6 +415,8 @@ export async function runAtsHarvest(input: {
         ? Math.max(baseCooldownSec, http404CooldownSeconds())
         : isHttp403Error(message)
         ? Math.max(baseCooldownSec, http403CooldownSeconds())
+        : isRateLimitError(message)
+        ? rateLimitCooldownSeconds()
         : baseCooldownSec
     )
     // After 3+ consecutive failures (this attempt counts as the 3rd) demote
@@ -409,7 +426,9 @@ export async function runAtsHarvest(input: {
     // job re-promotes anything that starts producing jobs again.
     let newTier: string | null = null
     try {
-      const recentFails = await recentFailureCount(pool, company.id, 2)
+      const recentFails = isRateLimitError(message)
+        ? 0
+        : await recentFailureCount(pool, company.id, 2)
       if (recentFails >= 2) {
         newTier = demoteFreshnessTier(company.freshness_tier)
         if (newTier === company.freshness_tier) newTier = null

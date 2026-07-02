@@ -23,6 +23,7 @@
  * `http://user:pass@residential.proxy:8000` to enable.
  */
 
+import { QueueFullError, withAtsRateLimit } from "@/lib/discovery/ats-rate-limiter"
 import { Agent, ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici"
 
 const H2_ENABLED = process.env.HARVESTER_HTTP2 === "true"
@@ -104,6 +105,44 @@ function dispatcherFor(url: Parameters<typeof undiciFetch>[0]): Dispatcher {
   return getAgent()
 }
 
+const RATE_LIMITED_HOSTS: Array<{ atsType: string; suffixes: string[] }> = [
+  { atsType: "workable", suffixes: ["apply.workable.com", "jobs.workable.com"] },
+  { atsType: "greenhouse", suffixes: ["boards-api.greenhouse.io"] },
+  { atsType: "lever", suffixes: ["api.lever.co"] },
+  { atsType: "ashby", suffixes: ["api.ashbyhq.com", "jobs.ashbyhq.com"] },
+  { atsType: "smartrecruiters", suffixes: ["api.smartrecruiters.com", "jobs.smartrecruiters.com", "careers.smartrecruiters.com"] },
+  { atsType: "recruitee", suffixes: ["recruitee.com"] },
+  { atsType: "teamtailor", suffixes: ["teamtailor.com"] },
+  { atsType: "personio", suffixes: ["jobs.personio.com", "jobs.personio.de"] },
+  { atsType: "bamboohr", suffixes: ["bamboohr.com"] },
+  { atsType: "jazzhr", suffixes: ["applytojob.com"] },
+  { atsType: "jobvite", suffixes: ["jobs.jobvite.com"] },
+  { atsType: "icims", suffixes: ["icims.com"] },
+  { atsType: "workday", suffixes: ["myworkdayjobs.com"] },
+  { atsType: "oraclecloud", suffixes: ["oraclecloud.com"] },
+  { atsType: "successfactors", suffixes: ["successfactors.com"] },
+  { atsType: "taleo", suffixes: ["taleo.net"] },
+  { atsType: "avature", suffixes: ["avature.net"] },
+]
+
+export function rateLimitKeyForHost(host: string): string | null {
+  const h = host.toLowerCase()
+  for (const entry of RATE_LIMITED_HOSTS) {
+    if (hostMatchesProxy(h, entry.suffixes)) return entry.atsType
+  }
+  return null
+}
+
+function rateLimitKeyForUrl(url: Parameters<typeof undiciFetch>[0]): string | null {
+  const href = hrefOf(url)
+  if (!href) return null
+  try {
+    return rateLimitKeyForHost(new URL(href).hostname)
+  } catch {
+    return null
+  }
+}
+
 /**
  * Drop-in replacement for `fetch` that routes through the harvester's HTTP/2
  * dispatcher (or the residential proxy agent for matching hosts). The undici
@@ -116,7 +155,18 @@ export const harvesterFetch = ((
   url: Parameters<typeof undiciFetch>[0],
   init?: Parameters<typeof undiciFetch>[1]
 ) => {
-  return undiciFetch(url, { ...init, dispatcher: dispatcherFor(url) })
+  const run = () => undiciFetch(url, { ...init, dispatcher: dispatcherFor(url) })
+  const rateLimitKey = rateLimitKeyForUrl(url)
+  if (!rateLimitKey) return run()
+  return withAtsRateLimit(rateLimitKey, run).catch((error) => {
+    if (error instanceof QueueFullError) {
+      return new Response("ATS rate limiter queue full", {
+        status: 429,
+        headers: { "retry-after": "60" },
+      }) as unknown as Awaited<ReturnType<typeof undiciFetch>>
+    }
+    throw error
+  })
 }) as unknown as typeof fetch
 
 /** Test/debug accessor — never used in production code. */

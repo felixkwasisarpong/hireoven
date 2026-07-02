@@ -5,12 +5,12 @@
  * is intentionally NOT Redis-backed for now. If discovery ever fans out across
  * machines, swap the bucket store for a shared one behind the same interface.
  *
- * Default: 5 req/sec per host, burst 10, queue cap 200. Workable is stricter:
- * 1 req/sec, burst 10, matching its documented 10 requests / 10 seconds API
- * limit. Requests beyond the burst are queued and drained as tokens refill; if
- * the queue for a host is already at its cap, the call rejects with
- * QueueFullError (callers map this to a 'rate_limited' outcome rather than
- * hammering the board).
+ * Default: 5 req/sec per host, burst 10, queue cap 200. Known ATS defaults are
+ * intentionally below published ceilings where the public job-board endpoint is
+ * not the same authenticated API covered by the docs. Requests beyond the burst
+ * are queued and drained as tokens refill; if the queue for a host is already
+ * at its cap, the call rejects with QueueFullError (callers map this to a
+ * 'rate_limited' outcome rather than hammering the board).
  *
  * Env overrides (read lazily, so tests can set them before first use):
  *   ATS_RATE_LIMIT_<HOST>_RPS     e.g. ATS_RATE_LIMIT_GREENHOUSE_RPS=8
@@ -39,7 +39,33 @@ const DEFAULT_QUEUE_CAP = 200
 type BucketConfig = { rps: number; burst: number }
 
 const HOST_DEFAULTS: Record<string, BucketConfig> = {
+  // Official: 10 requests / 10 seconds.
   workable: { rps: 1, burst: 10 },
+  // Greenhouse documents rate-limit headers per 10-second window on Harvest;
+  // the public board API does not publish a fixed number. Stay conservative.
+  greenhouse: { rps: 3, burst: 10 },
+  // Official Lever API default is 10 rps with bursts; public postings are kept
+  // lower because they are unauthenticated and shared-host.
+  lever: { rps: 5, burst: 10 },
+  // Official SmartRecruiters limit is 10 rps and 8 concurrent for most APIs.
+  smartrecruiters: { rps: 5, burst: 8 },
+  // Official Teamtailor bucket is 50 requests / 10 seconds.
+  teamtailor: { rps: 5, burst: 50 },
+  // Official Recruitee limit is 1000 requests/minute per API token.
+  recruitee: { rps: 10, burst: 20 },
+  // Official JazzHR API limit is 240 calls/minute.
+  jazzhr: { rps: 4, burst: 8 },
+  // No public numeric posting limit found; these are tuned from observed 429s
+  // and kept below the generic shared-host default.
+  ashby: { rps: 3, burst: 6 },
+  bamboohr: { rps: 2, burst: 5 },
+  personio: { rps: 2, burst: 5 },
+  workday: { rps: 2, burst: 5 },
+  icims: { rps: 1, burst: 5 },
+  jobvite: { rps: 2, burst: 5 },
+  successfactors: { rps: 1, burst: 3 },
+  taleo: { rps: 1, burst: 3 },
+  avature: { rps: 1, burst: 3 },
 }
 
 type Bucket = {
