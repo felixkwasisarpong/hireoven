@@ -3,10 +3,12 @@ import {
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
+  type ConditionalFetchResult,
   type HarvestCtx,
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
+import { withAtsRateLimit } from "@/lib/discovery/ats-rate-limiter"
 
 /**
  * Workable public job board API.
@@ -69,6 +71,14 @@ type WorkableResponse = {
 
 function listingUrl(slug: string): string {
   return `https://apply.workable.com/api/v3/accounts/${encodeURIComponent(slug)}/jobs`
+}
+
+function fetchWorkableJson<T>(
+  url: string,
+  ctx: HarvestCtx,
+  options: { maxAttempts?: number; method?: "GET" | "POST"; body?: string } = {}
+): Promise<ConditionalFetchResult<T>> {
+  return withAtsRateLimit("workable", () => conditionalFetchJson<T>(url, ctx, options))
 }
 
 function detectFromUrl(url: string): { slug: string } | null {
@@ -180,7 +190,7 @@ async function fetchPage(
   // Workable flipped this endpoint to POST-only — GET now 404s, and 403s under
   // the harvester's concurrent load. The pagination token rides in the body;
   // an empty body returns page 1.
-  return conditionalFetchJson<WorkableResponse>(listingUrl(slug), ctx, {
+  return fetchWorkableJson<WorkableResponse>(listingUrl(slug), ctx, {
     method: "POST",
     body: JSON.stringify(token ? { token } : {}),
   })
@@ -256,7 +266,7 @@ export const workableAdapter: AtsAdapter = {
         if (DETAIL_DELAY_MS > 0) await sleep(DETAIL_DELAY_MS)
         const job = targets[i]
         const shortcode = job.externalId.replace(/^workable:/, "")
-        const res = await conditionalFetchJson<WorkableRawJob>(
+        const res = await fetchWorkableJson<WorkableRawJob>(
           detailUrl(slug, shortcode),
           { ...ctx, etag: null, lastModified: null },
           { maxAttempts: 2 }

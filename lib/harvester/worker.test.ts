@@ -8,6 +8,7 @@ import {
   loadWorkerConfig,
   resolvePerCompanyTimeoutMs,
   scaleWorkerConfigForLoops,
+  type AdapterClaimFilter,
 } from "./worker"
 
 test("loadWorkerConfig: defaults when env is empty", () => {
@@ -24,11 +25,13 @@ test("loadWorkerConfig: reads valid env vars", () => {
     HARVESTER_CLAIM_BATCH_SIZE: "100",
     HARVESTER_LEASE_SECONDS: "300",
     HARVESTER_CONCURRENCY: "16",
+    HARVESTER_INCLUDE_ADAPTERS: "workable",
   })
   assert.equal(config.tickIntervalMs, 5_000)
   assert.equal(config.claimBatchSize, 40)
   assert.equal(config.leaseSeconds, 300)
   assert.equal(config.concurrency, 12)
+  assert.deepEqual(config.adapterFilter, { include: ["workable"], exclude: [] })
 })
 
 test("loadWorkerConfig: falls back on garbage env", () => {
@@ -182,6 +185,45 @@ test("claimEligibleCompanies: orders strictly by next_harvest_at (no tier priori
     !/CASE\s+COALESCE\(freshness_tier/i.test(captured),
     "ORDER BY must not include a freshness_tier CASE — that re-introduces tier_2/tier_3 starvation"
   )
+})
+
+test("claimEligibleCompanies: supports Workable-only claim filtering", async () => {
+  const captured: { text: string; values: unknown[] } = { text: "", values: [] }
+  const pool = {
+    query: async (text: string, values: unknown[]) => {
+      captured.text = text
+      captured.values = values
+      return { rows: [], rowCount: 0 } as unknown as QueryResult
+    },
+  } as unknown as Pool
+  const filter: AdapterClaimFilter = { include: ["workable"], exclude: [] }
+
+  await claimEligibleCompanies(pool, 10, 60, filter)
+
+  assert.deepEqual(captured.values[2], ["workable"])
+  assert.match(captured.text, /apply\.workable\.com/)
+  assert.doesNotMatch(captured.text, /jobs\.lever\.co/)
+  assert.doesNotMatch(captured.text, /boards\.greenhouse\.io/)
+})
+
+test("claimEligibleCompanies: excludes Workable from the broad claim filter", async () => {
+  const captured: { text: string; values: unknown[] } = { text: "", values: [] }
+  const pool = {
+    query: async (text: string, values: unknown[]) => {
+      captured.text = text
+      captured.values = values
+      return { rows: [], rowCount: 0 } as unknown as QueryResult
+    },
+  } as unknown as Pool
+  const filter: AdapterClaimFilter = { include: null, exclude: ["workable"] }
+
+  await claimEligibleCompanies(pool, 10, 60, filter)
+
+  assert.ok(Array.isArray(captured.values[2]))
+  assert.ok(!(captured.values[2] as string[]).includes("workable"))
+  assert.doesNotMatch(captured.text, /apply\.workable\.com/)
+  assert.match(captured.text, /jobs\.lever\.co/)
+  assert.match(captured.text, /boards\.greenhouse\.io/)
 })
 
 test("adapterNameFor: uses ats_type when present and supported", () => {
