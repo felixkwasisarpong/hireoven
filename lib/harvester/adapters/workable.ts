@@ -8,7 +8,6 @@ import {
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
-import { withAtsRateLimit } from "@/lib/discovery/ats-rate-limiter"
 
 /**
  * Workable public job board API.
@@ -78,7 +77,7 @@ function fetchWorkableJson<T>(
   ctx: HarvestCtx,
   options: { maxAttempts?: number; method?: "GET" | "POST"; body?: string } = {}
 ): Promise<ConditionalFetchResult<T>> {
-  return withAtsRateLimit("workable", () => conditionalFetchJson<T>(url, ctx, options))
+  return conditionalFetchJson<T>(url, ctx, options)
 }
 
 function detectFromUrl(url: string): { slug: string } | null {

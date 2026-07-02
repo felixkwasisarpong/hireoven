@@ -35,6 +35,7 @@ services:
       HARVESTER_TIER_1_INTERVAL_SEC: ${HARVESTER_TIER_1_INTERVAL_SEC:-180}
       HARVESTER_TIER_2_INTERVAL_SEC: ${HARVESTER_TIER_2_INTERVAL_SEC:-3600}
       HARVESTER_FAILURE_COOLDOWN_SECONDS: ${HARVESTER_FAILURE_COOLDOWN_SECONDS:-1800}
+      HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS: ${HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS:-900}
       HARVESTER_HTTP_403_COOLDOWN_SECONDS: ${HARVESTER_HTTP_403_COOLDOWN_SECONDS:-86400}
       HARVESTER_PER_COMPANY_TIMEOUT_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_MS:-60000}
       HARVESTER_PER_COMPANY_TIMEOUT_WORKDAY_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_WORKDAY_MS:-120000}
@@ -54,26 +55,26 @@ services:
       HARVESTER_ASHBY_CONCURRENCY: ${HARVESTER_ASHBY_CONCURRENCY:-2}
       HARVESTER_GREENHOUSE_CONCURRENCY: ${HARVESTER_GREENHOUSE_CONCURRENCY:-3}
       HARVESTER_LEVER_CONCURRENCY: ${HARVESTER_LEVER_CONCURRENCY:-2}
-      # apply.workable.com rate-limits HARD per IP (429 on every request from the
-      # datacenter IP), starving ~90% of enrolled workable boards. Routing it
-      # through a SINGLE proxy IP does NOT fix it — measured: even a clean webbox
-      # IP got 429'd within ~30 min crawling ~5k boards. The real fix is a ROTATING
-      # PROXY POOL: set HARVESTER_PROXY_URL to the pool and add apply.workable.com
-      # to HARVESTER_PROXY_HOSTS, THEN raise this above 1. Stays 1 until then.
+      # apply.workable.com publishes a hard 10 requests / 10 seconds limit. Keep
+      # one Workable lane and let ATS_RATE_LIMIT_WORKABLE_* pace listing + detail
+      # requests; raising concurrency alone only fills the limiter queue.
       HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-1}
       # Detail-pass volume — Workable v3 omits the JD from the list, so the pass
-      # fetches /api/v2 per new job. This is the 429 amplifier, so keep it gentle:
-      # 20 jobs @ 800ms with concurrency 2 ≈ ~2.5 req/s through the proxy IP, well
-      # under the ~10 req/s that got the raw datacenter IP rate-capped. JDs beyond
-      # 20/board fill over subsequent crawls (alreadyDescribedIds).
+      # fetches /api/v2 per new job. The Workable host gate enforces the 1 rps
+      # average; this cap controls how much detail work one board can
+      # consume before the next company gets a turn.
       HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-20}
-      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-800}
+      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-0}
       # Route adapter fetches whose host matches HARVESTER_PROXY_HOSTS through a
       # proxy. Default is Workday only (its per-tenant rate is low enough for one
-      # proxy IP). Add apply.workable.com,jobs.workable.com ONLY with a rotating
-      # pool as HARVESTER_PROXY_URL — a single IP gets 429'd by Workable at scale.
+      # proxy IP). Keep high-volume ATS hosts direct unless you have a legitimate
+      # proxy route and still keep their host-rate caps in place.
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
+      # Proactive host gate for real harvesterFetch HTTP calls. host-rate-gate
+      # divides these budgets by HARVESTER_INSTANCES, so defaults below are sized
+      # for the 6-loop main lane and resolve to conservative per-process rates.
+      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_HOST_RATE_LIMITS:-boards-api.greenhouse.io=18,api.lever.co=30,api.smartrecruiters.com=30,api.ashbyhq.com=18,teamtailor.com=30,recruitee.com=60,applytojob.com=24,myworkdayjobs.com=12,icims.com=6,bamboohr.com=12,jobs.personio.com=12,jobs.personio.de=12,jobs.jobvite.com=12,successfactors.com=6,taleo.net=6,avature.net=6}
       HARVESTER_TEAMTAILOR_CONCURRENCY: ${HARVESTER_TEAMTAILOR_CONCURRENCY:-1}
       HARVESTER_RECRUITEE_CONCURRENCY: ${HARVESTER_RECRUITEE_CONCURRENCY:-2}
       HARVESTER_SMARTRECRUITERS_CONCURRENCY: ${HARVESTER_SMARTRECRUITERS_CONCURRENCY:-1}
@@ -85,6 +86,25 @@ services:
       HARVESTER_JOBVITE_CONCURRENCY: ${HARVESTER_JOBVITE_CONCURRENCY:-1}
       HARVESTER_ORACLECLOUD_CONCURRENCY: ${HARVESTER_ORACLECLOUD_CONCURRENCY:-1}
       HARVESTER_APPLE_CONCURRENCY: ${HARVESTER_APPLE_CONCURRENCY:-1}
+      # ATS discovery/backsolve token buckets. Actual harvester HTTP requests are
+      # paced by HARVESTER_HOST_RATE_LIMITS above.
+      ATS_RATE_LIMIT_QUEUE_CAP: ${ATS_RATE_LIMIT_QUEUE_CAP:-200}
+      ATS_RATE_LIMIT_WORKABLE_RPS: ${ATS_RATE_LIMIT_WORKABLE_RPS:-1}
+      ATS_RATE_LIMIT_WORKABLE_BURST: ${ATS_RATE_LIMIT_WORKABLE_BURST:-10}
+      ATS_RATE_LIMIT_GREENHOUSE_RPS: ${ATS_RATE_LIMIT_GREENHOUSE_RPS:-3}
+      ATS_RATE_LIMIT_GREENHOUSE_BURST: ${ATS_RATE_LIMIT_GREENHOUSE_BURST:-10}
+      ATS_RATE_LIMIT_LEVER_RPS: ${ATS_RATE_LIMIT_LEVER_RPS:-5}
+      ATS_RATE_LIMIT_LEVER_BURST: ${ATS_RATE_LIMIT_LEVER_BURST:-10}
+      ATS_RATE_LIMIT_SMARTRECRUITERS_RPS: ${ATS_RATE_LIMIT_SMARTRECRUITERS_RPS:-5}
+      ATS_RATE_LIMIT_SMARTRECRUITERS_BURST: ${ATS_RATE_LIMIT_SMARTRECRUITERS_BURST:-8}
+      ATS_RATE_LIMIT_WORKDAY_RPS: ${ATS_RATE_LIMIT_WORKDAY_RPS:-2}
+      ATS_RATE_LIMIT_WORKDAY_BURST: ${ATS_RATE_LIMIT_WORKDAY_BURST:-5}
+      ATS_RATE_LIMIT_ICIMS_RPS: ${ATS_RATE_LIMIT_ICIMS_RPS:-1}
+      ATS_RATE_LIMIT_ICIMS_BURST: ${ATS_RATE_LIMIT_ICIMS_BURST:-5}
+      ATS_RATE_LIMIT_BAMBOOHR_RPS: ${ATS_RATE_LIMIT_BAMBOOHR_RPS:-2}
+      ATS_RATE_LIMIT_BAMBOOHR_BURST: ${ATS_RATE_LIMIT_BAMBOOHR_BURST:-5}
+      ATS_RATE_LIMIT_PERSONIO_RPS: ${ATS_RATE_LIMIT_PERSONIO_RPS:-2}
+      ATS_RATE_LIMIT_PERSONIO_BURST: ${ATS_RATE_LIMIT_PERSONIO_BURST:-5}
       USAJOBS_API_KEY: ${USAJOBS_API_KEY}
       USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
 
@@ -116,9 +136,13 @@ services:
       ATS_RATE_LIMIT_WORKABLE_BURST: ${ATS_RATE_LIMIT_WORKABLE_BURST:-10}
       ATS_RATE_LIMIT_QUEUE_CAP: ${ATS_RATE_LIMIT_QUEUE_CAP:-200}
       HARVESTER_FAILURE_COOLDOWN_SECONDS: ${HARVESTER_FAILURE_COOLDOWN_SECONDS:-1800}
+      HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS: ${HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS:-900}
       HARVESTER_HTTP_403_COOLDOWN_SECONDS: ${HARVESTER_HTTP_403_COOLDOWN_SECONDS:-86400}
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
+      # Workable's published API limit is 10 requests / 10 seconds. This worker
+      # runs one loop by default, so the configured host budget is the real rate.
+      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_WORKABLE_HOST_RATE_LIMITS:-apply.workable.com=1,jobs.workable.com=1}
 
   app-worker:
     image: ghcr.io/felixkwasisarpong/hireoven:latest
