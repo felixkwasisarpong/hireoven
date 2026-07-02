@@ -330,26 +330,35 @@ export default async function HomePage() {
       <section className="border-y border-slate-100 bg-white px-6 py-8">
         <Link
           href="/extension"
-          className="group mx-auto flex max-w-5xl flex-col items-center gap-3 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-[#0C0A1E] via-[#16102e] to-[#1a0a2e] p-6 transition hover:border-[#FF5C18]/40 sm:flex-row sm:gap-5 sm:p-5"
+          className="group relative mx-auto flex max-w-5xl flex-col items-center gap-4 overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-[#0C0A1E] via-[#1a1033] to-[#2a0e2e] p-6 shadow-[0_24px_60px_-30px_rgba(255,92,24,0.55)] ring-1 ring-white/5 transition duration-300 hover:ring-[#FF5C18]/30 sm:flex-row sm:gap-5"
         >
+          <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF5C18]/20 blur-[70px] transition duration-500 group-hover:bg-[#FF5C18]/30" />
+          <span aria-hidden className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-violet-500/10 blur-[50px]" />
           <span
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg"
+            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl shadow-lg ring-1 ring-white/20"
             style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}
             aria-hidden
           >
             🧩
           </span>
-          <div className="min-w-0 flex-1 text-center sm:text-left">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#FF9A3C]">
-              New · now on the Chrome Web Store
+          <div className="relative min-w-0 flex-1 text-center sm:text-left">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF5C18]/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#FF9A3C] ring-1 ring-[#FF5C18]/25">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF9A3C] opacity-75" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF9A3C]" />
+              </span>
+              New · Chrome Web Store
+            </span>
+            <p className="mt-2 text-[16px] font-semibold text-white sm:text-[17px]">
+              Match scores &amp; one-click autofill on every job posting.
             </p>
-            <p className="mt-1 text-[15px] font-semibold text-white">
-              Match score + autofill on every job posting — free Chrome extension.
+            <p className="mt-0.5 text-[13px] text-white/50">
+              Free Chrome extension — works on LinkedIn, Greenhouse, Lever, Ashby, Workday &amp; more.
             </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-bold text-slate-900 transition group-hover:bg-[#FF5C18] group-hover:text-white">
+          <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition group-hover:bg-[#FF5C18] group-hover:text-white">
             Get the extension
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
           </span>
         </Link>
       </section>
@@ -358,28 +367,34 @@ export default async function HomePage() {
       <section className="border-b border-slate-100 bg-white px-6 py-8">
         <Link
           href="/h1b-sponsors/leaderboard"
-          className="group mx-auto flex max-w-5xl flex-col items-center gap-3 rounded-3xl border border-slate-200/70 bg-gradient-to-br from-[#0b2a23] via-[#0e3a2e] to-[#0a2440] p-6 transition hover:border-emerald-400/40 sm:flex-row sm:gap-5 sm:p-5"
+          className="group relative mx-auto flex max-w-5xl flex-col items-center gap-4 overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-[#06251d] via-[#0c3a2c] to-[#08324a] p-6 shadow-[0_24px_60px_-30px_rgba(16,185,129,0.55)] ring-1 ring-white/5 transition duration-300 hover:ring-emerald-400/30 sm:flex-row sm:gap-5"
         >
+          <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-500/20 blur-[70px] transition duration-500 group-hover:bg-emerald-500/30" />
+          <span aria-hidden className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-sky-500/10 blur-[50px]" />
           <span
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/20"
             style={{ background: "linear-gradient(135deg,#10b981,#34d399)" }}
             aria-hidden
           >
-            <ShieldCheck className="h-5 w-5 text-white" />
+            <ShieldCheck className="h-6 w-6 text-white" />
           </span>
-          <div className="min-w-0 flex-1 text-center sm:text-left">
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-300">
+          <div className="relative min-w-0 flex-1 text-center sm:text-left">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300 ring-1 ring-emerald-500/25">
+              <ShieldCheck className="h-3 w-3" />
               Free public data
-            </p>
-            <p className="mt-1 text-[15px] font-semibold text-white">
+            </span>
+            <p className="mt-2 text-[16px] font-semibold text-white sm:text-[17px]">
               {stats.jobs > 0
-                ? `Browse ${stats.jobs.toLocaleString()} jobs by H-1B sponsorship. See who actually files.`
-                : "Browse employers by H-1B sponsorship. See who actually files."}
+                ? `Browse ${stats.jobs.toLocaleString()} jobs by H-1B sponsorship.`
+                : "Browse employers by H-1B sponsorship."}
+            </p>
+            <p className="mt-0.5 text-[13px] text-white/50">
+              See who actually files — petition history from DOL &amp; USCIS public records. No signup.
             </p>
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2 text-[13px] font-bold text-slate-900 transition group-hover:bg-emerald-500 group-hover:text-white">
+          <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition group-hover:bg-emerald-500 group-hover:text-white">
             View leaderboard
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
           </span>
         </Link>
       </section>
@@ -674,7 +689,9 @@ export default async function HomePage() {
               { href: "/login", label: "Sign in" },
               { href: "/launch", label: "Join waitlist" },
             ]} />
-            <FooterColumn title="Legal" links={[
+            <FooterColumn title="Company" links={[
+              { href: "/contact", label: "Contact" },
+              { href: "/support", label: "Support" },
               { href: "/privacy", label: "Privacy" },
               { href: "/terms", label: "Terms" },
             ]} />
@@ -683,7 +700,7 @@ export default async function HomePage() {
             <p className="text-[12px] text-slate-400">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
             <div className="flex items-center gap-4">
               <p className="text-[12px] text-slate-300">Built for people who move fast.</p>
-              <p className="text-[12px] text-slate-400">Powered by Sepurux</p>
+              <Link href="/contact" className="text-[12px] text-slate-400 transition hover:text-slate-900">Contact</Link>
             </div>
           </div>
         </div>
