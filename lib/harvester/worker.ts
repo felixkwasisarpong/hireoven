@@ -49,6 +49,7 @@ export type WorkerConfig = {
   claimBatchSize: number
   leaseSeconds: number
   concurrency: number
+  adapterFilter?: AdapterClaimFilter
 }
 
 const MAX_CLAIM_BATCH_SIZE = 40
@@ -77,6 +78,7 @@ export function loadWorkerConfig(
     // before the lease expires and companies get re-claimed.
     leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 240),
     concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8, 1, MAX_DEFAULT_CONCURRENCY),
+    adapterFilter: loadAdapterClaimFilter(env),
   }
 }
 
@@ -146,63 +148,6 @@ export function resolvePerCompanyTimeoutMs(
   return Math.max(globalTimeoutMs, adapterDefault)
 }
 
-const CLAIM_QUERY = `
-UPDATE companies
-SET next_harvest_at = now() + ($2 || ' seconds')::interval
-WHERE id IN (
-  SELECT id FROM companies
-  WHERE status = 'active'
-    AND is_active = true
-    AND duplicate_of_company_id IS NULL
-    AND careers_url IS NOT NULL
-    AND (
-      ats_type = ANY($3::text[])
-      OR careers_url ILIKE 'https://boards.greenhouse.io/%'
-      OR careers_url ILIKE 'https://job-boards.greenhouse.io/%'
-      OR careers_url ILIKE 'https://jobs.lever.co/%'
-      OR careers_url ILIKE 'https://jobs.ashbyhq.com/%'
-      OR careers_url ILIKE 'https://jobs.smartrecruiters.com/%'
-      OR careers_url ILIKE 'https://careers.smartrecruiters.com/%'
-      OR careers_url ILIKE 'https://apply.workable.com/%'
-      OR careers_url ILIKE 'https://jobs.workable.com/%'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.wd[0-9]{1,3}\.myworkdayjobs\.com/'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.recruitee\.com/'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.teamtailor\.com/'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
-      OR careers_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
-      OR careers_url ILIKE 'https://jobs.jobvite.com/%'
-      OR careers_url ILIKE 'https://digitalcareers.infosys.com/%'
-      OR careers_url ILIKE 'https://jobs.apple.com/%'
-      OR direct_ats_url ILIKE 'https://boards.greenhouse.io/%'
-      OR direct_ats_url ILIKE 'https://job-boards.greenhouse.io/%'
-      OR direct_ats_url ILIKE 'https://jobs.lever.co/%'
-      OR direct_ats_url ILIKE 'https://jobs.ashbyhq.com/%'
-      OR direct_ats_url ILIKE 'https://jobs.smartrecruiters.com/%'
-      OR direct_ats_url ILIKE 'https://careers.smartrecruiters.com/%'
-      OR direct_ats_url ILIKE 'https://apply.workable.com/%'
-      OR direct_ats_url ILIKE 'https://jobs.workable.com/%'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.wd[0-9]{1,3}\.myworkdayjobs\.com/'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.recruitee\.com/'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.teamtailor\.com/'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.jobs\.personio\.(com|de)/'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.bamboohr\.com/'
-      OR direct_ats_url ~* '^https?://[a-z0-9-]+\.applytojob\.com/'
-      OR direct_ats_url ILIKE 'https://jobs.jobvite.com/%'
-      OR direct_ats_url ILIKE 'https://digitalcareers.infosys.com/%'
-      OR direct_ats_url ILIKE 'https://jobs.apple.com/%'
-    )
-    AND (next_harvest_at IS NULL OR next_harvest_at <= now())
-  -- Sort by overdueness only. Tier still controls cadence via the interval
-  -- written to next_harvest_at after each crawl; a strict tier CASE here
-  -- starved tier_2/tier_3 because tier_1's backlog never cleared.
-  ORDER BY next_harvest_at ASC NULLS FIRST
-  LIMIT $1
-  FOR UPDATE SKIP LOCKED
-)
-RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier, consecutive_empty_crawls
-`
-
 const SUPPORTED_ATS_TYPES = [
   "greenhouse",
   "lever",
@@ -229,7 +174,147 @@ const SUPPORTED_ATS_TYPES = [
   // route via URL detection already; these two have no matching careers_url pattern.
   "eightfold",
   "netflix",
-]
+] as const satisfies readonly AtsName[]
+
+export type AdapterClaimFilter = {
+  include: AtsName[] | null
+  exclude: AtsName[]
+}
+
+const DEFAULT_ADAPTER_CLAIM_FILTER: AdapterClaimFilter = {
+  include: null,
+  exclude: [],
+}
+
+const SUPPORTED_ATS_TYPE_SET = new Set<string>(SUPPORTED_ATS_TYPES)
+
+const CLAIM_URL_SQL: Partial<Record<AtsName, string[]>> = {
+  greenhouse: [
+    "careers_url ILIKE 'https://boards.greenhouse.io/%'",
+    "careers_url ILIKE 'https://job-boards.greenhouse.io/%'",
+    "direct_ats_url ILIKE 'https://boards.greenhouse.io/%'",
+    "direct_ats_url ILIKE 'https://job-boards.greenhouse.io/%'",
+  ],
+  lever: [
+    "careers_url ILIKE 'https://jobs.lever.co/%'",
+    "direct_ats_url ILIKE 'https://jobs.lever.co/%'",
+  ],
+  ashby: [
+    "careers_url ILIKE 'https://jobs.ashbyhq.com/%'",
+    "direct_ats_url ILIKE 'https://jobs.ashbyhq.com/%'",
+  ],
+  smartrecruiters: [
+    "careers_url ILIKE 'https://jobs.smartrecruiters.com/%'",
+    "careers_url ILIKE 'https://careers.smartrecruiters.com/%'",
+    "direct_ats_url ILIKE 'https://jobs.smartrecruiters.com/%'",
+    "direct_ats_url ILIKE 'https://careers.smartrecruiters.com/%'",
+  ],
+  workable: [
+    "careers_url ILIKE 'https://apply.workable.com/%'",
+    "careers_url ILIKE 'https://jobs.workable.com/%'",
+    "direct_ats_url ILIKE 'https://apply.workable.com/%'",
+    "direct_ats_url ILIKE 'https://jobs.workable.com/%'",
+  ],
+  workday: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.wd[0-9]{1,3}\\.myworkdayjobs\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.wd[0-9]{1,3}\\.myworkdayjobs\\.com/'",
+  ],
+  recruitee: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.recruitee\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.recruitee\\.com/'",
+  ],
+  teamtailor: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.teamtailor\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.teamtailor\\.com/'",
+  ],
+  personio: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.jobs\\.personio\\.(com|de)/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.jobs\\.personio\\.(com|de)/'",
+  ],
+  bamboohr: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.bamboohr\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.bamboohr\\.com/'",
+  ],
+  jazzhr: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.applytojob\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.applytojob\\.com/'",
+  ],
+  jobvite: [
+    "careers_url ILIKE 'https://jobs.jobvite.com/%'",
+    "direct_ats_url ILIKE 'https://jobs.jobvite.com/%'",
+  ],
+  infosys: [
+    "careers_url ILIKE 'https://digitalcareers.infosys.com/%'",
+    "direct_ats_url ILIKE 'https://digitalcareers.infosys.com/%'",
+  ],
+  apple: [
+    "careers_url ILIKE 'https://jobs.apple.com/%'",
+    "direct_ats_url ILIKE 'https://jobs.apple.com/%'",
+  ],
+}
+
+function parseAdapterList(raw: string | undefined): AtsName[] {
+  if (!raw?.trim()) return []
+  const parsed: AtsName[] = []
+  const seen = new Set<string>()
+  for (const part of raw.split(/[,\s]+/)) {
+    const name = part.trim().toLowerCase()
+    if (!name || seen.has(name) || !SUPPORTED_ATS_TYPE_SET.has(name)) continue
+    seen.add(name)
+    parsed.push(name as AtsName)
+  }
+  return parsed
+}
+
+function loadAdapterClaimFilter(
+  env: Record<string, string | undefined> = process.env
+): AdapterClaimFilter {
+  const include = parseAdapterList(env.HARVESTER_INCLUDE_ADAPTERS)
+  const exclude = parseAdapterList(env.HARVESTER_EXCLUDE_ADAPTERS)
+  return {
+    include: include.length > 0 ? include : null,
+    exclude,
+  }
+}
+
+function enabledClaimAdapters(filter?: AdapterClaimFilter): AtsName[] {
+  const normalized = filter ?? DEFAULT_ADAPTER_CLAIM_FILTER
+  const excluded = new Set(normalized.exclude)
+  const base = normalized.include ?? [...SUPPORTED_ATS_TYPES]
+  return base.filter((name) => !excluded.has(name))
+}
+
+function buildClaimQuery(enabledAdapters: readonly AtsName[]): string {
+  const adapterClauses = [
+    "ats_type = ANY($3::text[])",
+    ...enabledAdapters.flatMap((name) => CLAIM_URL_SQL[name] ?? []),
+  ]
+    .map((clause) => `      ${clause}`)
+    .join("\n      OR ")
+
+  return `
+UPDATE companies
+SET next_harvest_at = now() + ($2 || ' seconds')::interval
+WHERE id IN (
+  SELECT id FROM companies
+  WHERE status = 'active'
+    AND is_active = true
+    AND duplicate_of_company_id IS NULL
+    AND careers_url IS NOT NULL
+    AND (
+${adapterClauses}
+    )
+    AND (next_harvest_at IS NULL OR next_harvest_at <= now())
+  -- Sort by overdueness only. Tier still controls cadence via the interval
+  -- written to next_harvest_at after each crawl; a strict tier CASE here
+  -- starved tier_2/tier_3 because tier_1's backlog never cleared.
+  ORDER BY next_harvest_at ASC NULLS FIRST
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier, consecutive_empty_crawls
+`
+}
 
 type ClaimedRow = {
   id: string
@@ -357,12 +442,16 @@ async function insertTickCrawlLogsSafe(pool: Pool, outcomes: TickCompanyOutcome[
 export async function claimEligibleCompanies(
   pool: Pool,
   batchSize: number,
-  leaseSeconds: number
+  leaseSeconds: number,
+  adapterFilter?: AdapterClaimFilter
 ): Promise<AtsHarvestCompany[]> {
-  const { rows } = await pool.query<ClaimedRow>(CLAIM_QUERY, [
+  const enabledAdapters = enabledClaimAdapters(adapterFilter)
+  if (enabledAdapters.length === 0) return []
+
+  const { rows } = await pool.query<ClaimedRow>(buildClaimQuery(enabledAdapters), [
     batchSize,
     leaseSeconds,
-    SUPPORTED_ATS_TYPES,
+    enabledAdapters,
   ])
   return rows.map((row) => ({
     id: row.id,
@@ -387,7 +476,12 @@ export async function runTick(
   options: { signal?: AbortSignal; env?: Record<string, string | undefined> } = {}
 ): Promise<TickSummary> {
   const startedAt = Date.now()
-  const companies = await claimEligibleCompanies(pool, config.claimBatchSize, config.leaseSeconds)
+  const companies = await claimEligibleCompanies(
+    pool,
+    config.claimBatchSize,
+    config.leaseSeconds,
+    config.adapterFilter
+  )
 
   if (companies.length === 0) {
     return {
@@ -571,6 +665,7 @@ export function startWorkerLoop(
       batch: config.claimBatchSize,
       leaseSec: config.leaseSeconds,
       defaultConcurrency: config.concurrency,
+      claimAdapters: enabledClaimAdapters(config.adapterFilter),
       perAdapter: Object.fromEntries(
         [...limits.byAdapter.entries()].map(([name, _]) => [
           name,

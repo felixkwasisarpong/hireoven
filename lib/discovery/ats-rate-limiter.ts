@@ -5,10 +5,12 @@
  * is intentionally NOT Redis-backed for now. If discovery ever fans out across
  * machines, swap the bucket store for a shared one behind the same interface.
  *
- * Default: 5 req/sec per host, burst 10, queue cap 200. Requests beyond the
- * burst are queued and drained as tokens refill; if the queue for a host is
- * already at its cap, the call rejects with QueueFullError (callers map this to
- * a 'rate_limited' outcome rather than hammering the board).
+ * Default: 5 req/sec per host, burst 10, queue cap 200. Workable is stricter:
+ * 1 req/sec, burst 10, matching its documented 10 requests / 10 seconds API
+ * limit. Requests beyond the burst are queued and drained as tokens refill; if
+ * the queue for a host is already at its cap, the call rejects with
+ * QueueFullError (callers map this to a 'rate_limited' outcome rather than
+ * hammering the board).
  *
  * Env overrides (read lazily, so tests can set them before first use):
  *   ATS_RATE_LIMIT_<HOST>_RPS     e.g. ATS_RATE_LIMIT_GREENHOUSE_RPS=8
@@ -35,6 +37,10 @@ const DEFAULT_BURST = 10
 const DEFAULT_QUEUE_CAP = 200
 
 type BucketConfig = { rps: number; burst: number }
+
+const HOST_DEFAULTS: Record<string, BucketConfig> = {
+  workable: { rps: 1, burst: 10 },
+}
 
 type Bucket = {
   tokens: number
@@ -70,9 +76,13 @@ function queueCap(): number {
 
 function hostConfig(atsType: string): BucketConfig {
   const key = atsType.toUpperCase().replace(/[^A-Z0-9]+/g, "_")
+  const defaults = HOST_DEFAULTS[atsType.toLowerCase()] ?? {
+    rps: DEFAULT_RPS,
+    burst: DEFAULT_BURST,
+  }
   return {
-    rps: envNumber(`ATS_RATE_LIMIT_${key}_RPS`, DEFAULT_RPS),
-    burst: envNumber(`ATS_RATE_LIMIT_${key}_BURST`, DEFAULT_BURST),
+    rps: envNumber(`ATS_RATE_LIMIT_${key}_RPS`, defaults.rps),
+    burst: envNumber(`ATS_RATE_LIMIT_${key}_BURST`, defaults.burst),
   }
 }
 
