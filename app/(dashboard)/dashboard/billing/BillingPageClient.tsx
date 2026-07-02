@@ -224,6 +224,17 @@ export default function BillingPageClient({
     }
   }, [billingLoaded, usageLoaded])
 
+  // Auto-apply a promo code passed via ?promo= (e.g. the LAUNCH offer banner
+  // links to /dashboard/billing?promo=LAUNCH). Validates it on mount so the code
+  // is applied without the user retyping it.
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get("promo")?.trim()
+    if (!fromUrl) return
+    setPromoInput(fromUrl.toUpperCase())
+    void validatePromo(fromUrl)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (historyLoaded || !shouldLoadHistory) return
     fetch("/api/billing/history")
@@ -301,8 +312,8 @@ export default function BillingPageClient({
     }
   }
 
-  async function validatePromo() {
-    const raw = promoInput.trim()
+  async function validatePromo(codeArg?: string) {
+    const raw = (codeArg ?? promoInput).trim()
     if (!raw) {
       setPromoError("Enter a code.")
       return
