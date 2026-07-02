@@ -16,6 +16,7 @@
 
 import { loadEnvConfig } from "@next/env"
 import { Pool } from "pg"
+import { nameTokens } from "@/lib/companies/domain-resolution"
 
 loadEnvConfig(process.cwd())
 
@@ -31,6 +32,10 @@ const CONCURRENCY = Math.max(1, Math.min(20, Number(concArg?.split("=")[1] ?? "8
 // junky adzuna/dice *placeholder / *-discovered stubs, whose slug-ish names
 // mis-guess to unrelated live domains (e.g. "550 Niagara…" → 550.com).
 const TENANT_ONLY = argv.includes("--tenant-only")
+// Scope to companies created in the last N hours (e.g. --since-hours=3 for a
+// fresh-harvest pass). 0 = no recency filter.
+const sinceArg    = argv.find(a => a.startsWith("--since-hours="))
+const SINCE_HOURS = sinceArg ? Math.max(0, Number(sinceArg.split("=")[1])) : 0
 const PROBE_TIMEOUT_MS = 6_000
 // A real logo.dev brand mark is a substantial PNG; a parked/unknown domain
 // returns 404 (fallback=404) or a tiny blank. Reject anything smaller.
@@ -58,6 +63,22 @@ function cleanCompanyName(raw: string): string {
   }
   // Remove remaining non-alphanumeric except spaces
   return s.replace(/[^a-zA-Z0-9\s]/g, "").trim()
+}
+
+/**
+ * True when a MULTI-word company name collapses to a single short word after
+ * suffix-stripping — the dominant mis-brand pattern at scale ("Pride Global" →
+ * pride.com, "Frey Consulting Group" → frey.com, "Lamar Usa" → lamar.com). The
+ * lone generic word almost always resolves to a different real company that
+ * owns the short .com. Genuinely single-word brands ("Navien", "Rosti") are
+ * left alone. Costs a few real "Brand + suffix" hits — acceptable for an
+ * unattended bulk pass where a wrong logo is worse than a blank one.
+ */
+function collapsesToGenericWord(name: string): boolean {
+  const origWords = name.trim().split(/\s+/).filter(Boolean)
+  if (origWords.length < 2) return false
+  const cleanedWords = cleanCompanyName(name).split(/\s+/).filter(Boolean)
+  return cleanedWords.length === 1 && cleanedWords[0]!.length <= 7
 }
 
 // Reject slugs that are too short or clearly generic single-dictionary-words
@@ -164,6 +185,43 @@ async function hasLogoMark(domain: string): Promise<boolean> {
   }
 }
 
+/**
+ * True only when `domain`'s homepage actually mentions the company's most
+ * distinctive name token. Kills the "guessed a different real company" mis-brand
+ * (e.g. "Work with Adiona" → workwith.com, whose homepage never says "adiona").
+ * The distinctive token = the longest non-generic word in the name.
+ */
+async function homepageOwns(domain: string, name: string): Promise<boolean> {
+  const tokens = nameTokens(name)
+  if (!tokens.length) return false
+  const distinctive = [...tokens].sort((a, b) => b.length - a.length)[0]!
+  if (distinctive.length < 4) return false // too generic to confirm ownership
+  for (const url of [`https://${domain}`, `https://www.${domain}`]) {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), PROBE_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, {
+        redirect: "follow",
+        signal: ctrl.signal,
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; Hireoven/1.0)" },
+      })
+      if (!res.ok) { clearTimeout(timer); continue }
+      const ct = res.headers.get("content-type") ?? ""
+      if (!/text\/html|xml/i.test(ct)) { clearTimeout(timer); continue }
+      const haystack = (await res.text())
+        .slice(0, 200_000)
+        .toLowerCase()
+        .replace(/<[^>]+>/g, " ")
+        .replace(/[^a-z0-9]+/g, " ")
+      clearTimeout(timer)
+      if (haystack.includes(distinctive)) return true
+    } catch {
+      clearTimeout(timer)
+    }
+  }
+  return false
+}
+
 // ─── Concurrency helper ───────────────────────────────────────────────────────
 
 async function pMap<T, R>(
@@ -204,6 +262,7 @@ async function main() {
     JOIN jobs j ON j.company_id = c.id AND j.is_active = true
     WHERE ${domainFilter}
       AND (c.logo_url IS NULL OR c.logo_url = '')
+      ${SINCE_HOURS > 0 ? `AND c.created_at > now() - interval '${SINCE_HOURS} hours'` : ""}
     ORDER BY c.name
     ${LIMIT > 0 ? `LIMIT ${LIMIT}` : ""}
   `)
@@ -215,8 +274,13 @@ async function main() {
   let failed   = 0
 
   await pMap(companies, async (company, idx) => {
-    const domain = await resolveDomain(company.name)
     const progress = `[${idx + 1}/${companies.length}]`
+    if (collapsesToGenericWord(company.name)) {
+      console.log(`${progress} ⊘ ${company.name} (collapses to generic word)`)
+      failed++
+      return
+    }
+    const domain = await resolveDomain(company.name)
 
     if (!domain) {
       console.log(`${progress} ✗ ${company.name}`)
@@ -229,6 +293,14 @@ async function main() {
     // logo. This is the guard that stops name-guess mis-branding.
     if (!(await hasLogoMark(domain))) {
       console.log(`${progress} ⊘ ${company.name} → ${domain} (no logo.dev mark)`)
+      failed++
+      return
+    }
+
+    // Ownership guard: the homepage must mention the company's distinctive name
+    // token, else the guess landed on a different real company (mis-brand).
+    if (!(await homepageOwns(domain, company.name))) {
+      console.log(`${progress} ⊘ ${company.name} → ${domain} (homepage not owned)`)
       failed++
       return
     }

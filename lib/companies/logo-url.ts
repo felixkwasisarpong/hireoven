@@ -177,6 +177,32 @@ const FAVICON_DOMAIN_OVERRIDES: Record<string, string> = {
   // Guessed domain from the truncated name "The Childrens Hospital Of Philadel"
   // resolves to nothing; the real brand domain is chop.edu.
   "thechildrenshospitalofphiladel.com": "chop.edu",
+  // Johnson & Johnson: the wrongly-stored jj.com / johnsonand.com aren't J&J;
+  // the real brand mark is on jnj.com.
+  "jj.com": "jnj.com",
+  "johnsonand.com": "jnj.com",
+  // "Nametag" (account-protection / identity verification) lives on
+  // getnametag.com; the bare nametag.com is an unrelated name-badge site.
+  "nametag.com": "getnametag.com",
+  // Source name "Infoma Group Plc" compresses to a dead host; the real brand
+  // is Informa plc (FTSE 100 events/intelligence group) at informa.com.
+  "infomagroupplc.com": "informa.com",
+  // Miratech (IT/software outsourcing, SmartRecruiters tenant "miratech1") is
+  // miratechgroup.com; the guessed miratech.com is an unrelated industrial
+  // emissions company (wrong brand mark on logo.dev).
+  "miratech.com": "miratechgroup.com",
+  // National Vision (optical retailer, SmartRecruiters tenant "NationalVision1")
+  // — the garbled "Notional Vision" name guesses to a dead host.
+  "notionalvision.com": "nationalvision.com",
+  // H&M Group's corporate domain carries no brand mark; the red H&M logo lives
+  // on the consumer domain hm.com.
+  "hmgroup.com": "hm.com",
+  // Misspelled "Adapive Insights" → Adaptive Insights (now Workday Adaptive
+  // Planning); its own brand domain still resolves.
+  "adapiveinsights.com": "adaptiveinsights.com",
+  // "Thales USA" compresses to thales.com; the canonical brand host is
+  // thalesgroup.com.
+  "thales.com": "thalesgroup.com",
 }
 
 /**
