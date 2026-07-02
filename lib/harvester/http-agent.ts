@@ -24,6 +24,7 @@
  */
 
 import { Agent, ProxyAgent, fetch as undiciFetch, type Dispatcher } from "undici"
+import { gateHostRate } from "@/lib/harvester/host-rate-gate"
 
 const H2_ENABLED = process.env.HARVESTER_HTTP2 === "true"
 
@@ -112,10 +113,14 @@ function dispatcherFor(url: Parameters<typeof undiciFetch>[0]): Dispatcher {
  * types differ subtly (Symbol.dispose iterator) so we cast through `unknown`
  * and trust runtime behaviour.
  */
-export const harvesterFetch = ((
+export const harvesterFetch = (async (
   url: Parameters<typeof undiciFetch>[0],
   init?: Parameters<typeof undiciFetch>[1]
 ) => {
+  // Proactively rate-gate configured (path-based, per-IP-limited) hosts so we
+  // never exceed their threshold and earn a 429. No-op for unconfigured hosts.
+  const href = hrefOf(url)
+  if (href) await gateHostRate(href)
   return undiciFetch(url, { ...init, dispatcher: dispatcherFor(url) })
 }) as unknown as typeof fetch
 
