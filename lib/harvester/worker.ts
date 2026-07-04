@@ -116,6 +116,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   ashby: 60_000,
   usajobs: 60_000,
   icims: 60_000,
+  oraclecloud: 180_000, // large tenants (JPMorgan ~7.1k) paginate 200/page → ~36 pages + detail-fetch budget
   apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
   amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
   walmart: 480_000, // 5 career areas × up to 200 pages (10/page) of the careers GraphQL
