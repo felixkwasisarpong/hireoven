@@ -64,6 +64,7 @@ import {
   fillAshbyComboboxes,
   type RequiredFieldFillNote,
 } from "../autofill/ashby-autofill"
+import { normalizeHireovenDashboardUrl } from "../utils/hireoven-url"
 import {
   estimateWorkdayAutofillFields,
   isWorkdayApplicationPage,
@@ -1226,6 +1227,9 @@ export class ApexBar {
   private tailorError: string | null = null
   private tailorMatchScore: number | null = null
   private tailoredResumeId: string | null = null
+  // The job this tailored resume was created for. Used to prevent a tailored
+  // resume from a previous job leaking into autofill on a different job.
+  private tailoredResumeForJobId: string | null = null
   private tailoredResumeVersionId: string | null = null
   private tailorSnapStatus: "idle" | "snapping" | "snapped" | "error" = "idle"
   private tailorSnapError: string | null = null
@@ -1383,6 +1387,7 @@ export class ApexBar {
     this.tailorError = null
     this.tailorMatchScore = null
     this.tailoredResumeId = null
+    this.tailoredResumeForJobId = null
     this.tailoredResumeVersionId = null
     this.tailorSnapStatus = "idle"
     this.tailorSnapError = null
@@ -1483,7 +1488,7 @@ export class ApexBar {
           // Stale-response guard: discard if the user already navigated.
           if (location.href !== targetUrl) return
           this.alreadySaved = res.saved
-          this.existingDashboardUrl = res.dashboardUrl ?? null
+          this.existingDashboardUrl = normalizeHireovenDashboardUrl(res.dashboardUrl)
           // Authoritative jobId for downstream actions (autofill resume picker).
           // /check returns it whether or not the user has saved this job —
           // any time we found a matching jobs row, jobId is set.
@@ -2604,6 +2609,38 @@ export class ApexBar {
     return this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined
   }
 
+  /**
+   * The tailored resume id to attach for the CURRENT job. Only returns the
+   * tailored resume when it was actually tailored for this job — otherwise a
+   * resume tailored for a previous job would leak in, and the server would
+   * attach the wrong "Tailored for … at <other company>" file. When it doesn't
+   * match, we return undefined so the runner falls back to the job-based
+   * primary/tailored lookup for THIS job.
+   */
+  private currentTailoredResumeId(): string | undefined {
+    if (!this.tailoredResumeId) return undefined
+    const jobId = this.currentAutofillJobId()
+    if (jobId && this.tailoredResumeForJobId && this.tailoredResumeForJobId === jobId) {
+      return this.tailoredResumeId
+    }
+    return undefined
+  }
+
+  /**
+   * The tailored resume *snapshot* (resume_versions id) for the current job.
+   * This is the actual tailored content the user approved on the bar — the
+   * base resumeId is NOT tailored — so this must be attached for the tailored
+   * resume to be used. Job-scoped so a previous job's version can't leak in.
+   */
+  private currentTailoredVersionId(): string | undefined {
+    if (!this.tailoredResumeVersionId) return undefined
+    const jobId = this.currentAutofillJobId()
+    if (jobId && this.tailoredResumeForJobId && this.tailoredResumeForJobId === jobId) {
+      return this.tailoredResumeVersionId
+    }
+    return undefined
+  }
+
   private summarizeAutofillRows(rows: AutofillFieldResult[] | null): {
     fillableCount: number
     filledCount: number
@@ -3094,6 +3131,8 @@ export class ApexBar {
       const result = await runWorkdayAutofillInExistingBar({
         profile: this.autofillProfile,
         resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
+        resumeId: this.currentTailoredResumeId(),
+        resumeVersionId: this.currentTailoredVersionId(),
         onSnapshot: (snapshot) => {
           this.workdaySnapshot = snapshot
           this.render()
@@ -3361,7 +3400,10 @@ export class ApexBar {
     this.render()
     try {
       const result = await saveExtractedJob(job)
-      this.saveResult = result
+      this.saveResult = {
+        ...result,
+        dashboardUrl: normalizeHireovenDashboardUrl(result.dashboardUrl) ?? undefined,
+      }
       this.knownJobId = result.jobId
       this.saveStatus = "saved"
     } catch (err) {
@@ -3410,6 +3452,7 @@ export class ApexBar {
     this.tailorError = null
     this.tailorMatchScore = null
     this.tailoredResumeId = null
+    this.tailoredResumeForJobId = null
     this.tailoredResumeVersionId = null
     this.tailorSnapStatus = "idle"
     this.tailorSnapError = null
@@ -3420,7 +3463,10 @@ export class ApexBar {
       if (!jobId) {
         const result = await saveExtractedJob(job)
         jobId = result.jobId
-        this.saveResult = result
+        this.saveResult = {
+          ...result,
+          dashboardUrl: normalizeHireovenDashboardUrl(result.dashboardUrl) ?? undefined,
+        }
         this.knownJobId = result.jobId
         this.alreadySaved = true
       }
@@ -3463,6 +3509,7 @@ export class ApexBar {
       this.tailorStatus = "done"
       this.tailorMatchScore = approve.matchScore ?? preview.matchScore ?? null
       this.tailoredResumeId = approve.resumeId ?? preview.resumeId ?? null
+      this.tailoredResumeForJobId = jobId ?? null
       this.tailoredResumeVersionId = approve.versionId ?? null
       if (this.site === "workday") {
         // Workday apply-flow tenants can crash when resume attachment is pushed
@@ -3718,6 +3765,8 @@ export class ApexBar {
         const runOptions = {
           profile: this.autofillProfile,
           resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
+          resumeId: this.currentTailoredResumeId(),
+          resumeVersionId: this.currentTailoredVersionId(),
           onSnapshot: (snapshot) => {
             this.workdaySnapshot = snapshot
             this.autofillPreview = [
@@ -3897,9 +3946,13 @@ export class ApexBar {
           // (always when the job exists in the DB), /save (on fresh save), or
           // /analyze. With it the server returns the per-job tailored copy when
           // one exists; without it, primary resume is the fallback.
+          // Only attach the tailored version/id when it was tailored for THIS
+          // job; otherwise fall back to the job-based lookup so a previous
+          // job's tailored resume can't leak in.
+          const tailoredForThisJob = Boolean(this.currentTailoredResumeId())
           resumeBytes = await fetchPrimaryResume({
-            versionId: this.tailoredResumeVersionId ?? undefined,
-            resumeId: this.tailoredResumeId ?? undefined,
+            versionId: tailoredForThisJob ? (this.tailoredResumeVersionId ?? undefined) : undefined,
+            resumeId: this.currentTailoredResumeId(),
             jobId: this.currentAutofillJobId(),
           })
         } catch {

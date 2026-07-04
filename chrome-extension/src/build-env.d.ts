@@ -1,0 +1,1 @@
+declare const __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__: string

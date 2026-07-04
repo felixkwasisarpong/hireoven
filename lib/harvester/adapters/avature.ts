@@ -2,53 +2,43 @@ import {
   envConcurrency,
   hashContent,
   type AtsAdapter,
-  type HarvestCtx,
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
+import { fetchHtmlConditional } from "@/lib/harvester/adapters/_json-ld"
 
 /**
  * Avature adapter (enterprise CRM-style ATS).
  *
  * Avature powers branded enterprise career portals. Each customer gets a
- * dedicated subdomain on avature.net; the tenant slug is the subdomain label
- * that appears in the Avature careers host, e.g.
- *   https://acme.avature.net/careers
- * detectFromUrl() round-trips that subdomain label back to the slug.
+ * dedicated subdomain on avature.net; the tenant slug is the subdomain label,
+ * e.g. https://acme.avature.net/careers/SearchJobs
  *
- * ┌────────────────────────────────────────────────────────────────────────┐
- * │ VERIFY LIVE ENDPOINT before enabling in harvest rotation.                │
- * │ Avature's public listing JSON shape is NOT verified here. The field      │
- * │ names below are best-effort and read defensively (multiple fallbacks per │
- * │ field, envelope read from any common key). Confirm against one live      │
- * │ company token and set AVATURE_API_BASE / AVATURE_JOBS_PATH if a tenant   │
- * │ deviates. All parsing is unit-tested against mocked JSON only.           │
- * └────────────────────────────────────────────────────────────────────────┘
+ * Avature serves the public job list as SERVER-RENDERED HTML (verified live:
+ * `…/careers/SearchJobs` returns `200 text/html`, NOT JSON — the previous
+ * JSON-API implementation failed on every tenant). We scrape the JobDetail
+ * anchors and paginate with `?jobOffset=N`.
  *
- * API surface (defaults, overridable):
- *   GET {AVATURE_API_BASE}/careers/SearchJobs?jsonp=false&page={page}
- *   (AVATURE_API_BASE templates the per-company subdomain via {company})
+ *   List page : GET {slug}.avature.net/careers/SearchJobs[?jobOffset=N]
+ *               (locale tenants 302-redirect to /en_XX/careers/SearchJobs;
+ *                fetchHtmlConditional follows redirects)
+ *   Job link  : <host>/[locale/]careers/JobDetail/<Title-Slug>/<numericId>
+ *   Paging    : jobOffset = number of jobs already collected (page size varies
+ *               per tenant — 10/12/… — so tracking the running count matches
+ *               each tenant's own pagination hrefs).
  */
-
-const DEFAULT_API_BASE = "https://{company}.avature.net"
-const API_BASE = (process.env.AVATURE_API_BASE?.trim() || DEFAULT_API_BASE).replace(/\/+$/, "")
-const JOBS_PATH =
-  process.env.AVATURE_JOBS_PATH?.trim() || "/careers/SearchJobs?jsonp=false&page={page}"
-
-const RESULTS_PER_PAGE = Math.max(
-  10,
-  Math.min(200, Number.parseInt(process.env.HARVESTER_AVATURE_PAGE_SIZE ?? "100", 10))
-)
-const MAX_PAGES = Math.max(
-  1,
-  Number.parseInt(process.env.HARVESTER_AVATURE_MAX_PAGES ?? "20", 10)
-)
-const DEFAULT_TIMEOUT_MS = 15_000
-const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 
 const AVATURE_HOST_RE = /(^|\.)avature\.net$/
 // Company token: letters / digits / dash, 2–64 chars.
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9-]{1,63}$/
+// JobDetail anchor: capture the href and the anchor's inner HTML (the title).
+const JOB_ANCHOR_RE = /<a\b[^>]*\bhref="([^"]*\/careers\/JobDetail\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi
+const JOB_PATH_RE = /\/careers\/JobDetail\/([^/?#]+)\/(\d+)/
+
+const MAX_PAGES = Math.max(
+  1,
+  Number.parseInt(process.env.HARVESTER_AVATURE_MAX_PAGES ?? "40", 10)
+)
 
 function detectFromUrl(url: string): { slug: string } | null {
   let parsed: URL
@@ -67,221 +57,67 @@ function detectFromUrl(url: string): { slug: string } | null {
   return null
 }
 
-function buildJobsUrl(slug: string, page = 1): string {
-  const base = API_BASE.replace("{company}", encodeURIComponent(slug))
-  const path = JOBS_PATH.replace("{company}", encodeURIComponent(slug)).replace(
-    "{page}",
-    String(page)
-  )
-  return `${base}${path.startsWith("/") ? "" : "/"}${path}`
+function buildSearchUrl(slug: string, offset = 0): string {
+  const base = `https://${encodeURIComponent(slug)}.avature.net/careers/SearchJobs`
+  return offset > 0 ? `${base}?jobOffset=${offset}` : base
 }
 
-function applyUrlFor(slug: string, jobId: string): string {
-  return `https://${encodeURIComponent(slug)}.avature.net/careers/JobDetail/${encodeURIComponent(jobId)}`
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0*39;|&#x0*27;|&rsquo;|&#8217;/g, "'")
+    .replace(/&nbsp;/g, " ")
 }
 
-// ---- Response shapes (defensive; tenants vary) -----------------------------
-
-type AvatureJob = {
-  id?: string | number
-  jobId?: string | number
-  positionId?: string | number
-  requisitionId?: string | number
-  title?: string
-  jobTitle?: string
-  name?: string
-  positionTitle?: string
-  description?: string
-  jobDescription?: string
-  summary?: string
-  applyUrl?: string
-  url?: string
-  applicationUrl?: string
-  location?: string
-  city?: string
-  locationName?: string
-  employmentType?: string
-  jobType?: string
-  type?: string
-  postedAt?: string
-  publishedAt?: string
-  createdAt?: string
-  salaryMin?: string | number
-  payMin?: string | number
-  salaryMax?: string | number
-  payMax?: string | number
-  salaryCurrency?: string
-  currency?: string
+function stripTags(html: string): string {
+  return decodeEntities(html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim()
 }
 
-type AvatureResponse =
-  | AvatureJob[]
-  | {
-      data?: AvatureJob[]
-      results?: AvatureJob[]
-      items?: AvatureJob[]
-      jobs?: AvatureJob[]
-      positions?: AvatureJob[]
-      postings?: AvatureJob[]
-      opportunities?: AvatureJob[]
-      total?: number
-      totalCount?: number
-      count?: number
-    }
-
-function firstString(...values: Array<string | number | undefined>): string | undefined {
-  for (const v of values) {
-    if (typeof v === "number" && Number.isFinite(v)) return String(v)
-    if (typeof v === "string" && v.trim().length > 0) return v.trim()
+function deslug(slug: string): string {
+  let s = slug
+  try {
+    s = decodeURIComponent(slug)
+  } catch {
+    /* leave raw */
   }
-  return undefined
+  return s.replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim()
 }
 
-function toSalary(
-  min: string | number | undefined,
-  max: string | number | undefined,
-  currency: string | undefined
-): { min?: number; max?: number; currency?: string } | null {
-  const parse = (v: string | number | undefined): number | undefined => {
-    if (v === undefined) return undefined
-    const n = typeof v === "number" ? v : Number.parseFloat(String(v).replace(/[$,]/g, ""))
-    return Number.isFinite(n) ? Math.round(n) : undefined
-  }
-  const lo = parse(min)
-  const hi = parse(max)
-  if (lo === undefined && hi === undefined) return null
-  return { min: lo, max: hi, currency: currency?.trim() || "USD" }
-}
+type AvatureLink = { jobId: string; title: string; url: string }
 
-function extractJobs(data: AvatureResponse): { jobs: AvatureJob[]; total: number } {
-  // total=0 means "unknown" — a bare array carries no count, so pagination must
-  // rely on page-size / empty-page signals rather than a satisfied total.
-  if (Array.isArray(data)) return { jobs: data, total: 0 }
-  const jobs =
-    data.data ??
-    data.results ??
-    data.items ??
-    data.jobs ??
-    data.positions ??
-    data.postings ??
-    data.opportunities ??
-    []
-  const total = data.total ?? data.totalCount ?? data.count ?? 0
-  return { jobs, total }
-}
-
-export function mapItemToJob(slug: string, item: AvatureJob): HarvestedJob | null {
-  const title = firstString(item.title, item.jobTitle, item.name, item.positionTitle)
-  if (!title) return null
-  const externalIdRaw = firstString(
-    item.id,
-    item.jobId,
-    item.positionId,
-    item.requisitionId
-  )
-  if (!externalIdRaw) return null
-
-  const applyUrl =
-    firstString(item.applyUrl, item.applicationUrl, item.url) ??
-    applyUrlFor(slug, externalIdRaw)
-  const description = firstString(item.description, item.jobDescription, item.summary)
-  const location = firstString(item.locationName, item.location, item.city)
-  const employmentType = firstString(item.employmentType, item.jobType, item.type)
-  const postedRaw = firstString(item.postedAt, item.publishedAt, item.createdAt)
-  let postedAt: string | undefined
-  if (postedRaw) {
-    const d = new Date(postedRaw)
-    if (!Number.isNaN(d.getTime())) postedAt = d.toISOString()
-  }
-  const salary = toSalary(
-    item.salaryMin ?? item.payMin,
-    item.salaryMax ?? item.payMax,
-    item.salaryCurrency ?? item.currency
-  )
-
-  return {
-    externalId: `avature:${slug}:${externalIdRaw}`,
-    title,
-    applyUrl,
-    description,
-    location,
-    postedAt,
-    employmentType,
-    salaryMin: salary?.min,
-    salaryMax: salary?.max,
-    salaryCurrency: salary?.currency,
-    contentHash: hashContent([
-      title,
-      applyUrl,
-      location,
-      postedAt,
-      employmentType,
-      salary?.min,
-      salary?.max,
-      salary?.currency,
-      description?.slice(0, 4_000),
-    ]),
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
-async function fetchPage(
-  url: string,
-  ctx: HarvestCtx
-): Promise<
-  | { ok: true; data: AvatureResponse; upstreamLatencyMs: number }
-  | { ok: false; status: number | null; reason: string; upstreamLatencyMs: number }
-> {
-  const doFetch = ctx.fetchImpl ?? fetch
-  const timeoutMs = Math.max(2_000, ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-  let attempt = 0
-  let upstreamLatencyMs = 0
-  let lastStatus: number | null = null
-  let lastReason = "unknown"
-
-  while (attempt < 3) {
-    attempt += 1
-    const startedAt = Date.now()
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
+export function extractJobs(html: string, tenantHost: string): AvatureLink[] {
+  const out = new Map<string, AvatureLink>()
+  for (const m of html.matchAll(JOB_ANCHOR_RE)) {
+    let absolute: URL
     try {
-      const response = await doFetch(url, {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-          "user-agent":
-            ctx.userAgent ??
-            "hireoven-harvester/1.0 (+https://hireoven.com; bot@hireoven.com)",
-        },
-        signal: controller.signal,
-      })
-      upstreamLatencyMs += Date.now() - startedAt
-      if (response.ok) {
-        const data = (await response.json()) as AvatureResponse
-        return { ok: true, data, upstreamLatencyMs }
-      }
-      lastStatus = response.status
-      lastReason = `http_${response.status}`
-      if (!RETRY_STATUSES.has(response.status) || attempt >= 3) {
-        return { ok: false, status: response.status, reason: lastReason, upstreamLatencyMs }
-      }
-      await sleep(500 * 2 ** (attempt - 1) + Math.random() * 250)
-    } catch (error) {
-      upstreamLatencyMs += Date.now() - startedAt
-      lastReason =
-        error instanceof Error && error.name === "AbortError" ? "timeout" : "fetch_error"
-      if (attempt >= 3) {
-        return { ok: false, status: null, reason: lastReason, upstreamLatencyMs }
-      }
-      await sleep(500 * 2 ** (attempt - 1) + Math.random() * 250)
-    } finally {
-      clearTimeout(timer)
+      absolute = new URL(decodeEntities(m[1]), `https://${tenantHost}/`)
+    } catch {
+      continue
     }
+    if (!AVATURE_HOST_RE.test(absolute.hostname.toLowerCase())) continue
+    const pathMatch = absolute.pathname.match(JOB_PATH_RE)
+    if (!pathMatch) continue
+    const jobId = pathMatch[2]
+    if (out.has(jobId)) continue
+    const title = stripTags(m[2]) || deslug(pathMatch[1])
+    if (!title) continue
+    absolute.hash = ""
+    absolute.search = ""
+    out.set(jobId, { jobId, title, url: absolute.toString() })
   }
-  return { ok: false, status: lastStatus, reason: lastReason, upstreamLatencyMs }
+  return Array.from(out.values())
+}
+
+export function mapLinkToJob(slug: string, link: AvatureLink): HarvestedJob {
+  return {
+    externalId: `avature:${slug}:${link.jobId}`,
+    title: link.title,
+    applyUrl: link.url,
+    contentHash: hashContent([link.title, link.url]),
+  }
 }
 
 export const avatureAdapter: AtsAdapter = {
@@ -293,37 +129,63 @@ export const avatureAdapter: AtsAdapter = {
     const startedAt = Date.now()
     if (!SLUG_RE.test(slug)) throw new Error(`avature malformed slug: ${slug}`)
 
+    const host = `${slug.toLowerCase()}.avature.net`
     const jobs = new Map<string, HarvestedJob>()
     let latencyMs = 0
     let pagesFetched = 0
-    let totalReported = 0
+    let offset = 0
+    let etag: string | null = ctx.etag ?? null
+    let lastModified: string | null = ctx.lastModified ?? null
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      const url = buildJobsUrl(slug, page)
-      const result = await fetchPage(url, ctx)
-      if (!result.ok) {
-        if (page === 1) {
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const result = await fetchHtmlConditional(buildSearchUrl(slug, offset), ctx)
+
+      if (result.kind === "not_modified") {
+        // First page unchanged since last harvest — skip the whole board.
+        if (page === 0) {
+          return {
+            jobs: [],
+            notModified: true,
+            etag: result.etag,
+            lastModified: result.lastModified,
+            sourceAts: "avature",
+            sourceAtsSlug: slug,
+            fetchedAt,
+            upstreamLatencyMs: result.upstreamLatencyMs,
+          }
+        }
+        break
+      }
+
+      if (result.kind === "error") {
+        if (page === 0) {
           const err = new Error(`avature fetch failed: ${result.reason}`)
           ;(err as Error & { status?: number | null }).status = result.status
           throw err
         }
         break
       }
+
       pagesFetched += 1
       latencyMs += result.upstreamLatencyMs
-      const { jobs: items, total } = extractJobs(result.data)
-      totalReported = total || totalReported
+      if (page === 0) {
+        etag = result.etag
+        lastModified = result.lastModified
+      }
+
+      const links = extractJobs(result.html, host)
+      if (links.length === 0) break
       let added = 0
-      for (const item of items) {
-        const job = mapItemToJob(slug, item)
-        if (!job) continue
+      for (const link of links) {
+        const job = mapLinkToJob(slug, link)
         if (jobs.has(job.externalId)) continue
         jobs.set(job.externalId, job)
         added += 1
       }
-      if (items.length < RESULTS_PER_PAGE) break
+      // No new jobs on this page → either the end, or a tenant that ignores
+      // jobOffset and re-serves page 1. Either way, stop.
       if (added === 0) break
-      if (totalReported && jobs.size >= totalReported) break
+      offset += links.length
     }
 
     if (pagesFetched === 0) {
@@ -335,8 +197,8 @@ export const avatureAdapter: AtsAdapter = {
     return {
       jobs: Array.from(jobs.values()),
       notModified: false,
-      etag: null,
-      lastModified: null,
+      etag,
+      lastModified,
       sourceAts: "avature",
       sourceAtsSlug: slug,
       fetchedAt,
@@ -345,4 +207,4 @@ export const avatureAdapter: AtsAdapter = {
   },
 }
 
-export { buildJobsUrl, detectFromUrl }
+export { buildSearchUrl, detectFromUrl }

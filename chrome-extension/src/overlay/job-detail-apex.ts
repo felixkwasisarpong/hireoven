@@ -28,6 +28,10 @@ import {
   detectLinkedInEasyApplyModal,
 } from "../detectors/application-form"
 import type { TailorApproveResult, TailorPreviewResult } from "../types"
+import {
+  normalizeHireovenDashboardUrl,
+  productionHireovenUrl,
+} from "../utils/hireoven-url"
 
 const HOST_ID = "hireoven-detail-apex"
 const COLLAPSED_KEY = "hireovenDetailApexCollapsed"
@@ -291,7 +295,7 @@ async function runCheck(): Promise<void> {
       applyUrl: job.applyUrl,
     })
     alreadySaved = res.saved
-    dashboardUrlForExisting = res.dashboardUrl ?? null
+    dashboardUrlForExisting = normalizeHireovenDashboardUrl(res.dashboardUrl)
     knownJobId = res.jobId ?? null
     render()
   } catch {
@@ -319,10 +323,14 @@ async function onSave(): Promise<void> {
   saveStatus = "saving"
   render()
   try {
-    saveResult = await saveExtractedJob(job)
+    const result = await saveExtractedJob(job)
+    saveResult = {
+      ...result,
+      dashboardUrl: normalizeHireovenDashboardUrl(result.dashboardUrl) ?? undefined,
+    }
     saveStatus = "saved"
     alreadySaved = true
-    knownJobId = saveResult.jobId
+    knownJobId = result.jobId
     if (saveResult.dashboardUrl) dashboardUrlForExisting = saveResult.dashboardUrl
   } catch (err) {
     saveStatus = "error"
@@ -343,11 +351,14 @@ async function onTailor(): Promise<void> {
     let jobId = knownJobId ?? analysis?.jobId ?? saveResult?.jobId ?? null
     if (!jobId) {
       const result = await saveExtractedJob(job)
-      saveResult = result
+      saveResult = {
+        ...result,
+        dashboardUrl: normalizeHireovenDashboardUrl(result.dashboardUrl) ?? undefined,
+      }
       saveStatus = "saved"
       alreadySaved = true
       knownJobId = result.jobId
-      if (result.dashboardUrl) dashboardUrlForExisting = result.dashboardUrl
+      if (saveResult.dashboardUrl) dashboardUrlForExisting = saveResult.dashboardUrl
       jobId = result.jobId
     }
 
@@ -393,7 +404,7 @@ async function onTailor(): Promise<void> {
 
 function onOpenHireoven(): void {
   const url = saveResult?.dashboardUrl ?? dashboardUrlForExisting
-  window.open(url ?? "https://hireoven.com/dashboard/jobs", "_blank", "noopener")
+  window.open(url ?? productionHireovenUrl("/dashboard/jobs"), "_blank", "noopener")
 }
 
 function onApplyOnSite(): void {

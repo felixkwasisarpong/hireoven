@@ -16,6 +16,7 @@ describe("isReturningEmployerQuestion", () => {
       "Have you ever been employed by our company?",
       "Are you a former employee of Acme?",
       "Have you ever worked for us?",
+      "Have you previously worked for Caterpillar Inc., Solar or any subsidiaries as an employee or contingent worker?",
       "Are you currently or previously employed by the company?",
       "Have you worked here before?",
     ]) {

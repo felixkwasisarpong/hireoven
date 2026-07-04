@@ -23,15 +23,10 @@ import {
   handleExtensionPreflight,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { extensionDashboardUrl } from "@/lib/extension/dashboard-url"
 import { buildExtensionJobFingerprint } from "@/lib/extension/job-fingerprint"
 
 export const runtime = "nodejs"
-
-function originFromRequest(request: Request): string {
-  const origin = request.headers.get("origin")
-  if (origin && /^https?:\/\//.test(origin)) return origin
-  try { return new URL(request.url).origin } catch { return "" }
-}
 
 export function OPTIONS(request: Request) {
   return handleExtensionPreflight(request)
@@ -98,7 +93,7 @@ export async function GET(request: Request) {
       saved: true,
       jobId,
       applicationId: appRow.rows[0].id,
-      dashboardUrl: `${originFromRequest(request)}/dashboard/jobs/${jobId}`,
+      dashboardUrl: extensionDashboardUrl(request, jobId),
     },
     { headers: corsHeaders },
   )

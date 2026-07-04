@@ -12,14 +12,32 @@ const HUE_CLASSES: Record<ScoreHue, string> = {
   red: "bg-red-50 text-red-600 ring-red-200",
 }
 
+// Dark-theme hue classes (the leaderboard renders inside a dark panel).
+const DARK_HUE_CLASSES: Record<ScoreHue, string> = {
+  emerald: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
+  green: "bg-green-400/10 text-green-300 ring-green-400/25",
+  blue: "bg-sky-400/10 text-sky-300 ring-sky-400/25",
+  amber: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
+  orange: "bg-orange-400/10 text-orange-300 ring-orange-400/25",
+  red: "bg-red-400/10 text-red-300 ring-red-400/25",
+}
+
 // Small inline grade badge — reusable on leaderboard rows and the company profile.
-export function ScorecardBadge({ score, className }: { score: number; className?: string }) {
+export function ScorecardBadge({
+  score,
+  className,
+  tone = "light",
+}: {
+  score: number
+  className?: string
+  tone?: "light" | "dark"
+}) {
   const b = scoreBucket(score)
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
-        HUE_CLASSES[b.hue],
+        (tone === "dark" ? DARK_HUE_CLASSES : HUE_CLASSES)[b.hue],
         className
       )}
       title={b.label}

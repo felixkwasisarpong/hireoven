@@ -5,6 +5,8 @@
   "description": "Hireoven Apex Bridge Chrome Extension",
   "scripts": {
     "build": "webpack --mode production",
+    "build:local": "webpack --mode production",
+    "build:prod": "HIREOVEN_EXTENSION_TARGET=production webpack --mode production",
     "dev": "webpack --mode development --watch",
     "type-check": "tsc --noEmit",
     "test:site": "npx tsx src/detectors/__tests__/site.devtest.ts",

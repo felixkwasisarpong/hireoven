@@ -64,7 +64,16 @@ type ExtendedSafeProfile = SafeProfile & {
   resume_linkedin_url?: string | null
   resume_portfolio_url?: string | null
   resume_education?: ResumeEducationRow[] | null
+  resume_certifications?: string[] | null
   resume_full_name?: string | null
+  // EEO / self-identification — only populated when the user has opted in via
+  // auto_fill_diversity (see /api/extension/autofill-profile).
+  auto_fill_diversity?: boolean | null
+  gender?: string | null
+  ethnicity?: string | null
+  hispanic_latino?: string | null
+  veteran_status?: string | null
+  disability_status?: string | null
 }
 
 type WorkdayCvAddress = {
@@ -108,6 +117,7 @@ type WorkdayCv = {
   portfolio: string
   workExperience: WorkdayCvWorkExperience[]
   education: WorkdayCvEducation[]
+  certifications: string[]
   skills: string[]
   skillYears: Record<string, number>
   visa: {
@@ -116,9 +126,20 @@ type WorkdayCv = {
     status: string
   }
   salaryExpectation: string
+  salaryExpectationSingle: string
   availability: string
   citizenship: string
   yearsOfExperience: number
+  // EEO / self-identification — only populated when the user opted in
+  // (auto_fill_diversity). Empty string means "no saved answer → decline".
+  diversity: {
+    optedIn: boolean
+    gender: string
+    ethnicity: string
+    hispanicLatino: string
+    veteranStatus: string
+    disabilityStatus: string
+  }
 }
 
 type ToolbarState = "FILLING" | "WAITING" | "NEEDS_REVIEW" | "PAUSED" | "DONE" | "STOPPED"
@@ -183,6 +204,8 @@ type WorkdayAutofillRunnerOptions = {
   profile?: ExtendedSafeProfile | null
   resumeFile?: File | null
   resumeJobId?: string | null
+  resumeId?: string | null
+  resumeVersionId?: string | null
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
 }
@@ -225,6 +248,12 @@ declare global {
 type RunInBarOptions = {
   profile: SafeProfile
   resumeJobId?: string
+  /** Base resume id (from "Tailor Resume" on the bar). Lower priority than
+   *  resumeVersionId — the base resume is NOT the tailored content. */
+  resumeId?: string
+  /** Tailored resume snapshot id (resume_versions row). This is the actual
+   *  tailored resume the user approved on the bar; highest priority. */
+  resumeVersionId?: string
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
   maxCycles?: number
@@ -274,6 +303,9 @@ export function isReturningEmployerQuestion(question: string): boolean {
     q.includes("been employed by") ||
     q.includes("currently or previously employed") ||
     q.includes("currently or previously worked") ||
+    q.includes("previously worked for") ||
+    q.includes("previously worked at") ||
+    q.includes("previously worked with") ||
     q.includes("ever been employed by") ||
     q.includes("currently employed by") ||
     q.includes("ever worked for") ||
@@ -612,6 +644,15 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
       : typeof profile.salary_expectation_min === "number"
         ? String(profile.salary_expectation_min)
         : ""
+  // A single value for numeric salary fields — prefer the max, else the min.
+  // (Range strings like "100000-120000" become "100000120000" in a numeric
+  // input, which most ATS reject as "too large".)
+  const salaryExpectationSingle =
+    typeof profile.salary_expectation_max === "number"
+      ? String(profile.salary_expectation_max)
+      : typeof profile.salary_expectation_min === "number"
+        ? String(profile.salary_expectation_min)
+        : ""
 
   return {
     firstName: name.firstName,
@@ -635,6 +676,9 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
       nonEmpty(profile.resume_portfolio_url),
     workExperience,
     education: fallbackEducation,
+    certifications: Array.isArray(profile.resume_certifications)
+      ? profile.resume_certifications.map((c) => nonEmpty(c)).filter(Boolean).slice(0, 12)
+      : [],
     skills,
     skillYears,
     visa: {
@@ -643,9 +687,18 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
       status: nonEmpty(profile.work_authorization) || (profile.requires_sponsorship ? "H-1B required" : ""),
     },
     salaryExpectation,
+    salaryExpectationSingle,
     availability: nonEmpty(profile.earliest_start_date) || "2 weeks notice required",
     citizenship: "",
     yearsOfExperience,
+    diversity: {
+      optedIn: profile.auto_fill_diversity === true,
+      gender: nonEmpty(profile.gender),
+      ethnicity: nonEmpty(profile.ethnicity),
+      hispanicLatino: nonEmpty(profile.hispanic_latino),
+      veteranStatus: nonEmpty(profile.veteran_status),
+      disabilityStatus: nonEmpty(profile.disability_status),
+    },
   }
 }
 
@@ -892,6 +945,8 @@ class WorkdayAutofillRunner {
   private resumeFile: File | null = null
   private resumeUploadCounted = false
   private readonly resumeJobId: string | null
+  private readonly resumeId: string | null
+  private readonly resumeVersionId: string | null
   private readonly showToolbar: boolean
   private readonly externalProfile: ExtendedSafeProfile | null
   private readonly onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
@@ -947,6 +1002,8 @@ class WorkdayAutofillRunner {
     this.onWarning = options?.onWarning
     this.resumeFile = options?.resumeFile ?? null
     this.resumeJobId = options?.resumeJobId ?? null
+    this.resumeId = options?.resumeId ?? null
+    this.resumeVersionId = options?.resumeVersionId ?? null
     this.publishDebug()
     this.debug("info", "runner.init", {
       showToolbar: this.showToolbar,
@@ -1014,15 +1071,30 @@ class WorkdayAutofillRunner {
     this.refreshProgress()
 
     if (!this.resumeFile) {
+      // Priority: versionId (the tailored snapshot the user approved on the
+      // bar) → base resumeId → jobId (server resolves a per-job tailored copy
+      // or primary) → primary. The base resumeId is NOT the tailored content,
+      // so versionId must win.
       const resumeBytes = await fetchPrimaryResume({
+        versionId: this.resumeVersionId ?? undefined,
         jobId: this.resumeJobId ?? undefined,
+        resumeId: this.resumeId ?? undefined,
       }).catch(() => null)
       if (resumeBytes) {
-        const file = this.decodeBase64File(resumeBytes.base64, resumeBytes.filename)
+        // Give the attachment a recruiter-facing name. The server may return an
+        // internal label ("Tailored for … at … · Workday.docx"); rename it to
+        // "<Full Name> - <Role> Resume.docx" so the recruiter never sees the
+        // tooling label. Role comes from the job posting (the browser tab title
+        // on Workday apply pages is the job title).
+        const professionalName = this.professionalResumeName(resumeBytes.filename)
+        const file = this.decodeBase64File(resumeBytes.base64, professionalName)
         if (file) this.resumeFile = file
         this.debug("info", "context.initialize.resume_loaded", {
           jobId: this.resumeJobId,
-          filename: resumeBytes.filename,
+          resumeId: this.resumeId,
+          versionId: this.resumeVersionId,
+          serverFilename: resumeBytes.filename,
+          filename: professionalName,
           loaded: Boolean(this.resumeFile),
         })
       } else {
@@ -1220,6 +1292,8 @@ class WorkdayAutofillRunner {
     if (this.debugEntries.length > DEBUG_LOG_LIMIT) {
       this.debugEntries.splice(0, this.debugEntries.length - DEBUG_LOG_LIMIT)
     }
+    // Mirror source-field + non-info events to the console for live debugging.
+    console.debug("[HO-WD]", level, event, JSON.stringify(cleanDetails ?? {}))
     this.publishDebug()
   }
 
@@ -1513,6 +1587,7 @@ class WorkdayAutofillRunner {
     if (
       document.querySelector(
         '[data-automation-id="applyFlowMyExperiencePage"], ' +
+        '[data-automation-id="applyFlowMyExpPage"], ' +
         '[data-automation-id="myExperiencePage"]',
       )
     ) {
@@ -1530,19 +1605,41 @@ class WorkdayAutofillRunner {
       return { id: "review", name: "Review", index: 5, total: STEP_TOTAL }
     }
 
-    if (normalized.includes("my information")) {
+    // Some tenants have no currentPage marker and no per-step page wrappers.
+    // The progress bar still announces the active step ("current step 2 of 6
+    // My Experience"), and the page heading (h2 "My Experience") is a second
+    // independent signal — fold both into the step-name matching.
+    const progressCurrent = ((): string => {
+      const active = document.querySelector<HTMLElement>(
+        '[data-automation-id="progressBar"] [aria-current="step"], ' +
+        '[data-automation-id="progressBar"] [aria-current="true"], ' +
+        '[aria-current="step"]',
+      )
+      if (active) return normText(active.textContent ?? "")
+      const m = bodyText.match(
+        /current step \d+ of \d+\s*(my information|my experience|application questions|voluntary disclosures|self identify|review)/,
+      )
+      return m ? m[1] : ""
+    })()
+    const stepHints = `${normalized} ${progressCurrent} ${headingText}`
+
+    if (stepHints.includes("my information")) {
       return { id: "my_information", name: "My Information", index: 1, total: STEP_TOTAL }
     }
-    if (normalized.includes("my experience")) {
+    if (stepHints.includes("my experience")) {
       return { id: "my_experience", name: "My Experience", index: 2, total: STEP_TOTAL }
     }
-    if (normalized.includes("application question")) {
+    if (stepHints.includes("application question")) {
       return { id: "application_questions", name: "Application Questions", index: 3, total: STEP_TOTAL }
     }
-    if (normalized.includes("self identify") || normalized.includes("self-identify")) {
+    if (
+      stepHints.includes("self identify") ||
+      stepHints.includes("self-identify") ||
+      stepHints.includes("voluntary disclosures")
+    ) {
       return { id: "self_identify", name: "Self Identify", index: 4, total: STEP_TOTAL }
     }
-    if (normalized.includes("review")) {
+    if (stepHints.includes("review")) {
       return { id: "review", name: "Review", index: 5, total: STEP_TOTAL }
     }
 
@@ -1564,6 +1661,14 @@ class WorkdayAutofillRunner {
         '[data-automation-id="formField-education"]',
       )
     ) {
+      return { id: "my_experience", name: "My Experience", index: 2, total: STEP_TOTAL }
+    }
+    // Inline tenants without section automation ids: an editable page listing
+    // Work Experience + Education with Add buttons is the My Experience step.
+    const hasSectionAddButtons = Array.from(
+      document.querySelectorAll<HTMLElement>('button, [role="button"]'),
+    ).some((b) => isVisible(b) && /^add( another)?$/.test(normText(b.textContent ?? "")))
+    if (hasSectionAddButtons && bodyText.includes("work experience") && bodyText.includes("education")) {
       return { id: "my_experience", name: "My Experience", index: 2, total: STEP_TOTAL }
     }
     if (document.querySelector('[data-automation-id*="review"], [data-automation-id="reviewPage"]')) {
@@ -2267,56 +2372,263 @@ class WorkdayAutofillRunner {
       return
     }
 
-    const existing = nonEmpty(extractComboboxDisplayValue(comboTarget))
+    // For multiselect widgets the display-value heuristic is unreliable (the
+    // widget's hidden "N items selected" counter reads as an answer), so trust
+    // the pill-based selection check instead.
+    const isMultiselectWidget = Boolean(
+      container.querySelector(
+        '[data-uxi-widget-type="multiselect"], [data-automation-id="multiSelectContainer"]',
+      ),
+    )
+    const existing = isMultiselectWidget
+      ? (this.hasWorkdayMultiselectSelection(container) ? "multiselect selection" : "")
+      : nonEmpty(extractComboboxDisplayValue(comboTarget))
     if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
       this.bumpFilledCount()
       this.debug("info", "field.source.already_answered", { existing: existing.slice(0, 60) })
       return
     }
 
-    // Ordered by preference: the company's own career site first (most honest
-    // answer — you found the role on their careers page), then company website,
-    // then the broad job-board / social options. selectComboboxElement
-    // type-searches each and returns on the first that resolves to a real
-    // option, so variants a given tenant doesn't offer are simply skipped.
-    const preferred = [
+    // Workday's "How Did You Hear About Us?" prompt is a two-level picker:
+    // parent category → company-specific child. For this field, click
+    // "Company Website", then the first careers child under it (e.g.
+    // "Caterpillar Careers"). If no child contains "Career", pick the first
+    // child in that submenu. Do not fall back to unrelated source categories.
+    const sourceChildren = [
+      "Careers",
+      "Company Careers",
       "Company Career Site",
       "Career Site",
-      "Careers",
-      "Company Website",
-      "Company Site",
-      "Organization Website",
-      "LinkedIn",
-      "Indeed",
-      "Job Board",
-      "Online Job Board",
-      "Social Media",
-      "Other",
     ]
-    // 1. Native Workday multiselect (data-uxi-widget-type="multiselect"): open
-    //    from the search input / prompt icon and click a (possibly nested)
-    //    promptOption. This is the real PayPal markup.
-    if (await this.fillWorkdayMultiselect(container, preferred, "How Did You Hear About Us?")) {
+    if (
+      await this.fillCompanyWebsiteCareersSource(
+        container,
+        "How Did You Hear About Us?",
+        sourceChildren,
+      )
+    ) {
       this.bumpFilledCount()
-      this.debug("info", "field.source.filled", { via: "multiselect" })
-      return
-    }
-
-    // 2. Fallbacks for tenants that render Source as a plain combobox.
-    for (const value of preferred) {
-      if (await this.selectComboboxElement(comboTarget, value, "How Did You Hear About Us?", { optional: true })) {
-        this.debug("info", "field.source.filled", { value, via: "combobox" })
-        return
-      }
-    }
-    if (await this.selectFirstRealOption(comboTarget, "How Did You Hear About Us?")) {
-      this.debug("info", "field.source.filled", { via: "first_option" })
+      this.debug("info", "field.source.filled", { via: "company_website_careers" })
       return
     }
 
     this.logWarning("Manual review needed: How Did You Hear About Us?")
     this.requiredFieldMissesThisStep += 1
     this.markManualReview(container, "How Did You Hear About Us?")
+  }
+
+  /**
+   * Wait until the apply flow looks settled: no visible loading indicator and
+   * no broken-state signals. Touching the source prompt while Workday is still
+   * creating the application record makes the widget fire CXS calls with an
+   * undefined application id, flipping the flow into the "Something went
+   * wrong" error page — so never open it before this returns true.
+   */
+  private async waitForApplyFlowSettled(timeoutMs: number): Promise<boolean> {
+    // Only genuine Workday loading chrome — [aria-busy] is too generic and can
+    // match persistent widgets, burning the whole timeout for nothing.
+    const busyEl = (): HTMLElement | null => {
+      const el = document.querySelector<HTMLElement>(
+        '[data-automation-id="loadingIndicator"], [data-automation-id*="spinner" i]',
+      )
+      return el && isVisible(el) ? el : null
+    }
+    if (this.detectBrokenApplyFlowState().broken) return false
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (!busyEl()) {
+        // Quiet once; require it to stay quiet across a short settle margin.
+        await sleep(300)
+        if (!busyEl()) return !this.detectBrokenApplyFlowState().broken
+      }
+      await sleep(150)
+    }
+    return !this.detectBrokenApplyFlowState().broken && !busyEl()
+  }
+
+  private async fillCompanyWebsiteCareersSource(
+    container: HTMLElement,
+    fieldName: string,
+    childPreferred: string[],
+  ): Promise<boolean> {
+    if (!(await this.waitForApplyFlowSettled(5000))) {
+      this.debug("warn", "field.source.skipped_flow_not_settled")
+      return false
+    }
+    // Fast path: the prompt's search box queries the backend directly and
+    // returns leaf options in ~1s (e.g. "Caterpillar Careers"), skipping the
+    // two-level drill and its not-ready "No Items." dance entirely.
+    if (await this.fillSourceViaPromptSearch(container, fieldName)) return true
+    // Several quick attempts: on a freshly created application the submenu
+    // answers "No Items." until the backend source list exists; each attempt
+    // bails fast on that state, so more retries are cheap and eventually one
+    // lands right after the data is ready.
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      if (this.hasWorkdayMultiselectSelection(container)) return true
+      if (this.detectBrokenApplyFlowState().broken) {
+        // Never keep poking a flow that has already tipped into the error
+        // state — every extra prompt interaction makes recovery less likely.
+        this.debug("warn", "field.source.aborted_broken_flow", { attempt })
+        return false
+      }
+      // Tenant vocabularies vary: "Company Website" → "<Company> Careers"
+      // (Caterpillar) or "Career Websites" → "Corporate Website" (others).
+      const ok = await this.fillWorkdayMultiselect(container, ["Company Website", ...childPreferred], fieldName, {
+        parentPreferred: ["Company Website", "Career Websites"],
+        parentMatcher: (text) => /\b(company|corporate|career)s?\s*websites?\b/i.test(text),
+        childMatcher: (text) =>
+          /\bcareers?\b/i.test(text) || /\b(corporate|company)\s*websites?\b/i.test(text),
+        childPreferred,
+        childFallbackToFirst: true,
+      })
+      if (ok && this.hasWorkdayMultiselectSelection(container)) return true
+      this.debug("warn", "field.source.company_website_retry", { attempt, selected: ok })
+      await sleep(600)
+    }
+    return false
+  }
+
+  /**
+   * Fill the source prompt via its search box: type "careers", let Workday's
+   * typeahead query the backend, and click the first leaf whose text contains
+   * the standalone word "Careers" (matches "<Company> Careers" / "Company
+   * Careers Site" while excluding job boards like "Career Builder"). Verified
+   * live: results land in ~1s, far faster than drilling the category tree.
+   */
+  private async fillSourceViaPromptSearch(container: HTMLElement, fieldName: string): Promise<boolean> {
+    const input =
+      container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
+      container.querySelector<HTMLInputElement>('[data-automation-id="multiselectInputContainer"] input')
+    if (!input || !isVisible(input)) return false
+    this.setToolbarField(fieldName)
+
+    const nativeSet = (value: string): void => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+      setter?.call(input, value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    const pressEnter = (): void => {
+      for (const type of ["keydown", "keyup"] as const) {
+        input.dispatchEvent(
+          new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }),
+        )
+      }
+    }
+    const searchResults = (): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-automation-id="activeListContainer"] [data-automation-id="promptOption"]',
+        ),
+      ).filter((el) => isVisible(el) && nonEmpty(el.textContent).length > 0)
+    const optionLabel = (option: HTMLElement): string =>
+      nonEmpty(option.getAttribute("data-automation-label")) || nonEmpty(option.textContent)
+
+    // Term per tenant vocabulary: "careers" finds "<Company> Careers"
+    // (plural \bcareers\b also keeps out job boards like "Career Builder");
+    // "website" finds "Corporate Website" / "Company Website" leaves.
+    const searchTerms = ["careers", "website"]
+    for (let attempt = 0; attempt < searchTerms.length; attempt += 1) {
+      input.scrollIntoView({ block: "center" })
+      input.focus()
+      nativeSet(searchTerms[attempt])
+      pressEnter()
+
+      const deadline = Date.now() + 2500
+      while (Date.now() < deadline) {
+        const target = searchResults().find((option) => {
+          const text = optionLabel(option)
+          if (!/\bcareers\b/i.test(text) && !/\b(corporate|company)\s*websites?\b/i.test(text)) return false
+          if (this.isTopLevelSourceCategory(text)) return false
+          if (this.isBackHeaderOption(text, "Company Website")) return false
+          return true
+        })
+        if (target) {
+          target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+          target.click()
+          target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+          await sleep(300)
+          if (this.hasWorkdayMultiselectSelection(container)) {
+            if (input.value) nativeSet("")
+            input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+            this.debug("info", "field.source.filled_via_search", { picked: optionLabel(target) })
+            return true
+          }
+        }
+        await sleep(120)
+      }
+      this.debug("info", "field.source.search_retry", { attempt })
+      await sleep(400)
+    }
+    // Leave the widget clean for the drill fallback.
+    if (input.value) nativeSet("")
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  private hasWorkdayMultiselectSelection(container: HTMLElement): boolean {
+    const label = nonEmpty(container.querySelector('[data-automation-id="promptSelectionLabel"]')?.textContent)
+    if (label && !this.isUnansweredSelectPlaceholder(label)) return true
+
+    const selectedItems = Array.from(
+      container.querySelectorAll<HTMLElement>(
+        '[data-automation-id="selectedItem"], ' +
+        '[data-automation-id="selectedItemList"], ' +
+        '[data-automation-id*="pill" i], ' +
+        '[data-automation-id*="tag" i]',
+      ),
+    ).filter((el) => isVisible(el) && nonEmpty(el.textContent).length > 0)
+    if (selectedItems.some((el) => !this.isUnansweredSelectPlaceholder(el.textContent ?? ""))) return true
+
+    const removeControl = container.querySelector<HTMLElement>(
+      '[aria-label*="remove" i], [aria-label*="delete" i], [title*="remove" i], [data-automation-id*="remove" i]',
+    )
+    if (removeControl && nonEmpty(container.textContent) && !this.isUnansweredSelectPlaceholder(container.textContent ?? "")) {
+      return true
+    }
+
+    return false
+  }
+
+  private isTopLevelSourceCategory(text: string): boolean {
+    const value = normText(text)
+    if (!value) return false
+    return [
+      "company website",
+      "career websites",
+      "career website",
+      "job sites",
+      "job posting sites",
+      "current employee",
+      "employee referral",
+      "former worker",
+      "professional association",
+      "recruiter agency",
+      "recruitment event",
+      "social referral",
+    ].some((category) => value === category)
+  }
+
+  private isBackHeaderOption(text: string, parentLabel: string): boolean {
+    const value = normText(text)
+    const parent = normText(parentLabel)
+    if (!value) return false
+    if (value === "back") return true
+    if (parent && value === parent) return true
+    return parent ? value.includes("back") && value.includes(parent) : value.includes("back")
+  }
+
+  private submenuCandidateOptions(
+    options: HTMLElement[],
+    parentLabel: string,
+    optionText: (option: HTMLElement) => string,
+  ): HTMLElement[] {
+    return options.filter((option) => {
+      const text = optionText(option)
+      if (!text) return false
+      if (this.isBackHeaderOption(text, parentLabel)) return false
+      if (this.isTopLevelSourceCategory(text)) return false
+      return true
+    })
   }
 
   /**
@@ -2331,6 +2643,13 @@ class WorkdayAutofillRunner {
     container: HTMLElement,
     preferred: string[],
     fieldName: string,
+    opts?: {
+      parentPreferred?: string[]
+      childPreferred?: string[]
+      parentMatcher?: (text: string) => boolean
+      childMatcher?: (text: string) => boolean
+      childFallbackToFirst?: boolean
+    },
   ): Promise<boolean> {
     const input =
       container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
@@ -2339,21 +2658,99 @@ class WorkdayAutofillRunner {
     const icon = container.querySelector<HTMLElement>('[data-automation-id="promptIcon"]')
     const opener: HTMLElement = input ?? icon ?? container
 
-    const isSelected = (): boolean =>
-      nonEmpty(container.querySelector('[data-automation-id="promptSelectionLabel"]')?.textContent).length > 0 ||
-      container.querySelectorAll('[data-automation-id="selectedItem"], [data-automation-id*="pill" i]').length > 0
+    const isSelected = (): boolean => this.hasWorkdayMultiselectSelection(container)
 
-    const collect = (): HTMLElement[] =>
-      Array.from(
-        document.querySelectorAll<HTMLElement>('[data-automation-id="promptOption"], [role="option"]'),
-      ).filter((el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""))
+    // Options must come from the floating popup ([data-automation-id=
+    // "activeListContainer"], role=listbox), NOT the whole document. Already-
+    // selected pills elsewhere on the page (e.g. the phone country code
+    // "United States of America (+1)") are also rendered as promptOption /
+    // role=option nodes, so an unscoped query returns them instantly — the
+    // wait-for-popup loop then exits with imposters before the real menu
+    // renders, and we click a value from a completely different field.
+    // (Verified live on cat.wd5.myworkdayjobs.com, 2026-07.)
+    const collect = (): HTMLElement[] => {
+      const popups = Array.from(
+        document.querySelectorAll<HTMLElement>('[data-automation-id="activeListContainer"]'),
+      ).filter((el) => isVisible(el))
+      const nodes = popups.length
+        ? popups.flatMap((popup) =>
+            Array.from(popup.querySelectorAll<HTMLElement>('[data-automation-id="promptOption"], [role="option"]')),
+          )
+        : // Fallback for tenants without activeListContainer: global query, but
+          // never options living inside a field's own selected-value chrome.
+          Array.from(
+            document.querySelectorAll<HTMLElement>('[data-automation-id="promptOption"], [role="option"]'),
+          ).filter(
+            (el) =>
+              !el.closest(
+                '[data-automation-id="selectedItem"], ' +
+                '[data-automation-id="selectedItemList"], ' +
+                '[data-automation-id="multiSelectContainer"]',
+              ),
+          )
+      // Workday attaches the click handler to the inner promptOption node, not
+      // the [role=option] menuItem wrapper — clicking the wrapper is a silent
+      // no-op (verified live: wrapper click leaves the menu unchanged). Both
+      // appear in the query, wrapper first, so normalize every hit down to its
+      // inner promptOption and dedupe.
+      const clickable = Array.from(
+        new Set(
+          nodes.map(
+            (el) =>
+              (el.getAttribute("data-automation-id") === "promptOption"
+                ? el
+                : el.querySelector<HTMLElement>('[data-automation-id="promptOption"]')) ?? el,
+          ),
+        ),
+      )
+      return clickable.filter(
+        (el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""),
+      )
+    }
 
-    const pick = (opts: HTMLElement[]): HTMLElement | null => {
-      for (const want of preferred) {
-        const m = opts.find((o) => normText(o.textContent).includes(normText(want)))
-        if (m) return m
+    const optionText = (option: HTMLElement): string =>
+      nonEmpty(option.getAttribute("data-automation-label")) || nonEmpty(option.textContent)
+
+    const pick = (
+      options: HTMLElement[],
+      preferences: string[],
+      pickOpts?: {
+        skipExact?: string
+        skipAny?: string[]
+        matcher?: (text: string) => boolean
+        fallback?: boolean
+      },
+    ): HTMLElement | null => {
+      const skipExact = normText(pickOpts?.skipExact)
+      const skipAny = new Set((pickOpts?.skipAny ?? []).map((text) => normText(text)).filter(Boolean))
+      const candidates = options.filter((option) => {
+        const text = normText(optionText(option))
+        if (!text) return false
+        if (skipExact && text === skipExact) return false
+        if (skipAny.has(text)) return false
+        if (text === "back") return false
+        return true
+      })
+      if (pickOpts?.matcher) {
+        const matched = candidates.find((o) => pickOpts.matcher?.(optionText(o)))
+        if (matched) return matched
       }
-      return opts[0] ?? null
+      for (const want of preferences) {
+        const wanted = normText(want)
+        if (!wanted) continue
+        const exact = candidates.find((o) => normText(optionText(o)) === wanted)
+        if (exact) return exact
+      }
+      for (const want of preferences) {
+        const wanted = normText(want)
+        if (!wanted) continue
+        const partial = candidates.find((o) => {
+          const text = normText(optionText(o))
+          return text.includes(wanted) || wanted.includes(text)
+        })
+        if (partial) return partial
+      }
+      return pickOpts?.fallback === false ? null : (candidates[0] ?? null)
     }
 
     this.setToolbarField(fieldName)
@@ -2364,9 +2761,9 @@ class WorkdayAutofillRunner {
     opener.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
     if (icon && icon !== opener) icon.dispatchEvent(new MouseEvent("click", { bubbles: true }))
 
-    // Wait for the options popup to render.
+    // Wait for the options popup to render (network-backed on first open).
     let options: HTMLElement[] = []
-    const deadline = Date.now() + 1800
+    const deadline = Date.now() + 4000
     while (Date.now() < deadline) {
       options = collect()
       if (options.length) break
@@ -2377,20 +2774,92 @@ class WorkdayAutofillRunner {
       opener.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
       return false
     }
+    this.debug("info", "field.source.multiselect_options_l0", {
+      texts: options.slice(0, 10).map(optionText).join(" | "),
+    })
 
-    // One drill level: click a (preferred) option; if nothing selected, it was a
-    // category — pick a leaf from the freshly-revealed options.
+    // One drill level: click a preferred option; if nothing selected, it was a
+    // category — pick a leaf from the freshly-revealed options. For source, the
+    // first click can be pinned to a website parent matcher, and the second click
+    // can be pinned to a careers child matcher.
+    let selectedParentLabel = ""
     for (let level = 0; level < 2; level += 1) {
-      const target = pick(options)
-      if (!target) break
+      const parentPreferred = opts?.parentPreferred ?? []
+      const hasPinnedParent = parentPreferred.length > 0 || Boolean(opts?.parentMatcher)
+      const isPinnedChildLevel = level > 0 && hasPinnedParent
+      const isPinnedParentLevel = level === 0 && hasPinnedParent
+      const levelOptions = isPinnedChildLevel
+        ? this.submenuCandidateOptions(options, selectedParentLabel, optionText)
+        : options
+      if (!levelOptions.length) break
+      const preferences = isPinnedChildLevel
+        ? (opts?.childPreferred?.length ? opts.childPreferred : preferred)
+        : isPinnedParentLevel
+          ? parentPreferred
+          : preferred
+      const target = pick(levelOptions, preferences, {
+        skipExact: isPinnedChildLevel ? selectedParentLabel : undefined,
+        skipAny: isPinnedChildLevel ? parentPreferred : undefined,
+        matcher: isPinnedParentLevel ? opts?.parentMatcher : isPinnedChildLevel ? opts?.childMatcher : undefined,
+        fallback: isPinnedChildLevel && opts?.childFallbackToFirst
+          ? true
+          : !isPinnedParentLevel && !isPinnedChildLevel,
+      })
+      if (!target) {
+        this.debug("info", "field.source.multiselect_pick_failed", {
+          level,
+          candidates: levelOptions.slice(0, 10).map(optionText).join(" | "),
+        })
+        break
+      }
+      this.debug("info", "field.source.multiselect_pick", { level, picked: optionText(target) })
+      if (isPinnedParentLevel) selectedParentLabel = optionText(target)
       target.scrollIntoView({ block: "center" })
+      target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
       target.click()
-      await sleep(400)
+      target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+      await sleep(250)
       if (isSelected()) {
         opener.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
         return true
       }
-      const next = collect().filter((el) => el !== target)
+      let next = collect().filter((el) => el !== target)
+      if (hasPinnedParent && level === 0) {
+        // Child options are fetched from the server the first time a category
+        // is opened. On a freshly created application Workday answers with a
+        // literal "No Items." submenu until the source list exists backend-side
+        // (observed: ~15s+ after page load) — waiting it out inside one open
+        // menu never resolves. So: if the submenu is a settled "No Items.",
+        // fail THIS attempt fast and let the outer retry reopen the prompt,
+        // which is what eventually gets real children.
+        const deadline = Date.now() + 8000
+        const noItemsGiveUpAt = Date.now() + 1500
+        const noItemsVisible = (): boolean =>
+          Array.from(
+            document.querySelectorAll<HTMLElement>(
+              '[data-automation-id="activeListContainer"] [data-automation-id="promptOption"]',
+            ),
+          ).some((el) => isVisible(el) && /^no items\.?$/i.test((el.textContent ?? "").trim()))
+        while (Date.now() < deadline) {
+          const fresh = collect().filter((el) => el !== target)
+          const childOptions = this.submenuCandidateOptions(fresh, selectedParentLabel, optionText)
+          const child = pick(childOptions, opts?.childPreferred?.length ? opts.childPreferred : preferred, {
+            skipExact: selectedParentLabel,
+            skipAny: parentPreferred,
+            matcher: opts?.childMatcher,
+            fallback: false,
+          })
+          if (child || (opts?.childFallbackToFirst && childOptions.length > 0)) {
+            next = childOptions
+            break
+          }
+          if (Date.now() > noItemsGiveUpAt && noItemsVisible()) {
+            this.debug("info", "field.source.no_items_submenu_bail")
+            break
+          }
+          await sleep(120)
+        }
+      }
       if (!next.length) break
       options = next
     }
@@ -2410,11 +2879,6 @@ class WorkdayAutofillRunner {
     return /\*/.test(labelText)
   }
 
-  /** Open a combobox and click its first non-placeholder option. Last-resort fill. */
-  private async selectFirstRealOption(target: HTMLElement, fieldName: string): Promise<boolean> {
-    return this.selectOptionMatching(target, fieldName)
-  }
-
   /**
    * Open a combobox and click an option. With `matcher`, picks the first option
    * whose text matches (e.g. a "decline to answer" choice); without it, picks the
@@ -2429,20 +2893,41 @@ class WorkdayAutofillRunner {
     const shell =
       target.closest<HTMLElement>('[role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"]') ??
       target
+    // Scroll into view before opening: Workday renders the options portal
+    // relative to the trigger, and clicking an off-screen dropdown (e.g. the
+    // lower EEO fields below the fold) often fails to open it.
+    try {
+      shell.scrollIntoView({ block: "center" })
+    } catch {
+      // best-effort
+    }
+    await sleep(80)
     shell.focus()
     shell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
     shell.click()
     shell.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
 
     const automationId = target.getAttribute("data-automation-id") ?? ""
-    const deadline = Date.now() + 1500
+    const deadline = Date.now() + 3000
     while (Date.now() < deadline) {
       const menuOptions = automationId
         ? Array.from(document.querySelectorAll(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
         : []
-      const roleOptions = Array.from(
-        document.querySelectorAll('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]'),
+      // Prefer options inside the currently-open popup — a document-wide
+      // [role=option] query can return stale options from a previously closed
+      // dropdown (or another field), which made later EEO fields miss.
+      const activePopup = Array.from(
+        document.querySelectorAll(
+          '[data-automation-activepopup="true"] [role="option"], ' +
+            '[data-automation-activepopup="true"] [role="menuitem"], ' +
+            '[data-automation-activepopup="true"] [data-automation-id="promptOption"]',
+        ),
       )
+      const roleOptions = activePopup.length
+        ? activePopup
+        : Array.from(
+            document.querySelectorAll('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]'),
+          )
       const options = [...menuOptions, ...roleOptions].filter(
         (el): el is HTMLElement => el instanceof HTMLElement && isVisible(el),
       )
@@ -2474,6 +2959,55 @@ class WorkdayAutofillRunner {
   //   • demographic dropdowns/radios → pick the "decline / do not wish to answer"
   //   • required acknowledgement checkboxes → check
   //   • CC-305 signature Name → user's name; Date → today
+  /**
+   * Maps a self-identify question label to the user's saved EEO answer.
+   * Returns null when the user hasn't opted in or there's no saved value for
+   * that question (caller then declines). `decline:true` means the saved value
+   * itself is a "prefer not to answer".
+   */
+  private diversityPreference(label: string): { values: string[]; decline: boolean } | null {
+    if (!this.cv || !this.cv.diversity.optedIn) return null
+    const l = normText(label)
+    const d = this.cv.diversity
+    const isDecline = (v: string): boolean =>
+      /wish not|not wish|prefer not|decline|do not wish|don t wish/.test(normText(v))
+    const use = (saved: string): { values: string[]; decline: boolean } | null => {
+      if (!saved) return null
+      if (isDecline(saved)) return { values: [], decline: true }
+      return { values: [saved], decline: false }
+    }
+    // Hispanic/Latino is a Yes/No question — normalize to the bare token so it
+    // matches option lists that read "Yes" / "No" (not the full sentence).
+    if (/\bhispanic\b|\blatino\b/.test(l)) {
+      if (!d.hispanicLatino) return null
+      if (isDecline(d.hispanicLatino)) return { values: [], decline: true }
+      return /^\s*yes/i.test(d.hispanicLatino)
+        ? { values: ["Yes"], decline: false }
+        : { values: ["No"], decline: false }
+    }
+    if (/\bgender\b|\bsex\b/.test(l)) return use(d.gender)
+    if (/\bethnic|\brace\b|racial/.test(l)) return use(d.ethnicity)
+    if (/veteran/.test(l)) return use(d.veteranStatus)
+    if (/disab/.test(l)) return use(d.disabilityStatus)
+    return null
+  }
+
+  /** Word-boundary match between an option's text and any saved EEO value. */
+  private optionMatchesSaved(optionText: string, values: string[]): boolean {
+    const opt = normText(optionText)
+    if (!opt) return false
+    const escape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    for (const value of values) {
+      const want = normText(value)
+      if (!want) continue
+      if (opt === want) return true
+      // Whole-word/phrase containment either direction (avoids "male"⊂"female").
+      if (new RegExp(`\\b${escape(want)}\\b`).test(opt)) return true
+      if (new RegExp(`\\b${escape(opt)}\\b`).test(want)) return true
+    }
+    return false
+  }
+
   private async fillSelfIdentifyStep(): Promise<void> {
     this.debug("info", "step.self_identify.start")
     const DECLINE_RE =
@@ -2492,8 +3026,23 @@ class WorkdayAutofillRunner {
       const existing = nonEmpty(extractComboboxDisplayValue(combo))
       if (existing && !this.isUnansweredSelectPlaceholder(existing)) continue
       const label = this.extractApplicationQuestionLabel(container, combo) || "Voluntary disclosure"
-      const ok = await this.selectOptionMatching(combo, label, (t) => DECLINE_RE.test(t))
-      this.debug(ok ? "info" : "info", "self_identify.combo", { label, declined: ok })
+      // Prefer the user's saved EEO answer (opt-in only); decline otherwise, or
+      // if the saved value can't be matched to an option on this form.
+      const pref = this.diversityPreference(label)
+      let ok = false
+      if (pref && !pref.decline && pref.values.length) {
+        ok = await this.selectOptionMatching(combo, label, (t) => this.optionMatchesSaved(t, pref.values))
+        if (ok) {
+          this.debug("info", "self_identify.combo_saved", { label, values: pref.values.join(" | ") })
+        }
+      }
+      if (!ok) {
+        ok = await this.selectOptionMatching(combo, label, (t) => DECLINE_RE.test(t))
+        this.debug("info", "self_identify.combo_declined", { label, declined: ok })
+      }
+      // Let the dropdown fully close before touching the next field, so its
+      // options don't linger and get scooped by the next field's scan.
+      await sleep(250)
     }
 
     // 2. Radio groups (e.g. disability CC-305) → decline radio.
@@ -2510,11 +3059,25 @@ class WorkdayAutofillRunner {
       const group = radio.name ? radios.filter((r) => r.name === radio.name) : [radio]
       // Only act if the group is unanswered, so we never override a user choice.
       if (group.some((r) => r.checked)) continue
-      const declineRadio = group.find((r) => DECLINE_RE.test(this.getRadioLabel(r)))
-      if (declineRadio) {
-        declineRadio.click()
+      // Prefer the saved answer for this question; fall back to decline.
+      const groupLabel =
+        this.extractApplicationQuestionLabel(
+          (radio.closest("[data-automation-id*='formField'], fieldset") as HTMLElement) ?? radio.parentElement ?? radio,
+          radio,
+        ) || ""
+      const pref = this.diversityPreference(groupLabel)
+      let target: HTMLInputElement | undefined
+      if (pref && !pref.decline && pref.values.length) {
+        target = group.find((r) => this.optionMatchesSaved(this.getRadioLabel(r), pref.values))
+      }
+      if (!target) target = group.find((r) => DECLINE_RE.test(this.getRadioLabel(r)))
+      if (target) {
+        target.click()
         this.bumpFilledCount()
-        this.debug("info", "self_identify.radio_declined", { group: groupName })
+        this.debug("info", "self_identify.radio_set", {
+          group: groupName,
+          saved: Boolean(pref && !pref.decline && pref.values.length),
+        })
       }
     }
 
@@ -2604,8 +3167,9 @@ class WorkdayAutofillRunner {
     await this.maybeUploadResume()
     await this.fillWorkExperienceEntries()
     await this.fillEducationEntries()
+    await this.fillCertificationEntries()
     await this.fillSkillsSection()
-    await this.fillWebsiteSection()
+    // Websites section intentionally not filled (product decision, 2026-07).
     this.debug("info", "step.my_experience.complete")
   }
 
@@ -2627,40 +3191,64 @@ class WorkdayAutofillRunner {
         title: job.title,
         company: job.company,
       })
-      add.click()
-      await sleep(500)
-
-      const dialog = this.getActiveDialog()
-      if (!dialog) {
-        this.debug("error", "experience.dialog_missing_after_add", { index: index + 1 })
+      // Re-resolve every iteration: after the first inline entry the "Add"
+      // button is replaced by "Add Another".
+      const addButton =
+        index === 0
+          ? add
+          : this.findAddButtonForSection(["workExperienceSection", "workExperience"], /work experience|employment|experience/)
+      if (!addButton) {
+        this.debug("warn", "experience.add_another_missing", { index: index + 1 })
         break
       }
+      addButton.click()
+      await sleep(500)
 
-      await this.fillAutomationIdInRoot(dialog, "jobTitle", job.title, "Job Title", { labelRe: /job title|title|position/ })
-      await this.fillAutomationIdInRoot(dialog, "company", job.company, "Company", { labelRe: /company|employer|organization/ })
-      await this.fillAutomationIdInRoot(dialog, "location", job.location, "Location", { optional: true, labelRe: /location/ })
-      await this.selectAutomationComboboxInRoot(dialog, "startDate-Month", job.startDate.month, "Start Month", { labelRe: /from.*month|start.*month|month/ })
-      await this.fillAutomationIdInRoot(dialog, "startDate-Year", job.startDate.year, "Start Year", { labelRe: /from.*year|start.*year|year/ })
-      await this.setCheckboxInRoot(dialog, "currentlyWorkHere", job.current, "Currently Work Here")
+      // Dialog tenants open a modal; inline tenants append a "Work
+      // Experience N" panel directly into the page.
+      const root = await this.resolveEntryRoot(["workExperience"], /work experience \d+/i, index + 1)
+      if (!root) {
+        this.debug("error", "experience.entry_root_missing_after_add", { index: index + 1 })
+        break
+      }
+      const isDialog = root.matches('[role="dialog"], [data-automation-id*="modal"]')
 
+      await this.fillAutomationIdInRoot(root, "jobTitle", job.title, "Job Title", { labelRe: /job title|title|position/, commit: true })
+      await this.fillAutomationIdInRoot(root, "company", job.company, "Company", { labelRe: /company|employer|organization/, commit: true })
+      await this.fillAutomationIdInRoot(root, "location", job.location, "Location", { optional: true, labelRe: /location/, commit: true })
+      await this.setCheckboxInRoot(root, "currentlyWorkHere", job.current, "Currently Work Here")
+
+      const startMonthViaCombo = await this.selectAutomationComboboxInRoot(root, "startDate-Month", job.startDate.month, "Start Month", { optional: true })
+      if (startMonthViaCombo) {
+        await this.fillAutomationIdInRoot(root, "startDate-Year", job.startDate.year, "Start Year", { optional: true })
+      } else {
+        // Inline tenants render From/To as MM/YYYY segment inputs.
+        await this.fillInlineDateInRoot(root, "startDate", job.startDate.month, job.startDate.year, "From")
+      }
       if (!job.current && job.endDate) {
-        await this.selectAutomationComboboxInRoot(dialog, "endDate-Month", job.endDate.month, "End Month", { optional: true, labelRe: /to.*month|end.*month/ })
-        await this.fillAutomationIdInRoot(dialog, "endDate-Year", job.endDate.year, "End Year", { optional: true, labelRe: /to.*year|end.*year/ })
+        const endMonthViaCombo = await this.selectAutomationComboboxInRoot(root, "endDate-Month", job.endDate.month, "End Month", { optional: true })
+        if (endMonthViaCombo) {
+          await this.fillAutomationIdInRoot(root, "endDate-Year", job.endDate.year, "End Year", { optional: true })
+        } else {
+          await this.fillInlineDateInRoot(root, "endDate", job.endDate.month, job.endDate.year, "To")
+        }
       }
 
       const description = this.buildExperienceDescription(job)
-      await this.fillTextareaAutomationInRoot(dialog, "description", description, "Description", { labelRe: /description|responsibilities|role description/ })
+      await this.fillTextareaAutomationInRoot(root, "description", description, "Description", { labelRe: /description|responsibilities|role description/, commit: true })
 
-      const save = dialog.querySelector<HTMLElement>('[data-automation-id="saveWorkExperienceButton"]')
-      if (isVisible(save)) {
-        const saveEl = save as HTMLElement
-        saveEl.click()
-        await this.waitForDialogClose(dialog, 5000)
-      } else {
-        this.debug("warn", "experience.save_button_missing", { index: index + 1 })
-        await this.clickSaveInDialog(dialog)
+      if (isDialog) {
+        const save = root.querySelector<HTMLElement>('[data-automation-id="saveWorkExperienceButton"]')
+        if (isVisible(save)) {
+          const saveEl = save as HTMLElement
+          saveEl.click()
+          await this.waitForDialogClose(root, 5000)
+        } else {
+          this.debug("warn", "experience.save_button_missing", { index: index + 1 })
+          await this.clickSaveInDialog(root)
+        }
       }
-      this.debug("info", "experience.entry.saved", { index: index + 1 })
+      this.debug("info", "experience.entry.saved", { index: index + 1, inline: !isDialog })
       await sleep(250)
     }
   }
@@ -2682,61 +3270,414 @@ class WorkdayAutofillRunner {
         school: edu.school,
         degree: edu.degree,
       })
-      add.click()
-      await sleep(500)
-
-      const dialog = this.getActiveDialog()
-      if (!dialog) {
-        this.debug("error", "education.dialog_missing_after_add", { index: index + 1 })
+      const addButton =
+        index === 0 ? add : this.findAddButtonForSection(["educationSection"], /education|school|academic|degree/)
+      if (!addButton) {
+        this.debug("warn", "education.add_another_missing", { index: index + 1 })
         break
       }
+      addButton.click()
+      await sleep(500)
 
-      await this.fillAutomationIdInRoot(dialog, "school", edu.school, "School Name", { labelRe: /school|university|college|institution/ })
-      const degreeSelected = await this.selectAutomationComboboxInRoot(dialog, "degree", edu.degree, "Degree", { optional: true, labelRe: /degree|qualification/ })
-      if (!degreeSelected) {
-        const fallback = this.pickDegreeFallback(edu.degree)
-        if (fallback) {
-          await this.selectAutomationComboboxInRoot(dialog, "degree", fallback, "Degree", { optional: true, labelRe: /degree|qualification/ })
-        }
+      const root = await this.resolveEntryRoot(["education"], /education \d+/i, index + 1)
+      if (!root) {
+        this.debug("error", "education.entry_root_missing_after_add", { index: index + 1 })
+        break
       }
-      await this.fillAutomationIdInRoot(dialog, "fieldOfStudy", edu.major, "Field of Study", { optional: true, labelRe: /field of study|major|area of study|discipline/ })
+      const isDialog = root.matches('[role="dialog"], [data-automation-id*="modal"]')
+
+      // School: plain text input on dialog tenants; a search prompt (type →
+      // pick the matching option) on inline tenants.
+      const schoolContainer = this.locateFieldContainer(root, ["school", "schoolName"], /school|university|institution/)
+      if (schoolContainer && this.isPromptField(schoolContainer)) {
+        // Long official names often return nothing — retry progressively
+        // simplified queries, then Workday's own documented escape hatch.
+        const schoolQueries: string[] = [edu.school]
+        const noParens = edu.school.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s+/g, " ").trim()
+        if (noParens && normText(noParens) !== normText(edu.school)) schoolQueries.push(noParens)
+        const words = noParens.split(/\s+/)
+        if (words.length > 4) schoolQueries.push(words.slice(0, 4).join(" "))
+        schoolQueries.push("School Not Listed")
+        for (const query of schoolQueries) {
+          if (await this.fillPromptSearchInContainer(schoolContainer, query, "School or University")) break
+        }
+      } else {
+        await this.fillAutomationIdInRoot(root, "school", edu.school, "School Name", { labelRe: /school|university|college|institution/ })
+      }
+
+      // Degree: dropdown whose vocabulary varies per tenant ("BS", "B.S.",
+      // "Bachelor of Science", "Bachelor's"…). Try level-appropriate
+      // candidates until one matches an option.
+      let degreeSelected = false
+      for (const candidate of this.degreeOptionCandidates(edu.degree)) {
+        degreeSelected = await this.selectAutomationComboboxInRoot(root, "degree", candidate, "Degree", { optional: true, labelRe: /degree|qualification/, strictOptions: true })
+        if (degreeSelected) break
+      }
+      if (!degreeSelected) {
+        this.debug("warn", "education.degree_unmatched", { degree: edu.degree })
+        this.markManualReview(root, "Degree")
+      }
+
+      // Field of Study: same prompt-vs-text split as school.
+      const fieldContainer = this.locateFieldContainer(root, ["fieldOfStudy", "field-of-study"], /field of study|major|discipline/)
+      if (fieldContainer && this.isPromptField(fieldContainer)) {
+        await this.fillPromptSearchInContainer(fieldContainer, edu.major, "Field of Study")
+      } else {
+        await this.fillAutomationIdInRoot(root, "fieldOfStudy", edu.major, "Field of Study", { optional: true, labelRe: /field of study|major|area of study|discipline/, commit: true })
+      }
+
       if (edu.gpa) {
-        await this.fillAutomationIdInRoot(dialog, "gpa", edu.gpa, "GPA", { optional: true })
+        await this.fillAutomationIdInRoot(root, "gpa", edu.gpa, "GPA", { optional: true, commit: true })
       }
       if (edu.startYear) {
-        await this.fillAutomationIdInRoot(dialog, "startDate-Year", edu.startYear, "Education Start Year", {
+        await this.fillAutomationIdInRoot(root, "startDate-Year", edu.startYear, "Education Start Year", {
           optional: true,
+          commit: true,
         })
       }
       if (edu.endYear) {
-        const endYearSet = await this.fillAutomationIdInRoot(dialog, "endDate-Year", edu.endYear, "Education End Year", {
+        const endYearSet = await this.fillAutomationIdInRoot(root, "endDate-Year", edu.endYear, "Education End Year", {
           optional: true,
+          commit: true,
         })
         if (!endYearSet) {
-          await this.selectAutomationComboboxInRoot(dialog, "endDate-Year", edu.endYear, "Education End Year", {
+          await this.selectAutomationComboboxInRoot(root, "endDate-Year", edu.endYear, "Education End Year", {
             optional: true,
           })
         }
       }
 
-      const save = dialog.querySelector<HTMLElement>('[data-automation-id="saveEducationButton"]')
-      if (isVisible(save)) {
-        const saveEl = save as HTMLElement
-        saveEl.click()
-        await this.waitForDialogClose(dialog, 5000)
-      } else {
-        await this.clickSaveInDialog(dialog)
+      if (isDialog) {
+        const save = root.querySelector<HTMLElement>('[data-automation-id="saveEducationButton"]')
+        if (isVisible(save)) {
+          const saveEl = save as HTMLElement
+          saveEl.click()
+          await this.waitForDialogClose(root, 5000)
+        } else {
+          await this.clickSaveInDialog(root)
+        }
       }
-      this.debug("info", "education.entry.saved", { index: index + 1 })
+      this.debug("info", "education.entry.saved", { index: index + 1, inline: !isDialog })
       await sleep(250)
     }
+  }
+
+  /**
+   * Certifications: résumés store certification NAMES only (no numbers/dates),
+   * but Workday's cert entry requires an Issued Date. So we fill the searchable
+   * Certification name and flag the required date for manual review rather than
+   * inventing a date. Skipped entirely when the résumé has no certifications.
+   */
+  private async fillCertificationEntries(): Promise<void> {
+    if (!this.cv || this.cv.certifications.length === 0) {
+      this.debug("info", "certifications.none_on_resume")
+      return
+    }
+    const add = this.findAddButtonForSection(
+      ["certificationSection", "certificationsSection", "certifications"],
+      /certification|licen[sc]e/,
+    )
+    if (!add) {
+      this.debug("info", "certifications.section_missing_or_hidden")
+      return
+    }
+
+    for (const [index, cert] of this.cv.certifications.entries()) {
+      if (this.stopped || this.paused) return
+      this.debug("info", "certification.entry.start", { index: index + 1, cert })
+      const addButton =
+        index === 0
+          ? add
+          : this.findAddButtonForSection(
+              ["certificationSection", "certificationsSection", "certifications"],
+              /certification|licen[sc]e/,
+            )
+      if (!addButton) {
+        this.debug("warn", "certification.add_another_missing", { index: index + 1 })
+        break
+      }
+      addButton.click()
+      await sleep(500)
+
+      const root = await this.resolveEntryRoot(["certification", "certifications"], /certifications? \d+/i, index + 1)
+      if (!root) {
+        this.debug("error", "certification.entry_root_missing_after_add", { index: index + 1 })
+        break
+      }
+      const isDialog = root.matches('[role="dialog"], [data-automation-id*="modal"]')
+
+      // Certification name: search prompt on inline tenants, plain field on dialogs.
+      const certContainer = this.locateFieldContainer(
+        root,
+        ["certification", "certificationName"],
+        /certification|licen[sc]e|name/,
+      )
+      if (certContainer && this.isPromptField(certContainer)) {
+        await this.fillPromptSearchInContainer(certContainer, cert, "Certification")
+      } else {
+        await this.fillAutomationIdInRoot(root, "certification", cert, "Certification", {
+          optional: true,
+          labelRe: /certification|licen[sc]e|name/,
+          commit: true,
+        })
+      }
+
+      // Issued Date is required but the résumé has no date — flag, don't invent.
+      const issuedContainer = this.locateFieldContainer(root, ["issuedDate", "issueDate"], /issued? date|date issued/)
+      if (issuedContainer) {
+        this.logWarning("Manual review needed: Certification Issued Date (not on résumé)")
+        this.markManualReview(issuedContainer, "Certification Issued Date")
+      }
+
+      if (isDialog) {
+        const save = root.querySelector<HTMLElement>(
+          '[data-automation-id="saveCertificationButton"], [data-automation-id*="save" i]',
+        )
+        if (isVisible(save)) {
+          ;(save as HTMLElement).click()
+          await this.waitForDialogClose(root, 5000)
+        } else {
+          await this.clickSaveInDialog(root)
+        }
+      }
+      this.debug("info", "certification.entry.saved", { index: index + 1, inline: !isDialog })
+      await sleep(250)
+    }
+  }
+
+  /**
+   * After clicking Add / Add Another, the entry appears either as a modal
+   * dialog (older tenants) or as an inline "… N" panel appended to the page.
+   * Returns whichever exists, waiting briefly for it to render.
+   */
+  private async resolveEntryRoot(
+    panelPrefixes: string[],
+    headingRe: RegExp,
+    entryNumber: number,
+  ): Promise<HTMLElement | null> {
+    const deadline = Date.now() + 4000
+    while (Date.now() < deadline) {
+      const dialog = this.getActiveDialog()
+      if (dialog) return dialog
+      // Inline panels persist after filling, so wait until THIS entry's panel
+      // exists and return it by index — never an earlier, already-filled one.
+      const panels = this.inlineEntryPanels(panelPrefixes, headingRe)
+      if (panels.length >= entryNumber) return panels[entryNumber - 1]
+      await sleep(150)
+    }
+    return null
+  }
+
+  /** All inline repeating-section panels, in order (e.g. workExperience-1, -2 …). */
+  private inlineEntryPanels(panelPrefixes: string[], headingRe: RegExp): HTMLElement[] {
+    for (const prefix of panelPrefixes) {
+      const panels = Array.from(
+        document.querySelectorAll<HTMLElement>(`[data-automation-id^="${safeEscapeSelector(prefix)}-"]`),
+      ).filter((el) => isVisible(el) && /-\d+$/.test(el.getAttribute("data-automation-id") ?? ""))
+      if (panels.length) return panels
+    }
+    // Fallback: headings like "Work Experience 2" → smallest ancestor that
+    // contains form controls but not a second matching heading.
+    const headings = Array.from(
+      document.querySelectorAll<HTMLElement>("h3, h4, h5, [role='heading']"),
+    ).filter((h) => isVisible(h) && headingRe.test(normText(h.textContent ?? "")))
+    const panels: HTMLElement[] = []
+    for (const heading of headings) {
+      let node: HTMLElement | null = heading.parentElement
+      while (node && node !== document.body) {
+        if (node.querySelector("input, textarea, select")) {
+          const containedHeadings = Array.from(
+            node.querySelectorAll<HTMLElement>("h3, h4, h5, [role='heading']"),
+          ).filter((h) => headingRe.test(normText(h.textContent ?? "")))
+          if (containedHeadings.length <= 1) panels.push(node)
+          break
+        }
+        node = node.parentElement
+      }
+    }
+    return panels
+  }
+
+  /** Fill an inline MM/YYYY date widget (dateSectionMonth/Year segment inputs). */
+  private async fillInlineDateInRoot(
+    root: ParentNode,
+    which: "startDate" | "endDate",
+    month: string,
+    year: string,
+    fieldName: string,
+  ): Promise<boolean> {
+    const field =
+      root.querySelector<HTMLElement>(`[data-automation-id="formField-${which}"]`) ??
+      root.querySelector<HTMLElement>(`[data-automation-id="${which}"]`) ??
+      (root instanceof HTMLElement ? root : null)
+    if (!field) return false
+    const scope = field === root ? (root as HTMLElement) : field
+    const monthInput = scope.querySelector<HTMLInputElement>('[data-automation-id="dateSectionMonth-input"]')
+    const yearInput = scope.querySelector<HTMLInputElement>('[data-automation-id="dateSectionYear-input"]')
+    if (!monthInput && !yearInput) {
+      this.debug("warn", "field.inline_date_not_found", { fieldName, which })
+      return false
+    }
+    this.setToolbarField(fieldName)
+    let ok = false
+    const monthValue = this.monthNumber(month)
+    if (monthInput && monthValue) {
+      ok = this.setElementValue(monthInput, monthValue, `${fieldName} Month`, { commit: true }) || ok
+    }
+    if (yearInput && nonEmpty(year)) {
+      ok = this.setElementValue(yearInput, year, `${fieldName} Year`, { commit: true }) || ok
+    }
+    if (ok) this.bumpFilledCount()
+    this.debug(ok ? "info" : "warn", "field.inline_date_fill", { fieldName, which, ok })
+    return ok
+  }
+
+  /** "January"/"jan"/"1"/"01" → "01"; "" when unparseable. */
+  private monthNumber(raw: string): string {
+    const v = normText(raw)
+    if (!v) return ""
+    const n = Number.parseInt(v, 10)
+    if (Number.isFinite(n) && n >= 1 && n <= 12) return String(n).padStart(2, "0")
+    const months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    const idx = months.findIndex((m) => m.startsWith(v.slice(0, 3)))
+    return idx >= 0 ? String(idx + 1).padStart(2, "0") : ""
+  }
+
+  /** Locate a field's formField container by automation id or label. */
+  private locateFieldContainer(root: ParentNode, automationIds: string[], labelRe: RegExp): HTMLElement | null {
+    for (const id of automationIds) {
+      const el =
+        root.querySelector<HTMLElement>(`[data-automation-id="formField-${safeEscapeSelector(id)}"]`) ??
+        root.querySelector<HTMLElement>(`[data-automation-id="${safeEscapeSelector(id)}"]`)
+      if (el && isVisible(el)) return el.closest<HTMLElement>('[data-automation-id^="formField"]') ?? el
+    }
+    const labelled = this.findControlByLabel(labelRe, { root })
+    if (!labelled) return null
+    return labelled.closest<HTMLElement>('[data-automation-id^="formField"]') ?? labelled
+  }
+
+  /** True when a field is a Workday search prompt (☰ multiselect) rather than a plain input. */
+  private isPromptField(container: HTMLElement): boolean {
+    return Boolean(
+      container.querySelector(
+        '[data-uxi-widget-type="multiselect"], [data-automation-id="multiSelectContainer"], [data-automation-id="promptIcon"]',
+      ),
+    )
+  }
+
+  /**
+   * Generic prompt-search fill: type the query into the prompt's search box,
+   * wait for backend results, click the best match (exact normalized → partial
+   * → first), and verify the selection pill registered.
+   */
+  private async fillPromptSearchInContainer(container: HTMLElement, query: string, fieldName: string): Promise<boolean> {
+    if (!nonEmpty(query)) return false
+    if (this.hasWorkdayMultiselectSelection(container)) {
+      this.debug("info", "prompt_search.already_selected", { fieldName })
+      return true
+    }
+    const input =
+      container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
+      container.querySelector<HTMLInputElement>('[data-automation-id="multiselectInputContainer"] input') ??
+      container.querySelector<HTMLInputElement>("input")
+    if (!input || !isVisible(input)) {
+      this.debug("warn", "prompt_search.input_missing", { fieldName })
+      return false
+    }
+    this.setToolbarField(fieldName)
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+    const nativeSet = (value: string): void => {
+      setter?.call(input, value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    input.scrollIntoView({ block: "center" })
+    input.focus()
+    nativeSet(query)
+    for (const type of ["keydown", "keyup"] as const) {
+      input.dispatchEvent(new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }))
+    }
+
+    const desired = normText(query)
+    const optionLabel = (option: HTMLElement): string =>
+      nonEmpty(option.getAttribute("data-automation-label")) || nonEmpty(option.textContent)
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline) {
+      const options = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-automation-id="activeListContainer"] [data-automation-id="promptOption"]',
+        ),
+      ).filter(
+        (el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""),
+      )
+      if (options.length) {
+        const target =
+          options.find((o) => normText(optionLabel(o)) === desired) ??
+          options.find((o) => {
+            const t = normText(optionLabel(o))
+            return t.includes(desired) || desired.includes(t)
+          }) ??
+          options[0]
+        target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+        target.click()
+        target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+        await sleep(350)
+        if (this.hasWorkdayMultiselectSelection(container)) {
+          this.bumpFilledCount()
+          this.debug("info", "prompt_search.selected", { fieldName, picked: optionLabel(target) })
+          if (input.value) nativeSet("")
+          input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+          return true
+        }
+      }
+      await sleep(150)
+    }
+    this.debug("warn", "prompt_search.no_selection", { fieldName, query: query.slice(0, 60) })
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    this.markManualReview(container, fieldName)
+    return false
+  }
+
+  /**
+   * Candidate option texts for a degree dropdown, most-specific first.
+   * "Bachelor of Science in X" → BS / B.S. / BSc / Bachelor of Science /
+   * Bachelor's…; "Master of Science" → MS / M.S. / MSc / Master of Science…
+   */
+  private degreeOptionCandidates(rawDegree: string): string[] {
+    const v = normText(rawDegree)
+    if (!v) return []
+    const compact = v.replace(/[^a-z]/g, "")
+    const out: string[] = [rawDegree]
+    const isScience = /\bscience\b/.test(v) || /^(bs|bsc|ms|msc)/.test(compact)
+    const isArts = /\barts?\b/.test(v) || /^(ba|ma)$/.test(compact)
+    if (/\bmba\b/.test(v) || /business administration/.test(v)) {
+      out.push("MBA", "M.B.A.", "Master of Business Administration", "Masters", "Master's", "Master's Degree")
+    } else if (/master/.test(v) || /^m(s|sc|a|eng)$/.test(compact)) {
+      if (isScience) out.push("MS", "M.S.", "MSc", "Master of Science")
+      if (isArts) out.push("MA", "M.A.", "Master of Arts")
+      out.push("Masters", "Master's", "Master's Degree", "Master")
+    } else if (/bachelor/.test(v) || /^b(s|sc|a|eng)$/.test(compact)) {
+      if (isScience) out.push("BS", "B.S.", "BSc", "Bachelor of Science")
+      if (isArts) out.push("BA", "B.A.", "Bachelor of Arts")
+      out.push("Bachelors", "Bachelor's", "Bachelor's Degree", "Bachelor")
+    } else if (/phd|ph d|doctor/.test(v)) {
+      out.push("PhD", "Ph.D.", "Doctorate", "Doctoral", "Doctor of Philosophy")
+    } else if (/associate/.test(v)) {
+      out.push("AS", "A.S.", "AA", "A.A.", "Associates", "Associate's", "Associate's Degree")
+    } else if (/high school|secondary/.test(v)) {
+      out.push("High School", "High School Diploma", "High School or Equivalent")
+    } else if (/diploma|certificate/.test(v)) {
+      out.push("Diploma", "Certificate")
+    }
+    return out.filter((c) => nonEmpty(c))
   }
 
   private async fillSkillsSection(): Promise<void> {
     if (!this.cv) return
     const add = this.findAddButtonForSection(["skillsSection", "skills"], /skill/)
     if (!add) {
-      this.debug("info", "skills.section_missing_or_hidden")
+      // Inline tenants render Skills as a single "Type to Add Skills" prompt
+      // instead of an Add-button dialog — add each resume skill through it.
+      await this.fillSkillsPrompt()
       return
     }
     const skills = this.cv.skills.slice(0, 24)
@@ -2795,33 +3736,148 @@ class WorkdayAutofillRunner {
     }
   }
 
-  private async fillWebsiteSection(): Promise<void> {
-    if (!this.cv) return
-    const add = this.findAddButtonForSection(["websiteSection", "websites"], /website|social|web address|url/)
-    if (!add) {
-      this.debug("info", "website.section_missing_or_hidden")
+  /**
+   * "Type to Add Skills" prompt: for each resume skill, type it, click the
+   * matching typeahead option (pill appears), move on. Enter-to-create is the
+   * fallback when the typeahead has no match.
+   */
+  private async fillSkillsPrompt(): Promise<void> {
+    if (!this.cv || this.cv.skills.length === 0) return
+    const container = this.locateFieldContainer(document, ["skills", "skillsPrompt"], /type to add skills|^skills$/)
+    if (!container || !this.isPromptField(container)) {
+      this.debug("info", "skills.section_missing_or_hidden")
       return
     }
-
-    const entries: Array<{ type: string; url: string }> = []
-    if (this.cv.linkedIn) entries.push({ type: "LinkedIn", url: this.cv.linkedIn })
-    if (this.cv.portfolio) entries.push({ type: "Portfolio", url: this.cv.portfolio })
-
-    for (const entry of entries) {
-      if (this.stopped || this.paused) return
-      this.debug("info", "website.entry.start", { type: entry.type })
-      add.click()
-      await sleep(220)
-      const dialog = this.getActiveDialog()
-      if (!dialog) break
-
-      await this.selectAutomationComboboxInRoot(dialog, "websiteType", entry.type, "Website Type", { optional: true, labelRe: /type|category/ })
-      await this.fillAutomationIdInRoot(dialog, "websiteAddress", entry.url, "Website URL", { labelRe: /url|web address|website|link/ })
-      await this.clickSaveInDialog(dialog)
-      this.debug("info", "website.entry.saved", { type: entry.type })
-      await sleep(220)
+    const input =
+      container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
+      container.querySelector<HTMLInputElement>('[data-automation-id="multiselectInputContainer"] input') ??
+      container.querySelector<HTMLInputElement>("input")
+    if (!input || !isVisible(input)) {
+      this.debug("warn", "skills.prompt_input_missing")
+      return
     }
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+    const nativeSet = (value: string): void => {
+      setter?.call(input, value)
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    const pressKey = (key: string, keyCode: number): void => {
+      for (const type of ["keydown", "keyup"] as const) {
+        input.dispatchEvent(new KeyboardEvent(type, { key, code: key, keyCode, which: keyCode, bubbles: true }))
+      }
+    }
+    const pillTexts = (): string[] =>
+      Array.from(container.querySelectorAll<HTMLElement>('[data-automation-id="selectedItem"]'))
+        .filter((el) => isVisible(el))
+        .map((el) => normText(el.textContent ?? ""))
+    const optionLabel = (option: HTMLElement): string =>
+      nonEmpty(option.getAttribute("data-automation-label")) || nonEmpty(option.textContent)
+    const visibleOptions = (): HTMLElement[] =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-automation-id="activeListContainer"] [data-automation-id="promptOption"]',
+        ),
+      ).filter(
+        (el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""),
+      )
+
+    for (const skill of this.cv.skills.slice(0, 24)) {
+      if (this.stopped || this.paused) return
+      const want = normText(skill)
+      if (!want) continue
+      // Exact-equality checks ONLY: substring logic made "JavaScript" look
+      // like an existing "Java" pill and silently skipped Java.
+      if (pillTexts().includes(want)) continue
+      this.setToolbarField(`Skill: ${skill}`)
+      const before = new Set(pillTexts())
+      const newPill = (): string | null => pillTexts().find((t) => !before.has(t)) ?? null
+
+      let added = false
+      for (let attempt = 0; attempt < 2 && !added; attempt += 1) {
+        // Open the widget (skills search only fires once the popup is active),
+        // then type + Enter — the same trigger the working School/Field-of-
+        // Study prompt uses to populate results.
+        input.focus()
+        input.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+        input.click()
+        input.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+        await sleep(150)
+        nativeSet(skill)
+        pressKey("Enter", 13)
+
+        const deadline = Date.now() + 2500
+        while (Date.now() < deadline && !added) {
+          if (newPill()) {
+            added = true
+            break
+          }
+          // Match the catalog's canonical name for this skill — the list uses
+          // "Java (Programming Language)", "Amazon Web Services (AWS)", etc.,
+          // so plain equality misses. skillOptionMatches strips the
+          // parenthetical and also checks the acronym inside it, while still
+          // rejecting look-alikes ("AWS" ≠ "AWS VPN", "Java" ≠ "JavaScript").
+          const options = visibleOptions()
+          const match =
+            options.find((o) => this.skillOptionMatches(optionLabel(o), skill, "strong")) ??
+            options.find((o) => this.skillOptionMatches(optionLabel(o), skill, "loose"))
+          if (match) {
+            match.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+            match.click()
+            match.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+            await sleep(200)
+            added = Boolean(newPill())
+            if (added) break
+          }
+          await sleep(120)
+        }
+      }
+      if (added) {
+        this.bumpFilledCount()
+        this.debug("info", "skills.prompt_added", { skill, pill: newPill() })
+      } else {
+        this.debug("warn", "skills.prompt_not_added", { skill })
+        nativeSet("")
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+      }
+      await sleep(150)
+    }
+    if (input.value) nativeSet("")
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
   }
+
+  /**
+   * Does a skills-catalog option correspond to the résumé skill?
+   *   strong — canonical-name match:
+   *     • whole option equals the skill ("GraphQL" = "GraphQL")
+   *     • option minus its "(…)" qualifier equals the skill
+   *       ("Java (Programming Language)" → "Java")
+   *     • the acronym inside "(…)" equals the skill
+   *       ("Amazon Web Services (AWS)" ← "AWS")
+   *   loose — option base starts with the skill as a full word, for multi-word
+   *     skills only (guards against "AWS" → "AWS VPN": single short tokens are
+   *     excluded from loose).
+   * Both reject "Java" vs "JavaScript" (bases differ) and "AWS" vs "AWS VPN".
+   */
+  private skillOptionMatches(optionLabelRaw: string, skillRaw: string, mode: "strong" | "loose"): boolean {
+    const want = normText(skillRaw)
+    const label = normText(optionLabelRaw)
+    if (!want || !label) return false
+    const base = normText(optionLabelRaw.replace(/\s*\([^)]*\)\s*/g, " "))
+    const parenMatch = optionLabelRaw.match(/\(([^)]*)\)/)
+    const paren = parenMatch ? normText(parenMatch[1]) : ""
+    if (mode === "strong") {
+      if (label === want) return true
+      if (base === want) return true
+      if (paren && paren === want) return true
+      return false
+    }
+    // loose: only for multi-word skills, require a whole-word prefix on base.
+    if (want.split(" ").length < 2) return false
+    return base === want || base.startsWith(`${want} `)
+  }
+
+  // fillWebsiteSection was removed 2026-07 (product decision: never autofill
+  // the Websites section) — see git history if it needs to come back.
 
   /**
    * Yes/No (and small multi-choice) radio screening questions. Standalone so
@@ -2845,7 +3901,7 @@ class WorkdayAutofillRunner {
         : [radio]
       // Skip groups that already have a selection (e.g. user pre-answered).
       if (group.some((choice) => choice.checked)) continue
-      const label = parseQuestionLabel(radio as HTMLElement) || parseQuestionLabel(group[0] as HTMLElement)
+      const label = this.getRadioGroupQuestionLabel(radio, group)
       const answer = this.getYesNoAnswer(label)
       if (answer === null) {
         this.debug("warn", "questions.radio.unanswered", { label: label || "(missing label)" })
@@ -2904,8 +3960,32 @@ class WorkdayAutofillRunner {
     }
   }
 
+  /**
+   * TEMP DIAGNOSTIC: render a fixed on-screen panel listing what the app-
+   * questions pass saw and did, so it can be screenshotted when the console
+   * isn't reachable. Remove once the flow is verified.
+   */
+  private qaDiag: string[] = []
+  private lastComboScan = ""
+  private lastComboOptions = ""
+  private renderQaDebugOverlay(): void {
+    const id = "__ho_qa_debug"
+    document.getElementById(id)?.remove()
+    const box = document.createElement("div")
+    box.id = id
+    box.style.cssText =
+      "position:fixed;left:8px;bottom:8px;z-index:2147483647;max-width:640px;max-height:60vh;overflow:auto;" +
+      "background:#111;color:#0f0;font:11px/1.4 monospace;padding:10px 12px;border:2px solid #0f0;border-radius:8px;white-space:pre-wrap;"
+    box.textContent =
+      "HO APP-QUESTIONS DEBUG (screenshot me)\n" +
+      "──────────────────────────────────────\n" +
+      (this.qaDiag.length ? this.qaDiag.join("\n") : "(no questions detected)")
+    document.body.appendChild(box)
+  }
+
   private async fillApplicationQuestionsStep(): Promise<void> {
     if (!this.cv) return
+    this.qaDiag = []
     this.debug("info", "step.application_questions.start")
     this.fillScreeningRadios()
 
@@ -2966,17 +4046,46 @@ class WorkdayAutofillRunner {
         return true
       }
 
-      const optionAnswer = this.getSelectAnswer(label)
-      if (optionAnswer && applySelect(optionAnswer)) {
-        this.bumpFilledCount()
-        this.debug("info", "questions.select.answered", { label, desired: optionAnswer })
+      // Native <select> yes/no + agreement questions (e.g. "Are you at least
+      // 18 years of age?") — resolve deterministically, the same way as the
+      // custom-combobox path, before falling back to the semantic tier.
+      const currentText = normText(select.options[select.selectedIndex]?.textContent ?? "")
+      const isAnswered = Boolean(currentText) && !this.isUnansweredSelectPlaceholder(currentText)
+      const { candidates, confident } = this.questionComboboxCandidates(label)
+      const matchesCurrent = candidates.some(
+        (c) => currentText === normText(c) || currentText.includes(normText(c)),
+      )
+
+      let answered = false
+      let chosen = ""
+      if (candidates.length && !(isAnswered && (matchesCurrent || !confident))) {
+        for (const cand of candidates) {
+          if (applySelect(cand)) {
+            answered = true
+            chosen = cand
+            this.bumpFilledCount()
+            this.debug("info", "questions.select.answered", { label, desired: cand, overrode: isAnswered })
+            break
+          }
+        }
+      }
+      let outcome: string
+      if (answered) outcome = `SET=${chosen}${isAnswered ? " (override)" : ""}`
+      else if (isAnswered && (matchesCurrent || !confident)) {
+        outcome = `KEPT=${currentText}`
+        this.debug("info", "questions.select.kept_existing", { label, current: currentText.slice(0, 60) })
       } else {
-        this.debug("warn", "questions.select.deferred", { label, desired: optionAnswer })
+        outcome = "DEFERRED→AI"
+        this.debug("warn", "questions.select.deferred", { label })
         this.queueSemantic({ el: select, label, type: "select", options: optionTexts, apply: applySelect })
       }
+      this.qaDiag.push(
+        `[select] "${label.slice(0, 46)}" cand=[${candidates.slice(0, 3).join(",")}] conf=${confident} cur="${currentText || "-"}" → ${outcome}`,
+      )
     }
     await this.fillApplicationQuestionComboboxes()
     await this.flushSemanticQueue()
+    this.renderQaDebugOverlay()
     this.debug("info", "step.application_questions.complete")
   }
 
@@ -3048,9 +4157,11 @@ class WorkdayAutofillRunner {
       if (ok) {
         this.bumpFilledCount()
         this.debug("info", "questions.semantic.answered", { label: q.label, value })
+        this.qaDiag.push(`[AI] "${q.label.slice(0, 46)}" → SET=${value}`)
         await sleep(120)
       } else {
         this.debug("warn", "questions.semantic.apply_failed", { label: q.label, value })
+        this.qaDiag.push(`[AI] "${q.label.slice(0, 46)}" → APPLY_FAILED (${value})`)
         this.markManualReview(q.el, q.label)
       }
     }
@@ -3089,21 +4200,16 @@ class WorkdayAutofillRunner {
         continue
       }
 
-      const existing = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
-      if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
-        this.debug("info", "questions.combobox.already_answered", {
-          label,
-          existing: existing.slice(0, 80),
-        })
-        continue
-      }
+      // Candidate answers in priority order. Agreement dropdowns render
+      // "I Agree" / "I Do Not Agree" (not Yes/No), so an affirmative intent
+      // must try both — we can't enumerate options without opening the menu.
+      const { candidates, confident } = this.questionComboboxCandidates(label)
 
-      const yn = this.getYesNoAnswer(label)
-      let desired = yn === null ? this.getSelectAnswer(label) : (yn ? "Yes" : "No")
-      if (!desired) desired = this.inferDefaultQuestionComboboxAnswer(label)
-      // Combobox option lists aren't enumerable without opening the dropdown,
-      // so the semantic tier returns a free value that selectComboboxElement
-      // fuzzy-matches against the live options.
+      const widget =
+        comboboxTarget.getAttribute("data-automation-id") ||
+        comboboxTarget.getAttribute("role") ||
+        comboboxTarget.tagName.toLowerCase()
+      const existing = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
       const deferCombobox = () =>
         this.queueSemantic({
           el: container,
@@ -3112,21 +4218,85 @@ class WorkdayAutofillRunner {
           apply: (value: string) =>
             this.selectComboboxElement(comboboxTarget, value, label, { optional: true }),
         })
+      const diag = (outcome: string) =>
+        this.qaDiag.push(
+          `[combo:${widget}] "${label.slice(0, 40)}" cand=[${candidates.slice(0, 3).join(",")}] conf=${confident} cur="${existing || "-"}" → ${outcome}`,
+        )
 
-      if (!desired) {
+      if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
+        const existingMatches = candidates.some(
+          (c) => normText(existing) === normText(c) || normText(existing).includes(normText(c)),
+        )
+        // Keep the existing value if it already matches our answer, or if we
+        // have no confident answer to replace it with. Otherwise correct a
+        // mismatched value (e.g. a wrong answer left by an earlier run).
+        if (existingMatches || !confident) {
+          this.debug("info", "questions.combobox.kept_existing", { label, existing: existing.slice(0, 80), confident })
+          diag(`KEPT=${existing}`)
+          continue
+        }
+        this.debug("info", "questions.combobox.overriding_existing", { label, existing: existing.slice(0, 80) })
+      }
+
+      if (!candidates.length) {
         this.debug("warn", "questions.combobox.unanswered", { label })
+        diag("DEFERRED→AI (no candidates)")
         deferCombobox()
         continue
       }
 
-      const ok = await this.selectComboboxElement(comboboxTarget, desired, label, { optional: true })
+      let ok = false
+      let chosen = ""
+      let lastScan = ""
+      for (const cand of candidates) {
+        this.lastComboScan = ""
+        ok = await this.selectComboboxElement(comboboxTarget, cand, label, { optional: true, strictOptions: true })
+        lastScan = this.lastComboScan
+        if (ok) {
+          chosen = cand
+          break
+        }
+      }
       if (ok) {
-        this.debug("info", "questions.combobox.answered", { label, desired })
+        this.debug("info", "questions.combobox.answered", { label, desired: chosen })
+        diag(`SET=${chosen} [${lastScan}]`)
       } else {
-        this.debug("warn", "questions.combobox.answer_failed", { label, desired })
+        this.debug("warn", "questions.combobox.answer_failed", { label, tried: candidates.join(" | ") })
+        diag(`FAILED [${lastScan}] (tried ${candidates.slice(0, 2).join(",")})`)
         deferCombobox()
       }
     }
+  }
+
+  /**
+   * Ordered candidate answers for an application-question dropdown. Yes/No
+   * screening questions and "I Agree"/"I Do Not Agree" consent dropdowns are
+   * both common, so an affirmative/negative intent expands to synonyms tried
+   * in turn until one matches a real option.
+   */
+  private questionComboboxCandidates(label: string): { candidates: string[]; confident: boolean } {
+    const q = normText(label)
+    const affirmative = ["Yes", "I Agree", "Agree", "I Accept", "Accept", "I Consent", "True"]
+    const negative = ["No", "I Do Not Agree", "I Disagree", "Disagree", "Decline", "False"]
+
+    // Explicit non-yes/no answers (education level, citizenship, …) — confident.
+    const sel = this.getSelectAnswer(label)
+    if (sel) return { candidates: [sel], confident: true }
+
+    // Agreement / consent / acknowledgement / e-signature → affirmative. Confident.
+    if (/\bagree\b|\bconsent\b|acknowledge|e signature|electronic signature|electronically (receive|sign)|i agree/.test(q)) {
+      return { candidates: ["I Agree", "Agree", "Yes", "I Accept", "I Consent"], confident: true }
+    }
+
+    // Deterministic yes/no mapping (18+, sponsorship, work auth, …) — confident.
+    const yn = this.getYesNoAnswer(label)
+    if (yn !== null) return { candidates: yn ? affirmative : negative, confident: true }
+
+    // Heuristic inference — NOT confident, so it never overrides an existing value.
+    const inferred = this.inferDefaultQuestionComboboxAnswer(label)
+    if (inferred === "Yes") return { candidates: affirmative, confident: false }
+    if (inferred === "No") return { candidates: negative, confident: false }
+    return { candidates: [], confident: false }
   }
 
   private normalizeQuestionLabel(raw: string): string {
@@ -3193,7 +4363,7 @@ class WorkdayAutofillRunner {
     target: HTMLElement,
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean; riskyApplyFlowField?: boolean },
+    opts?: { optional?: boolean; riskyApplyFlowField?: boolean; strictOptions?: boolean },
   ): Promise<boolean> {
     const attr = "data-ho-combobox-target"
     const token = `ho-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
@@ -3214,7 +4384,18 @@ class WorkdayAutofillRunner {
       v === "choose one" ||
       v === "choose" ||
       v === "select an option" ||
-      v === "please select"
+      v === "please select" ||
+      // Workday multiselects carry a hidden a11y counter ("0 items selected")
+      // that leaks out of extractComboboxDisplayValue and previously made an
+      // empty multiselect look answered.
+      /^0 items? selected$/.test(v) ||
+      // Prompt menus render a "No Items." / loading row while options are
+      // being fetched from the server — never a real, clickable option.
+      // (Clicking it wedges the whole prompt widget; verified live.)
+      v === "no items" ||
+      v === "no items found" ||
+      v === "no matches" ||
+      v === "loading"
     )
   }
 
@@ -3223,10 +4404,29 @@ class WorkdayAutofillRunner {
     const q = normText(question)
     if (!q) return null
 
+    // Age eligibility — "Are you at least 18 years of age?" and variants.
     if (
-      q.includes("require sponsorship") ||
-      q.includes("future require sponsorship") ||
-      q.includes("require visa sponsorship")
+      /\b(at least|over|older than|18 or older|minimum age)\b/.test(q) &&
+      /\b18\b/.test(q) &&
+      (q.includes("age") || q.includes("years") || q.includes("old"))
+    ) {
+      return true
+    }
+    // Pre-employment screening / background check willingness.
+    if (
+      (q.includes("pre employment") || q.includes("background check") || q.includes("drug screen") ||
+        q.includes("screening")) &&
+      (q.includes("willing") || q.includes("undergo") || q.includes("consent") || q.includes("agree"))
+    ) {
+      return true
+    }
+
+    // Visa/immigration sponsorship — matches many phrasings, e.g. "require
+    // immigration or visa sponsorship", "need sponsorship now or in the
+    // future". Answered from the profile (No when the user needs no sponsor).
+    if (
+      q.includes("sponsorship") &&
+      (q.includes("require") || q.includes("need") || q.includes("visa") || q.includes("immigration"))
     ) {
       return this.cv.visa.requiresSponsorship
     }
@@ -3317,8 +4517,12 @@ class WorkdayAutofillRunner {
     if (!this.cv) return null
     const q = normText(question)
     if (!q) return null
-    if (q.includes("salary") || q.includes("compensation")) {
-      return this.cv.salaryExpectation || "Negotiable"
+    if (q.includes("salary") || q.includes("compensation") || q.includes("pay rate") || q.includes("desired pay")) {
+      // Only send a range when the question explicitly asks for one — numeric
+      // salary fields strip the dash and reject the merged number as too large.
+      const wantsRange = /\brange\b|minimum and maximum|min.*max|from.*to/.test(q)
+      if (wantsRange && this.cv.salaryExpectation) return this.cv.salaryExpectation
+      return this.cv.salaryExpectationSingle || this.cv.salaryExpectation || "Negotiable"
     }
     if (q.includes("start date") || q.includes("earliest start")) {
       return this.cv.availability || "2 weeks notice required"
@@ -3361,6 +4565,36 @@ class WorkdayAutofillRunner {
     return nonEmpty(input.value).toLowerCase()
   }
 
+  private looksLikeRadioOptionLabel(label: string): boolean {
+    return /^(yes|no|true|false)$/i.test(nonEmpty(label))
+  }
+
+  private getRadioGroupQuestionLabel(radio: HTMLInputElement, group: HTMLInputElement[]): string {
+    const container =
+      radio.closest<HTMLElement>(
+        "fieldset, [role='radiogroup'], [role='group'], [data-automation-id*='formField']",
+      ) ??
+      group[0]?.closest<HTMLElement>(
+        "fieldset, [role='radiogroup'], [role='group'], [data-automation-id*='formField']",
+      ) ??
+      null
+
+    if (container) {
+      const fromContainer = this.extractApplicationQuestionLabel(container, radio)
+      if (fromContainer && !this.looksLikeRadioOptionLabel(fromContainer)) return fromContainer
+
+      const stripped = nonEmpty(container.textContent)
+        .replace(/\*/g, " ")
+        .replace(/\b(?:yes|no|true|false)\b/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim()
+      if (stripped.length > 8 && !this.looksLikeRadioOptionLabel(stripped)) return stripped
+    }
+
+    const parsed = parseQuestionLabel(radio as HTMLElement) || parseQuestionLabel(group[0] as HTMLElement)
+    return this.looksLikeRadioOptionLabel(parsed) ? "" : parsed
+  }
+
   private markManualReview(el: HTMLElement, question: string): void {
     if (el.getAttribute(MANUAL_REVIEW_ATTR) === "1") return
     el.setAttribute(MANUAL_REVIEW_ATTR, "1")
@@ -3393,10 +4627,43 @@ class WorkdayAutofillRunner {
     }
   }
 
+  /**
+   * True when the resume already shows as an uploaded attachment. Workday
+   * clears the file input after processing and renders the attachment as a
+   * separate row, so checking input.files alone re-uploads on every re-run
+   * (observed live: duplicate CV attachments).
+   */
+  private hasExistingResumeAttachment(): boolean {
+    if (
+      document.querySelector(
+        '[data-automation-id="file-upload-item"], ' +
+        '[data-automation-id="delete-file"], ' +
+        '[data-automation-id="attachments-FileUpload"] [role="listitem"]',
+      )
+    ) {
+      return true
+    }
+    const name = normText(this.resumeFile?.name ?? "")
+    if (!name) return false
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-automation-id*="file" i], [data-automation-id*="attachment" i], [data-automation-id*="upload" i]',
+      ),
+    ).some((el) => isVisible(el) && normText(el.textContent ?? "").includes(name))
+  }
+
   private async maybeUploadResume(): Promise<boolean> {
     if (!this.resumeFile) {
       this.debug("info", "resume_upload.skipped_no_file")
       return false
+    }
+    if (this.hasExistingResumeAttachment()) {
+      this.debug("info", "resume_upload.skipped_already_attached")
+      if (!this.resumeUploadCounted) {
+        this.bumpFilledCount()
+        this.resumeUploadCounted = true
+      }
+      return true
     }
     const fileInput = this.findResumeFileInput()
     if (!fileInput) {
@@ -3679,7 +4946,7 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean; labelRe?: RegExp },
+    opts?: { optional?: boolean; labelRe?: RegExp; commit?: boolean },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
     const found = root.querySelector<HTMLElement>(selector)
@@ -3694,7 +4961,7 @@ class WorkdayAutofillRunner {
       return false
     }
     this.setToolbarField(fieldName)
-    const ok = this.setElementValue(el, value, fieldName)
+    const ok = this.setElementValue(el, value, fieldName, { commit: opts?.commit })
     if (ok) this.bumpFilledCount()
     this.debug(ok ? "info" : "warn", "field.automation_fill", {
       fieldName,
@@ -3710,7 +4977,7 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
-    opts?: { labelRe?: RegExp },
+    opts?: { labelRe?: RegExp; commit?: boolean },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
     const found = root.querySelector<HTMLElement>(selector)
@@ -3723,7 +4990,7 @@ class WorkdayAutofillRunner {
       return false
     }
     this.setToolbarField(fieldName)
-    const ok = this.setElementValue(el, value, fieldName)
+    const ok = this.setElementValue(el, value, fieldName, { commit: opts?.commit })
     if (ok) this.bumpFilledCount()
     this.debug(ok ? "info" : "warn", "field.textarea_fill", {
       fieldName,
@@ -3738,14 +5005,14 @@ class WorkdayAutofillRunner {
     automationId: string,
     value: string,
     fieldName: string,
-    opts?: { optional?: boolean; labelRe?: RegExp },
+    opts?: { optional?: boolean; labelRe?: RegExp; strictOptions?: boolean },
   ): Promise<boolean> {
     const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
-    if (await this.selectCombobox(selector, value, fieldName, { root, optional: true })) return true
+    if (await this.selectCombobox(selector, value, fieldName, { root, optional: true, strictOptions: opts?.strictOptions })) return true
     // Label fallback within the dialog/root.
     if (opts?.labelRe) {
       const combo = this.findControlByLabel(opts.labelRe, { combobox: true, root })
-      if (combo && (await this.selectComboboxElement(combo, value, fieldName, { optional: true }))) return true
+      if (combo && (await this.selectComboboxElement(combo, value, fieldName, { optional: true, strictOptions: opts?.strictOptions }))) return true
     }
     if (!opts?.optional) {
       this.logWarning(`Manual review needed: ${fieldName}`)
@@ -3755,7 +5022,10 @@ class WorkdayAutofillRunner {
   }
 
   private async setCheckboxInRoot(root: ParentNode, automationId: string, checked: boolean, fieldName: string): Promise<boolean> {
-    const selector = `[data-automation-id="${safeEscapeSelector(automationId)}"]`
+    // Inline tenants put the automation id on the formField wrapper.
+    const selector =
+      `[data-automation-id="${safeEscapeSelector(automationId)}"], ` +
+      `[data-automation-id="formField-${safeEscapeSelector(automationId)}"]`
     const target = root.querySelector<HTMLElement>(selector)
     if (!target) {
       this.debug("warn", "field.checkbox_not_found", { fieldName, automationId, selector })
@@ -3770,11 +5040,16 @@ class WorkdayAutofillRunner {
     }
     if (el.checked !== checked) {
       this.setToolbarField(fieldName)
-      const clickTarget =
-        (target.closest("label") as HTMLElement | null) ??
-        (target.closest('[role="checkbox"]') as HTMLElement | null) ??
-        target
-      clickTarget.click()
+      // Click the input itself first — it's a real (if visually hidden)
+      // checkbox and React listens on it; wrapper divs often swallow clicks.
+      el.click()
+      if (el.checked !== checked) {
+        const clickTarget =
+          (target.closest("label") as HTMLElement | null) ??
+          (target.closest('[role="checkbox"]') as HTMLElement | null) ??
+          target
+        clickTarget.click()
+      }
       if (el.checked !== checked) {
         el.checked = checked
         el.dispatchEvent(new Event("input", { bubbles: true }))
@@ -3831,23 +5106,35 @@ class WorkdayAutofillRunner {
   private findAddButtonForSection(sectionAutomationIds: string[], headingRe: RegExp): HTMLElement | null {
     for (const id of sectionAutomationIds) {
       const section = document.querySelector<HTMLElement>(`[data-automation-id="${safeEscapeSelector(id)}"]`)
-      const add = section?.querySelector<HTMLElement>('[data-automation-id="Add"], [data-automation-id="add"]') ?? null
+      const add = section?.querySelector<HTMLElement>(
+        '[data-automation-id="Add"], [data-automation-id="add"], [data-automation-id="Add Another"], [data-automation-id="addButton"]',
+      ) ?? null
       if (isVisible(add)) return add
     }
     // Heading-matched fallback: associate each visible Add button with its section.
     const adds = Array.from(
       document.querySelectorAll<HTMLElement>(
-        '[data-automation-id="Add"], [data-automation-id="add"], button, [role="button"]',
+        '[data-automation-id="Add"], [data-automation-id="add"], [data-automation-id="add-button"], button, [role="button"]',
       ),
     ).filter((b) => isVisible(b) && /^add(\s+(another|more|new))?$/.test(normText(b.textContent ?? "")))
+    const allHeadings = Array.from(
+      document.querySelectorAll<HTMLElement>("h2, h3, h4, [role='heading'], legend"),
+    ).filter((h) => isVisible(h))
     for (const add of adds) {
-      const container = add.closest("section, fieldset, [data-automation-id]") ?? add.parentElement
-      const headingText = normText(
-        container?.querySelector("h2, h3, h4, [role='heading'], legend, [data-automation-id*='label']")?.textContent ??
-          container?.textContent?.slice(0, 120) ??
-          "",
+      // Container heading (older tenants wrap Add inside its section)…
+      const container = add.closest("section, fieldset, [data-automation-id]:not(button)") ?? add.parentElement
+      const containerHeading = normText(
+        container?.querySelector("h2, h3, h4, [role='heading'], legend, [data-automation-id*='label']")?.textContent ?? "",
       )
-      if (headingRe.test(headingText)) return add
+      if (containerHeading && headingRe.test(containerHeading)) return add
+      // …otherwise the nearest heading PRECEDING the button in document order
+      // (tenants that render bare add-buttons directly under the page wrapper:
+      // "Work Experience" <h3> → Add, "Education" <h3> → Add, …).
+      let preceding: HTMLElement | null = null
+      for (const h of allHeadings) {
+        if (h.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING) preceding = h
+      }
+      if (preceding && headingRe.test(normText(preceding.textContent ?? ""))) return add
     }
     return null
   }
@@ -4022,7 +5309,7 @@ class WorkdayAutofillRunner {
     selector: string,
     value: string,
     fieldName: string,
-    opts?: { root?: ParentNode; optional?: boolean; riskyApplyFlowField?: boolean },
+    opts?: { root?: ParentNode; optional?: boolean; riskyApplyFlowField?: boolean; strictOptions?: boolean },
   ): Promise<boolean> {
     const clean = nonEmpty(value)
     if (!clean) {
@@ -4084,11 +5371,25 @@ class WorkdayAutofillRunner {
         '[data-automation-id*="dropDownSelectList"], [role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"], button',
       ) ??
       target
+    // Close any menu left open by a previous field before opening this one —
+    // an overlapping popup makes the shell click a no-op (opts=0) or lands the
+    // selection on the wrong dropdown.
+    document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    await sleep(150)
+
+    comboboxShell.scrollIntoView({ block: "center" })
     comboboxShell.focus()
     comboboxShell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
     comboboxShell.click()
     comboboxShell.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
     this.debug("info", "combobox.clicked", { fieldName, selector, role: comboboxShell.getAttribute("role") || "" })
+
+    // This combobox's own listbox — Workday points the trigger at it via
+    // aria-controls/aria-owns. Scoping options to it prevents grabbing another
+    // field's still-open menu.
+    const ownedListboxId =
+      comboboxShell.getAttribute("aria-controls") || comboboxShell.getAttribute("aria-owns") || ""
 
     const resolved = resolveInputControlFromElement(target)
     const input = target instanceof HTMLInputElement
@@ -4112,25 +5413,37 @@ class WorkdayAutofillRunner {
     let menuOptionCount = 0
     let roleOptionCount = 0
     let pollAttempts = 0
+    const OPTION_SELECTOR = '[role="option"], [role="menuitem"], [data-automation-id="promptOption"]'
+    this.lastComboOptions = ""
     while (Date.now() < POLL_DEADLINE) {
       pollAttempts += 1
+      // Priority 1: this combobox's own listbox (aria-controls) — precise.
+      const owned = ownedListboxId ? document.getElementById(ownedListboxId) : null
+      // Priority 2: the single currently-active popup.
+      const activePopup = document.querySelector<HTMLElement>('[data-automation-activepopup="true"]')
+      // Priority 3: id-scoped Workday menu items for this automation id.
       const menuOptions = automationId
-        ? Array.from(document.querySelectorAll(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
+        ? Array.from(document.querySelectorAll<HTMLElement>(`[data-automation-id^="${safeEscapeSelector(automationId)}-menu-item--"]`))
         : []
-      const roleOptions = Array.from(document.querySelectorAll('[role="option"], [role="menuitem"]'))
-      const promptOptions = Array.from(document.querySelectorAll('[data-automation-id="promptOption"]'))
-      const activePopupOptions = Array.from(
-        document.querySelectorAll(
-          '[data-automation-activepopup="true"] [role="option"], ' +
-            '[data-automation-activepopup="true"] [role="menuitem"], ' +
-            '[data-automation-activepopup="true"] [data-automation-id="promptOption"]',
-        ),
-      )
+
+      let scoped: HTMLElement[] = []
+      if (owned && isVisible(owned)) scoped = Array.from(owned.querySelectorAll<HTMLElement>(OPTION_SELECTOR))
+      else if (activePopup && isVisible(activePopup)) scoped = Array.from(activePopup.querySelectorAll<HTMLElement>(OPTION_SELECTOR))
+      else if (menuOptions.length) scoped = menuOptions
+      // Last resort only when nothing scoped exists: global (rare, e.g. tenants
+      // without aria-controls or activepopup markers).
+      if (!scoped.length) scoped = Array.from(document.querySelectorAll<HTMLElement>(OPTION_SELECTOR))
+
+      const candidateOptions = scoped.filter((el) => isVisible(el))
       menuOptionCount = menuOptions.length
-      roleOptionCount = roleOptions.length + promptOptions.length + activePopupOptions.length
-      const candidateOptions = [...activePopupOptions, ...promptOptions, ...menuOptions, ...roleOptions]
+      roleOptionCount = candidateOptions.length
       if (candidateOptions.length > 0) {
         option = findOptionByText(candidateOptions, clean)
+        // DIAG: record what options were seen and which was matched.
+        this.lastComboOptions = candidateOptions
+          .slice(0, 5)
+          .map((o) => `${nonEmpty(o.textContent).slice(0, 12)}${o.getAttribute("aria-selected") === "true" ? "*" : ""}`)
+          .join(",")
         if (option) break
       }
       await sleep(100)
@@ -4143,12 +5456,30 @@ class WorkdayAutofillRunner {
       pollAttempts,
       matched: Boolean(option),
     })
+    this.lastComboScan = `opts=[${this.lastComboOptions}] matched=${Boolean(option)}`
     if (option) {
       const clickTarget =
         option.closest<HTMLElement>('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]') ?? option
+      const attrs = ["data-automation-id", "data-value", "value", "aria-posinset", "role", "id"]
+        .map((a) => (clickTarget.getAttribute(a) ? `${a}=${clickTarget.getAttribute(a)}` : ""))
+        .filter(Boolean)
+        .join(" ")
+      this.lastComboScan += ` click="${nonEmpty(clickTarget.textContent).slice(0, 12)}"{${attrs}}`
+      // Full mouse-event sequence — Workday's button-combobox options often
+      // ignore a bare .click() and only commit on mousedown/mouseup.
+      clickTarget.scrollIntoView({ block: "center" })
+      clickTarget.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
       clickTarget.click()
-      await sleep(120)
-      const displayedAfter = nonEmpty(extractComboboxDisplayValue(target))
+      clickTarget.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+      // Verify the display actually updated — poll briefly for slow tenants.
+      let displayedAfter = ""
+      const verifyDeadline = Date.now() + 900
+      while (Date.now() < verifyDeadline) {
+        displayedAfter = nonEmpty(extractComboboxDisplayValue(target))
+        if (displayedAfter && !this.isUnansweredSelectPlaceholder(displayedAfter)) break
+        await sleep(100)
+      }
+      this.lastComboScan += ` post="${displayedAfter || "-"}"`
       if (displayedAfter && !this.isUnansweredSelectPlaceholder(displayedAfter)) {
         this.bumpFilledCount()
         this.debug("info", "combobox.option_selected", {
@@ -4158,12 +5489,25 @@ class WorkdayAutofillRunner {
         })
         return true
       }
-      this.bumpFilledCount()
+      // Clicked an option but the value did NOT stick — report honestly so the
+      // caller can try another candidate instead of leaving the field blank
+      // while believing it succeeded. Close the menu first.
+      comboboxShell.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
       this.debug("warn", "combobox.option_selected_unverified", {
         fieldName,
         optionText: nonEmpty(clickTarget.textContent),
       })
-      return true
+      return false
+    }
+
+    // strictOptions: the caller is probing candidate values against a fixed
+    // option list (e.g. degree levels) — a non-match must report failure so
+    // the next candidate can be tried, never the blind Enter fallback (which
+    // fakes success and strands the dropdown open).
+    if (opts?.strictOptions) {
+      comboboxShell.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+      this.debug("info", "combobox.strict_no_match", { fieldName, selector, desired: clean.slice(0, 60) })
+      return false
     }
 
     if (input && !opts?.riskyApplyFlowField) {
@@ -4208,7 +5552,7 @@ class WorkdayAutofillRunner {
     el: HTMLInputElement | HTMLTextAreaElement,
     value: string,
     fieldName = "field",
-    opts?: { forceOverwrite?: boolean },
+    opts?: { forceOverwrite?: boolean; commit?: boolean },
   ): boolean {
     const clean = nonEmpty(value)
     if (!clean) {
@@ -4247,13 +5591,17 @@ class WorkdayAutofillRunner {
       el.dispatchEvent(new Event("input", { bubbles: true }))
       el.dispatchEvent(new Event("change", { bubbles: true }))
       el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }))
-      // Intentionally NO el.blur() here. Workday's apply-flow tenants
-      // auto-save on blur via the cx-applyflow bundle; firing blur after
-      // every field hammers their backend with N save calls in quick
-      // succession, which is a known trigger for the generic 500 +
-      // "Something went wrong" page on flaky tenants (US Bank, etc.).
-      // The change event alone is enough for React to pick up the new value;
-      // the user's first real focus/blur after our run will commit cleanly.
+      // By default NO el.blur(): Workday's apply-flow tenants auto-save on
+      // blur, and firing it after every My Information field hammers the
+      // backend (known 500 trigger on flaky tenants). But inline My
+      // Experience entries (opts.commit) only register in the validation
+      // model once the field blurs — without it, Save & Continue reports
+      // every filled field as "required and must have a value". So commit
+      // there explicitly.
+      if (opts?.commit) {
+        el.dispatchEvent(new FocusEvent("blur", { bubbles: true }))
+        el.dispatchEvent(new Event("focusout", { bubbles: true }))
+      }
       this.debug("info", "set_value.success", {
         fieldName,
         tag: el.tagName.toLowerCase(),
@@ -4289,14 +5637,41 @@ class WorkdayAutofillRunner {
     return `${base}\n\nKey Skills: ${relevantSkills.join(" · ")}`
   }
 
-  private pickDegreeFallback(rawDegree: string): string {
-    const normalized = normText(rawDegree)
-    if (!normalized) return ""
-    if (normalized.includes("bachelor")) return "Bachelor's"
-    if (normalized.includes("master")) return "Master's"
-    if (normalized.includes("phd") || normalized.includes("doctor")) return "Doctorate"
-    if (normalized.includes("associate")) return "Associate's"
-    return ""
+  /**
+   * A clean, recruiter-facing resume filename: "<Full Name> - <Role> Resume.docx".
+   * Never exposes internal tooling labels. Falls back to name-only, then the
+   * server-provided name (if it's not an internal label), then "Resume.docx".
+   */
+  private professionalResumeName(serverFilename: string): string {
+    const clean = (s: string): string =>
+      s.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim()
+    const ext = /\.(pdf|docx?|txt|html?)$/i.exec(serverFilename)?.[0] ?? ".docx"
+
+    const fullName = clean(`${this.cv?.firstName ?? ""} ${this.cv?.lastName ?? ""}`)
+    const role = clean(this.pageJobTitle())
+
+    if (fullName) {
+      return role ? `${fullName} - ${role} Resume${ext}` : `${fullName} Resume${ext}`
+    }
+    // No name available: keep the server name unless it's an internal label.
+    const serverBase = clean(serverFilename.replace(/\.[a-z0-9]+$/i, ""))
+    if (serverBase && !/^tailored\b/i.test(serverBase)) return `${serverBase}${ext}`
+    return role ? `${role} Resume${ext}` : `Resume${ext}`
+  }
+
+  /** Best-effort job posting title from the Workday page (for the resume name). */
+  private pageJobTitle(): string {
+    const stepNames = /^(my information|my experience|application questions|voluntary disclosures|self identify|review)$/i
+    // The browser tab title on Workday apply pages is the job title.
+    const title = (document.title || "")
+      .replace(/\s*[|\-–—]\s*(workday|myworkdayjobs|careers?).*$/i, "")
+      .trim()
+    if (title && !stepNames.test(normText(title)) && title.length <= 80) return title
+    // Fallback: the job heading rendered above the step progress bar.
+    const heading = Array.from(document.querySelectorAll<HTMLElement>("h1, h2"))
+      .map((h) => nonEmpty(h.textContent))
+      .find((t) => t && !stepNames.test(normText(t)) && t.length <= 80)
+    return heading ?? ""
   }
 
   private decodeBase64File(base64: string, filename: string): File | null {
@@ -4666,6 +6041,8 @@ export async function runWorkdayAutofillInExistingBar(options: RunInBarOptions):
     showToolbar: false,
     profile: options.profile as ExtendedSafeProfile,
     resumeJobId: options.resumeJobId ?? null,
+    resumeId: options.resumeId ?? null,
+    resumeVersionId: options.resumeVersionId ?? null,
     onSnapshot: options.onSnapshot,
     onWarning: options.onWarning,
   })

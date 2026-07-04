@@ -25,13 +25,13 @@ test("loadWorkerConfig: reads valid env vars", () => {
     HARVESTER_CLAIM_BATCH_SIZE: "100",
     HARVESTER_LEASE_SECONDS: "300",
     HARVESTER_CONCURRENCY: "16",
-    HARVESTER_INCLUDE_ADAPTERS: "workable",
+    HARVESTER_INCLUDE_ADAPTERS: "greenhouse",
   })
   assert.equal(config.tickIntervalMs, 5_000)
   assert.equal(config.claimBatchSize, 40)
   assert.equal(config.leaseSeconds, 300)
   assert.equal(config.concurrency, 12)
-  assert.deepEqual(config.adapterFilter, { include: ["workable"], exclude: [] })
+  assert.deepEqual(config.adapterFilter, { include: ["greenhouse"], exclude: [] })
 })
 
 test("loadWorkerConfig: falls back on garbage env", () => {
@@ -139,7 +139,6 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "lever",
     "ashby",
     "smartrecruiters",
-    "workable",
     "workday",
     "recruitee",
     "teamtailor",
@@ -156,6 +155,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "apple",
     "eightfold",
     "netflix",
+    "avature",
   ])
 
   assert.equal(result.length, 1)

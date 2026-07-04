@@ -153,7 +153,10 @@ const SUPPORTED_ATS_TYPES = [
   "lever",
   "ashby",
   "smartrecruiters",
-  "workable",
+  // "workable" is intentionally NOT in the claim allowlist — apply.workable.com
+  // hard-rate-limits sustained aggregation (429s) and its API needs per-account
+  // tokens, not one global key. Kept out here so the fast loop never claims it,
+  // regardless of any HARVESTER_EXCLUDE_ADAPTERS env on the box.
   "workday",
   "recruitee",
   "teamtailor",
@@ -174,6 +177,11 @@ const SUPPORTED_ATS_TYPES = [
   // route via URL detection already; these two have no matching careers_url pattern.
   "eightfold",
   "netflix",
+  // Avature scrapes {slug}.avature.net careers HTML. Same trap as above — it was
+  // registered but not in the claim allowlist, so its ~80 tenants were never
+  // claimed by the fast loop. ats_type='avature' has no careers_url pattern, so
+  // it must be listed here to be picked up.
+  "avature",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {

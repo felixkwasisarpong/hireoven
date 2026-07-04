@@ -215,6 +215,7 @@ export interface ExtensionSafeProfile {
   auto_fill_diversity: boolean
   gender: string | null
   ethnicity: string | null
+  hispanic_latino: string | null
   veteran_status: string | null
   disability_status: string | null
   // Resume-derived fields

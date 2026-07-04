@@ -14,6 +14,10 @@ const APP_ORIGINS = [
   "http://localhost:3000",
   "https://hireoven.com",
 ] as const
+const DEFAULT_APP_ORIGIN =
+  __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__ === APP_ORIGINS[1]
+    ? APP_ORIGINS[1]
+    : APP_ORIGINS[0]
 const SESSION_COOKIE_NAME = "ho_session"
 
 type AggregatorSite = "linkedin" | "glassdoor" | "indeed" | "handshake"
@@ -77,9 +81,10 @@ async function pingAllTabs(): Promise<{ connected: AggregatorSite[] }> {
 // ── Auth / API helper (mirrors background.ts apiRequest pattern) ─────────────
 
 async function resolveOrigin(): Promise<string> {
-  // Keep aggregator API writes on the production app by default. Local
-  // development routes through the main background service worker's devMode.
-  return APP_ORIGINS[1]
+  const result = await chrome.storage.local.get("devMode")
+  if (result.devMode === true) return APP_ORIGINS[0]
+  if (result.devMode === false) return APP_ORIGINS[1]
+  return DEFAULT_APP_ORIGIN
 }
 
 async function getSessionToken(origin: string): Promise<string | null> {
