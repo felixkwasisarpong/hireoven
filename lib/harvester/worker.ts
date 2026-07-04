@@ -199,6 +199,11 @@ const SUPPORTED_ATS_TYPES = [
   "adecco",
   // Kelly Services (mykelly.com FacetWP API). Single-company custom adapter.
   "kelly",
+  // Radancy / TalentBrew (careers.*/en/search-jobs/results/ XHR). Registered +
+  // page-deep but was absent from the claim allowlist, so its only enrolled
+  // tenant (L3Harris) was never claimed by the fast loop. Enrolled by ats_type;
+  // slug falls back to careers_url (no canonical URL builder for radancy).
+  "radancy",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {
