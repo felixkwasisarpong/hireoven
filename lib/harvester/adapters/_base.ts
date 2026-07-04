@@ -38,6 +38,7 @@ export type AtsName =
   | "infosys"
   | "ibm"
   | "adecco"
+  | "kelly"
   | "apple"
   | "amazon"
   | "walmart"
