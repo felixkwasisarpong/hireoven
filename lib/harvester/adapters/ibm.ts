@@ -30,7 +30,8 @@ import {
 const IBM_HOST_RE = /^https?:\/\/(?:(?:www\.)?ibm\.com\/careers|careers\.ibm\.com)/i
 const ENDPOINT = "https://www-api.ibm.com/search/api/v2"
 const PAGE_SIZE = 100
-const SOURCE_FIELDS = ["_id", "title", "url", "description", "field_keyword_18", "field_keyword_19"]
+// field_keyword_17 = work style (Remote/Hybrid/On-site), _19 = location.
+const SOURCE_FIELDS = ["_id", "title", "url", "description", "field_keyword_17", "field_keyword_18", "field_keyword_19"]
 
 function intEnv(name: string, dflt: number, min = 0): number {
   const n = Number.parseInt(process.env[name] ?? "", 10)
@@ -43,6 +44,7 @@ type IbmSource = {
   title?: string
   url?: string
   description?: string
+  field_keyword_17?: string
   field_keyword_18?: string
   field_keyword_19?: string
 }
@@ -61,7 +63,12 @@ function buildBody(from: number): string {
     _source: SOURCE_FIELDS,
     size: PAGE_SIZE,
     from,
-    sort: [{ _score: "desc" }],
+    // Match the payload the careers site sends (lang:"zz" = all languages; `sm`
+    // is the site's search-metadata echo). Coverage is identical to the minimal
+    // form (~900 jobs) but this stays in lockstep with the official request.
+    sort: [{ _score: "desc" }, { pageviews: "desc" }],
+    lang: "zz",
+    sm: { query: "", lang: "zz" },
   })
 }
 
@@ -80,13 +87,16 @@ export function mapHit(hit: IbmHit): HarvestedJob | null {
   const jobId = url.match(/[?&]jobId=(\d+)/)?.[1] || hit._id || url
   const location = s.field_keyword_19?.trim() || undefined
   const description = stripHtml(s.description)
+  const ws = s.field_keyword_17?.trim()
+  const workMode = ws && /^(remote|hybrid|on-?site)$/i.test(ws) ? ws : undefined
   return {
     externalId: `ibm:${jobId}`,
     title,
     applyUrl: url,
     location,
     description,
-    contentHash: hashContent([title, url, location, description?.slice(0, 4_000)]),
+    workMode,
+    contentHash: hashContent([title, url, location, workMode, description?.slice(0, 4_000)]),
   }
 }
 
