@@ -174,6 +174,11 @@ const SUPPORTED_ATS_TYPES = [
   // route via URL detection already; these two have no matching careers_url pattern.
   "eightfold",
   "netflix",
+  // Avature scrapes {slug}.avature.net careers HTML. Same trap as above — it was
+  // registered but not in the claim allowlist, so its ~80 tenants were never
+  // claimed by the fast loop. ats_type='avature' has no careers_url pattern, so
+  // it must be listed here to be picked up.
+  "avature",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {
