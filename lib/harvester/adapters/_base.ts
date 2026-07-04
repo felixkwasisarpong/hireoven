@@ -49,6 +49,7 @@ export type AtsName =
   | "adp"
   | "teamworkonline"
   | "jsonld"
+  | "sitemapjsonld"
   | "radancy"
 
 export type HarvestCtx = {
