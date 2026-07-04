@@ -38,6 +38,7 @@ export type AtsName =
   | "infosys"
   | "apple"
   | "amazon"
+  | "walmart"
   | "microsoft"
   | "netflix"
   | "rippling"
