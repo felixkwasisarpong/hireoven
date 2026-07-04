@@ -219,3 +219,30 @@ test(
     }
   }
 )
+
+test("workday: change-detection returns notModified + skips crawl on unchanged board", async () => {
+  const makePostings = (offset: number, count: number) =>
+    Array.from({ length: count }, (_, i) => ({ externalPath: `/job/base-${offset + i}`, title: `Job ${offset + i}` }))
+  let listingPosts = 0
+  const fetchImpl = (async (_url: string, init: { body?: string }) => {
+    if (!init?.body) return new Response("{}", { status: 200, headers: { "content-type": "application/json" } }) // detail GET
+    listingPosts += 1
+    const offset = (JSON.parse(init.body) as { offset?: number }).offset ?? 0
+    const total = 30 // below QUERY_TOTAL_CAP → skip is trustworthy
+    const pageCount = Math.min(20, Math.max(0, total - offset))
+    return new Response(JSON.stringify({ total, jobPostings: makePostings(offset, pageCount), facets: [] }),
+      { status: 200, headers: { "content-type": "application/json" } })
+  }) as unknown as typeof fetch
+
+  const first = await workdayAdapter.fetchJobs({ slug: "acme:wd1:External", ctx: { etag: null, lastModified: null, fetchImpl } })
+  assert.equal(first.notModified, false)
+  assert.equal(first.jobs.length, 30)
+  assert.ok(first.etag && first.etag.startsWith("wdv1:"), "stores a page-0 fingerprint as etag")
+  const afterFirst = listingPosts
+
+  const second = await workdayAdapter.fetchJobs({ slug: "acme:wd1:External", ctx: { etag: first.etag, lastModified: null, fetchImpl } })
+  assert.equal(second.notModified, true, "unchanged board short-circuits")
+  assert.equal(second.jobs.length, 0)
+  assert.equal(second.etag, first.etag)
+  assert.equal(listingPosts - afterFirst, 1, "second crawl does exactly one page-0 probe POST, no pagination")
+})

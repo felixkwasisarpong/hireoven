@@ -426,6 +426,15 @@ export const oraclecloudAdapter: AtsAdapter = {
     let etag: string | null = null
     let lastModified: string | null = null
     let pagesFetched = 0
+    // Change-detection fingerprint. Oracle CE is a POST-less GET but the adapter
+    // never sent HTTP validators, so every crawl re-paginated the whole board
+    // (avg ~33s, ~4% skipped). Instead we cheaply fingerprint the board from
+    // page 0 — `TotalJobsCount` (catches any add/remove) plus the first, newest
+    // requisition (sortBy=POSTING_DATES_DESC, so a new posting lands here). If it
+    // matches the stored fingerprint (`ctx.etag`), the board is unchanged and we
+    // skip the remaining pages entirely.
+    const priorFingerprint = ctx.etag
+    let fingerprint: string | null = null
 
     for (let page = 0; page < MAX_PAGES; page++) {
       const offset = page * PAGE_LIMIT
@@ -466,6 +475,25 @@ export const oraclecloudAdapter: AtsAdapter = {
       lastModified ??= result.lastModified
 
       const pageJobs = mapResponseToJobs(result.data, identifier, site, origin)
+
+      if (page === 0) {
+        const total = totalJobsCount(result.data)
+        const first = pageJobs[0]
+        fingerprint = `orcv1:${total ?? "?"}:${first?.externalId ?? ""}:${first?.postedAt ?? ""}`
+        if (priorFingerprint && priorFingerprint === fingerprint) {
+          return {
+            jobs: [],
+            notModified: true,
+            etag: fingerprint,
+            lastModified: null,
+            sourceAts: "oraclecloud",
+            sourceAtsSlug: slug,
+            fetchedAt,
+            upstreamLatencyMs: result.upstreamLatencyMs,
+          }
+        }
+      }
+
       let added = 0
       for (const job of pageJobs) {
         if (all.has(job.externalId)) continue
@@ -495,7 +523,9 @@ export const oraclecloudAdapter: AtsAdapter = {
     return {
       jobs,
       notModified: false,
-      etag,
+      // Store the page-0 fingerprint so the next crawl can skip an unchanged
+      // board. Falls back to any HTTP etag if page 0 never yielded one.
+      etag: fingerprint ?? etag,
       lastModified,
       sourceAts: "oraclecloud",
       sourceAtsSlug: slug,
