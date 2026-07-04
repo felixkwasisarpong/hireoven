@@ -37,6 +37,11 @@ export type CdxQueryOptions = {
   fetchImpl?: typeof fetch
   /** Request timeout in ms. Default 120s — CDX queries can be slow. */
   timeoutMs?: number
+  /** Override the CDX `url` match pattern. Defaults to `{apex}/*` (path prefix
+   *  under a single host). Pass a domain-wildcard form like
+   *  `*.myworkdayjobs.com` (optionally with a `/path/*` suffix) to enumerate
+   *  subdomain-per-tenant ATSes that CC DOES index at the subdomain level. */
+  urlPattern?: string
 }
 
 // Fallback used when the live index list can't be fetched. Latest list:
@@ -82,9 +87,10 @@ export async function queryCdxForApex(
   const doFetch   = options.fetchImpl ?? fetch
 
   // Query all paths under the apex domain using prefix match.
-  // CDX requires the full URL form: "{apex}/*" to match all paths.
+  // CDX requires the full URL form: "{apex}/*" to match all paths. Callers can
+  // override this (e.g. "*.myworkdayjobs.com") for subdomain-per-tenant ATSes.
   const params = new URLSearchParams({
-    url:    `${apex}/*`,
+    url:    options.urlPattern ?? `${apex}/*`,
     output: "json",
     limit:  String(limit),
     fl:     "url,status,timestamp",
