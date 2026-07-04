@@ -38,6 +38,8 @@ test("purgeDeadCrawledCompanies: mode=dead uses UPDATE…status='dead' and exclu
   await purgeDeadCrawledCompanies({ pool, mode: "dead", minEmptyCrawls: 20 })
   assert.match(sqls[0], /UPDATE companies SET status='dead'/)
   assert.match(sqls[0], /status IS DISTINCT FROM 'dead'/) // termination guard
+  // never retire a board that was never confirmed live (protects fresh discoveries)
+  assert.match(sqls[0], /last_job_seen_at IS NOT NULL/)
 })
 
 test("purgeDeadCrawledCompanies: mode=delete uses DELETE", async () => {

@@ -9,11 +9,12 @@ import { getPostgresPool } from "@/lib/postgres/server"
  * job-less company we keep crawling forever. This marks those dead (or deletes
  * them) so the harvester stops wasting cycles on them.
  *
- * A company qualifies when it is harvestable (ats_type set), has been
- * crawled-empty repeatedly (`minEmptyCrawls` floor — also guards against
- * never-yet-crawled fresh enrollments), has ZERO active jobs, and nothing has
- * been seen for it in `inactiveDays` days. Visa sponsors and anything with
- * h1b_records are always preserved.
+ * A company qualifies when it is harvestable (ats_type set), was once live
+ * (`last_job_seen_at IS NOT NULL` — a board that has never produced a job is
+ * never retired here), has been crawled-empty repeatedly (`minEmptyCrawls`
+ * floor), has ZERO active jobs, and nothing has been seen for it in
+ * `inactiveDays` days. Visa sponsors and anything with h1b_records are always
+ * preserved.
  *
  * mode='dead' (default): set status='dead' + is_active=false. The harvester
  *   claim query skips status='dead', and enrollTenantAsCompany won't resurrect a
@@ -38,10 +39,22 @@ const DEFAULT_MAX_BATCHES = Math.max(1, Number.parseInt(process.env.PURGE_DEAD_M
 export type PurgeDeadMode = "dead" | "delete"
 
 // $1 = min empty-crawl streak, $2 = inactive days. (Batch SQL adds $3 = limit.)
+//
+// `last_job_seen_at IS NOT NULL` is the "was it ever actually alive?" guard:
+// the harvester sets that column only on a crawl that returned ≥1 job (see
+// run-harvest resetting consecutive_empty_crawls alongside it). So we only ever
+// retire boards that were LIVE and then died — a board that has never once
+// produced a job (every fresh discovery, e.g. Common-Crawl-seeded Workday/Oracle
+// tenants still crawling in, or a real employer that currently has 0 open reqs)
+// is never marked dead here, no matter how many empty crawls it racks up. The
+// trade-off is we keep crawling never-confirmed boards, but the harvester's
+// freshness tiers already back those off, and it's the price of not killing a
+// real employer we simply caught at a quiet moment.
 const PREDICATE = `
   ats_type IS NOT NULL
   AND status IS DISTINCT FROM 'dead'
   AND COALESCE(sponsors_h1b, false) = false
+  AND last_job_seen_at IS NOT NULL
   AND COALESCE(consecutive_empty_crawls, 0) >= $1
   AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_id = companies.id AND j.is_active = true)
   AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_id = companies.id AND j.last_seen_at >= now() - ($2 || ' days')::interval)
