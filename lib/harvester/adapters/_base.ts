@@ -36,6 +36,9 @@ export type AtsName =
   | "avature"
   | "ukg"
   | "infosys"
+  | "ibm"
+  | "adecco"
+  | "kelly"
   | "apple"
   | "amazon"
   | "walmart"
@@ -49,6 +52,7 @@ export type AtsName =
   | "adp"
   | "teamworkonline"
   | "jsonld"
+  | "sitemapjsonld"
   | "radancy"
 
 export type HarvestCtx = {
