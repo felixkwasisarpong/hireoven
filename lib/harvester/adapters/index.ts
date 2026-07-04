@@ -15,6 +15,7 @@ import { zohoRecruitAdapter } from "@/lib/harvester/adapters/zohorecruit"
 import { adpAdapter } from "@/lib/harvester/adapters/adp"
 import { teamworkOnlineAdapter } from "@/lib/harvester/adapters/teamworkonline"
 import { jsonldAdapter } from "@/lib/harvester/adapters/jsonld"
+import { sitemapJsonLdAdapter } from "@/lib/harvester/adapters/sitemap-jsonld"
 import { radancyAdapter } from "@/lib/harvester/adapters/radancy"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
 import { icimsAdapter } from "@/lib/harvester/adapters/icims"
@@ -96,6 +97,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   adp: adpAdapter,
   teamworkonline: teamworkOnlineAdapter,
   jsonld: jsonldAdapter,
+  sitemapjsonld: sitemapJsonLdAdapter,
   radancy: radancyAdapter,
 }
 
