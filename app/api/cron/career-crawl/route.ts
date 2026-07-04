@@ -168,7 +168,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── Full crawl: all active companies, deactivate persistent failures ──────
-  const deactivated: { id: string; name: string; reason: string }[] = []
+  const errored: { id: string; name: string; reason: string }[] = []
 
   if (mode === "full") {
     const { rows: allCompanies } = await pool.query<{
@@ -218,13 +218,16 @@ export async function GET(request: NextRequest) {
           } catch (err) {
             stats.errors++
             const reason = err instanceof Error ? err.message : String(err)
-            // Mark the company inactive — it will stay dark until manually re-enabled
-            // or until a future crawl pipeline resolves the bad URL.
-            await pool.query(
-              `UPDATE companies SET is_active = false, last_crawled_at = NOW() WHERE id = $1`,
-              [company.id]
-            )
-            deactivated.push({ id: company.id, name: company.name, reason: reason.slice(0, 200) })
+            // Do NOT deactivate on a careers-page crawl error. This is a
+            // SECONDARY crawl of the branded careers site, which fails
+            // transiently all the time (timeout / WAF / rate-limit / network
+            // blip). These companies are harvested from their ATS API by the
+            // main harvester, which — together with purge-dead-crawled (needs
+            // repeated empty crawls + zero jobs) — is the sole owner of
+            // liveness. Killing a company here on one flaky fetch dark-holed
+            // ~2k boards that were live the whole time. Just record + move on.
+            await pool.query(`UPDATE companies SET last_crawled_at = NOW() WHERE id = $1`, [company.id])
+            errored.push({ id: company.id, name: company.name, reason: reason.slice(0, 200) })
           }
         })
       )
@@ -236,9 +239,9 @@ export async function GET(request: NextRequest) {
     mode,
     durationMs: Date.now() - started,
     ...stats,
-    deactivated: deactivated.length > 0 ? deactivated : undefined,
+    errored: errored.length > 0 ? errored : undefined,
     message: mode === "full"
-      ? `[full] crawled ${stats.companies} companies → ${stats.jobs} jobs, deactivated ${deactivated.length}`
+      ? `[full] crawled ${stats.companies} companies → ${stats.jobs} jobs, errored ${errored.length} (not deactivated)`
       : `[${mode}] resolved ${stats.resolved}, crawled ${stats.companies} companies → ${stats.jobs} jobs`,
   })
 }
