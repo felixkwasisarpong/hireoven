@@ -153,7 +153,10 @@ const SUPPORTED_ATS_TYPES = [
   "lever",
   "ashby",
   "smartrecruiters",
-  "workable",
+  // "workable" is intentionally NOT in the claim allowlist — apply.workable.com
+  // hard-rate-limits sustained aggregation (429s) and its API needs per-account
+  // tokens, not one global key. Kept out here so the fast loop never claims it,
+  // regardless of any HARVESTER_EXCLUDE_ADAPTERS env on the box.
   "workday",
   "recruitee",
   "teamtailor",

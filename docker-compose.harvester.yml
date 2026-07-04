@@ -20,10 +20,6 @@ services:
       PGSSLMODE: ${PGSSLMODE:-disable}
       PG_POOL_MAX: ${PG_POOL_MAX:-25}
       HARVESTER_USE_NEW_ADAPTERS: ${HARVESTER_USE_NEW_ADAPTERS:-true}
-      # Workable is intentionally disabled. Its public board path rate-limits
-      # sustained aggregation traffic and the official API requires per-account
-      # tokens, not one global key.
-      HARVESTER_EXCLUDE_ADAPTERS: workable
       HARVESTER_INSTANCES: ${HARVESTER_INSTANCES:-6}
       # Total claims are divided across HARVESTER_INSTANCES in worker.ts.
       # Without this, 6 loops silently fall back to 24 total claims/tick.
