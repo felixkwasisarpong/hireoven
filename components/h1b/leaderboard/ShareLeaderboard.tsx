@@ -41,7 +41,7 @@ export default function ShareLeaderboard({
         href={twitter}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50"
       >
         X / Twitter
       </a>
@@ -49,13 +49,13 @@ export default function ShareLeaderboard({
         href={linkedin}
         target="_blank"
         rel="noopener noreferrer"
-        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50"
       >
         LinkedIn
       </a>
       <button
         onClick={copy}
-        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 hover:bg-slate-50"
+        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-600 transition-colors hover:bg-slate-50"
       >
         {copied ? <Check className="h-3.5 w-3.5" /> : <Link2 className="h-3.5 w-3.5" />}
         {copied ? "Copied" : "Copy link"}

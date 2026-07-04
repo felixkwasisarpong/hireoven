@@ -306,7 +306,10 @@ export default function CompanyLogo({
           priority={priority}
           loading={priority ? "eager" : "lazy"}
           className={cn(
-            "object-contain bg-white p-1 transition-opacity duration-200",
+            // bg-[#fff] (not bg-white) so the global `body.site-chroma .bg-white`
+            // translucency override can't make the logo plate see-through — a
+            // transparent logo would otherwise reveal the coloured monogram beneath.
+            "object-contain bg-[#fff] p-1 transition-opacity duration-200",
             loaded ? "opacity-100" : "opacity-0"
           )}
           referrerPolicy="no-referrer"
@@ -332,7 +335,8 @@ export default function CompanyLogo({
           decoding="async"
           referrerPolicy="no-referrer"
           className={cn(
-            "absolute inset-0 h-full w-full bg-white object-contain p-1 transition-opacity duration-200",
+            // bg-[#fff] (not bg-white): see note on the <Image> variant above.
+            "absolute inset-0 h-full w-full bg-[#fff] object-contain p-1 transition-opacity duration-200",
             loaded ? "opacity-100" : "opacity-0"
           )}
           onLoad={(event) => {

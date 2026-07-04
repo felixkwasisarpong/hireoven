@@ -11,8 +11,11 @@ const US_STATES = [
 function cls(active: boolean): string {
   return active
     ? "rounded-full bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-    : "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+    : "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
 }
+
+const SELECT_CLS =
+  "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 outline-none transition-colors hover:bg-slate-50"
 
 // URL-state-driven filters (no client store). Changing a control rewrites the
 // query string and resets the keyset cursor. `lockState` / `lockIndustry` hide a
@@ -36,6 +39,7 @@ export default function LeaderboardFilters({
       if (value == null || value === "") next.delete(key)
       else next.set(key, value)
       next.delete("cursor") // new filter → start from the top
+      next.delete("from") // and restart the sequential numbering
       const qs = next.toString()
       router.push(qs ? `${pathname}?${qs}` : pathname)
     },
@@ -89,7 +93,7 @@ export default function LeaderboardFilters({
 
       {!lockState && (
         <select
-          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600"
+          className={SELECT_CLS}
           value={params.get("state") ?? ""}
           onChange={(e) => update("state", e.target.value || null)}
           aria-label="Filter by state"
@@ -105,7 +109,7 @@ export default function LeaderboardFilters({
 
       {!lockIndustry && industries.length > 0 && (
         <select
-          className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600"
+          className={SELECT_CLS}
           value={params.get("industry") ?? ""}
           onChange={(e) => update("industry", e.target.value || null)}
           aria-label="Filter by industry"

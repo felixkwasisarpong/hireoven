@@ -1,11 +1,22 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowRight, Building2, Briefcase, CheckCircle2, FileQuestion, HelpCircle, ShieldCheck } from "lucide-react"
+import {
+  ArrowRight,
+  Building2,
+  Briefcase,
+  CalendarRange,
+  CheckCircle2,
+  FileCheck2,
+  FileQuestion,
+  HelpCircle,
+  Plus,
+  ShieldCheck,
+} from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import RankBadge from "@/components/h1b/leaderboard/RankBadge"
-import { ScorecardBadge } from "@/components/h1b/scorecard/ScorecardBadge"
+import { ConfidenceRing } from "@/components/h1b/scorecard/ConfidenceRing"
 import { getCompanyH1bRank, industrySlug } from "@/lib/h1b/leaderboard"
 import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
@@ -172,20 +183,37 @@ export default async function H1bSponsorPage({ params }: Props) {
     ],
   }
 
-  const stats: Array<{ label: string; value: string }> = [
-    { label: "Certified LCAs · 12 mo", value: (c.h1b_sponsor_count_1yr ?? 0).toLocaleString() },
-    { label: "Certified LCAs · 3 yr", value: (c.h1b_sponsor_count_3yr ?? 0).toLocaleString() },
-    { label: "Sponsorship confidence", value: `${c.sponsorship_confidence ?? 0}%` },
-    { label: "Open US roles", value: c.openUsJobs.toLocaleString() },
+  const certified1 = c.h1b_sponsor_count_1yr ?? 0
+  const certified3 = c.h1b_sponsor_count_3yr ?? 0
+
+  const stats = [
+    {
+      label: "Certified LCAs · 12 mo",
+      value: certified1.toLocaleString(),
+      Icon: FileCheck2,
+      chip: "bg-emerald-50 text-emerald-600",
+    },
+    {
+      label: "Certified LCAs · 3 yr",
+      value: certified3.toLocaleString(),
+      Icon: CalendarRange,
+      chip: "bg-slate-100 text-slate-500",
+    },
+    {
+      label: "Open US roles",
+      value: c.openUsJobs.toLocaleString(),
+      Icon: Briefcase,
+      chip: "bg-orange-50 text-orange-600",
+    },
   ]
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="min-h-dvh bg-slate-50 text-slate-950">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <nav className="mb-6 flex flex-wrap items-center gap-1.5 text-[13px] text-slate-500">
+      <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+        <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-[13px] text-slate-500">
           <Link href="/h1b-sponsors/leaderboard" className="hover:text-slate-800">All sponsors</Link>
           {c.industry && (
             <>
@@ -202,110 +230,147 @@ export default async function H1bSponsorPage({ params }: Props) {
           <span className="text-slate-700">{c.name}</span>
         </nav>
 
-        <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          <CompanyLogo
-            companyName={c.name}
-            domain={c.domain}
-            logoUrl={c.logo_url}
-            priority
-            className="h-16 w-16 shrink-0 rounded-2xl border border-slate-200/70 bg-white"
-          />
-          <div className="min-w-0">
-            <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${v.tone}`}>
-              <v.Icon className="h-3.5 w-3.5" />
-              {v.label}
-            </span>
-            <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight sm:text-[32px]">
-              Does {c.name} sponsor H-1B visas?
-            </h1>
-            <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{verdictSentence(c)}</p>
-            {c.industry && (
-              <p className="mt-2 inline-flex items-center gap-1.5 text-[13px] text-slate-400">
-                <Building2 className="h-3.5 w-3.5" /> {c.industry}
-              </p>
-            )}
-            {rank && (
-              <div className="mt-3">
-                <RankBadge rank={rank} />
+        {/* Hero */}
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-4">
+                <CompanyLogo
+                  companyName={c.name}
+                  domain={c.domain}
+                  logoUrl={c.logo_url}
+                  priority
+                  className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white p-1.5 sm:h-24 sm:w-24"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-2xl font-bold tracking-tight text-slate-900">{c.name}</p>
+                  {c.industry && (
+                    <span className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-slate-500">
+                      <Building2 className="h-3.5 w-3.5" /> {c.industry}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
-            {(c.is_cap_exempt || c.is_e_verify) && (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {c.is_cap_exempt && c.cap_exempt_reason && (
-                  <CapExemptBadge
-                    reason={c.cap_exempt_reason}
-                    confidence={c.cap_exempt_confidence ?? "low"}
-                  />
-                )}
-                {c.is_e_verify && <EverifyBadge />}
+
+              <span className={`mt-5 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold ${v.tone}`}>
+                <v.Icon className="h-4 w-4" />
+                {v.label}
+              </span>
+
+              <h1 className="mt-3 text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-[30px]">
+                Does {c.name} sponsor H-1B visas?
+              </h1>
+              <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-600">{verdictSentence(c)}</p>
+
+              {(rank || c.is_cap_exempt || c.is_e_verify) && (
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {rank && <RankBadge rank={rank} />}
+                  {c.is_cap_exempt && c.cap_exempt_reason && (
+                    <CapExemptBadge
+                      reason={c.cap_exempt_reason}
+                      confidence={c.cap_exempt_confidence ?? "low"}
+                    />
+                  )}
+                  {c.is_e_verify && <EverifyBadge />}
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link
+                  href={profilePath}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06),0_2px_8px_rgba(255,92,24,0.22)] transition-colors hover:bg-primary-hover"
+                >
+                  <Briefcase className="h-4 w-4" />
+                  {c.openUsJobs > 0 ? `View ${c.openUsJobs.toLocaleString()} open roles` : "View company profile"}
+                </Link>
+                <Link
+                  href={`/signup?next=${encodeURIComponent(profilePath)}`}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
+                >
+                  Get sponsor-role alerts
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <ScorecardBadge score={c.sponsorship_confidence ?? 0} />
+            </div>
+
+            {/* Confidence gauge */}
+            <aside className="flex shrink-0 flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-8 py-6 lg:w-72">
+              <ConfidenceRing score={c.sponsorship_confidence ?? 0} />
               <Link
                 href={`/h1b-sponsors/${companyParam(c.id, c.name)}/scorecard`}
-                className="text-sm font-medium text-slate-600 underline hover:text-slate-900"
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
               >
-                View scorecard →
+                View full scorecard
+                <ArrowRight className="h-3.5 w-3.5" />
               </Link>
-            </div>
+            </aside>
           </div>
-        </header>
 
-        <section className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-[22px] font-bold tabular-nums text-slate-900">{s.value}</p>
-              <p className="mt-0.5 text-[11.5px] leading-tight text-slate-500">{s.label}</p>
-            </div>
-          ))}
+          {/* Key stats — folded into the hero as a divided strip */}
+          <div className="mt-8 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-6">
+            {stats.map((s, i) => (
+              <div
+                key={s.label}
+                className={i === 0 ? "pr-4 sm:pr-6" : i === stats.length - 1 ? "pl-4 sm:pl-6" : "px-4 sm:px-6"}
+              >
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${s.chip}`}>
+                    <s.Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-[11px]">
+                    {s.label}
+                  </span>
+                </div>
+                <p className="mt-2 text-2xl font-bold tabular-nums leading-none text-slate-900 sm:text-[28px]">
+                  {s.value}
+                </p>
+              </div>
+            ))}
+          </div>
         </section>
 
         {layoffSignal && (
-          <div className="mt-8">
+          <div className="mt-6">
             <LayoffSignalCard signal={layoffSignal} />
           </div>
         )}
 
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            href={profilePath}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            <Briefcase className="h-4 w-4" />
-            {c.openUsJobs > 0 ? `View ${c.openUsJobs.toLocaleString()} open roles` : "View company profile"}
-          </Link>
-          <Link
-            href={`/signup?next=${encodeURIComponent(profilePath)}`}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300"
-          >
-            Get alerts for sponsor-friendly roles
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-
-        <nav className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-slate-500" aria-label="More about this company">
+        {/* Related links — plain, no card */}
+        <nav
+          className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm"
+          aria-label={`More about ${c.name}`}
+        >
           <span className="text-slate-400">More on {c.name}:</span>
-          <Link href={salariesPath(c.id, c.name)} className="font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline">
+          <Link
+            href={salariesPath(c.id, c.name)}
+            className="group inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900"
+          >
             What {c.name} pays
+            <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
-          <Link href={jobsAtPath(c.id, c.name)} className="font-medium text-slate-700 underline-offset-2 hover:text-slate-900 hover:underline">
+          <Link
+            href={jobsAtPath(c.id, c.name)}
+            className="group inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900"
+          >
             Open jobs at {c.name}
+            <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-slate-500" />
           </Link>
         </nav>
 
-        <section className="mt-12">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900">
-            <HelpCircle className="h-4.5 w-4.5 text-slate-400" />
+        {/* FAQ — one container, divided rows */}
+        <section className="mt-10">
+          <h2 className="flex items-center gap-2 px-1 text-lg font-bold text-slate-900">
+            <HelpCircle className="h-5 w-5 text-slate-400" />
             {c.name} H-1B sponsorship FAQ
           </h2>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
             {faqs.map((f) => (
-              <details key={f.q} className="group rounded-2xl border border-slate-200 bg-white p-4 open:shadow-sm">
-                <summary className="cursor-pointer list-none text-[15px] font-semibold text-slate-800 marker:hidden">
+              <details key={f.q} className="group p-5">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-semibold text-slate-800 marker:hidden">
                   {f.q}
+                  <Plus className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-45" />
                 </summary>
-                <p className="mt-2 text-[14px] leading-relaxed text-slate-600">{f.a}</p>
+                <p className="mt-3 text-[14px] leading-relaxed text-slate-600">{f.a}</p>
               </details>
             ))}
           </div>
