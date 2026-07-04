@@ -120,6 +120,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
   walmart: 480_000, // 5 career areas × up to 200 pages (10/page) of the careers GraphQL
   sitemapjsonld: 300_000, // enumerate sitemap + fetch up to ~2.5k job pages (concurrent)
+  ibm: 120_000, // ~9 pages (100/page) of the careers Elasticsearch index
   microsoft: 240_000, // ~146 search pages (10/page) + a detail-fetch budget
   netflix: 120_000, // ~52 list pages (10/page, Eightfold) + a detail-fetch budget
   eightfold: 240_000, // large tenants (HSBC ~1.6k) paginate 10/page → up to 200 pages
@@ -190,6 +191,8 @@ const SUPPORTED_ATS_TYPES = [
   // Sitemap-driven JSON-LD (UPS and other Phenom-Canvas / custom sites). Enrolled
   // by ats_type with the sitemap URL — no careers_url pattern — so list it here.
   "sitemapjsonld",
+  // IBM (www-api.ibm.com Elasticsearch). Single-company custom adapter.
+  "ibm",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {
