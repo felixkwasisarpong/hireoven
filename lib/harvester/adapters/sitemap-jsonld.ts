@@ -31,7 +31,8 @@ import {
  * Tunables:
  *   HARVESTER_SITEMAPJSONLD_MAX_JOBS      (default 2500)
  *   HARVESTER_SITEMAPJSONLD_CONCURRENCY   (default 4)
- *   HARVESTER_SITEMAPJSONLD_JOB_URL_RE    (default "/jobs?/i" — job-detail path)
+ *   HARVESTER_SITEMAPJSONLD_JOB_URL_RE    (default "/job/i" — job-detail path;
+ *       matches UPS/McDonald's/Kaiser `…/job/…` while excluding `/category/…-jobs/`)
  * Gated by the sitemapjsonld per-company timeout (worker.ts).
  */
 
@@ -46,9 +47,9 @@ const MAX_SUBMAPS = 30
 const JOB_URL_RE = (() => {
   const raw = process.env.HARVESTER_SITEMAPJSONLD_JOB_URL_RE?.trim()
   try {
-    return raw ? new RegExp(raw, "i") : /\/jobs?\//i
+    return raw ? new RegExp(raw, "i") : /\/job\//i
   } catch {
-    return /\/jobs?\//i
+    return /\/job\//i
   }
 })()
 const XML_RE = /\.xml($|\?)/i
