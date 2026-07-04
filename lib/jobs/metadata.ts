@@ -75,19 +75,24 @@ export const CLEARANCE_REQUIRED_PATTERNS = [
   /\bsecurity\s+clearance\s+required\b/i,
 ]
 
+// Only EXPLICIT sponsorship blockers belong here. A bare "authorized to work" /
+// "work authorization" / "eligible to work" / "must be authorized" is NOT a
+// blocker — F1 OPT, STEM OPT and H-1B holders are all legally authorized to work,
+// so that (near-universal) boilerplate must never flag "No sponsorship".
 const AUTH_REQUIRED_PATTERNS = [
-  /\bauthorized to work\b/i,
-  /\bwork authorization\b/i,
-  /\beligible to work\b/i,
-  /\bwithout (current|future)?\s*(visa|employment)?\s*sponsorship\b/i,
-  /\bno (visa|employment|work) sponsorship\b/i,
-  /\bmust be a u\.?s\.?\s+citizen\b/i,
+  // Explicit no-sponsorship statements.
+  /\bwithout (?:current|future)?\s*(?:visa|employment|company)?\s*sponsorship\b/i,
+  /\bno\s+(?:visa|employment|work|company)?\s*sponsorship\b/i,
+  /\bsponsorship\s+(?:is|will)?\s*not\s+(?:available|provided|offered|possible|considered)\b/i,
+  /\b(?:do(?:es)?\s+not|will\s+not|won'?t|cannot|can\s?not|(?:are|is)\s+not\s+able\s+to|unable\s+to|not\s+able\s+to)\b[^.\n]{0,30}\bsponsor(?:ship)?\b/i,
+  // Citizenship / U.S.-persons requirements (exclude visa holders).
+  /\bmust be (?:a\s+|an\s+)?u\.?\s?s\.?\s+citizens?\b/i,
   /\b(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required\b/i,
   /\brequires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\b/i,
   /\bcitizen(?:ship)?\s+(?:is\s+)?required\b/i,
   /\bu\.?\s?s\.?\s+persons?\s+only\b/i,
+  // Security clearance implies citizenship + no sponsorship.
   ...CLEARANCE_REQUIRED_PATTERNS,
-  /\bmust be (currently )?authorized\b/i,
 ]
 
 const AUTH_NOT_REQUIRED_PATTERNS = [
@@ -255,8 +260,11 @@ export function inferRequiresAuthorization(
   const text = toTextBlob(description)
   if (!text) return null
 
-  if (AUTH_NOT_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))) return false
+  // Explicit blockers (no sponsorship / citizenship / clearance) take priority —
+  // "No visa sponsorship is available" contains "sponsorship ... available", so the
+  // blocker must be checked before the sponsorship-available signal.
   if (AUTH_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))) return true
+  if (AUTH_NOT_REQUIRED_PATTERNS.some((pattern) => pattern.test(text))) return false
   return null
 }
 
