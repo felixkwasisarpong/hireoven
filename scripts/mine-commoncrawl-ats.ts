@@ -39,12 +39,19 @@ type CdxTarget = {
   ats: AtsName
   /** The apex domain to pass to the CDX wildcard query (*.apex). */
   apex: string
+  /** Optional CDX `url` match override. Defaults to `{apex}/*` (path prefix
+   *  under one host). Use a domain-wildcard form for subdomain-per-tenant
+   *  ATSes (Workday/Oracle) — CC DOES index those at the subdomain level. */
+  cdxUrl?: string
 }
 
-// Only include ATSes where CC crawls shared-domain job boards accessible via
-// path prefix (e.g. jobs.lever.co/{slug}/*). Subdomain-per-tenant ATSes
-// (BambooHR, Recruitee, TeamTailor, Workday, iCIMS) are not indexed by CC
-// at the tenant-subdomain level — use crt.sh for those instead.
+// Path-prefix ATSes crawl a shared-domain board (e.g. jobs.lever.co/{slug}/*).
+// Subdomain-per-tenant ATSes (Workday, Oracle) ARE indexed by CC at the
+// subdomain level — they just need a `*.apex` domain-wildcard query instead of
+// `{host}/*`. Their indexed job URL carries the tenant AND the site, and the
+// site name is otherwise unobtainable (the tenant host 406s on /sites), so CC
+// is the only zero-cost enumerator for them: detectAdapter parses the
+// tenant:wd:site / pod:site slug straight out of the URL.
 const CDX_TARGETS: CdxTarget[] = [
   { ats: "greenhouse",      apex: "boards.greenhouse.io"     },
   { ats: "greenhouse",      apex: "job-boards.greenhouse.io" },
@@ -53,6 +60,11 @@ const CDX_TARGETS: CdxTarget[] = [
   { ats: "smartrecruiters", apex: "jobs.smartrecruiters.com" },
   { ats: "workable",        apex: "apply.workable.com"       },
   { ats: "rippling",        apex: "ats.rippling.com"         },
+  // Subdomain-per-tenant enterprise ATSes (highest jobs-per-tenant).
+  { ats: "workday",         apex: "myworkdayjobs.com", cdxUrl: "*.myworkdayjobs.com" },
+  // oraclecloud.com hosts all of Oracle Cloud; restrict to the recruiting
+  // Candidate Experience path so we don't pull unrelated Fusion apps.
+  { ats: "oraclecloud",     apex: "oraclecloud.com",   cdxUrl: "*.oraclecloud.com/hcmUI/CandidateExperience/*" },
 ]
 
 // ─── CLI args ─────────────────────────────────────────────────────────────────
@@ -179,7 +191,7 @@ async function main() {
     console.log(`\n[commoncrawl] querying CDX for *.${target.apex} …`)
     let entries
     try {
-      entries = await queryCdxForApex(target.apex, { index: ccIndex, limit: cdxLimit })
+      entries = await queryCdxForApex(target.apex, { index: ccIndex, limit: cdxLimit, urlPattern: target.cdxUrl })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.warn(`  ⚠ CDX query failed for ${target.apex}: ${msg}`)
