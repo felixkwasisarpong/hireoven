@@ -20,10 +20,10 @@ services:
       PGSSLMODE: ${PGSSLMODE:-disable}
       PG_POOL_MAX: ${PG_POOL_MAX:-25}
       HARVESTER_USE_NEW_ADAPTERS: ${HARVESTER_USE_NEW_ADAPTERS:-true}
-      # Workable has its own paced worker below. Excluding it here keeps 429
-      # backoff and queued Workable detail fetches from consuming the main ATS
-      # worker capacity.
-      HARVESTER_EXCLUDE_ADAPTERS: ${HARVESTER_EXCLUDE_ADAPTERS:-workable}
+      # Workable is intentionally disabled. Its public board path rate-limits
+      # sustained aggregation traffic and the official API requires per-account
+      # tokens, not one global key.
+      HARVESTER_EXCLUDE_ADAPTERS: workable
       HARVESTER_INSTANCES: ${HARVESTER_INSTANCES:-6}
       # Total claims are divided across HARVESTER_INSTANCES in worker.ts.
       # Without this, 6 loops silently fall back to 24 total claims/tick.
@@ -55,16 +55,6 @@ services:
       HARVESTER_ASHBY_CONCURRENCY: ${HARVESTER_ASHBY_CONCURRENCY:-2}
       HARVESTER_GREENHOUSE_CONCURRENCY: ${HARVESTER_GREENHOUSE_CONCURRENCY:-3}
       HARVESTER_LEVER_CONCURRENCY: ${HARVESTER_LEVER_CONCURRENCY:-2}
-      # apply.workable.com publishes a hard 10 requests / 10 seconds limit. Keep
-      # one Workable lane and let ATS_RATE_LIMIT_WORKABLE_* pace listing + detail
-      # requests; raising concurrency alone only fills the limiter queue.
-      HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-1}
-      # Detail-pass volume — Workable v3 omits the JD from the list, so the pass
-      # fetches /api/v2 per new job. The Workable host gate enforces the 1 rps
-      # average; this cap controls how much detail work one board can
-      # consume before the next company gets a turn.
-      HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-20}
-      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-0}
       # Route adapter fetches whose host matches HARVESTER_PROXY_HOSTS through a
       # proxy. Default is Workday only (its per-tenant rate is low enough for one
       # proxy IP). Keep high-volume ATS hosts direct unless you have a legitimate
@@ -89,8 +79,6 @@ services:
       # ATS discovery/backsolve token buckets. Actual harvester HTTP requests are
       # paced by HARVESTER_HOST_RATE_LIMITS above.
       ATS_RATE_LIMIT_QUEUE_CAP: ${ATS_RATE_LIMIT_QUEUE_CAP:-200}
-      ATS_RATE_LIMIT_WORKABLE_RPS: ${ATS_RATE_LIMIT_WORKABLE_RPS:-1}
-      ATS_RATE_LIMIT_WORKABLE_BURST: ${ATS_RATE_LIMIT_WORKABLE_BURST:-10}
       ATS_RATE_LIMIT_GREENHOUSE_RPS: ${ATS_RATE_LIMIT_GREENHOUSE_RPS:-3}
       ATS_RATE_LIMIT_GREENHOUSE_BURST: ${ATS_RATE_LIMIT_GREENHOUSE_BURST:-10}
       ATS_RATE_LIMIT_LEVER_RPS: ${ATS_RATE_LIMIT_LEVER_RPS:-5}
@@ -107,47 +95,6 @@ services:
       ATS_RATE_LIMIT_PERSONIO_BURST: ${ATS_RATE_LIMIT_PERSONIO_BURST:-5}
       USAJOBS_API_KEY: ${USAJOBS_API_KEY}
       USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
-
-  harvester-workable:
-    image: ghcr.io/felixkwasisarpong/hireoven-harvester:latest
-    pull_policy: always
-    container_name: hireoven-harvester-workable
-    restart: unless-stopped
-    command: ["npm", "run", "harvester:worker"]
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      PGSSLMODE: ${PGSSLMODE:-disable}
-      PG_POOL_MAX: ${HARVESTER_WORKABLE_PG_POOL_MAX:-5}
-      HARVESTER_USE_NEW_ADAPTERS: ${HARVESTER_USE_NEW_ADAPTERS:-true}
-      HARVESTER_INCLUDE_ADAPTERS: workable
-      # MUST be empty here. The main harvester sets a global
-      # HARVESTER_EXCLUDE_ADAPTERS=workable (Coolify injects it into every
-      # service); if it leaks in, include(workable) - exclude(workable) = []
-      # and this worker claims nothing (claimAdapters:[]). Shadow it to "".
-      HARVESTER_EXCLUDE_ADAPTERS: ""
-      HARVESTER_INSTANCES: ${HARVESTER_WORKABLE_INSTANCES:-1}
-      HARVESTER_TOTAL_CLAIM_BUDGET: ${HARVESTER_WORKABLE_TOTAL_CLAIM_BUDGET:-1}
-      HARVESTER_CONCURRENCY: ${HARVESTER_WORKABLE_DEFAULT_CONCURRENCY:-1}
-      HARVESTER_CLAIM_BATCH_SIZE: ${HARVESTER_WORKABLE_CLAIM_BATCH_SIZE:-1}
-      HARVESTER_TICK_INTERVAL_MS: ${HARVESTER_WORKABLE_TICK_INTERVAL_MS:-1000}
-      HARVESTER_LEASE_SECONDS: ${HARVESTER_WORKABLE_LEASE_SECONDS:-600}
-      HARVESTER_TICK_TIMEOUT_MS: ${HARVESTER_WORKABLE_TICK_TIMEOUT_MS:-300000}
-      HARVESTER_PER_COMPANY_TIMEOUT_MS: ${HARVESTER_WORKABLE_PER_COMPANY_TIMEOUT_MS:-180000}
-      HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-1}
-      HARVESTER_WORKABLE_DETAIL_MAX_JOBS: ${HARVESTER_WORKABLE_DETAIL_MAX_JOBS:-20}
-      HARVESTER_WORKABLE_DETAIL_DELAY_MS: ${HARVESTER_WORKABLE_DETAIL_DELAY_MS:-0}
-      ATS_RATE_LIMIT_WORKABLE_RPS: ${ATS_RATE_LIMIT_WORKABLE_RPS:-1}
-      ATS_RATE_LIMIT_WORKABLE_BURST: ${ATS_RATE_LIMIT_WORKABLE_BURST:-10}
-      ATS_RATE_LIMIT_QUEUE_CAP: ${ATS_RATE_LIMIT_QUEUE_CAP:-200}
-      HARVESTER_FAILURE_COOLDOWN_SECONDS: ${HARVESTER_FAILURE_COOLDOWN_SECONDS:-1800}
-      HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS: ${HARVESTER_RATE_LIMIT_COOLDOWN_SECONDS:-900}
-      HARVESTER_HTTP_403_COOLDOWN_SECONDS: ${HARVESTER_HTTP_403_COOLDOWN_SECONDS:-86400}
-      HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
-      HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
-      # Workable's published API limit is 10 requests / 10 seconds. This worker
-      # runs one loop by default, so the configured host budget is the real rate.
-      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_WORKABLE_HOST_RATE_LIMITS:-apply.workable.com=1,jobs.workable.com=1}
 
   app-worker:
     image: ghcr.io/felixkwasisarpong/hireoven:latest
