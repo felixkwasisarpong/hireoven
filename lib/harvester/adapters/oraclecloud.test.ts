@@ -235,3 +235,38 @@ test("oraclecloud: fetchJobs paginates by TotalJobsCount, ignoring the misleadin
   const detailedJob = result.jobs.find((j) => j.externalId.endsWith(":2"))
   assert.match(detailedJob!.description ?? "", /detail description with enough useful/)
 })
+
+test("oraclecloud: change-detection returns notModified + skips pagination on unchanged board", async () => {
+  const page0 = {
+    items: [
+      {
+        TotalJobsCount: 2,
+        requisitionList: [
+          { Id: 1, Title: "Alpha", PrimaryLocation: "NYC", ExternalDescriptionStr: "<p>Responsibilities include building and operating large scale distributed systems, collaborating across teams, mentoring engineers, and ensuring reliability, security and performance of critical production services every single day here.</p>" },
+          { Id: 2, Title: "Beta", PrimaryLocation: "SF", ExternalDescriptionStr: "<p>Responsibilities include building and operating large scale distributed systems, collaborating across teams, mentoring engineers, and ensuring reliability, security and performance of critical production services every single day here.</p>" },
+        ],
+      },
+    ],
+  }
+  let listingCalls = 0
+  const fetchImpl: typeof fetch = (async (input: string | URL) => {
+    const url = new URL(input.toString())
+    if (url.pathname === "/hcmRestApi/resources/latest/recruitingCEJobRequisitions") {
+      listingCalls += 1
+      return new Response(JSON.stringify(page0), { headers: { "content-type": "application/json" } })
+    }
+    return new Response("{}", { headers: { "content-type": "application/json" } })
+  }) as unknown as typeof fetch
+
+  const first = await oraclecloudAdapter.fetchJobs({ slug: "eeho.fa.us2:CX_1", ctx: { etag: null, lastModified: null, fetchImpl } })
+  assert.equal(first.notModified, false)
+  assert.equal(first.jobs.length, 2)
+  assert.ok(first.etag && first.etag.startsWith("orcv1:"), "stores a page-0 fingerprint as etag")
+  const afterFirst = listingCalls
+
+  const second = await oraclecloudAdapter.fetchJobs({ slug: "eeho.fa.us2:CX_1", ctx: { etag: first.etag, lastModified: null, fetchImpl } })
+  assert.equal(second.notModified, true, "unchanged board short-circuits")
+  assert.equal(second.jobs.length, 0)
+  assert.equal(second.etag, first.etag)
+  assert.equal(listingCalls - afterFirst, 1, "second crawl does exactly one page-0 fetch, no pagination")
+})

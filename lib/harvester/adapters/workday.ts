@@ -704,6 +704,41 @@ export const workdayAdapter: AtsAdapter = {
     const url = listingUrl(parsed)
     const deadline = Date.now() + COMPANY_DEADLINE_MS
 
+    // Change-check before the full (30-60s) paginated crawl. One page-0 POST
+    // fingerprints the board via `total` (catches any add/remove) plus a hash of
+    // the first page's job IDs (catches same-count churn in the newest slice). If
+    // it matches the stored fingerprint (ctx.etag), the board is unchanged and we
+    // skip all pagination + per-job detail. Only trusted BELOW the 2,000 query
+    // cap: at/over the cap `total` saturates at 2,000 and deep changes wouldn't
+    // move the first page, so capped tenants always take the full facet crawl.
+    let fingerprint: string | null = null
+    const probe = await postWorkdayListing(
+      url,
+      { appliedFacets: {}, limit: PAGE_LIMIT, offset: 0, searchText: "" },
+      ctx
+    )
+    if (probe.kind === "ok") {
+      const total = probe.data.total ?? 0
+      const firstIds = (probe.data.jobPostings ?? [])
+        .map((raw) => mapRawJob(parsed, raw)?.externalId)
+        .filter((id): id is string => Boolean(id))
+      fingerprint = `wdv1:${total}:${hashContent(firstIds)}`
+      if (ctx.etag && ctx.etag === fingerprint && total < QUERY_TOTAL_CAP) {
+        return {
+          jobs: [],
+          notModified: true,
+          etag: fingerprint,
+          lastModified: null,
+          sourceAts: "workday",
+          sourceAtsSlug: slug,
+          fetchedAt,
+          upstreamLatencyMs: probe.upstreamLatencyMs,
+        }
+      }
+    }
+    // probe error → fall through; harvestListing re-fetches page 0 and throws on
+    // a first-page failure, preserving the WAF / circuit-breaker signal.
+
     // Phase 1: harvest the listing, subdividing by facet on capped tenants so we
     // break past the 2,000-per-query wrap. Bounded by the deadline + page budget;
     // the first page's failure still throws (WAF / circuit-breaker signal).
@@ -726,10 +761,10 @@ export const workdayAdapter: AtsAdapter = {
     return {
       jobs,
       notModified: false,
-      // Workday CXS doesn't honor If-None-Match on POST; conditional headers
-      // are not applicable. Leaving etag/lastModified as null so the worker
-      // doesn't waste a header on the next call.
-      etag: null,
+      // Store the page-0 fingerprint (see change-check above) so the next crawl
+      // can skip an unchanged board. Workday CXS doesn't honor If-None-Match on
+      // POST, so this app-level fingerprint stands in for an HTTP etag.
+      etag: fingerprint,
       lastModified: null,
       sourceAts: "workday",
       sourceAtsSlug: slug,
