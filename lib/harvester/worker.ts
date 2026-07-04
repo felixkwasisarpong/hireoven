@@ -118,6 +118,7 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   icims: 60_000,
   apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
   amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
+  walmart: 480_000, // 5 career areas × up to 200 pages (10/page) of the careers GraphQL
   microsoft: 240_000, // ~146 search pages (10/page) + a detail-fetch budget
   netflix: 120_000, // ~52 list pages (10/page, Eightfold) + a detail-fetch budget
   eightfold: 240_000, // large tenants (HSBC ~1.6k) paginate 10/page → up to 200 pages
@@ -182,6 +183,9 @@ const SUPPORTED_ATS_TYPES = [
   // claimed by the fast loop. ats_type='avature' has no careers_url pattern, so
   // it must be listed here to be picked up.
   "avature",
+  // Walmart (careers.walmart.com GraphQL). Single-company custom adapter; listed
+  // here so the one walmart row is claimed by the fast loop.
+  "walmart",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {

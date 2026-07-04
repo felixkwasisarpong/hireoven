@@ -4,6 +4,7 @@ import { bamboohrAdapter } from "@/lib/harvester/adapters/bamboohr"
 import { breezyAdapter } from "@/lib/harvester/adapters/breezy"
 import { appleAdapter } from "@/lib/harvester/adapters/apple"
 import { amazonAdapter } from "@/lib/harvester/adapters/amazon"
+import { walmartAdapter } from "@/lib/harvester/adapters/walmart"
 import { microsoftAdapter } from "@/lib/harvester/adapters/microsoft"
 import { netflixAdapter } from "@/lib/harvester/adapters/netflix"
 import { ripplingAdapter } from "@/lib/harvester/adapters/rippling"
@@ -84,6 +85,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   infosys: infosysAdapter,
   apple: appleAdapter,
   amazon: amazonAdapter,
+  walmart: walmartAdapter,
   microsoft: microsoftAdapter,
   netflix: netflixAdapter,
   rippling: ripplingAdapter,
