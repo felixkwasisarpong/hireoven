@@ -36,6 +36,7 @@ export type AtsName =
   | "avature"
   | "ukg"
   | "infosys"
+  | "ibm"
   | "apple"
   | "amazon"
   | "walmart"
