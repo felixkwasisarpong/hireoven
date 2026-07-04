@@ -9,6 +9,7 @@ function hit(jobId: string, title: string, loc: string) {
       title,
       url: `https://careers.ibm.com/careers/JobDetail?jobId=${jobId}`,
       description: "<p>Do <b>great</b> things.</p>",
+      field_keyword_17: "Hybrid",
       field_keyword_18: "Professional",
       field_keyword_19: loc,
     },
@@ -43,6 +44,7 @@ test("ibm: mapHit maps id from jobId, apply URL, location, strips HTML desc", ()
   assert.equal(job!.title, "Quantum Hardware Design Engineer")
   assert.equal(job!.applyUrl, "https://careers.ibm.com/careers/JobDetail?jobId=108263")
   assert.equal(job!.location, "Yorktown Heights, US")
+  assert.equal(job!.workMode, "Hybrid")
   assert.equal(job!.description, "Do great things.")
 })
 
