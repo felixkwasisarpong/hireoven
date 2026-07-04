@@ -205,6 +205,14 @@ const SUPPORTED_ATS_TYPES = [
   // tenant (L3Harris) was never claimed by the fast loop. Enrolled by ats_type;
   // slug falls back to careers_url (no canonical URL builder for radancy).
   "radancy",
+  // Registered + already crawlable, but claimed only opportunistically via
+  // careers_url URL-detection — so many enrolled/reactivated tenants sat
+  // uncrawled (gem/pinpoint barely appeared in crawl_logs). List them here so
+  // the fast loop claims them by ats_type like every other supported adapter.
+  "gem",
+  "pinpoint",
+  "rippling",
+  "breezy",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {
