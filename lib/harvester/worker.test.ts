@@ -161,6 +161,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "ibm",
     "adecco",
     "kelly",
+    "radancy",
   ])
 
   assert.equal(result.length, 1)

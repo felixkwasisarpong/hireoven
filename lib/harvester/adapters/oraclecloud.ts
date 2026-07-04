@@ -25,10 +25,15 @@ import pLimit from "p-limit"
  * The pod identifier is everything left of `.oraclecloud.com`.
  */
 
-const PAGE_LIMIT = 50
+// Oracle CE honours page sizes up to 200 (values above are clamped to 200
+// server-side), so request the max to cut round-trips 4× vs the old 50. With
+// MAX_PAGES=60 the ceiling is 200×60 = 12,000 jobs — enough for the largest
+// tenants we harvest (JPMorgan ~7,100). Pagination self-stops at
+// `TotalJobsCount`, so MAX_PAGES is only a runaway safety cap.
+const PAGE_LIMIT = 200
 const MAX_PAGES = Math.max(
   1,
-  Number.parseInt(process.env.HARVESTER_ORACLECLOUD_MAX_PAGES ?? "20", 10)
+  Number.parseInt(process.env.HARVESTER_ORACLECLOUD_MAX_PAGES ?? "60", 10)
 )
 const DETAIL_MAX_JOBS = Math.max(
   0,

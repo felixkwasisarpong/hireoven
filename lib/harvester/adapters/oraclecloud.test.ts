@@ -201,7 +201,7 @@ test("oraclecloud: fetchJobs paginates by TotalJobsCount, ignoring the misleadin
       const offsetMatch = finder.match(/offset=(\d+)/)
       const offset = offsetMatch ? Number.parseInt(offsetMatch[1], 10) : -1
       if (offset === 0) return new Response(JSON.stringify(page0), { headers: { "content-type": "application/json" } })
-      if (offset === 50) return new Response(JSON.stringify(page1), { headers: { "content-type": "application/json" } })
+      if (offset === 200) return new Response(JSON.stringify(page1), { headers: { "content-type": "application/json" } })
     }
     if (url.pathname.includes("/hcmUI/CandidateExperience/en/sites/CX_1/job/")) {
       detailCalls += 1
