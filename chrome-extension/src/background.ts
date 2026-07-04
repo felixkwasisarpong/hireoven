@@ -58,6 +58,10 @@ const LOCAL_APP_ORIGINS = [
   "http://127.0.0.1:3000",
 ] as const
 const PROD_APP_ORIGIN = "https://hireoven.com" as const
+const DEFAULT_APP_ORIGIN =
+  __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__ === PROD_APP_ORIGIN
+    ? PROD_APP_ORIGIN
+    : LOCAL_APP_ORIGINS[0]
 
 const SESSION_COOKIE_NAME = "ho_session"
 
@@ -256,7 +260,9 @@ function makeQueueId(): string {
 /**
  * Resolve the active hireoven origin.
  *
- * Default is the production app, even for manually loaded packages.
+ * Default is controlled by the build:
+ *   npm run build       → localhost:3000
+ *   npm run build:prod  → hireoven.com
  *
  * Override via chrome.storage.local:
  *   chrome.storage.local.set({ devMode: true })   → force localhost:3000
@@ -284,7 +290,7 @@ async function resolveOrigin(): Promise<string> {
     return LOCAL_APP_ORIGINS[0]
   }
   if (result.devMode === false) return PROD_APP_ORIGIN
-  return PROD_APP_ORIGIN
+  return DEFAULT_APP_ORIGIN
 }
 
 async function hasSessionCookie(origin: string): Promise<boolean> {

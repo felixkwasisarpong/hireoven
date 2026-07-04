@@ -64,6 +64,13 @@ function cleanStringArray(value: unknown, maxItems: number, maxLen: number): str
   return out
 }
 
+/** Certifications live in the resume's skills bucket as a string[] of names. */
+function cleanCertifications(skills: unknown, maxItems = 12, maxLen = 120): string[] {
+  if (!skills || typeof skills !== "object") return []
+  const certs = (skills as { certifications?: unknown }).certifications
+  return cleanStringArray(certs, maxItems, maxLen)
+}
+
 function cleanWorkExperience(value: unknown, maxItems = 8): SafeResumeExperience[] {
   if (!Array.isArray(value)) return []
   const out: SafeResumeExperience[] = []
@@ -125,6 +132,7 @@ export async function GET(request: Request) {
     resume_top_skills: string[] | null
     resume_work_experience: unknown
     resume_education: unknown
+    resume_skills: unknown
   }>(
     `SELECT ap.*,
             r.full_name     AS resume_full_name,
@@ -138,10 +146,11 @@ export async function GET(request: Request) {
             r.summary        AS resume_summary,
             r.top_skills     AS resume_top_skills,
             r.work_experience AS resume_work_experience,
-            r.education       AS resume_education
+            r.education       AS resume_education,
+            r.skills          AS resume_skills
      FROM autofill_profiles ap
      LEFT JOIN LATERAL (
-       SELECT full_name, primary_role, email, phone, location, linkedin_url, portfolio_url, summary, top_skills, work_experience, education
+       SELECT full_name, primary_role, email, phone, location, linkedin_url, portfolio_url, summary, top_skills, work_experience, education, skills
        FROM resumes
        WHERE user_id = $1
        ORDER BY is_primary DESC, updated_at DESC
@@ -172,6 +181,7 @@ export async function GET(request: Request) {
   const topSkills = cleanStringArray(profile.resume_top_skills, 24, 100)
   const workExperience = cleanWorkExperience(profile.resume_work_experience)
   const education = cleanEducation(profile.resume_education)
+  const certifications = cleanCertifications(profile.resume_skills)
 
   // Return only safe fields for autofill.
   // Diversity fields (gender, ethnicity, veteran, disability) are included only
@@ -210,6 +220,7 @@ export async function GET(request: Request) {
     auto_fill_diversity: profile.auto_fill_diversity ?? false,
     gender: profile.auto_fill_diversity ? (profile.gender ?? null) : null,
     ethnicity: profile.auto_fill_diversity ? (profile.ethnicity ?? null) : null,
+    hispanic_latino: profile.auto_fill_diversity ? (profile.hispanic_latino ?? null) : null,
     veteran_status: profile.auto_fill_diversity ? (profile.veteran_status ?? null) : null,
     disability_status: profile.auto_fill_diversity ? (profile.disability_status ?? null) : null,
     // Resume-derived fields
@@ -226,6 +237,7 @@ export async function GET(request: Request) {
     top_skills: topSkills,
     work_experience: workExperience,
     resume_education: education,
+    resume_certifications: certifications,
   }
 
   return NextResponse.json(

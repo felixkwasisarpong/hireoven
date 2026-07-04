@@ -31,6 +31,7 @@ import {
   readExtensionJsonBody,
   requireExtensionAuth,
 } from "@/lib/extension/auth"
+import { extensionDashboardUrl } from "@/lib/extension/dashboard-url"
 
 export const runtime = "nodejs"
 
@@ -71,17 +72,6 @@ interface SaveResultBody {
   created: boolean
   updated: boolean
   dashboardUrl?: string
-}
-
-function resolveOriginFromRequest(request: Request): string {
-  const origin = request.headers.get("origin")
-  if (origin && /^https?:\/\//.test(origin)) return origin
-  // Fallback to request URL origin
-  try {
-    return new URL(request.url).origin
-  } catch {
-    return ""
-  }
 }
 
 /**
@@ -607,7 +597,7 @@ export async function POST(request: Request) {
     jobId,
     created,
     updated: !created || jobUpdated,
-    dashboardUrl: `${resolveOriginFromRequest(request)}/dashboard/jobs/${jobId}`,
+    dashboardUrl: extensionDashboardUrl(request, jobId),
   }
 
   return NextResponse.json(result, {

@@ -89,7 +89,12 @@ let currentAutofillFields: DetectedField[] = []
 let currentTailorResumeId: string | null = null
 let tailorJobId: string | null = null
 let detectedAts: string | null = null
-let appOrigin = "https://hireoven.com"
+const DEFAULT_APP_ORIGIN =
+  __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__ === "https://hireoven.com"
+    ? "https://hireoven.com"
+    : "http://localhost:3000"
+
+let appOrigin = DEFAULT_APP_ORIGIN
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -878,8 +883,10 @@ async function boot() {
   const stored = await chrome.storage.local.get(["devMode", "lastJobId"])
   if (stored.devMode === true) {
     appOrigin = "http://localhost:3000"
-  } else {
+  } else if (stored.devMode === false) {
     appOrigin = "https://hireoven.com"
+  } else {
+    appOrigin = DEFAULT_APP_ORIGIN
   }
 
   // Restore jobId from extension storage if available (handles cross-session)

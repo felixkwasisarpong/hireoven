@@ -241,6 +241,11 @@ const ETHNICITY_OPTIONS = [
   "Asian", "American Indian or Alaska Native", "Native Hawaiian or Other Pacific Islander",
   "Two or More Races", "Prefer not to answer",
 ]
+const HISPANIC_OPTIONS = [
+  "Yes, I am Hispanic or Latino",
+  "No, I am not Hispanic or Latino",
+  "I don't wish to answer",
+]
 const VETERAN_OPTIONS = [
   "I am not a protected veteran",
   "I identify as one or more classifications of a protected veteran",
@@ -273,7 +278,7 @@ const EMPTY_FORM: FormState = {
   custom_answers: DEFAULT_QA,
   highest_degree: null, field_of_study: null, university: null,
   graduation_year: null, gpa: null,
-  gender: null, ethnicity: null, veteran_status: null, disability_status: null,
+  gender: null, ethnicity: null, hispanic_latino: null, veteran_status: null, disability_status: null,
   auto_fill_diversity: false,
 }
 
@@ -935,6 +940,12 @@ export default function AutofillPageClient({
                   <select value={str(form.ethnicity)} onChange={(e) => set("ethnicity", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {ETHNICITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </Field>
+                <Field label="Hispanic or Latino?" hint="Asked separately on many Workday forms.">
+                  <select value={str(form.hispanic_latino)} onChange={(e) => set("hispanic_latino", e.target.value || null)} className={inputCls}>
+                    <option value="">Select…</option>
+                    {HISPANIC_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
                 <Field label="Veteran status" hint="Required by OFCCP-covered employers.">

@@ -342,6 +342,7 @@ export type AutofillProfile = {
   gpa: string | null;
   gender: string | null;
   ethnicity: string | null;
+  hispanic_latino: string | null;
   veteran_status: string | null;
   disability_status: string | null;
   auto_fill_diversity: boolean;

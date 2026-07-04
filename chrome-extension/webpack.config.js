@@ -1,5 +1,12 @@
 const path = require("path")
 const fs = require("fs")
+const webpack = require("webpack")
+
+const extensionDefaultOrigin =
+  process.env.HIREOVEN_EXTENSION_DEFAULT_ORIGIN ||
+  (process.env.HIREOVEN_EXTENSION_TARGET === "production"
+    ? "https://hireoven.com"
+    : "http://localhost:3000")
 
 /** Minimal plugin to copy the popup HTML to the output popup/ directory. */
 class CopyPopupHtmlPlugin {
@@ -47,5 +54,10 @@ module.exports = {
   optimization: {
     runtimeChunk: false,
   },
-  plugins: [new CopyPopupHtmlPlugin()],
+  plugins: [
+    new webpack.DefinePlugin({
+      __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__: JSON.stringify(extensionDefaultOrigin),
+    }),
+    new CopyPopupHtmlPlugin(),
+  ],
 }

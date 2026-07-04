@@ -47,6 +47,8 @@ export async function GET(request: Request) {
   const pool = getPostgresPool()
   let result: { rows: Resume[] } = { rows: [] }
   let resume: Resume | null = null
+  // Role this resume was tailored for, folded into the download filename.
+  let roleLabel: string | null = null
   if (versionId) {
     const versionResult = await pool.query<ResumeVersion>(
       `SELECT * FROM resume_versions WHERE id = $1 AND user_id = $2 LIMIT 1`,
@@ -67,11 +69,17 @@ export async function GET(request: Request) {
     resume = version.snapshot
       ? restoreResumeFromSnapshot(baseResume, version.snapshot)
       : baseResume
+    // Keep the DOCX heading/content from the version, but do NOT let the
+    // internal version label ("Tailored for … at …") become the uploaded
+    // filename — recruiters see that name. professionalResumeFilename() below
+    // derives a clean "<Full Name> Resume.docx" from the candidate instead.
     resume = {
       ...resume,
       name: version.name ?? resume.name,
-      file_name: version.name ? `${version.name}.docx` : resume.file_name,
     }
+    // Recover the role from the internal label "Tailored for <role> at <co> · <ats>".
+    const roleMatch = (version.name ?? "").match(/^tailored\s+for\s+(.+?)(?:\s+at\s+|\s+·\s+|$)/i)
+    if (roleMatch?.[1]) roleLabel = roleMatch[1].trim()
   } else if (resumeId) {
     result = await pool.query<Resume>(
       `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
@@ -127,9 +135,7 @@ export async function GET(request: Request) {
     return extensionError(request, 500, "Generated document was empty", { headers: cors })
   }
 
-  const safeName = (resume.name ?? resume.file_name ?? "resume")
-    .replace(/["\\]/g, "")
-    .replace(/\.docx$/i, "")
+  const safeName = professionalResumeFilename(resume, roleLabel ?? resume.primary_role)
 
   return new NextResponse(new Uint8Array(docxBuffer), {
     headers: {
@@ -139,4 +145,35 @@ export async function GET(request: Request) {
       "Cache-Control":       "no-store",
     },
   })
+}
+
+/**
+ * A clean, recruiter-facing resume filename (returned without the .docx
+ * extension), e.g. "Felix Sarpong - Site Reliability Engineer Resume".
+ * Prefers the candidate's real name + the role it was tailored for; never
+ * leaks internal labels like "Tailored for … at …". Falls back gracefully to
+ * name-only, then the base file name, then a generic "Resume".
+ */
+function professionalResumeFilename(resume: Resume, role?: string | null): string {
+  const clean = (s: string): string =>
+    s.replace(/[\\/:*?"<>|]/g, " ").replace(/\s+/g, " ").trim()
+
+  const roleLabel = clean(role ?? "")
+
+  // Candidate name — full_name, else resume.name when it isn't a tailoring label.
+  let person = clean(resume.full_name ?? "")
+  if (!person) {
+    const name = clean(resume.name ?? "")
+    if (name && !/^tailored\b/i.test(name) && !/resume|cv/i.test(name)) person = name
+  }
+
+  if (person) {
+    return roleLabel ? `${person} - ${roleLabel} Resume` : `${person} Resume`
+  }
+
+  // No usable person name: role-only, then base filename, then generic.
+  if (roleLabel) return `${roleLabel} Resume`
+  const base = clean((resume.file_name ?? "").replace(/\.[a-z0-9]+$/i, ""))
+  if (base && !/^tailored\b/i.test(base)) return base
+  return "Resume"
 }
