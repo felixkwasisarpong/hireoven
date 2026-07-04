@@ -22,6 +22,7 @@ import { icimsAdapter } from "@/lib/harvester/adapters/icims"
 import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
 import { ibmAdapter } from "@/lib/harvester/adapters/ibm"
 import { adeccoAdapter } from "@/lib/harvester/adapters/adecco"
+import { kellyAdapter } from "@/lib/harvester/adapters/kelly"
 import { jazzhrAdapter } from "@/lib/harvester/adapters/jazzhr"
 import { jobviteAdapter } from "@/lib/harvester/adapters/jobvite"
 import { leverAdapter } from "@/lib/harvester/adapters/lever"
@@ -88,6 +89,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   infosys: infosysAdapter,
   ibm: ibmAdapter,
   adecco: adeccoAdapter,
+  kelly: kellyAdapter,
   apple: appleAdapter,
   amazon: amazonAdapter,
   walmart: walmartAdapter,
