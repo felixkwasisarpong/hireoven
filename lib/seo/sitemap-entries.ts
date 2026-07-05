@@ -14,6 +14,14 @@ export { siteBaseUrl }
 // the hard limit so a growth spike between deploys can't push a chunk over.
 export const SITEMAP_CHUNK = 45000
 
+// Cap on individual /jobs/[id] URLs in the sitemap. Job detail pages are the core
+// long-tail SEO surface, so we index far more than the old 1000, but keep a bound:
+// the query is index-backed (idx_jobs_first_detected_at) and stops once it has this
+// many matching rows, so it's a bounded index walk (not a full scan) on the small
+// prod PG, and stays under Google's 50k-per-sitemap limit. Ordered newest-first, so
+// the freshest — and most link-worthy — roles are always the ones included.
+export const SITEMAP_JOB_LIMIT = 25000
+
 export type SitemapEntry = MetadataRoute.Sitemap[number]
 
 const SALARY_TOP_STATES = ["CA", "TX", "NY", "WA", "NJ", "MA", "IL", "GA", "PA", "VA"]
@@ -63,7 +71,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
         `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr, sponsorship_confidence, job_count, industry FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
       pool.query<{ id: string; updated_at: string }>(
-        `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")} ORDER BY first_detected_at DESC NULLS LAST LIMIT 1000`
+        `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")} ORDER BY first_detected_at DESC NULLS LAST LIMIT ${SITEMAP_JOB_LIMIT}`
       ),
       pool.query<{ city: string; state: string }>(
         `SELECT worksite_city AS city, worksite_state_abbr AS state FROM lca_records

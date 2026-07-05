@@ -10,7 +10,11 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/companies", "/companies/", "/h1b-sponsors", "/h1b-sponsors/", "/jobs/", "/jobs-at/", "/salaries/", "/privacy", "/terms"],
+        // /api/og/ must stay crawlable: it serves the Open Graph share images. A specific
+        // Allow overrides the broad /api/ Disallow via longest-match precedence, so social
+        // scrapers (LinkedIn, Facebook, Twitter) can fetch the preview image while the rest
+        // of /api/ stays blocked. Without this, shared job links show "Cannot display preview".
+        allow: ["/", "/api/og/", "/companies", "/companies/", "/h1b-sponsors", "/h1b-sponsors/", "/jobs/", "/jobs-at/", "/salaries/", "/privacy", "/terms"],
         disallow: ["/dashboard", "/dashboard/", "/admin", "/admin/", "/api/", "/auth/"],
       },
     ],

@@ -281,7 +281,7 @@ export default function JobListRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <h3 className="truncate text-[14px] font-semibold text-slate-950">{displayTitle}</h3>
+          <h3 className="line-clamp-2 text-[14px] font-semibold leading-snug text-slate-950 sm:line-clamp-1">{displayTitle}</h3>
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-slate-500">
           {companyHref ? (
@@ -461,7 +461,7 @@ export default function JobListRow({
           onClick={() => router.push(detailHref)}
           aria-label="View details"
           className={cn(
-            "inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[12px] font-semibold text-slate-600 transition",
+            "hidden h-8 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 text-[12px] font-semibold text-slate-600 transition sm:inline-flex",
             enableHoverEffects && "hover:bg-slate-100"
           )}
         >
