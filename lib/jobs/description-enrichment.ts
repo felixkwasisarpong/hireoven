@@ -17,14 +17,18 @@ import {
 import { safeJsonStringify } from "@/lib/jobs/json-sanitize"
 import { getPostgresPool } from "@/lib/postgres/server"
 
+// Missing-description influx is ~135k/day; at batch 100 × 12/hr the pass drained
+// only ~29k/day and the backlog grew unboundedly. 300 keeps up (~86k/day at the
+// */5 cadence, more with the crontab's explicit batch=500) now that the per-host
+// governor keeps the extra detail-fetches from tripping rate limits.
 const DEFAULT_BATCH_SIZE = Math.max(
   1,
-  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BATCH_SIZE ?? "100", 10)
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_BATCH_SIZE ?? "300", 10)
 )
 
 const DEFAULT_CONCURRENCY = Math.max(
   1,
-  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY ?? "4", 10)
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_CONCURRENCY ?? "10", 10)
 )
 
 const DEFAULT_MAX_ATTEMPTS = Math.max(
@@ -106,19 +110,25 @@ function withHardTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> 
 
 const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
   "ashby",
+  "avature",
   "bamboohr",
+  "breezy",
+  "eightfold",
+  "gem",
   "greenhouse",
   "icims",
   "jazzhr",
   "jobvite",
   "lever",
+  "oraclecloud",
   "rippling",
   "smartrecruiters",
+  "teamtailor",
   "workday",
 ] as const
 
 const DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN =
-  "(ashbyhq\\.com|bamboohr\\.com|greenhouse\\.io|icims\\.com|applytojob\\.com|jobvite\\.com|jobs\\.lever\\.co|ats\\.rippling\\.com|smartrecruiters\\.com|myworkdayjobs\\.com)"
+  "(ashbyhq\\.com|avature\\.net|bamboohr\\.com|breezy\\.hr|eightfold\\.ai|greenhouse\\.io|icims\\.com|applytojob\\.com|jobs\\.gem\\.com|jobvite\\.com|jobs\\.lever\\.co|oraclecloud\\.com|ats\\.rippling\\.com|smartrecruiters\\.com|teamtailor\\.com|myworkdayjobs\\.com)"
 
 type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
@@ -198,10 +208,16 @@ function enrichablePublicationStatusSql(
   sourceAtsParam: string,
   applyUrlPatternParam: string
 ): string {
+  // `visible_basic` is the status persist now gives a low/no-description job so
+  // it still reaches the feed (publicationStatusForInsert) — but the cron only
+  // ever looked for pending_enrichment / hidden_low_quality, so those visible
+  // basic jobs were published empty and NEVER backfilled. Include them here (and
+  // hidden_low_quality) so the enrichment pass actually fills them; once a
+  // description lands, SQL_UPGRADE_TO_VISIBLE_ENRICHED promotes them.
   return `(
         COALESCE(publication_status, 'published') = 'pending_enrichment'
         OR (
-          COALESCE(publication_status, 'published') = 'hidden_low_quality'
+          COALESCE(publication_status, 'published') IN ('hidden_low_quality', 'visible_basic')
           AND COALESCE(length(description), 0) < ${minDescriptionCharsParam}
           AND (
             source_ats = ANY(${sourceAtsParam}::text[])
