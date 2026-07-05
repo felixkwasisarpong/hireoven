@@ -98,12 +98,30 @@ async function main() {
   let salaryFilled = 0
   let failed = 0
 
+  // Retry a thunk through transient DB blips (e.g. a Coolify/PG restart drops
+  // in-flight connections with "terminating connection due to administrator
+  // command"). The Pool hands out fresh connections, so we just wait and retry;
+  // the run is row-level idempotent so re-doing a partial batch is safe.
+  async function withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await fn()
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e)
+        const transient = /terminat|connection|ECONNRESET|timeout|shutdown|administrator command/i.test(msg)
+        if (!transient || attempt >= 8) throw e
+        const wait = Math.min(30_000, 1000 * 2 ** (attempt - 1))
+        console.log(`  [retry] ${label} attempt ${attempt} after "${msg}" — waiting ${wait}ms`)
+        await new Promise((r) => setTimeout(r, wait))
+      }
+    }
+  }
+
   for (let i = 0; i < allIds.length; i += batchSize) {
     const ids = allIds.slice(i, i + batchSize)
     const placeholders = ids.map((_, j) => `$${j + 1}::uuid`).join(",")
-    const { rows: jobs } = await pool.query(
-      `SELECT * FROM jobs WHERE id IN (${placeholders})`,
-      ids
+    const { rows: jobs } = await withRetry("batch-select", () =>
+      pool.query(`SELECT * FROM jobs WHERE id IN (${placeholders})`, ids)
     )
 
     await Promise.all(
@@ -143,16 +161,18 @@ async function main() {
             const min = result.nextColumns.salary_min
             const max = result.nextColumns.salary_max
             const cur = result.nextColumns.salary_currency ?? "USD"
-            const res = await pool.query(
-              `UPDATE jobs SET
-                 raw_data = $1::jsonb,
-                 salary_min = COALESCE(salary_min, $3),
-                 salary_max = COALESCE(salary_max, $4),
-                 salary_currency = COALESCE(salary_currency, $5),
-                 updated_at = now()
-               WHERE id = $2::uuid
-               RETURNING (salary_min IS NOT NULL) AS has_salary`,
-              [JSON.stringify(nextRawData), job.id, min, max, cur]
+            const res = await withRetry(`update ${job.id}`, () =>
+              pool.query(
+                `UPDATE jobs SET
+                   raw_data = $1::jsonb,
+                   salary_min = COALESCE(salary_min, $3),
+                   salary_max = COALESCE(salary_max, $4),
+                   salary_currency = COALESCE(salary_currency, $5),
+                   updated_at = now()
+                 WHERE id = $2::uuid
+                 RETURNING (salary_min IS NOT NULL) AS has_salary`,
+                [JSON.stringify(nextRawData), job.id, min, max, cur]
+              )
             )
             updated += 1
             if (res.rows[0]?.has_salary && min != null) salaryFilled += 1
