@@ -25,9 +25,13 @@ const MAX_PAGES = Math.max(
   1,
   Number.parseInt(process.env.HARVESTER_RIPPLING_MAX_PAGES ?? "20", 10)
 )
+// 100 left boards >100 jobs (Petfolk 257, Barry's 209) with descriptions on
+// only the first 100. 200 covers the vast majority; the detail op is a fast
+// API call at concurrency 4 so this stays well inside the 60s per-company
+// budget. Env-tunable if a board or the edge needs it dialed back.
 const DETAIL_MAX_JOBS = Math.max(
   0,
-  Number.parseInt(process.env.HARVESTER_RIPPLING_DETAIL_MAX_JOBS ?? "100", 10)
+  Number.parseInt(process.env.HARVESTER_RIPPLING_DETAIL_MAX_JOBS ?? "200", 10)
 )
 const DETAIL_CONCURRENCY = Math.max(
   1,
