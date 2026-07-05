@@ -767,7 +767,12 @@ function normalizeFromCoreInput(input: {
     location: input.location,
   })
 
-  const extractedSalary = extractSalaryRange(input.description)
+  // Structured pay snippets (e.g. Workday's "Target Compensation: 125k - 135k")
+  // carry the range even when the crawled description body does not — parse them
+  // too, preferring the explicit comp text over a scan of the full description.
+  const extractedSalary =
+    extractSalaryRange(input.structuredCompensationText) ??
+    extractSalaryRange(input.description)
   const salaryMin =
     (input.structuredSalary?.min ?? null) ??
     extractedSalary?.min ??

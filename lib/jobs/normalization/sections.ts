@@ -1538,6 +1538,32 @@ function sanitizeCompensationBucket(
         continue
       }
 
+      // A compensation item with no salary signal that also isn't a benefit/EEO
+      // line is not a pay fact — it was misfiled here by upstream structured
+      // extraction (e.g. Workday dumps qualification/responsibility bullets into
+      // the compensation bucket). Route it to the best-fit section, and otherwise
+      // drop it: the compensation section shows pay only.
+      if (!hasSalarySignal) {
+        if (REQUIREMENT_LIKE_RE.test(candidate)) {
+          addItems(
+            buckets.requirements,
+            [candidate],
+            0.6,
+            { adapter, method: "heuristic", source_path: "compensation.rerouted" },
+            14
+          )
+        } else if (RESPONSIBILITY_LIKE_RE.test(candidate)) {
+          addItems(
+            buckets.responsibilities,
+            [candidate],
+            0.6,
+            { adapter, method: "heuristic", source_path: "compensation.rerouted" },
+            14
+          )
+        }
+        continue
+      }
+
       kept.push(candidate)
     }
   }
