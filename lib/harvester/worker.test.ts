@@ -139,6 +139,7 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "lever",
     "ashby",
     "smartrecruiters",
+    "workable",
     "workday",
     "recruitee",
     "teamtailor",

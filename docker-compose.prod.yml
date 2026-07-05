@@ -134,6 +134,11 @@ services:
       # that IP blocked. Default proxies Workday only.
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
+      # Proactive per-host rate cap for harvesterFetch (crons, legacy crawler,
+      # discovery, aggregator backsolve). Without this the worker hammered
+      # shared hosts uncapped — apply.workable.com 429'd and burned ~14 worker-
+      # hrs/day on 77s timeouts. Divided by HARVESTER_INSTANCES at runtime.
+      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_HOST_RATE_LIMITS:-boards-api.greenhouse.io=18,api.lever.co=30,api.smartrecruiters.com=30,api.ashbyhq.com=18,teamtailor.com=30,recruitee.com=60,applytojob.com=24,apply.workable.com=6,myworkdayjobs.com=12,icims.com=6,bamboohr.com=12,jobs.personio.com=12,jobs.personio.de=12,jobs.jobvite.com=12,successfactors.com=6,taleo.net=6,avature.net=6}
       # Pages Jooble walks per query (was single-page; raise if quota allows).
       JOOBLE_PAGES_PER_QUERY: ${JOOBLE_PAGES_PER_QUERY:-3}
       AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
@@ -244,6 +249,11 @@ services:
       # that IP blocked. Default proxies Workday only.
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
+      # Proactive per-host rate cap for harvesterFetch (crons, legacy crawler,
+      # discovery, aggregator backsolve). Without this the worker hammered
+      # shared hosts uncapped — apply.workable.com 429'd and burned ~14 worker-
+      # hrs/day on 77s timeouts. Divided by HARVESTER_INSTANCES at runtime.
+      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_HOST_RATE_LIMITS:-boards-api.greenhouse.io=18,api.lever.co=30,api.smartrecruiters.com=30,api.ashbyhq.com=18,teamtailor.com=30,recruitee.com=60,applytojob.com=24,apply.workable.com=6,myworkdayjobs.com=12,icims.com=6,bamboohr.com=12,jobs.personio.com=12,jobs.personio.de=12,jobs.jobvite.com=12,successfactors.com=6,taleo.net=6,avature.net=6}
       # Pages Jooble walks per query (was single-page; raise if quota allows).
       JOOBLE_PAGES_PER_QUERY: ${JOOBLE_PAGES_PER_QUERY:-3}
       AGGREGATOR_BACKSOLVE_CONCURRENCY: ${AGGREGATOR_BACKSOLVE_CONCURRENCY:-4}
