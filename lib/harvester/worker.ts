@@ -159,10 +159,12 @@ const SUPPORTED_ATS_TYPES = [
   "lever",
   "ashby",
   "smartrecruiters",
-  // "workable" is intentionally NOT in the claim allowlist — apply.workable.com
-  // hard-rate-limits sustained aggregation (429s) and its API needs per-account
-  // tokens, not one global key. Kept out here so the fast loop never claims it,
-  // regardless of any HARVESTER_EXCLUDE_ADAPTERS env on the box.
+  // workable was pulled from the allowlist after apply.workable.com 429'd under
+  // sustained aggregation. Root cause was RATE, not access: probed politely it
+  // returns 200 with full job counts. Re-enabled now that the host is capped in
+  // HARVESTER_HOST_RATE_LIMITS (apply.workable.com=6) — the proactive gate keeps
+  // us under its per-IP threshold so we never earn the 429 in the first place.
+  "workable",
   "workday",
   "recruitee",
   "teamtailor",

@@ -60,7 +60,7 @@ services:
       # Proactive host gate for real harvesterFetch HTTP calls. host-rate-gate
       # divides these budgets by HARVESTER_INSTANCES, so defaults below are sized
       # for the 6-loop main lane and resolve to conservative per-process rates.
-      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_HOST_RATE_LIMITS:-boards-api.greenhouse.io=18,api.lever.co=30,api.smartrecruiters.com=30,api.ashbyhq.com=18,teamtailor.com=30,recruitee.com=60,applytojob.com=24,myworkdayjobs.com=12,icims.com=6,bamboohr.com=12,jobs.personio.com=12,jobs.personio.de=12,jobs.jobvite.com=12,successfactors.com=6,taleo.net=6,avature.net=6}
+      HARVESTER_HOST_RATE_LIMITS: ${HARVESTER_HOST_RATE_LIMITS:-boards-api.greenhouse.io=18,api.lever.co=30,api.smartrecruiters.com=30,api.ashbyhq.com=18,teamtailor.com=30,recruitee.com=60,applytojob.com=24,apply.workable.com=6,myworkdayjobs.com=12,icims.com=6,bamboohr.com=12,jobs.personio.com=12,jobs.personio.de=12,jobs.jobvite.com=12,successfactors.com=6,taleo.net=6,avature.net=6}
       HARVESTER_TEAMTAILOR_CONCURRENCY: ${HARVESTER_TEAMTAILOR_CONCURRENCY:-1}
       HARVESTER_RECRUITEE_CONCURRENCY: ${HARVESTER_RECRUITEE_CONCURRENCY:-2}
       HARVESTER_SMARTRECRUITERS_CONCURRENCY: ${HARVESTER_SMARTRECRUITERS_CONCURRENCY:-1}
