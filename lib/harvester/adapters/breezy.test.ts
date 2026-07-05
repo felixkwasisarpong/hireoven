@@ -76,3 +76,27 @@ test("breezy: fetchJobs treats a non-array body as an empty board", async () => 
   })
   assert.equal(result.jobs.length, 0)
 })
+
+test("breezy: fetchJobs enriches descriptions from each position's JSON-LD detail page", async () => {
+  const positions = [
+    { id: "p1", name: "Android Developer", url: "https://acme.breezy.hr/p/p1-android",
+      published_date: "2026-01-01", location: { name: "Remote", is_remote: true }, type: { id: "full-time", name: "Full-Time" } },
+  ]
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org", "@type": "JobPosting", title: "Android Developer",
+    description: "<p>Build delightful Android apps with a small team shipping to production daily.</p>",
+  })
+  const fetchImpl = (async (url: string) => {
+    if (String(url).endsWith("/json")) {
+      return new Response(JSON.stringify(positions), { headers: { "content-type": "application/json" } })
+    }
+    return new Response(
+      `<!doctype html><html><head><script type="application/ld+json">${jsonLd}</script></head><body></body></html>`,
+      { headers: { "content-type": "text/html" } }
+    )
+  }) as unknown as typeof fetch
+
+  const result = await breezyAdapter.fetchJobs({ slug: "acme", ctx: { etag: null, lastModified: null, fetchImpl } })
+  assert.equal(result.jobs.length, 1)
+  assert.match(result.jobs[0].description ?? "", /Build delightful Android apps/, "description enriched from JSON-LD")
+})

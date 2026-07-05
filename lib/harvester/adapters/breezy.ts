@@ -1,11 +1,14 @@
+import pLimit from "p-limit"
 import {
   envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
+  type HarvestCtx,
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
+import { fetchHtmlConditional, extractJsonLdBlocks } from "@/lib/harvester/adapters/_json-ld"
 
 /**
  * BreezyHR public positions API.
@@ -115,6 +118,76 @@ function mapRawJob(slug: string, raw: BreezyPosition): HarvestedJob | null {
   }
 }
 
+// The /json listing carries no description — those live on each position's
+// public HTML page (raw.url) as a schema.org/JobPosting JSON-LD block. Without
+// this, every breezy job shipped with an empty description. Bounded like the
+// gem/oracle detail phases so a large board can't blow the per-company budget.
+function intEnv(name: string, dflt: number, min = 0): number {
+  const n = Number.parseInt(process.env[name] ?? "", 10)
+  return Number.isFinite(n) && n >= min ? n : dflt
+}
+const DETAIL_MAX_JOBS = intEnv("HARVESTER_BREEZY_DETAIL_MAX_JOBS", 200, 0)
+const DETAIL_CONCURRENCY = intEnv("HARVESTER_BREEZY_DETAIL_CONCURRENCY", 4, 1)
+
+function stripHtml(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
+  const text = value
+    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text || undefined
+}
+
+function descriptionFromJsonLd(html: string): string | undefined {
+  for (const block of extractJsonLdBlocks(html)) {
+    const items = Array.isArray(block) ? block : [block]
+    for (const item of items) {
+      if (!item || typeof item !== "object") continue
+      const type = (item as { "@type"?: unknown })["@type"]
+      const isJob = type === "JobPosting" || (Array.isArray(type) && type.includes("JobPosting"))
+      if (!isJob) continue
+      const desc = (item as { description?: unknown }).description
+      if (typeof desc === "string") return stripHtml(desc)
+    }
+  }
+  return undefined
+}
+
+async function enrichWithDescriptions(jobs: HarvestedJob[], ctx: HarvestCtx): Promise<void> {
+  if (DETAIL_MAX_JOBS === 0) return
+  const targets = jobs.filter((j) => !j.description && j.applyUrl).slice(0, DETAIL_MAX_JOBS)
+  if (targets.length === 0) return
+
+  const limiter = pLimit(DETAIL_CONCURRENCY)
+  await Promise.all(
+    targets.map((job) =>
+      limiter(async () => {
+        const res = await fetchHtmlConditional(job.applyUrl, { ...ctx, etag: null, lastModified: null }, { maxAttempts: 2 })
+        if (res.kind !== "ok") return
+        const description = descriptionFromJsonLd(res.html)
+        if (!description) return
+        job.description = description
+        job.contentHash = hashContent([
+          job.title,
+          job.applyUrl,
+          job.location,
+          job.postedAt,
+          job.workMode,
+          job.employmentType,
+          description.slice(0, 4_000),
+        ])
+      })
+    )
+  )
+}
+
 export const breezyAdapter: AtsAdapter = {
   name: "breezy",
   // Shared edge 403s on bursts — keep this low (override via
@@ -151,6 +224,9 @@ export const breezyAdapter: AtsAdapter = {
       const mapped = mapRawJob(slug, raw)
       if (mapped) jobs.push(mapped)
     }
+
+    // The /json listing has no description — fetch each position's JSON-LD.
+    await enrichWithDescriptions(jobs, ctx)
 
     return {
       jobs,
