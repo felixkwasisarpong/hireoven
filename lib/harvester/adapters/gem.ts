@@ -1,8 +1,10 @@
+import pLimit from "p-limit"
 import {
   envConcurrency,
   conditionalFetchJson,
   hashContent,
   type AtsAdapter,
+  type HarvestCtx,
   type HarvestResult,
   type HarvestedJob,
 } from "@/lib/harvester/adapters/_base"
@@ -131,6 +133,103 @@ function batchPayload(slug: string): string {
   ])
 }
 
+// The list query carries no description — those live on the per-job detail op
+// (ExternalJobPostingQuery), which the SPA fires on job-page navigation. Without
+// this every gem job shipped with an empty description. Bounded like the
+// workday/oracle detail phases: cap the count + fan out under a concurrency
+// limit so one large board can't blow the per-company budget.
+function intEnv(name: string, dflt: number, min = 0): number {
+  const n = Number.parseInt(process.env[name] ?? "", 10)
+  return Number.isFinite(n) && n >= min ? n : dflt
+}
+const DETAIL_MAX_JOBS = intEnv("HARVESTER_GEM_DETAIL_MAX_JOBS", 200, 0)
+const DETAIL_CONCURRENCY = intEnv("HARVESTER_GEM_DETAIL_CONCURRENCY", 8, 1)
+
+const JOB_DETAIL_QUERY = `
+query ExternalJobPostingQuery($boardId: String!, $extId: String!) {
+  oatsExternalJobPosting(boardId: $boardId, extId: $extId) {
+    descriptionHtml
+    startDateTs
+    firstPublishedTsSec
+    __typename
+  }
+}
+`
+
+function detailPayload(slug: string, extId: string): string {
+  return JSON.stringify([
+    {
+      operationName: "ExternalJobPostingQuery",
+      variables: { boardId: slug, extId },
+      query: JOB_DETAIL_QUERY,
+    },
+  ])
+}
+
+type GemDetail = {
+  descriptionHtml?: string | null
+  startDateTs?: number | null
+  firstPublishedTsSec?: number | null
+}
+type GemDetailResponse = Array<{
+  data?: { oatsExternalJobPosting?: GemDetail | null } | null
+}>
+
+function stripHtml(value: string | undefined | null): string | undefined {
+  if (!value) return undefined
+  const text = value
+    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+  return text || undefined
+}
+
+async function enrichWithDescriptions(
+  slug: string,
+  jobs: HarvestedJob[],
+  ctx: HarvestCtx
+): Promise<void> {
+  if (DETAIL_MAX_JOBS === 0) return
+  const targets = jobs.filter((j) => !j.description).slice(0, DETAIL_MAX_JOBS)
+  if (targets.length === 0) return
+
+  const limiter = pLimit(DETAIL_CONCURRENCY)
+  await Promise.all(
+    targets.map((job) =>
+      limiter(async () => {
+        const extId = job.externalId.replace(/^gem:/, "")
+        const res = await conditionalFetchJson<GemDetailResponse>(GRAPHQL_URL, {
+          ...ctx,
+          etag: null,
+          lastModified: null,
+        }, { method: "POST", body: detailPayload(slug, extId), maxAttempts: 2 })
+        if (res.kind !== "ok") return
+        const detail = (Array.isArray(res.data) ? res.data[0] : undefined)?.data?.oatsExternalJobPosting
+        if (!detail) return
+        const description = stripHtml(detail.descriptionHtml)
+        if (description) job.description = description
+        const ts = detail.firstPublishedTsSec ?? detail.startDateTs
+        if (ts && !job.postedAt) job.postedAt = new Date(ts * 1000).toISOString()
+        job.contentHash = hashContent([
+          job.title,
+          job.applyUrl,
+          job.location,
+          job.workMode,
+          job.employmentType,
+          description?.slice(0, 4_000),
+        ])
+      })
+    )
+  )
+}
+
 function pickLocation(locations: GemLocation[] | null | undefined): string | undefined {
   if (!locations || locations.length === 0) return undefined
   const first = locations[0]
@@ -229,6 +328,9 @@ export const gemAdapter: AtsAdapter = {
       const mapped = mapRawJob(slug, raw)
       if (mapped) jobs.push(mapped)
     }
+
+    // The list op carries no description/posted date — fetch them per job.
+    await enrichWithDescriptions(slug, jobs, ctx)
 
     return {
       jobs,

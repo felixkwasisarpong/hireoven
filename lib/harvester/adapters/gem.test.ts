@@ -151,3 +151,39 @@ test("gem: live fetch returns a shaped response", { skip: !LIVE }, async () => {
     assert.match(sample.contentHash, /^[0-9a-f]{32}$/)
   }
 })
+
+test("gem: fetchJobs enriches each job with its detail description + posted date", async () => {
+  const DESC = "About Acme. We build delightful software and we are hiring senior engineers to join a small, fast-moving team shipping to production every day."
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body))
+    if (body[0].operationName === "JobBoardList") {
+      return new Response(
+        JSON.stringify([
+          { data: { oatsExternalJobPostings: { jobPostings: [
+            { id: "1", extId: "ext-1", title: "Senior Engineer",
+              locations: [{ city: "Durham", isoCountry: "USA", isRemote: false }],
+              job: { employmentType: "FULL_TIME", department: { name: "Eng" } } },
+          ] } } },
+        ]),
+        { headers: { "content-type": "application/json" } }
+      )
+    }
+    // ExternalJobPostingQuery detail op
+    assert.equal(body[0].variables.boardId, "acme")
+    assert.equal(body[0].variables.extId, "ext-1")
+    return new Response(
+      JSON.stringify([
+        { data: { oatsExternalJobPosting: {
+          descriptionHtml: `<p>${DESC}</p>`, firstPublishedTsSec: 1757804437, startDateTs: null,
+        } } },
+      ]),
+      { headers: { "content-type": "application/json" } }
+    )
+  }) as unknown as typeof fetch
+
+  const result = await gemAdapter.fetchJobs({ slug: "acme", ctx: { etag: null, lastModified: null, fetchImpl } })
+  assert.equal(result.jobs.length, 1)
+  const job = result.jobs[0]
+  assert.equal(job.description, DESC, "description populated from the detail op")
+  assert.equal(job.postedAt, new Date(1757804437 * 1000).toISOString(), "posted date from firstPublishedTsSec")
+})
