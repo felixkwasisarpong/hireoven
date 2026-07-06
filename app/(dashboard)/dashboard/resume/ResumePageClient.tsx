@@ -45,6 +45,7 @@ import {
 
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ImportLinkedInButton from "@/components/resume/ImportLinkedInButton"
+import ResumeViewModal from "@/components/resume/ResumeViewModal"
 import { useToast } from "@/components/ui/ToastProvider"
 import { publishLocalNotification } from "@/lib/hooks/useNotifications"
 import { writeResumeHandoff } from "@/lib/resume/local-resume-handoff"
@@ -230,10 +231,6 @@ function validateResumeUpload(file: File) {
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
-}
-
-function buildStudioPreviewUrl(resumeId: string) {
-  return `/dashboard/resume/studio?mode=preview&resumeId=${encodeURIComponent(resumeId)}`
 }
 
 function openPlaceholderTabFromGesture() {
@@ -508,79 +505,10 @@ function SaveResumeVersionAction({
   )
 }
 
-function ViewResumeAction({
-  resume,
-  className,
-  children,
-}: {
-  resume: Resume
-  className: string
-  children: React.ReactNode
-}) {
-  const { pushToast } = useToast()
-  const [isOpening, setIsOpening] = useState(false)
-
-  async function openResume() {
-    const placeholderTab = openPlaceholderTabFromGesture()
-    setIsOpening(true)
-    try {
-      const response = await fetch(`/api/resume/${resume.id}`, {
-        cache: "no-store",
-        credentials: "include",
-      })
-      if (!response.ok) throw new Error("Could not load resume file")
-      const data = (await response.json()) as Resume & { download_url?: string }
-      const url = data.download_url ?? data.file_url
-      if (!url) {
-        placeholderTab?.close()
-        const previewUrl = buildStudioPreviewUrl(resume.id)
-        window.location.assign(previewUrl)
-        pushToast({
-          tone: "info",
-          title: "Opening resume in Studio",
-          description: "This resume does not have a direct file preview yet.",
-        })
-        return
-      }
-
-      navigateOrFallback(placeholderTab, url)
-    } catch (error) {
-      placeholderTab?.close()
-      const previewUrl = buildStudioPreviewUrl(resume.id)
-      window.location.assign(previewUrl)
-      pushToast({
-        tone: "info",
-        title: "Opening resume in Studio",
-        description:
-          error instanceof Error
-            ? `Direct file preview failed: ${error.message}`
-            : "Direct file preview failed. Opening Studio instead.",
-      })
-    } finally {
-      setIsOpening(false)
-    }
-  }
-
-  return (
-    <button
-      type="button"
-      disabled={isOpening}
-      onClick={() => void openResume()}
-      className={className}
-    >
-      {isOpening ? (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Opening...
-        </>
-      ) : children}
-    </button>
-  )
-}
-
 function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void }) {
   const { primaryResume, resumes, hasResume, isLoading } = useResumeContext()
   const { data: hubData, refresh: refreshHubData } = useResumeHubData()
+  const [viewResume, setViewResume] = useState<Resume | null>(null)
 
   const breakdown = useMemo(() => {
     if (!primaryResume || primaryResume.parse_status !== "complete") return null
@@ -712,6 +640,14 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
   }
 
   return (
+    <>
+      {viewResume && (
+        <ResumeViewModal
+          fileUrl={`/api/resume/${encodeURIComponent(viewResume.id)}/file`}
+          title={viewResume.name ?? viewResume.file_name ?? "Resume"}
+          onClose={() => setViewResume(null)}
+        />
+      )}
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="space-y-3">
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
@@ -743,13 +679,14 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <ViewResumeAction
-                    resume={primaryResume}
+                  <button
+                    type="button"
+                    onClick={() => setViewResume(primaryResume)}
                     className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#5B4DFF] px-4 text-[13px] font-semibold text-white shadow-sm transition hover:bg-[#493EE6]"
                   >
                     <Eye className="h-4 w-4" />
                     View Resume
-                  </ViewResumeAction>
+                  </button>
                   <button
                     type="button"
                     onClick={() => onTabChange("edit")}
@@ -958,6 +895,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
         </section>
       </aside>
     </div>
+    </>
   )
 }
 
