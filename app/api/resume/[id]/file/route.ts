@@ -47,9 +47,22 @@ function fallbackBaseName(resume: Resume) {
     .replace(/\.(pdf|docx?|rtf|txt)$/i, "")
 }
 
-function acceptsHtmlNavigation(request: Request) {
+function isTopLevelNavigation(request: Request) {
+  // Only a real top-level tab navigation should be bounced to the Studio on
+  // failure. Iframe/embed requests (the in-app preview modal) send
+  // Sec-Fetch-Dest: iframe — redirecting those would render the whole Studio
+  // *inside the modal*, which is jarring. Fall back to Accept for older UAs.
+  const dest = request.headers.get("sec-fetch-dest")
+  if (dest) return dest === "document"
   const accept = request.headers.get("accept") ?? ""
   return accept.includes("text/html") && !accept.includes("application/json")
+}
+
+function previewErrorHtml() {
+  return new NextResponse(
+    `<!doctype html><html><body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif;color:#64748b;background:#f1f5f9"><div style="text-align:center;padding:24px"><p style="font-weight:600;margin:0 0 6px">Couldn't render this resume preview</p><p style="font-size:13px;margin:0">Try downloading it instead, or reopen in a moment.</p></div></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
+  )
 }
 
 function studioPreviewRedirect(request: Request, resumeId: string) {
@@ -173,8 +186,13 @@ export async function GET(
       resumeId: resume.id,
       error: error instanceof Error ? error.message : String(error),
     })
-    if (!forceDownload && acceptsHtmlNavigation(_request)) {
+    if (!forceDownload && isTopLevelNavigation(_request)) {
       return studioPreviewRedirect(_request, resume.id)
+    }
+    // Iframe/embed preview that couldn't render — show a small inline message
+    // instead of raw JSON (or the whole Studio) inside the modal.
+    if (!forceDownload) {
+      return previewErrorHtml()
     }
     return NextResponse.json(
       { error: "Could not load resume file" },
