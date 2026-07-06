@@ -5,11 +5,27 @@ import {
   adapterNameFor,
   buildAdapterLimits,
   claimEligibleCompanies,
+  enabledClaimAdapters,
   loadWorkerConfig,
   resolvePerCompanyTimeoutMs,
   scaleWorkerConfigForLoops,
   type AdapterClaimFilter,
 } from "./worker"
+
+test("enabledClaimAdapters: explicit include wins over a global exclude", () => {
+  // Dedicated workable worker: include=[workable] must survive even when the
+  // orchestrator injects the main lane's exclude=[workable] into it.
+  assert.deepEqual(
+    enabledClaimAdapters({ include: ["workable"], exclude: ["workable"] }),
+    ["workable"],
+  )
+})
+
+test("enabledClaimAdapters: exclude filters the default set when no include", () => {
+  const result = enabledClaimAdapters({ include: null, exclude: ["workable"] })
+  assert.ok(!result.includes("workable"), "workable excluded from default set")
+  assert.ok(result.includes("greenhouse"), "other adapters remain")
+})
 
 test("loadWorkerConfig: defaults when env is empty", () => {
   const config = loadWorkerConfig({})
