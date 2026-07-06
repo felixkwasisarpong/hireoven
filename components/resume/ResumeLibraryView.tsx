@@ -14,7 +14,6 @@ import {
   Edit3,
   Eye,
   FileText,
-  Loader2,
   MoreHorizontal,
   Plus,
   Search,
@@ -25,6 +24,7 @@ import {
   X,
 } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import ResumeViewModal from "@/components/resume/ResumeViewModal"
 import { useToast } from "@/components/ui/ToastProvider"
 import {
   RESUME_HANDOFF_EVENT,
@@ -191,6 +191,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortValue>("latest")
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [viewResume, setViewResume] = useState<Resume | null>(null)
   const [handoffResumes, setHandoffResumes] = useState<Resume[]>([])
   const [apiResumes, setApiResumes] = useState<Resume[]>([])
   const [isFetchingLibrary, setIsFetchingLibrary] = useState(true)
@@ -471,19 +472,10 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
     pushToast({ tone: "success", title: "Resume deleted" })
   }
 
-  async function handleView(resume: Resume) {
-    const res = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
-    if (!res.ok) {
-      pushToast({ tone: "error", title: "Could not open resume" })
-      return
-    }
-    const data = (await res.json()) as Resume & { download_url?: string }
-    const url = data.download_url ?? data.file_url
-    if (!url) {
-      pushToast({ tone: "error", title: "Resume file is not available" })
-      return
-    }
-    window.open(url, "_blank", "noopener,noreferrer")
+  function handleView(resume: Resume) {
+    // View = read the resume in a modal (a pure viewer), never a new tab or the
+    // Studio. Editing/tailoring live on their own actions.
+    setViewResume(resume)
   }
 
   async function handleDownload(resume: Resume) {
@@ -511,6 +503,13 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
 
   return (
     <main className="min-h-[calc(100vh-8.5rem)] bg-[#FAFBFF]">
+      {viewResume && (
+        <ResumeViewModal
+          fileUrl={`/api/resume/${encodeURIComponent(viewResume.id)}/file`}
+          title={viewResume.name ?? viewResume.file_name ?? "Resume"}
+          onClose={() => setViewResume(null)}
+        />
+      )}
       {/* Hidden file input */}
       <input
         ref={fileInputRef}

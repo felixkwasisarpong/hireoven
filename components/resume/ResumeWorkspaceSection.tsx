@@ -232,18 +232,16 @@ export default function ResumeWorkspaceSection() {
     })
   }
 
-  async function handleDownload(resume: Resume) {
-    const response = await fetch(`/api/resume/${resume.id}`, { cache: "no-store" })
-    if (!response.ok) {
-      pushToast({
-        tone: "error",
-        title: "Could not prepare download",
-      })
-      return
-    }
-
-    const data = (await response.json()) as Resume & { download_url?: string }
-    window.open(data.download_url ?? data.file_url, "_blank", "noopener,noreferrer")
+  function handleDownload(resume: Resume) {
+    // The file URL is deterministic, so navigate straight to it in the click
+    // gesture via an anchor. Doing this after an `await` gets blocked by popup
+    // blockers; ?download=1 makes the route send the file as an attachment.
+    const link = document.createElement("a")
+    link.href = `/api/resume/${encodeURIComponent(resume.id)}/file?download=1`
+    link.rel = "noopener"
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
   }
 
   return (

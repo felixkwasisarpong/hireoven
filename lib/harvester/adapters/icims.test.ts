@@ -150,3 +150,40 @@ test(
     }
   }
 )
+
+test("icims: change-detection skips detail fetches when listing unchanged + all described", async () => {
+  const searchHtml = `<a class="iCIMS_Anchor" href="https://careers-acme.icims.com/jobs/23007/role/job?in_iframe=1" title="23007 - Role">`
+  const detailHtml = `<html><body><div class="iCIMS_JobDescription"><p>Responsibilities include building customer relationships, explaining product options, meeting goals, and maintaining accurate notes across a busy retail floor every single week.</p></div></body></html>`
+  let detailFetches = 0
+  const fetchImpl = async (input: RequestInfo | URL) => {
+    const url = String(input)
+    if (url.includes("/jobs/search?pr=0")) return new Response(searchHtml, { status: 200 })
+    if (url.includes("/jobs/search?pr=1")) return new Response("", { status: 200 })
+    detailFetches += 1
+    return new Response(detailHtml, { status: 200 })
+  }
+
+  const first = await icimsAdapter.fetchJobs({
+    slug: "careers-acme.icims.com",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+  assert.equal(first.notModified, false)
+  assert.ok(first.etag && first.etag.startsWith("icimsv1:"), "stores a listing fingerprint")
+  assert.ok(detailFetches >= 1, "pass 1 fetched the detail page")
+  const afterFirst = detailFetches
+
+  // pass 2: same listing, etag matches, and the job already has a description in the DB
+  const second = await icimsAdapter.fetchJobs({
+    slug: "careers-acme.icims.com",
+    ctx: {
+      etag: first.etag,
+      lastModified: null,
+      fetchImpl,
+      alreadyDescribedIds: new Set(["icims:careers-acme.icims.com:23007"]),
+    },
+  })
+  assert.equal(second.notModified, true, "unchanged + fully-described board short-circuits")
+  assert.equal(second.jobs.length, 0)
+  assert.equal(second.etag, first.etag)
+  assert.equal(detailFetches - afterFirst, 0, "pass 2 does ZERO detail fetches (the rate-limited part)")
+})

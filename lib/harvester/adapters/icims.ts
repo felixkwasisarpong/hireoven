@@ -260,13 +260,46 @@ export const icimsAdapter: AtsAdapter = {
     const host = slug.toLowerCase()
     const startedAt = Date.now()
 
-    const links = await fetchAllJobLinks(host, ctx)
-    const jobs = links.length === 0 ? [] : await enrichWithDetails(links, ctx)
+    // Our etag is an app-level CONTENT fingerprint, not an HTTP validator — don't
+    // let it leak into If-None-Match on the listing/detail fetches (iCIMS wouldn't
+    // recognize it). Strip it for the actual requests; compare it below.
+    const priorFingerprint = ctx.etag
+    const fetchCtx: HarvestCtx = { ...ctx, etag: null, lastModified: null }
+
+    const links = await fetchAllJobLinks(host, fetchCtx)
+
+    // Change-detection: fingerprint the listing (job count + the set of job IDs).
+    // The expensive, rate-limited part of an iCIMS crawl is the per-job detail
+    // pages (up to DETAIL_MAX_JOBS in_iframe fetches). Skip them entirely when the
+    // listing is unchanged AND every job already has a description in the DB — so
+    // a steady board costs just the cheap listing fetch, and we stop hammering
+    // careers-*.icims.com with detail requests it doesn't need.
+    const fingerprint = `icimsv1:${links.length}:${hashContent(
+      links.map((l) => `${l.host}:${l.jobId ?? l.url}`).sort()
+    )}`
+    const alreadyDescribed = ctx.alreadyDescribedIds
+    const needingDetail = alreadyDescribed
+      ? links.filter((l) => !alreadyDescribed.has(`icims:${l.host}:${l.jobId}`)).length
+      : links.length
+    if (links.length > 0 && priorFingerprint === fingerprint && needingDetail === 0) {
+      return {
+        jobs: [],
+        notModified: true,
+        etag: fingerprint,
+        lastModified: null,
+        sourceAts: "icims",
+        sourceAtsSlug: host,
+        fetchedAt,
+        upstreamLatencyMs: Date.now() - startedAt,
+      }
+    }
+
+    const jobs = links.length === 0 ? [] : await enrichWithDetails(links, fetchCtx)
 
     return {
       jobs,
       notModified: false,
-      etag: null,
+      etag: fingerprint,
       lastModified: null,
       sourceAts: "icims",
       sourceAtsSlug: host,

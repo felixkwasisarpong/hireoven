@@ -179,8 +179,15 @@ export default function VersionHistory({
                     </button>
                     <button
                       type="button"
-                      disabled={!version.file_url}
-                      onClick={() => version.file_url && window.open(version.file_url, "_blank")}
+                      disabled={!version.snapshot}
+                      onClick={() => {
+                        const link = document.createElement("a")
+                        link.href = `/api/resume/${encodeURIComponent(resume.id)}/versions/${encodeURIComponent(version.id)}/file?download=1`
+                        link.rel = "noopener"
+                        document.body.appendChild(link)
+                        link.click()
+                        link.remove()
+                      }}
                       className="inline-flex items-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 disabled:opacity-50"
                     >
                       <Download className="h-4 w-4" />

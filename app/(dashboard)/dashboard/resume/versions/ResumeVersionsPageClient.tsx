@@ -7,6 +7,7 @@ import {
   ArrowUp,
   Copy,
   Download,
+  Eye,
   FileText,
   Loader2,
   MoreHorizontal,
@@ -17,6 +18,7 @@ import {
   Upload,
 } from "lucide-react"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
+import ResumeViewModal from "@/components/resume/ResumeViewModal"
 import { buildResumeSnapshot } from "@/lib/resume/scoring"
 import { cn } from "@/lib/utils"
 import type { Resume, ResumeVersion, ResumeVersionOutcomeStats } from "@/types"
@@ -220,6 +222,7 @@ export default function ResumeVersionsPageClient({
   const skippedInitialFetchRef = useRef(false)
 
   const [versions, setVersions] = useState<ResumeVersion[]>(initialVersions)
+  const [viewVersion, setViewVersion] = useState<ResumeVersion | null>(null)
   const [loadingVersions, setLoadingVersions] = useState(false)
   const [compareA, setCompareA] = useState(() => initialVersions[0]?.id ?? "")
   const [compareB, setCompareB] = useState(() => initialVersions[1]?.id ?? initialVersions[0]?.id ?? "")
@@ -278,7 +281,15 @@ export default function ResumeVersionsPageClient({
   }
 
   function handleDownload(version: ResumeVersion) {
-    if (version.file_url) window.open(version.file_url, "_blank", "noopener,noreferrer")
+    if (!resolvedPrimaryResume) return
+    // Versions have no stored file — the endpoint regenerates a DOCX from the
+    // version's snapshot. Navigate in the gesture via an anchor (no popup block).
+    const link = document.createElement("a")
+    link.href = `/api/resume/${encodeURIComponent(resolvedPrimaryResume.id)}/versions/${encodeURIComponent(version.id)}/file?download=1`
+    link.rel = "noopener"
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
   }
 
   async function handleCopy(version: ResumeVersion) {
@@ -299,6 +310,13 @@ export default function ResumeVersionsPageClient({
 
   return (
     <main className="min-h-screen bg-[#FAFBFF]">
+      {viewVersion && resolvedPrimaryResume && (
+        <ResumeViewModal
+          fileUrl={`/api/resume/${encodeURIComponent(resolvedPrimaryResume.id)}/versions/${encodeURIComponent(viewVersion.id)}/file`}
+          title={viewVersion.name ?? `Version ${viewVersion.version_number}`}
+          onClose={() => setViewVersion(null)}
+        />
+      )}
       <div className="mx-auto w-full max-w-[1120px] space-y-4 px-4 py-4 sm:px-6 lg:px-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -392,6 +410,15 @@ export default function ResumeVersionsPageClient({
                               <div className="flex items-center justify-end gap-1.5">
                                 <button
                                   type="button"
+                                  disabled={!version.snapshot}
+                                  onClick={() => setViewVersion(version)}
+                                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-30"
+                                  title="View"
+                                >
+                                  <Eye className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
                                   onClick={() => void handleCopy(version)}
                                   className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
                                   title="Duplicate"
@@ -400,7 +427,7 @@ export default function ResumeVersionsPageClient({
                                 </button>
                                 <button
                                   type="button"
-                                  disabled={!version.file_url}
+                                  disabled={!version.snapshot}
                                   onClick={() => handleDownload(version)}
                                   className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700 disabled:opacity-30"
                                   title="Download"
