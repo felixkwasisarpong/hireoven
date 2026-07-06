@@ -199,11 +199,24 @@ export async function probeCompanyForAts(
 ): Promise<AtsProbeHit | null> {
   const slugs = slugVariants(name)
   if (slugs.length === 0) return null
-  for (const prober of PROBERS) {
-    for (const slug of slugs) {
-      const hit = await prober.probe(slug, doFetch)
-      if (hit) return hit
-    }
-  }
-  return null
+  // Fire every prober × slug concurrently. Sequentially, a no-ATS company (the
+  // bulk of the sweep backlog) pays the full timeout of every probe in series
+  // (~30s), which timed the sweep out at batch 40. In parallel the cost is the
+  // slowest single probe (~TIMEOUT_MS). Pick the best hit, preserving PROBERS
+  // priority order, then higher jobCount as a tiebreak.
+  const tasks = PROBERS.flatMap((prober, order) =>
+    slugs.map((slug) =>
+      prober
+        .probe(slug, doFetch)
+        .then((hit) => (hit ? { order, hit } : null))
+        .catch(() => null),
+    ),
+  )
+  const results = await Promise.all(tasks)
+  const hits = results.filter(
+    (r): r is { order: number; hit: AtsProbeHit } => r !== null,
+  )
+  if (hits.length === 0) return null
+  hits.sort((a, b) => a.order - b.order || b.hit.jobCount - a.hit.jobCount)
+  return hits[0].hit
 }
