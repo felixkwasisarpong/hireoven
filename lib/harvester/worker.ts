@@ -318,11 +318,17 @@ function loadAdapterClaimFilter(
   }
 }
 
-function enabledClaimAdapters(filter?: AdapterClaimFilter): AtsName[] {
+export function enabledClaimAdapters(filter?: AdapterClaimFilter): AtsName[] {
   const normalized = filter ?? DEFAULT_ADAPTER_CLAIM_FILTER
+  // An explicit include list is an allow-list and wins outright: a global exclude
+  // (e.g. the main lane's HARVESTER_EXCLUDE_ADAPTERS=workable, which the deploy
+  // orchestrator injects into every service) must NOT cancel a dedicated worker
+  // that explicitly includes that adapter — otherwise it claims nothing.
+  if (normalized.include && normalized.include.length > 0) {
+    return [...normalized.include]
+  }
   const excluded = new Set(normalized.exclude)
-  const base = normalized.include ?? [...SUPPORTED_ATS_TYPES]
-  return base.filter((name) => !excluded.has(name))
+  return [...SUPPORTED_ATS_TYPES].filter((name) => !excluded.has(name))
 }
 
 function buildClaimQuery(enabledAdapters: readonly AtsName[]): string {
