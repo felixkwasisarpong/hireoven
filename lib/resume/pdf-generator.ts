@@ -96,22 +96,30 @@ function ResumeDocument({ resume }: { resume: Resume }) {
   const contact = joinContact(resume)
   const role = resume.primary_role ?? resume.name ?? null
   const h = React.createElement
+  // Parsed/uploaded resumes often carry partial `skills` (missing buckets, or
+  // just `{}`), so normalize every bucket to an array before reading `.length`.
+  // An unguarded read here throws and blanks the whole PDF/preview.
+  const skills = {
+    technical: resume.skills?.technical ?? [],
+    soft: resume.skills?.soft ?? [],
+    languages: resume.skills?.languages ?? [],
+    certifications: resume.skills?.certifications ?? [],
+  }
   const skillsSection =
-    resume.skills &&
-    resume.skills.technical.length +
-      resume.skills.soft.length +
-      resume.skills.languages.length +
-      resume.skills.certifications.length >
+    skills.technical.length +
+      skills.soft.length +
+      skills.languages.length +
+      skills.certifications.length >
       0
       ? h(
           View,
           { style: styles.section },
           h(Text, { style: styles.sectionTitle }, "Technical Skills"),
           ...[
-            ["Languages", resume.skills.languages],
-            ["Technical", resume.skills.technical],
-            ["Certifications", resume.skills.certifications],
-            ["Soft Skills", resume.skills.soft],
+            ["Languages", skills.languages],
+            ["Technical", skills.technical],
+            ["Certifications", skills.certifications],
+            ["Soft Skills", skills.soft],
           ]
             .filter(([, values]) => values.length > 0)
             .map(([label, values]) => {
@@ -179,7 +187,7 @@ function ResumeDocument({ resume }: { resume: Resume }) {
                   )
                 ),
                 item.description ? h(Text, { style: styles.itemSubtle }, item.description) : null,
-                ...item.achievements.map((achievement, bulletIndex) =>
+                ...(item.achievements ?? []).map((achievement, bulletIndex) =>
                   h(Text, { key: `${item.company}-${bulletIndex}`, style: styles.bullet }, `• ${achievement}`)
                 )
               )
@@ -229,8 +237,8 @@ function ResumeDocument({ resume }: { resume: Resume }) {
                 { key: `${project.name}-${index}`, style: { marginBottom: 8 } },
                 h(Text, { style: styles.itemTitle }, project.name),
                 h(Text, { style: styles.paragraph }, project.description),
-                project.technologies.length > 0
-                  ? h(Text, { style: styles.itemSubtle }, project.technologies.join(", "))
+                (project.technologies?.length ?? 0) > 0
+                  ? h(Text, { style: styles.itemSubtle }, (project.technologies ?? []).join(", "))
                   : null,
                 project.url ? h(Text, { style: styles.itemSubtle }, project.url) : null
               )

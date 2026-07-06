@@ -8,7 +8,7 @@
  * renders it. This is a pure viewer — no editing here.
  */
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Loader2, X } from "lucide-react"
 
 type Props = {
@@ -18,6 +18,8 @@ type Props = {
 }
 
 export default function ResumeViewModal({ fileUrl, title, onClose }: Props) {
+  const [loaded, setLoaded] = useState(false)
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose()
@@ -56,12 +58,15 @@ export default function ResumeViewModal({ fileUrl, title, onClose }: Props) {
           </button>
         </div>
         <div className="relative min-h-0 flex-1 bg-slate-100">
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400">
-            <Loader2 className="h-6 w-6 animate-spin" />
-          </div>
+          {!loaded && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-slate-400">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          )}
           <iframe
             src={fileUrl}
             title={`Resume: ${title}`}
+            onLoad={() => setLoaded(true)}
             className="relative h-full w-full"
           />
         </div>
