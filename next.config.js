@@ -29,7 +29,10 @@ const nextConfig = {
   },
   experimental: {
     serverActions: { allowedOrigins: ["hireoven.com", "localhost:3000"] },
-    serverComponentsExternalPackages: ["pdf-parse", "@napi-rs/canvas", "mammoth", "sharp", "undici"],
+    // @react-pdf/renderer MUST stay external — if webpack bundles/minifies it,
+    // its internal React reconciler breaks in production with
+    // "X.Component is not a constructor" (works in dev, throws in prod build).
+    serverComponentsExternalPackages: ["pdf-parse", "@napi-rs/canvas", "mammoth", "sharp", "undici", "@react-pdf/renderer"],
     outputFileTracingIncludes: {
       "/**": ["./node_modules/sharp/**/*"],
       // Native .node binary + pdfjs need to be traced into the standalone build
