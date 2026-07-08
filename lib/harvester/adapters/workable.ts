@@ -22,8 +22,10 @@ const MAX_PAGES = 10
 // the full JD only from the v2 detail endpoint. Jobs whose list description is
 // shorter than this get a (budgeted) detail fetch.
 const MIN_LIST_DESC = 300
-const DETAIL_MAX_JOBS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_MAX_JOBS ?? "50", 10))
-const DETAIL_DELAY_MS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_DELAY_MS ?? "200", 10))
+const DETAIL_MAX_JOBS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_MAX_JOBS ?? "25", 10))
+// 500 ms between detail fetches to avoid triggering Workable's per-IP 429 rate
+// limit during the enrichment pass (observed ~1.9k 429s/day at 200 ms).
+const DETAIL_DELAY_MS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_DELAY_MS ?? "500", 10))
 
 function detailUrl(slug: string, shortcode: string): string {
   return `https://apply.workable.com/api/v2/accounts/${encodeURIComponent(slug)}/jobs/${encodeURIComponent(shortcode)}`

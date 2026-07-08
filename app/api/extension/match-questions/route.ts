@@ -37,6 +37,7 @@ import {
   requireExtensionAuth,
 } from "@/lib/extension/auth"
 import { getPlanForUserId, gateResponse } from "@/lib/gates/server-gate"
+import { requireQuota } from "@/lib/usage/server-quota"
 import { canAccess } from "@/lib/gates"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 import { formatResumeContext } from "@/lib/autofill/resume-context"
@@ -56,6 +57,9 @@ type IncomingQuestion = {
   label: string
   type: QuestionType
   options?: string[]
+  /** True when the ATS marks this field required — in autonomous mode these
+   *  must never come back null (the apply agent can't submit while empty). */
+  required?: boolean
 }
 
 type MatchedAnswer = {
@@ -88,12 +92,24 @@ export async function POST(request: Request) {
     return gateResponse(403, "Application autofill requires sign-in", "auth")
   }
 
+  // AI question-matching is a paid capability — meter it against the same
+  // monthly autofill quota as /api/autofill/answer-question, so "Fill with AI"
+  // routes through the plan's credits instead of running unmetered.
+  const quota = await requireQuota(user.sub, "autofill", plan)
+  if (quota instanceof NextResponse) return quota
+
   const [body, bodyError] = await readExtensionJsonBody<{
     jobTitle?: string
     company?: string
     questions?: unknown
+    mode?: unknown
   }>(request)
   if (bodyError) return bodyError
+
+  // Autonomous (hands-off) runs must answer every REQUIRED field so the agent
+  // can submit — the model infers a best-effort grounded answer instead of
+  // returning null. "assist" (default) keeps the conservative behaviour.
+  const autonomous = body.mode === "autonomous"
 
   const questions = sanitizeQuestions(body.questions)
   if (questions.length === 0) {
@@ -128,7 +144,7 @@ export async function POST(request: Request) {
 
   let modelAnswers: MatchedAnswer[] = []
   try {
-    modelAnswers = await runMatch(answerable, profileContext, jobContext)
+    modelAnswers = await runMatch(answerable, profileContext, jobContext, autonomous)
   } catch (err) {
     console.error("[extension/match-questions] model call failed:", err)
     for (const q of answerable) answers.push({ id: q.id, value: null, confidence: "low" })
@@ -174,7 +190,7 @@ function sanitizeQuestions(value: unknown): IncomingQuestion[] {
             .filter(Boolean)
             .slice(0, MAX_OPTIONS)
         : undefined
-    out.push({ id, label, type, options })
+    out.push({ id, label, type, options, required: row.required === true })
     if (out.length >= MAX_QUESTIONS) break
   }
   return out
@@ -219,6 +235,7 @@ function validateAnswer(q: IncomingQuestion, raw: MatchedAnswer): MatchedAnswer 
 type ProfileRow = {
   first_name: string | null
   last_name: string | null
+  custom_answers: Array<{ question_pattern?: string; answer?: string }> | null
   work_authorization: string | null
   authorized_to_work: boolean | null
   requires_sponsorship: boolean | null
@@ -249,7 +266,7 @@ async function buildProfileContext(userId: string): Promise<string | null> {
   const pool = getPostgresPool()
   const result = await pool
     .query<ProfileRow>(
-      `SELECT ap.first_name, ap.last_name, ap.work_authorization, ap.authorized_to_work,
+      `SELECT ap.first_name, ap.last_name, ap.custom_answers, ap.work_authorization, ap.authorized_to_work,
               ap.requires_sponsorship, ap.sponsorship_statement, ap.years_of_experience,
               ap.salary_expectation_min, ap.salary_expectation_max, ap.earliest_start_date,
               ap.willing_to_relocate, ap.preferred_work_type, ap.highest_degree,
@@ -303,6 +320,13 @@ async function buildProfileContext(userId: string): Promise<string | null> {
     p.university ? `University: ${p.university}` : null,
   ]
 
+  // User-saved answers for common questions — the model should reuse these
+  // VERBATIM when a question matches, before inferring anything itself.
+  const savedAnswers = (Array.isArray(p.custom_answers) ? p.custom_answers : [])
+    .filter((qa) => typeof qa?.answer === "string" && qa.answer.trim())
+    .map((qa) => `Saved answer for questions like "${qa.question_pattern}": ${String(qa.answer).trim()}`)
+  profileLines.push(...savedAnswers)
+
   // Full parsed résumé — grounds answers about experience, achievements and education.
   const resumeContext = formatResumeContext({
     summary: p.r_summary,
@@ -334,13 +358,31 @@ Rules:
 - type "select": value MUST be copied verbatim from the provided "options" array. If none fits, value is null.
 - type "text": a direct, concise value (e.g. "5", "3 years", a city). No sentences unless asked.
 - type "textarea": 1–3 professional sentences, first person, grounded in the profile.
+- Sponsorship / work authorization: if the profile or résumé shows a CURRENTLY valid US work status (OPT, STEM OPT, CPT, H-1B, F-1 EAD, TN, L-1, O-1, green card / permanent resident, citizen), answer "are you authorized to work in the US" → yes, and "do you require sponsorship (now or in the future)" → no (mind negated phrasings like "without sponsorship"). Answer yes to requiring sponsorship ONLY when the profile explicitly requires sponsorship AND shows no current authorization. If neither profile nor résumé indicates any status, return null — never guess authorization.
+- Willingness / acknowledgement questions — "are you willing to / comfortable with / do you acknowledge" a stated condition of the role (onsite presence, travel, shifts, background check, export-control environment, supporting defense or military customers): answer yes with "medium" confidence unless the profile explicitly contradicts it. An applicant who chose to apply is presumed willing; a wrong "no" auto-disqualifies them.
 - Set "confidence": "high" only when the profile clearly answers it; "medium" if reasonably inferred; otherwise return null with "low".
 - Output ONLY a JSON object: {"answers":[{"id":"<id>","value":<string|null>,"confidence":"high|medium|low"}]} with one entry per question id. No prose.`
+
+// Appended in autonomous (hands-off) mode. The agent submits on its own, so a
+// null on a required field strands the whole application at manual review —
+// worse than a best-effort grounded answer the user can still edit. This does
+// NOT license inventing hard facts (exact salary, dates, citizenship); it means
+// inferring the most reasonable professional answer from the résumé and role.
+const AUTONOMOUS_ADDENDUM = `
+
+AUTONOMOUS MODE — the applicant is applying hands-off. Questions with "required": true MUST receive a usable, non-null value:
+- required "textarea": write 2–4 professional first-person sentences grounded in the résumé and the role (e.g. "Why do you want to work here?", "Describe a relevant challenge"). Never null.
+- required "text": give a concrete value; infer sensible logistics from the profile (notice period → "2 weeks" if unknown, etc.).
+- required "yesno": answer the way a qualified applicant with THIS profile truthfully would. When the profile shows no disqualifying signal, choose the non-disqualifying answer (e.g. background/eligibility/"can you perform the role" → the answer that lets a good-faith applicant proceed). Never null.
+- required "select": pick the closest option verbatim from "options". Never null.
+- Still return null ONLY for demographic/EEO questions (they are stripped before you see them, so in practice every required question gets a value).
+- Optional (required:false) questions keep the strict rule: null unless the profile supports it.`
 
 async function runMatch(
   questions: IncomingQuestion[],
   profileContext: string,
   jobContext: string,
+  autonomous: boolean,
 ): Promise<MatchedAnswer[]> {
   if (!anthropic) return []
 
@@ -348,6 +390,7 @@ async function runMatch(
     id: q.id,
     question: q.label,
     type: q.type,
+    ...(autonomous ? { required: q.required === true } : {}),
     ...(q.options?.length ? { options: q.options } : {}),
   }))
 
@@ -357,7 +400,7 @@ async function runMatch(
     system: [
       {
         type: "text",
-        text: SYSTEM_PROMPT,
+        text: autonomous ? SYSTEM_PROMPT + AUTONOMOUS_ADDENDUM : SYSTEM_PROMPT,
         // Static instructions — cache across the many applications a user runs.
         cache_control: { type: "ephemeral" },
       },

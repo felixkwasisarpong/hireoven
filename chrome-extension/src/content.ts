@@ -9,6 +9,8 @@
  */
 
 import { detectFormFields } from "./autofill/form-detector"
+import { fillRequiredAtsFields } from "./autofill/ashby-autofill"
+import { getAutofillProfile, matchQuestions } from "./api-client"
 import { pickResumeFileInput } from "./autofill/resume-target"
 import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
 import { scrapeConnectionResults } from "./apex-connection-scanner"
@@ -271,14 +273,39 @@ function registerMessageBridge(): void {
         }
         case "FILL_FORM_FIELDS": {
           const msg = message as FillFormFieldsMessage
-          let filledCount = 0
-          let skippedCount = 0
-          for (const { elementRef, value } of msg.fields) {
-            if (fillField(elementRef, value)) filledCount++
-            else skippedCount++
-          }
-          sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
-          break
+          void (async () => {
+            let filledCount = 0
+            let skippedCount = 0
+            for (const { elementRef, value } of msg.fields) {
+              if (fillField(elementRef, value)) filledCount++
+              else skippedCount++
+            }
+            // Smart second pass — answer whatever the keyword matcher couldn't
+            // (custom questions, comboboxes, radio groups, yes/no buttons) via
+            // the match-questions AI tier. Widget types are OBSERVED from the
+            // DOM per row (not predicted), so this generalizes to any ATS
+            // without per-site rules. Best-effort: a failure here never undoes
+            // the keyword fills above.
+            try {
+              const { profile } = await getAutofillProfile()
+              if (profile) {
+                const summary = await fillRequiredAtsFields({
+                  profile,
+                  doc: document,
+                  matchQuestions: async (questions) => {
+                    if (questions.length === 0) return []
+                    const res = await matchQuestions({ questions, mode: "assist" })
+                    return res.answers
+                  },
+                })
+                filledCount += summary.filledCount
+              }
+            } catch {
+              // best-effort — keyword fills already applied
+            }
+            sendResponse({ type: "FORM_FILLED", filledCount, skippedCount })
+          })()
+          return true
         }
         case "INJECT_RESUME_FILE": {
           const m = message as { base64: string; filename: string }

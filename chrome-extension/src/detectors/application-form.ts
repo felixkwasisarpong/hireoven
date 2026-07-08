@@ -16,6 +16,7 @@
  */
 
 import { detectSite, type SupportedSite } from "./site"
+import { queryAllDeep, queryDeep } from "../autofill/shadow-dom"
 
 export type ApplicationFormDetection = {
   hasForm: boolean
@@ -396,7 +397,9 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
     const isApplicationUrl = /\/(application|apply|oneclick|onlineapplication|jobapplication)/i.test(
       location.pathname,
     )
-    const profileInputs = Array.from(doc.querySelectorAll<HTMLElement>("input, textarea")).filter((el) => {
+    // Deep query — SmartRecruiters oneclick-ui renders every control inside
+    // open shadow roots (spl-* web components); plain queries see nothing.
+    const profileInputs = queryAllDeep<HTMLElement>(doc, "input, textarea").filter((el) => {
       const type = (el as HTMLInputElement).type?.toLowerCase() ?? "text"
       if (type === "hidden" || type === "submit" || type === "button" || type === "reset") return false
       const hay = [
@@ -412,7 +415,7 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
         hay,
       )
     })
-    const hasFile = Boolean(doc.querySelector('input[type="file"]'))
+    const hasFile = Boolean(queryDeep(doc, 'input[type="file"]'))
     if (isApplicationUrl || profileInputs.length >= 2 || (hasFile && profileInputs.length >= 1)) {
       // Treat the entire document body as the form root for field discovery.
       forms = [doc.body]
@@ -443,7 +446,8 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   let profileFieldHits = 0
 
   for (const form of forms) {
-    const inputs = form.querySelectorAll<HTMLElement>(
+    const inputs = queryAllDeep<HTMLElement>(
+      form,
       // Real input surface only — exclude hidden/submit/button/reset plus
       // aria-hidden / tabindex=-1 plumbing inputs (e.g. react-select's internal
       // requiredInput) that would otherwise produce phantom duplicate fields.
@@ -533,8 +537,15 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   const safeFieldCount = Math.max(labelFieldCount, profileFieldHits)
 
   const isWorkday = ats === "workday"
+  // Question-only steps ("Preliminary questions" on SmartRecruiters, iCIMS
+  // questionnaires) contain ZERO classic profile fields — but the question
+  // tier (deterministic rules + AI) answers them, so a known-ATS page with
+  // several real controls is still fillable. Without this, multi-step forms
+  // lock the Autofill button AND skip the AI cleanup on their later pages.
+  const questionStepFillable =
+    ats !== "unknown" && fields.filter((f) => f.type !== "file").length >= 3
   const supportsAutofill =
-    isWorkday || safeFieldCount >= 2 || (resumeUpload && safeFieldCount >= 1)
+    isWorkday || safeFieldCount >= 2 || (resumeUpload && safeFieldCount >= 1) || questionStepFillable
 
   if (isWorkday) {
     reasons.push("Workday step detected — Autofill uses step-aware runner (question dropdowns included).")

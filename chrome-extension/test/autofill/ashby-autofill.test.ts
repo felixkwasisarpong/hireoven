@@ -191,4 +191,250 @@ describe("Ashby autofill helpers", () => {
     expect((document.getElementById("gender") as HTMLInputElement).value).toBe("")
     expect(summary.filledCount).toBe(0)
   })
+
+  // Wire a jsdom stand-in for a react-select combobox: opening (mousedown/click)
+  // renders an options menu; clicking an option drops a singleValue chip and
+  // clears the search input — mirroring how the real widget commits a choice.
+  function wireReactSelect(rowId: string, optionLabels: string[]): void {
+    const row = document.getElementById(rowId)!
+    const input = row.querySelector<HTMLInputElement>("input.select__input")!
+    const open = () => {
+      if (row.querySelector(".select__menu")) return
+      const menu = document.createElement("div")
+      menu.className = "select__menu"
+      for (const label of optionLabels) {
+        const opt = document.createElement("div")
+        opt.className = "select__option"
+        opt.setAttribute("role", "option")
+        opt.textContent = label
+        opt.addEventListener("click", () => {
+          const chip = document.createElement("div")
+          chip.className = "select__single-value"
+          chip.textContent = label
+          row.querySelector(".select__control")!.prepend(chip)
+          input.value = ""
+          menu.remove()
+        })
+        menu.appendChild(opt)
+      }
+      row.appendChild(menu)
+    }
+    input.addEventListener("mousedown", open)
+    input.addEventListener("click", open)
+  }
+
+  const chipText = (rowId: string) =>
+    document.getElementById(rowId)!.querySelector(".select__single-value")?.textContent ?? ""
+
+  it("selects react-select combobox options for Country and Yes/No work-auth dropdowns", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="country-row" class="application-question">
+          <label>Country <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+        <div id="sponsor-row" class="application-question">
+          <label>Will you now or in the future require sponsorship for employment visa status? <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+      </form>`
+
+    wireReactSelect("country-row", ["Canada", "United Kingdom", "United States", "Germany"])
+    wireReactSelect("sponsor-row", ["Yes", "No"])
+
+    const summary = await fillRequiredAtsFields({ profile, doc: document })
+
+    expect(chipText("country-row")).toBe("United States")
+    expect(chipText("sponsor-row")).toBe("No") // requires_sponsorship: false
+    expect(summary.filledCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it("maps a US-variant profile country onto the ATS's 'United States' option", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="country-row" class="application-question">
+          <label>Country <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+      </form>`
+
+    wireReactSelect("country-row", ["United Kingdom", "United States", "Australia"])
+
+    await fillRequiredAtsFields({ profile: { ...profile, country: "USA" }, doc: document })
+
+    expect(chipText("country-row")).toBe("United States")
+  })
+
+  it("answers 'No' to sponsorship for a work-authorized applicant even when a future-sponsorship flag is set", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <fieldset class="application-question">
+          <legend>Will you require sponsorship for employment now or in the future? <span>*</span></legend>
+          <label><input type="radio" name="sponsor" value="yes" /> Yes</label>
+          <label><input type="radio" name="sponsor" value="no" /> No</label>
+        </fieldset>
+      </form>`
+
+    // authorized_to_work: true but requires_sponsorship intentionally true —
+    // the authorized-to-work rule must still answer No.
+    await fillRequiredAtsFields({
+      profile: { ...profile, authorized_to_work: true, requires_sponsorship: true },
+      doc: document,
+    })
+
+    const checked = document.querySelector<HTMLInputElement>('input[name="sponsor"]:checked')
+    expect(checked?.value).toBe("no")
+  })
+
+  it("leaves conditional 'If yes …' follow-up fields blank instead of filling them from the profile", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div class="application-question">
+          <label for="intl">If you selected international, what location(s)?</label>
+          <textarea id="intl"></textarea>
+        </div>
+        <div class="application-question">
+          <label for="sponstype">If yes, what type of sponsorship?</label>
+          <textarea id="sponstype"></textarea>
+        </div>
+      </form>`
+
+    await fillRequiredAtsFields({ profile, doc: document })
+
+    expect((document.getElementById("intl") as HTMLTextAreaElement).value).toBe("")
+    expect((document.getElementById("sponstype") as HTMLTextAreaElement).value).toBe("")
+  })
+
+  it("ticks one office for a 'select all that apply' relocate checkbox group", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <fieldset class="application-question">
+          <legend>What office(s) would you be willing to relocate to? (Select all that apply)</legend>
+          <label><input type="checkbox" name="office" value="sd" /> San Diego, California</label>
+          <label><input type="checkbox" name="office" value="dal" /> Dallas, Texas</label>
+          <label><input type="checkbox" name="office" value="dc" /> Washington, DC</label>
+        </fieldset>
+      </form>`
+
+    await fillRequiredAtsFields({ profile: { ...profile, willing_to_relocate: true }, doc: document })
+
+    const checked = document.querySelectorAll<HTMLInputElement>('input[name="office"]:checked')
+    expect(checked.length).toBe(1)
+  })
+
+  it("defaults 'Are you a transitioning service member?' to No for a non-veteran profile", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <fieldset class="application-question">
+          <legend>Are you a transitioning service member? <span>*</span></legend>
+          <label><input type="radio" name="tsm" value="no" /> No</label>
+          <label><input type="radio" name="tsm" value="yes" /> Yes</label>
+        </fieldset>
+      </form>`
+
+    await fillRequiredAtsFields({ profile, doc: document })
+
+    const checked = document.querySelector<HTMLInputElement>('input[name="tsm"]:checked')
+    expect(checked?.value).toBe("no")
+  })
+
+  it("answers an Ashby Yes/No BUTTON group (work auth) and counts it as answered via the _active class", async () => {
+    // Real Baseten/Ashby markup: the Yes/No answer is a pair of <button>s whose
+    // SELECTED state is a class ("_active_*"), not aria — plus a hidden checkbox.
+    // isQuestionAnswered must recognise the class, else the filled field is
+    // reported as needing manual review (and re-clicked → toggled off) on rescan.
+    document.body.innerHTML = `
+      <form class="_ashby-application-form">
+        <div class="_fieldEntry_x">
+          <label class="_required">Do you currently have unrestricted work authorization in the United States? <span>*</span></label>
+          <div class="_container _yesno">
+            <button type="button" class="_option">Yes</button>
+            <button type="button" class="_option">No</button>
+            <input class="_input" type="checkbox" tabindex="-1" />
+          </div>
+        </div>
+      </form>`
+    // Simulate Ashby's React behavior: clicking an option marks it _active
+    // (clearing its sibling) and toggles the hidden checkbox.
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>("._yesno button")]
+    const cb = document.querySelector<HTMLInputElement>("._yesno ._input")!
+    for (const btn of buttons) {
+      btn.addEventListener("click", () => {
+        for (const b of buttons) b.className = "_option"
+        btn.className = "_option _active_1svni_57"
+        cb.checked = /yes/i.test(btn.textContent ?? "")
+      })
+    }
+
+    const summary = await fillRequiredAtsFields({
+      profile: { first_name: "Felix", email: "f@x.com", authorized_to_work: true },
+      doc: document,
+    })
+
+    // Authorized applicant → "Yes" selected, and the field is NOT left for manual review.
+    expect(buttons.find((b) => /yes/i.test(b.textContent ?? ""))!.className).toMatch(/_active/)
+    expect(cb.checked).toBe(true)
+    expect(summary.manualReviewCount).toBe(0)
+  })
+
+  it("selects a React-controlled EEO radio via a real click, so its state registers (not just .checked)", async () => {
+    // Ashby's EEO radios are React-CONTROLLED: the selected state is driven by the
+    // CLICK event, not input.checked. Setting .checked + dispatching 'change' left
+    // React unaware → the radio reverted on re-render and the form SUBMITTED EMPTY
+    // (gender/race/veteran "not filling"). setReactChecked must click.
+    document.body.innerHTML = `
+      <form class="_ashby-application-form">
+        <fieldset class="_fieldEntry">
+          <label class="_label">Gender</label>
+          <label for="g0">Male</label><input id="g0" type="radio" name="gender" />
+          <label for="g1">Female</label><input id="g1" type="radio" name="gender" />
+          <label for="g2">Decline to self-identify</label><input id="g2" type="radio" name="gender" />
+        </fieldset>
+      </form>`
+    // React state is updated ONLY by the click event (a bare .checked set is invisible to it).
+    const reactState: Record<string, boolean> = { g0: false, g1: false, g2: false }
+    for (const r of document.querySelectorAll<HTMLInputElement>('input[name="gender"]')) {
+      r.addEventListener("click", () => {
+        for (const k of Object.keys(reactState)) reactState[k] = false
+        reactState[r.id] = true
+      })
+    }
+
+    await fillRequiredAtsFields({
+      profile: { first_name: "Felix", email: "f@x.com", auto_fill_diversity: true, gender: "Male" },
+      doc: document,
+      matchQuestions: async (qs) => qs.map((q) => ({ id: q.id, value: null, confidence: "low" as const })),
+    })
+
+    expect(reactState.g0).toBe(true) // React (click-driven) state registered — would be false on a .checked-only path
+    expect(document.querySelector<HTMLInputElement>("#g0")!.checked).toBe(true)
+  })
+
+  it("writes a PLAIN answer into a free-TEXT 'how did you hear' field, not the raw SOURCE_CANDIDATES sentinel", async () => {
+    // "How did you hear about this job?" is answered with a candidate-list sentinel
+    // (meant for dropdowns). On Greenhouse it renders as a free-text input — the
+    // text branch must unwrap the sentinel, else "__ho_source__Calendly career
+    // site|…" leaks into the box.
+    document.body.innerHTML = `
+      <form class="_ashby-application-form">
+        <div class="_fieldEntry_x">
+          <label>How did you hear about this job? <span>*</span></label>
+          <input id="hear" type="text" required value="" />
+        </div>
+      </form>`
+    await fillRequiredAtsFields({
+      profile: { first_name: "Felix", email: "f@x.com" },
+      doc: document,
+      matchQuestions: async (qs) => qs.map((q) => ({ id: q.id, value: null, confidence: "low" as const })),
+    })
+    const v = document.querySelector<HTMLInputElement>("#hear")!.value
+    expect(v).not.toContain("__ho_source__")
+    expect(v.length).toBeGreaterThan(0)
+  })
 })
