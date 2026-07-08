@@ -384,4 +384,67 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   { canonical: "Biostatistics", aliases: ["biostatistics", "biostatistician"], category: "healthcare" },
   { canonical: "Epidemiology", aliases: ["epidemiology", "epidemiologist"], category: "healthcare" },
   { canonical: "Regulatory Affairs", aliases: ["regulatory affairs"], category: "healthcare" },
+
+  // ── Testing / QA ────────────────────────────────────────────────────────────
+  { canonical: "Selenium", aliases: ["selenium"], category: "tool" },
+  { canonical: "Cypress", aliases: ["cypress"], category: "tool" },
+  { canonical: "Playwright", aliases: ["playwright"], category: "tool" },
+  { canonical: "Jest", aliases: ["\\bjest\\b"], category: "tool" },
+  { canonical: "Pytest", aliases: ["pytest", "py\\.test"], category: "tool" },
+  { canonical: "JUnit", aliases: ["junit"], category: "tool" },
+  { canonical: "Mocha", aliases: ["mocha\\.js", "mochajs"], category: "tool" },
+
+  // ── Data / BI / pipelines ───────────────────────────────────────────────────
+  { canonical: "Tableau", aliases: ["tableau"], category: "tool" },
+  { canonical: "Power BI", aliases: ["power bi", "powerbi"], category: "tool" },
+  { canonical: "Looker", aliases: ["looker"], category: "tool" },
+  { canonical: "Metabase", aliases: ["metabase"], category: "tool" },
+  { canonical: "Apache Spark", aliases: ["apache spark", "pyspark"], category: "tool" },
+  { canonical: "Apache Airflow", aliases: ["apache airflow", "airflow"], category: "tool" },
+  { canonical: "dbt", aliases: ["\\bdbt\\b", "data build tool"], category: "tool" },
+  { canonical: "Databricks", aliases: ["databricks"], category: "tool" },
+  { canonical: "Hadoop", aliases: ["hadoop"], category: "tool" },
+  { canonical: "Pandas", aliases: ["pandas"], category: "ml" },
+  { canonical: "NumPy", aliases: ["numpy"], category: "ml" },
+
+  // ── DevOps / infra (additional) ─────────────────────────────────────────────
+  { canonical: "GitLab", aliases: ["gitlab"], category: "tool" },
+  { canonical: "Bitbucket", aliases: ["bitbucket"], category: "tool" },
+  { canonical: "Helm", aliases: ["helm charts", "helm chart"], category: "cloud" },
+  { canonical: "Argo CD", aliases: ["argocd", "argo cd"], category: "cloud" },
+  { canonical: "Nginx", aliases: ["nginx"], category: "tool" },
+  { canonical: "RabbitMQ", aliases: ["rabbitmq"], category: "tool" },
+
+  // ── Project management / collaboration ──────────────────────────────────────
+  { canonical: "Jira", aliases: ["jira"], category: "tool" },
+  { canonical: "Confluence", aliases: ["confluence"], category: "tool" },
+
+  // ── Frontend / mobile frameworks (additional) ───────────────────────────────
+  { canonical: "Tailwind CSS", aliases: ["tailwind css", "tailwindcss", "tailwind"], category: "framework" },
+  { canonical: "Bootstrap", aliases: ["bootstrap css", "twitter bootstrap"], category: "framework" },
+  { canonical: "jQuery", aliases: ["jquery"], category: "framework" },
+  { canonical: "React Native", aliases: ["react native"], category: "framework" },
+  { canonical: "Flutter", aliases: ["flutter"], category: "framework" },
+
+  // ── Design tools ────────────────────────────────────────────────────────────
+  { canonical: "Adobe XD", aliases: ["adobe xd"], category: "marketing" },
+  { canonical: "InVision", aliases: ["invision"], category: "marketing" },
+
+  // ── Languages (additional) ──────────────────────────────────────────────────
+  { canonical: "MATLAB", aliases: ["matlab"], category: "language" },
+  { canonical: "PowerShell", aliases: ["powershell"], category: "language" },
+  { canonical: "Objective-C", aliases: ["objective-c", "objective c"], category: "language" },
+
+  // ── Security tooling / certs ────────────────────────────────────────────────
+  { canonical: "Penetration Testing", aliases: ["penetration testing", "pentesting", "pen testing"], category: "domain" },
+  { canonical: "Wireshark", aliases: ["wireshark"], category: "tool" },
+  { canonical: "Burp Suite", aliases: ["burp suite"], category: "tool" },
+  { canonical: "Nmap", aliases: ["nmap"], category: "tool" },
+  { canonical: "CISSP", aliases: ["\\bCISSP\\b"], category: "domain" },
+  { canonical: "CCNA", aliases: ["\\bCCNA\\b"], category: "domain" },
+  { canonical: "CompTIA", aliases: ["comptia"], category: "domain" },
+
+  // ── Certifications (additional) ─────────────────────────────────────────────
+  { canonical: "CFA", aliases: ["\\bCFA\\b", "chartered financial analyst"], category: "finance" },
+  { canonical: "Certified ScrumMaster", aliases: ["certified scrummaster", "certified scrum master"], category: "method" },
 ]
