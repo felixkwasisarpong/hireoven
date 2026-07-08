@@ -199,12 +199,12 @@ async function fetchPage(
 
 export const workableAdapter: AtsAdapter = {
   name: "workable",
-  // apply.workable.com rate-limits hard (429) — and the limit is per-IP, so the
-  // 6 in-process workers share one bucket: concurrency 2 means up to 12 parallel
-  // requests, which trips it constantly (observed ~850 http_429 / 2k ticks).
-  // Dropped to 1 (≤6 cluster-wide) to stop the 429 storm; env-overridable via
-  // HARVESTER_WORKABLE_CONCURRENCY.
-  concurrency: envConcurrency("workable", 1),
+  // apply.workable.com rate-limits per datacenter IP. With the WebShare proxy
+  // pool routing each request through a different residential IP, we can raise
+  // concurrency safely. Default 3 (overridable via HARVESTER_WORKABLE_CONCURRENCY).
+  // Without a proxy this would 429-storm — keep HARVESTER_PROXY_HOSTS containing
+  // apply.workable.com whenever this runs above 1.
+  concurrency: envConcurrency("workable", 3),
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
