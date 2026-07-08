@@ -53,11 +53,15 @@ import {
   applySafeFills,
   buildAutofillPreview,
   injectDocxFile,
+  reconcileRowsWithDom,
+  repairEmptyFills,
   setReactValue,
   type AutofillSource,
   type AutofillFieldResult,
+  type ResumeBytes,
   type SafeProfile,
 } from "../autofill/safe-fields"
+import { queryAllDeep } from "../autofill/shadow-dom"
 import { findUnfilledRequiredFields } from "../autofill/required-fields"
 import {
   fillRequiredAtsFields,
@@ -1246,6 +1250,8 @@ export class ApexBar {
     | "error" = "idle"
   private autofillPreview: AutofillFieldResult[] | null = null
   private autofillResults: AutofillFieldResult[] | null = null
+  private lastResumeBytes: ResumeBytes | null = null
+  private nextStepWatchToken = 0
   private autofillError: string | null = null
   private autofillProfile: SafeProfile | null = null
   private workdaySnapshot: WorkdayAutofillSnapshot | null = null
@@ -2026,6 +2032,20 @@ export class ApexBar {
     // in a separate review step but the user thinks of them as one of N items.
     const willFill = list.filter((f) => f.valuePreview && !f.skippedReason).length
     const reviewCount = list.filter((f) => f.skippedReason).length
+    // Question-only steps (SmartRecruiters "Preliminary questions"): tier-1
+    // has nothing to fill, but the AI question tier — which runs on Confirm —
+    // can answer the custom questions. Don't dead-end the user on
+    // "Nothing to fill"; let them start the AI fill.
+    const aiCandidates = list.filter(
+      (f) => f.skippedReason && /custom question/i.test(f.skippedReason),
+    ).length
+    const canConfirm = willFill > 0 || aiCandidates > 0
+    const confirmLabel =
+      willFill > 0
+        ? `Confirm fill (${willFill})`
+        : aiCandidates > 0
+          ? `Fill with AI (${aiCandidates})`
+          : "Nothing to fill"
 
     const filledCount = isDone ? list.filter((f) => f.filled).length : 0
     const skippedCount = isDone ? list.filter((f) => !f.filled).length : 0
@@ -2066,8 +2086,8 @@ export class ApexBar {
             <button
               class="ap-action ap-action-primary"
               data-action="autofill-confirm"
-              ${willFill === 0 ? "disabled" : ""}
-            >${willFill === 0 ? "Nothing to fill" : `Confirm fill (${willFill})`}</button>
+              ${canConfirm ? "" : "disabled"}
+            >${confirmLabel}</button>
           </div>
         ` : ""}
         ${isDone ? `
@@ -2731,6 +2751,106 @@ export class ApexBar {
     return this.site !== "workday" && this.autofillSiteSupported()
   }
 
+  /**
+   * Fingerprint of the currently visible form step: the set of control
+   * identities (id/name/label attribute). When the user clicks "Next" on a
+   * multi-step form, the overlap with the previous fingerprint collapses —
+   * that's the signal a new page of fields needs filling.
+   */
+  private formStepFingerprint(): Set<string> {
+    const out = new Set<string>()
+    for (const el of queryAllDeep<HTMLElement>(
+      document,
+      "input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea",
+    )) {
+      const host = el.getRootNode() instanceof ShadowRoot
+        ? ((el.getRootNode() as ShadowRoot).host as HTMLElement)
+        : null
+      const key = [
+        el.id || el.getAttribute("name") || "",
+        host?.getAttribute("label") ?? el.getAttribute("aria-label") ?? "",
+      ].join("|")
+      if (key !== "|") out.add(key)
+    }
+    return out
+  }
+
+  /**
+   * After a manual fill, keep watching for step changes ("Next" pages on
+   * SmartRecruiters/iCIMS — same idea as the Workday step runner). When the
+   * form's fingerprint changes substantially, run the fill pipeline on the
+   * new step automatically. NEVER clicks Next/Submit itself in manual mode;
+   * the user advances, the extension fills.
+   */
+  private startNextStepWatch(): void {
+    const token = ++this.nextStepWatchToken
+    let last = this.formStepFingerprint()
+    let fillsLeft = 6
+    const deadline = Date.now() + 5 * 60_000
+
+    const tick = async (): Promise<void> => {
+      if (token !== this.nextStepWatchToken) return
+      if (Date.now() > deadline || fillsLeft <= 0) return
+      setTimeout(() => void tick(), 1500)
+      if (this.autofillStatus === "filling") return
+      if (this.isConfirmationPage()) {
+        this.nextStepWatchToken += 1 // application done — stop watching
+        return
+      }
+      const current = this.formStepFingerprint()
+      if (current.size === 0) return
+      let overlap = 0
+      for (const key of current) if (last.has(key)) overlap += 1
+      const ratio = overlap / current.size
+      last = current
+      if (ratio >= 0.5) return // same step (minor re-renders don't count)
+      fillsLeft -= 1
+      await this.runStepRefill()
+      last = this.formStepFingerprint()
+    }
+    setTimeout(() => void tick(), 1500)
+  }
+
+  /** Fill pipeline for a newly revealed step of a multi-page application. */
+  private async runStepRefill(): Promise<void> {
+    if (!this.autofillProfile) return
+    this.autofillStatus = "filling"
+    this.render()
+    try {
+      const rows = await applySafeFills(
+        this.toAutofillSource(),
+        this.autofillProfile,
+        this.lastResumeBytes,
+        document,
+      )
+      this.autofillResults = [...(this.autofillResults ?? []), ...rows]
+      await this.runRequiredQuestionCleanup()
+      void this.startAutofillRepairWatch([...rows])
+    } catch {
+      // best-effort — leave whatever the step already has
+    }
+    this.autofillStatus = "done"
+    this.render()
+  }
+
+  /**
+   * Background watchdog: for 30s after a fill, restore any previously-filled
+   * field that the SPA wiped (stale Lit model re-commit, section re-renders).
+   * repairEmptyFills only rewrites EMPTY fields, so user edits are safe.
+   */
+  private async startAutofillRepairWatch(rows: AutofillFieldResult[]): Promise<void> {
+    if (rows.length === 0) return
+    const deadline = Date.now() + 30_000
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+      try {
+        await repairEmptyFills(rows, document)
+      } catch {
+        // best-effort — never let the watchdog surface an error
+      }
+    }
+  }
+
   private async runRequiredQuestionCleanup(): Promise<{
     attemptedCount: number
     filledCount: number
@@ -2740,22 +2860,42 @@ export class ApexBar {
       return { attemptedCount: 0, filledCount: 0, manualReviewCount: 0 }
     }
 
+    // Product rule: REQUIRED fields always get a best-effort answer — the
+    // user can edit before submitting, and a blank required field blocks the
+    // whole application. Optional fields stay conservative (only filled when
+    // the profile grounds them). The server's "autonomous" mode implements
+    // exactly this split, so manual fills use it too.
     const summary = await fillRequiredAtsFields({
       profile: this.autofillProfile,
       doc: document,
+      autonomous: true,
       matchQuestions: async (questions) => {
         if (questions.length === 0) return []
         const result = await matchQuestions({
           questions,
           jobTitle: this.job?.title ?? undefined,
           company: this.job?.company ?? undefined,
+          mode: "autonomous",
         })
         return result.answers
       },
     })
 
     if (summary.notes.length > 0) {
-      const existing = this.autofillResults ?? []
+      // Reconcile: tier-1 marks question fields "custom question — answer
+      // manually", then tier-2 actually answers them. Without merging, the
+      // SAME question shows as both SKIPPED (top) and FILLED (bottom) and the
+      // panel reads as mostly-skipped even when the form is filled. Drop
+      // tier-1 skip rows that a tier-2 note supersedes, and unlabeled skip
+      // rows (widget plumbing tier-1 couldn't name — useless to the user).
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()
+      const noteKeys = summary.notes.map((n) => norm(n.label)).filter(Boolean)
+      const existing = (this.autofillResults ?? []).filter((row) => {
+        if (!row.skippedReason || !/custom question/i.test(row.skippedReason)) return true
+        const key = norm(row.label ?? "")
+        if (!key) return false
+        return !noteKeys.some((nk) => nk === key || nk.includes(key) || key.includes(nk))
+      })
       this.autofillResults = [
         ...existing,
         ...this.requiredFieldFillNotesToRows(summary.notes),
@@ -3980,6 +4120,23 @@ export class ApexBar {
         }
       }
       await this.runRequiredQuestionCleanup()
+
+      // Repair watchdog — SPA forms wipe already-filled fields AFTER the fill:
+      // SmartRecruiters' Lit components re-commit a stale empty model on their
+      // own render schedule (observed ~20s later), and section re-renders
+      // (Country/Region appearing) recreate inputs empty. Watch for 30s and
+      // restore any filled field that empties. Only EMPTY fields are ever
+      // rewritten, so user edits made in the meantime are preserved. Runs in
+      // the background — the bar reports "done" immediately.
+      // Ground-truth reconcile: rows tier-1 skipped but that NOW hold a value
+      // (filled by tier-2 under a different label) flip to FILLED.
+      this.autofillResults = reconcileRowsWithDom(this.autofillResults ?? [], document)
+      void this.startAutofillRepairWatch([...(this.autofillResults ?? [])])
+      // Multi-step forms (SmartRecruiters "Next", iCIMS pages): keep watching.
+      // When the user advances and a NEW page of fields appears, fill it too —
+      // the extension never clicks Next/Submit itself in manual mode.
+      this.lastResumeBytes = resumeBytes
+      this.startNextStepWatch()
       this.autofillStatus = "done"
       const resultSummary = this.summarizeAutofillRows(this.autofillResults)
       if (resultSummary.fillableCount > 0 && resultSummary.filledCount === 0) {

@@ -114,6 +114,10 @@ export interface AtsAdapter {
 
 const DEFAULT_USER_AGENT =
   "hireoven-harvester/1.0 (+https://hireoven.com; bot@hireoven.com)"
+// Some ATS edge networks (Breezy, BambooHR) 403-block obvious bot UAs via WAF
+// rules. A plausible Chrome UA bypasses those checks without needing a proxy.
+export const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
 const DEFAULT_TIMEOUT_MS = 8_000
 const RETRY_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504])
 

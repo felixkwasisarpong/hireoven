@@ -341,6 +341,15 @@ export default function AutofillPageClient({
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
   }
+  // Picking any EEO value IS opting in — flip the diversity toggle on so the
+  // dashboard, the stored flag, and what the extension fills all agree.
+  function setEeo<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      auto_fill_diversity: value ? true : prev.auto_fill_diversity,
+    }))
+  }
   const str = (v: string | null | undefined) => v ?? ""
 
   useEffect(() => {
@@ -908,7 +917,7 @@ export default function AutofillPageClient({
               <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-4">
                 <div>
                   <p className="text-sm font-semibold text-gray-800">Auto-fill EEO / diversity questions</p>
-                  <p className="mt-0.5 text-xs text-gray-400">We only fill these if you opt in here</p>
+                  <p className="mt-0.5 text-xs text-gray-400">Turns on automatically once you pick any value below. Turn off to stop filling them.</p>
                 </div>
                 <button
                   type="button"
@@ -931,31 +940,31 @@ export default function AutofillPageClient({
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="Gender identity" hint="Used by most EEO forms.">
-                  <select value={str(form.gender)} onChange={(e) => set("gender", e.target.value || null)} className={inputCls}>
+                  <select value={str(form.gender)} onChange={(e) => setEeo("gender", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {GENDER_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
                 <Field label="Race / ethnicity" hint="EEOC-standard options.">
-                  <select value={str(form.ethnicity)} onChange={(e) => set("ethnicity", e.target.value || null)} className={inputCls}>
+                  <select value={str(form.ethnicity)} onChange={(e) => setEeo("ethnicity", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {ETHNICITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
                 <Field label="Hispanic or Latino?" hint="Asked separately on many Workday forms.">
-                  <select value={str(form.hispanic_latino)} onChange={(e) => set("hispanic_latino", e.target.value || null)} className={inputCls}>
+                  <select value={str(form.hispanic_latino)} onChange={(e) => setEeo("hispanic_latino", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {HISPANIC_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
                 <Field label="Veteran status" hint="Required by OFCCP-covered employers.">
-                  <select value={str(form.veteran_status)} onChange={(e) => set("veteran_status", e.target.value || null)} className={inputCls}>
+                  <select value={str(form.veteran_status)} onChange={(e) => setEeo("veteran_status", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {VETERAN_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </Field>
                 <Field label="Disability status" hint="OFCCP Form CC-305.">
-                  <select value={str(form.disability_status)} onChange={(e) => set("disability_status", e.target.value || null)} className={inputCls}>
+                  <select value={str(form.disability_status)} onChange={(e) => setEeo("disability_status", e.target.value || null)} className={inputCls}>
                     <option value="">Select…</option>
                     {DISABILITY_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
@@ -964,8 +973,8 @@ export default function AutofillPageClient({
 
               {!form.auto_fill_diversity && (
                 <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                  Enable &ldquo;Auto-fill EEO&rdquo; above to have Apex fill these fields.
-                  Your selections are saved but won&rsquo;t be used until you opt in.
+                  Auto-fill for EEO is off — pick any value above (or flip the toggle) and Apex will fill these
+                  voluntary questions. Leave it off to skip them.
                 </p>
               )}
             </Section>

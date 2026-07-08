@@ -8,6 +8,7 @@ import { DashboardMobileNavProvider } from "@/components/dashboard/DashboardMobi
 import DashboardProductTour from "@/components/dashboard/DashboardProductTour"
 import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
 import SavedJobReminderPopup from "@/components/apex/SavedJobReminderPopup"
+import LaunchPromoPopup from "@/components/apex/LaunchPromoPopup"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
@@ -124,6 +125,7 @@ export default function DashboardLayout({
           <DashboardLayoutInner>{children}</DashboardLayoutInner>
           <DashboardProductTour />
           <SavedJobReminderPopup />
+          <LaunchPromoPopup />
         </div>
       </DashboardMobileNavProvider>
     </ResumeProvider>

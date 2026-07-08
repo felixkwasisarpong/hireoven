@@ -45,6 +45,9 @@ export type MatchQuestion = {
   type: "text" | "textarea" | "yesno" | "select"
   /** Allowed choices for select/radio fields — answers are constrained to these. */
   options?: string[]
+  /** ATS marks this field required. In autonomous mode the server must not
+   *  return null for these (the agent can't submit while they're empty). */
+  required?: boolean
 }
 export type MatchedAnswer = {
   id: string
@@ -57,6 +60,9 @@ type MatchQuestionsRequest = {
   questions: MatchQuestion[]
   jobTitle?: string
   company?: string
+  /** "autonomous" = hands-off apply; server best-effort answers every required
+   *  field. Omitted/"assist" keeps the conservative null-on-uncertain behaviour. */
+  mode?: "autonomous" | "assist"
 }
 type AutofillTelemetryRequest = {
   type: "EXT_MVP_TRACK_AUTOFILL"
@@ -300,12 +306,14 @@ export function matchQuestions(args: {
   questions: MatchQuestion[]
   jobTitle?: string
   company?: string
+  mode?: "autonomous" | "assist"
 }): Promise<{ answers: MatchedAnswer[] }> {
   return send<{ answers: MatchedAnswer[] }>({
     type: "EXT_MVP_MATCH_QUESTIONS",
     questions: args.questions,
     jobTitle: args.jobTitle,
     company: args.company,
+    mode: args.mode,
   })
 }
 

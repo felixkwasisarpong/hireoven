@@ -2,6 +2,7 @@ import { fetchPrimaryResume, getAutofillProfile, matchQuestions } from "../api-c
 import type { MatchQuestion } from "../api-client"
 import type { SafeProfile } from "./safe-fields"
 import type { AutofillFieldResult } from "./safe-fields"
+import { isCurrentlyAuthorizedVisa } from "./work-auth"
 
 /**
  * A required application question the deterministic matcher couldn't answer.
@@ -955,6 +956,15 @@ class WorkdayAutofillRunner {
   private observer: MutationObserver | null = null
   private stopped = false
   private paused = false
+  /**
+   * Set when the runner pauses at a step HANDOFF (resume uploaded, step
+   * filled, waiting for the user's Save and Continue). When the mutation
+   * observer sees the page signature change — the user advanced — the runner
+   * auto-resumes and fills the new step. Without this the user had to click
+   * Autofill again on EVERY step ("delays" + "fields left out" on Workday).
+   * Explicit user pauses, the Review step, and the EEO pause never set it.
+   */
+  private autoPausedSignature: string | null = null
   private eeoPaused = false
   private processing = false
   private runQueued = false
@@ -1128,9 +1138,16 @@ class WorkdayAutofillRunner {
     if (this.stopped) return
     if (this.eeoPaused) return
     this.paused = true
+    this.autoPausedSignature = null // explicit pause — never auto-resume
     this.phase = "paused"
     this.setToolbarState("PAUSED", "Autofill paused.")
     this.debug("info", "runner.paused")
+  }
+
+  /** Pause at a step handoff — auto-resumes when the user advances the page. */
+  private markStepHandoffPause(): void {
+    this.paused = true
+    this.autoPausedSignature = this.captureApplicationPageSignature() || "unknown"
   }
 
   resume(): void {
@@ -1292,8 +1309,6 @@ class WorkdayAutofillRunner {
     if (this.debugEntries.length > DEBUG_LOG_LIMIT) {
       this.debugEntries.splice(0, this.debugEntries.length - DEBUG_LOG_LIMIT)
     }
-    // Mirror source-field + non-info events to the console for live debugging.
-    console.debug("[HO-WD]", level, event, JSON.stringify(cleanDetails ?? {}))
     this.publishDebug()
   }
 
@@ -1301,6 +1316,20 @@ class WorkdayAutofillRunner {
     if (this.observer) this.observer.disconnect()
     this.observer = new MutationObserver(() => {
       if (this.stopped) return
+      // Step-handoff pause + the page changed under us → the USER advanced
+      // (clicked Save and Continue / Continue). Resume and fill the new step.
+      // The pause exists to stop the RUNNER from auto-clicking navigation —
+      // not to make the human re-trigger Autofill on every page.
+      if (this.paused && !this.eeoPaused && !this.processing && this.autoPausedSignature) {
+        const sig = this.captureApplicationPageSignature()
+        if (sig && sig !== this.autoPausedSignature) {
+          this.paused = false
+          this.autoPausedSignature = null
+          this.phase = "running"
+          this.setToolbarState("WAITING", "Next step detected — resuming autofill…")
+          this.debug("info", "runner.auto_resumed_on_step_change")
+        }
+      }
       this.scheduleRun("mutation")
     })
     this.observer.observe(document.body, { childList: true, subtree: true })
@@ -1373,7 +1402,7 @@ class WorkdayAutofillRunner {
 
       const brokenState = this.detectBrokenApplyFlowState()
       if (brokenState.broken) {
-        this.paused = true
+        this.markStepHandoffPause() // auto-resumes once the user refreshes/fixes
         this.setToolbarState(
           "NEEDS_REVIEW",
           "Workday session is in an error state. Refresh this page before retrying autofill.",
@@ -1391,7 +1420,7 @@ class WorkdayAutofillRunner {
       }
 
       if (step.id === "account_required") {
-        this.paused = true
+        this.markStepHandoffPause() // auto-resumes when sign-in completes
         this.setToolbarState(
           "PAUSED",
           "Sign in or create your Workday account, then click Resume.",
@@ -1444,7 +1473,7 @@ class WorkdayAutofillRunner {
           const filledBefore = this.fieldsFilledCount
           const uploaded = await this.maybeUploadResume()
           if (uploaded) this.startNameCasingWatch(20000)
-          this.paused = true
+          this.markStepHandoffPause() // auto-resumes when the user clicks Continue
           if (uploaded || this.fieldsFilledCount > filledBefore) {
             this.setToolbarState(
               "DONE",
@@ -1491,7 +1520,7 @@ class WorkdayAutofillRunner {
         step.id === "self_identify"
       if (fillsThisStep) {
         if (this.requiredFieldMissesThisStep > 0) {
-          this.paused = true
+          this.markStepHandoffPause() // auto-resumes when the user advances
           this.setToolbarState(
             "NEEDS_REVIEW",
             `${step.name} filled (${this.fieldsFilledCount}/${this.totalExpectedFields}). ${this.requiredFieldMissesThisStep} field${this.requiredFieldMissesThisStep === 1 ? "" : "s"} need you.`,
@@ -1502,7 +1531,7 @@ class WorkdayAutofillRunner {
             misses: this.requiredFieldMissesThisStep,
           })
         } else {
-          this.paused = true
+          this.markStepHandoffPause() // auto-resumes when the user advances
           this.setToolbarState(
             "DONE",
             `${step.name} filled (${this.fieldsFilledCount}/${this.totalExpectedFields}).`,
@@ -3960,32 +3989,8 @@ class WorkdayAutofillRunner {
     }
   }
 
-  /**
-   * TEMP DIAGNOSTIC: render a fixed on-screen panel listing what the app-
-   * questions pass saw and did, so it can be screenshotted when the console
-   * isn't reachable. Remove once the flow is verified.
-   */
-  private qaDiag: string[] = []
-  private lastComboScan = ""
-  private lastComboOptions = ""
-  private renderQaDebugOverlay(): void {
-    const id = "__ho_qa_debug"
-    document.getElementById(id)?.remove()
-    const box = document.createElement("div")
-    box.id = id
-    box.style.cssText =
-      "position:fixed;left:8px;bottom:8px;z-index:2147483647;max-width:640px;max-height:60vh;overflow:auto;" +
-      "background:#111;color:#0f0;font:11px/1.4 monospace;padding:10px 12px;border:2px solid #0f0;border-radius:8px;white-space:pre-wrap;"
-    box.textContent =
-      "HO APP-QUESTIONS DEBUG (screenshot me)\n" +
-      "──────────────────────────────────────\n" +
-      (this.qaDiag.length ? this.qaDiag.join("\n") : "(no questions detected)")
-    document.body.appendChild(box)
-  }
-
   private async fillApplicationQuestionsStep(): Promise<void> {
     if (!this.cv) return
-    this.qaDiag = []
     this.debug("info", "step.application_questions.start")
     this.fillScreeningRadios()
 
@@ -4057,35 +4062,27 @@ class WorkdayAutofillRunner {
       )
 
       let answered = false
-      let chosen = ""
       if (candidates.length && !(isAnswered && (matchesCurrent || !confident))) {
         for (const cand of candidates) {
           if (applySelect(cand)) {
             answered = true
-            chosen = cand
             this.bumpFilledCount()
             this.debug("info", "questions.select.answered", { label, desired: cand, overrode: isAnswered })
             break
           }
         }
       }
-      let outcome: string
-      if (answered) outcome = `SET=${chosen}${isAnswered ? " (override)" : ""}`
-      else if (isAnswered && (matchesCurrent || !confident)) {
-        outcome = `KEPT=${currentText}`
-        this.debug("info", "questions.select.kept_existing", { label, current: currentText.slice(0, 60) })
-      } else {
-        outcome = "DEFERRED→AI"
-        this.debug("warn", "questions.select.deferred", { label })
-        this.queueSemantic({ el: select, label, type: "select", options: optionTexts, apply: applySelect })
+      if (!answered) {
+        if (isAnswered && (matchesCurrent || !confident)) {
+          this.debug("info", "questions.select.kept_existing", { label, current: currentText.slice(0, 60) })
+        } else {
+          this.debug("warn", "questions.select.deferred", { label })
+          this.queueSemantic({ el: select, label, type: "select", options: optionTexts, apply: applySelect })
+        }
       }
-      this.qaDiag.push(
-        `[select] "${label.slice(0, 46)}" cand=[${candidates.slice(0, 3).join(",")}] conf=${confident} cur="${currentText || "-"}" → ${outcome}`,
-      )
     }
     await this.fillApplicationQuestionComboboxes()
     await this.flushSemanticQueue()
-    this.renderQaDebugOverlay()
     this.debug("info", "step.application_questions.complete")
   }
 
@@ -4111,11 +4108,16 @@ class WorkdayAutofillRunner {
       return
     }
 
+    // Everything on the Workday semantic queue is a REQUIRED field the
+    // deterministic matcher couldn't answer, and the Workday runner is always a
+    // hands-off (autonomous) agent — so ask the server to best-effort answer
+    // each rather than nulling out and stranding the step at manual review.
     const questions: MatchQuestion[] = queue.map((q, index) => ({
       id: String(index),
       label: q.label,
       type: q.type,
       options: q.options,
+      required: true,
     }))
 
     let answers: Map<string, string | null>
@@ -4124,6 +4126,7 @@ class WorkdayAutofillRunner {
       const res = await matchQuestions({
         questions,
         jobTitle: this.detectJobTitle(),
+        mode: "autonomous",
       })
       answers = new Map(res.answers.map((a) => [a.id, a.value]))
       this.debug("info", "questions.semantic.response", {
@@ -4157,11 +4160,9 @@ class WorkdayAutofillRunner {
       if (ok) {
         this.bumpFilledCount()
         this.debug("info", "questions.semantic.answered", { label: q.label, value })
-        this.qaDiag.push(`[AI] "${q.label.slice(0, 46)}" → SET=${value}`)
         await sleep(120)
       } else {
         this.debug("warn", "questions.semantic.apply_failed", { label: q.label, value })
-        this.qaDiag.push(`[AI] "${q.label.slice(0, 46)}" → APPLY_FAILED (${value})`)
         this.markManualReview(q.el, q.label)
       }
     }
@@ -4205,10 +4206,6 @@ class WorkdayAutofillRunner {
       // must try both — we can't enumerate options without opening the menu.
       const { candidates, confident } = this.questionComboboxCandidates(label)
 
-      const widget =
-        comboboxTarget.getAttribute("data-automation-id") ||
-        comboboxTarget.getAttribute("role") ||
-        comboboxTarget.tagName.toLowerCase()
       const existing = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
       const deferCombobox = () =>
         this.queueSemantic({
@@ -4218,10 +4215,6 @@ class WorkdayAutofillRunner {
           apply: (value: string) =>
             this.selectComboboxElement(comboboxTarget, value, label, { optional: true }),
         })
-      const diag = (outcome: string) =>
-        this.qaDiag.push(
-          `[combo:${widget}] "${label.slice(0, 40)}" cand=[${candidates.slice(0, 3).join(",")}] conf=${confident} cur="${existing || "-"}" → ${outcome}`,
-        )
 
       if (existing && !this.isUnansweredSelectPlaceholder(existing)) {
         const existingMatches = candidates.some(
@@ -4232,7 +4225,6 @@ class WorkdayAutofillRunner {
         // mismatched value (e.g. a wrong answer left by an earlier run).
         if (existingMatches || !confident) {
           this.debug("info", "questions.combobox.kept_existing", { label, existing: existing.slice(0, 80), confident })
-          diag(`KEPT=${existing}`)
           continue
         }
         this.debug("info", "questions.combobox.overriding_existing", { label, existing: existing.slice(0, 80) })
@@ -4240,18 +4232,14 @@ class WorkdayAutofillRunner {
 
       if (!candidates.length) {
         this.debug("warn", "questions.combobox.unanswered", { label })
-        diag("DEFERRED→AI (no candidates)")
         deferCombobox()
         continue
       }
 
       let ok = false
       let chosen = ""
-      let lastScan = ""
       for (const cand of candidates) {
-        this.lastComboScan = ""
         ok = await this.selectComboboxElement(comboboxTarget, cand, label, { optional: true, strictOptions: true })
-        lastScan = this.lastComboScan
         if (ok) {
           chosen = cand
           break
@@ -4259,10 +4247,8 @@ class WorkdayAutofillRunner {
       }
       if (ok) {
         this.debug("info", "questions.combobox.answered", { label, desired: chosen })
-        diag(`SET=${chosen} [${lastScan}]`)
       } else {
         this.debug("warn", "questions.combobox.answer_failed", { label, tried: candidates.join(" | ") })
-        diag(`FAILED [${lastScan}] (tried ${candidates.slice(0, 2).join(",")})`)
         deferCombobox()
       }
     }
@@ -4428,6 +4414,9 @@ class WorkdayAutofillRunner {
       q.includes("sponsorship") &&
       (q.includes("require") || q.includes("need") || q.includes("visa") || q.includes("immigration"))
     ) {
+      // OPT / STEM OPT / CPT / H-1B / F-1 holders are currently authorized, so
+      // answer "No" to requiring sponsorship regardless of the raw flag.
+      if (isCurrentlyAuthorizedVisa(this.cv.visa.status)) return false
       return this.cv.visa.requiresSponsorship
     }
     if (
@@ -5414,7 +5403,6 @@ class WorkdayAutofillRunner {
     let roleOptionCount = 0
     let pollAttempts = 0
     const OPTION_SELECTOR = '[role="option"], [role="menuitem"], [data-automation-id="promptOption"]'
-    this.lastComboOptions = ""
     while (Date.now() < POLL_DEADLINE) {
       pollAttempts += 1
       // Priority 1: this combobox's own listbox (aria-controls) — precise.
@@ -5439,11 +5427,6 @@ class WorkdayAutofillRunner {
       roleOptionCount = candidateOptions.length
       if (candidateOptions.length > 0) {
         option = findOptionByText(candidateOptions, clean)
-        // DIAG: record what options were seen and which was matched.
-        this.lastComboOptions = candidateOptions
-          .slice(0, 5)
-          .map((o) => `${nonEmpty(o.textContent).slice(0, 12)}${o.getAttribute("aria-selected") === "true" ? "*" : ""}`)
-          .join(",")
         if (option) break
       }
       await sleep(100)
@@ -5456,15 +5439,9 @@ class WorkdayAutofillRunner {
       pollAttempts,
       matched: Boolean(option),
     })
-    this.lastComboScan = `opts=[${this.lastComboOptions}] matched=${Boolean(option)}`
     if (option) {
       const clickTarget =
         option.closest<HTMLElement>('[role="option"], [role="menuitem"], [data-automation-id="promptOption"]') ?? option
-      const attrs = ["data-automation-id", "data-value", "value", "aria-posinset", "role", "id"]
-        .map((a) => (clickTarget.getAttribute(a) ? `${a}=${clickTarget.getAttribute(a)}` : ""))
-        .filter(Boolean)
-        .join(" ")
-      this.lastComboScan += ` click="${nonEmpty(clickTarget.textContent).slice(0, 12)}"{${attrs}}`
       // Full mouse-event sequence — Workday's button-combobox options often
       // ignore a bare .click() and only commit on mousedown/mouseup.
       clickTarget.scrollIntoView({ block: "center" })
@@ -5479,7 +5456,6 @@ class WorkdayAutofillRunner {
         if (displayedAfter && !this.isUnansweredSelectPlaceholder(displayedAfter)) break
         await sleep(100)
       }
-      this.lastComboScan += ` post="${displayedAfter || "-"}"`
       if (displayedAfter && !this.isUnansweredSelectPlaceholder(displayedAfter)) {
         this.bumpFilledCount()
         this.debug("info", "combobox.option_selected", {

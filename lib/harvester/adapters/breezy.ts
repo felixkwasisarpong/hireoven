@@ -3,6 +3,7 @@ import {
   envConcurrency,
   conditionalFetchJson,
   hashContent,
+  BROWSER_USER_AGENT,
   type AtsAdapter,
   type HarvestCtx,
   type HarvestResult,
@@ -169,7 +170,7 @@ async function enrichWithDescriptions(jobs: HarvestedJob[], ctx: HarvestCtx): Pr
   await Promise.all(
     targets.map((job) =>
       limiter(async () => {
-        const res = await fetchHtmlConditional(job.applyUrl, { ...ctx, etag: null, lastModified: null }, { maxAttempts: 2 })
+        const res = await fetchHtmlConditional(job.applyUrl, { ...ctx, etag: null, lastModified: null, userAgent: BROWSER_USER_AGENT }, { maxAttempts: 2 })
         if (res.kind !== "ok") return
         const description = descriptionFromJsonLd(res.html)
         if (!description) return
@@ -196,7 +197,7 @@ export const breezyAdapter: AtsAdapter = {
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
-    const result = await conditionalFetchJson<BreezyPosition[]>(endpointFor(slug), ctx)
+    const result = await conditionalFetchJson<BreezyPosition[]>(endpointFor(slug), { ...ctx, userAgent: BROWSER_USER_AGENT })
 
     if (result.kind === "not_modified") {
       return {

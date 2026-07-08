@@ -3,7 +3,7 @@ import { generateFillScript } from "@/lib/autofill"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { getUserPlan } from "@/lib/gates/server-gate"
-import { bumpUsage } from "@/lib/usage/quotas-server"
+import { requireQuota } from "@/lib/usage/server-quota"
 import type { AutofillProfile } from "@/types"
 
 export const runtime = "nodejs"
@@ -16,13 +16,8 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { plan } = await getUserPlan()
-  const quota = await bumpUsage(user.id, "autofill", plan)
-  if (quota.exceeded) {
-    return NextResponse.json(
-      { error: `Autofill limit reached (${quota.limit}/month). Upgrade to use more.`, code: "QUOTA_EXCEEDED" },
-      { status: 429 }
-    )
-  }
+  const quota = await requireQuota(user.id, "autofill", plan)
+  if (quota instanceof NextResponse) return quota
   const pool = getPostgresPool()
 
   const body = await request.json().catch(() => ({})) as { jobId?: string }

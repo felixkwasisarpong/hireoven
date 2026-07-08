@@ -31,6 +31,19 @@ const clampScore = (value: number): number => Math.min(100, Math.max(0, Math.rou
 const normalizeText = (value: string | null | undefined): string =>
   value?.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim() ?? ""
 
+/**
+ * Whole-word containment with a length floor. Prevents a short normalized company
+ * name like "ati" from matching unrelated employers via a mid-word substring
+ * (communic-ati-ons, ph-arm-a). Mirrors the guard in lib/h1b/uscis-parser.ts.
+ */
+const MIN_NAME_CONTAINMENT = 4
+const nameContains = (haystack: string, needle: string): boolean => {
+  if (needle.length < MIN_NAME_CONTAINMENT) return false
+  if (haystack === needle) return true
+  const escaped = needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  return new RegExp(`(^| )${escaped}( |$)`).test(haystack)
+}
+
 const normalizeWageUnit = (
   unit: string | null | undefined
 ): "year" | "hour" | "month" | "week" | "biweekly" | null => {
@@ -129,7 +142,8 @@ const recordMatchesContext = (
   const recordTitle = normalizeText(record.jobTitle)
   const recordLocation = normalizeText(record.location ?? record.worksiteState)
 
-  const companyMatches = !company || !recordCompany || recordCompany.includes(company) || company.includes(recordCompany)
+  const companyMatches =
+    !company || !recordCompany || nameContains(recordCompany, company) || nameContains(company, recordCompany)
   const roleMatches =
     !roleFamily ||
     (recordRole.length > 0 && (recordRole.includes(roleFamily) || roleFamily.includes(recordRole))) ||

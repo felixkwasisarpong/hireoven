@@ -41,6 +41,13 @@ const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   ashby: 40_000,
   usajobs: 20_000,
   icims: 15_000,
+  // Workable's API is slow under load — 8s default caused 2k+ timeouts/day.
+  workable: 20_000,
+  // OracleCloud REST pages can be large; 8s isn't enough for slower tenants.
+  oraclecloud: 25_000,
+  // Personio and JSONLD endpoints have variable latency; give them headroom.
+  personio: 15_000,
+  sitemapjsonld: 20_000,
 }
 
 function tierIntervalSeconds(

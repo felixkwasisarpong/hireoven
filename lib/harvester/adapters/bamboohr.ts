@@ -2,6 +2,7 @@ import {
   conditionalFetchJson,
   envConcurrency,
   hashContent,
+  BROWSER_USER_AGENT,
   type AtsAdapter,
   type HarvestCtx,
   type HarvestResult,
@@ -145,6 +146,7 @@ async function fetchDescription(
     ...ctx,
     etag: null,
     lastModified: null,
+    userAgent: BROWSER_USER_AGENT,
   })
   if (result.kind !== "ok") return undefined
   return stripHtml(result.data?.result?.jobOpening?.description)
@@ -189,7 +191,7 @@ export const bamboohrAdapter: AtsAdapter = {
   detectFromUrl,
   async fetchJobs({ slug, ctx }): Promise<HarvestResult> {
     const fetchedAt = new Date()
-    const result = await conditionalFetchJson<BambooListResponse>(listUrl(slug), ctx)
+    const result = await conditionalFetchJson<BambooListResponse>(listUrl(slug), { ...ctx, userAgent: BROWSER_USER_AGENT })
 
     if (result.kind === "not_modified") {
       return {

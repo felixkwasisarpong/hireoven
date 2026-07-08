@@ -98,8 +98,7 @@ export async function benchmarkSalary(
     }>(
       `SELECT lr.wage_rate_from, lr.wage_rate_to, lr.wage_unit, lr.prevailing_wage
        FROM lca_records lr
-       JOIN companies c ON c.id = $1
-       WHERE lr.employer_name ILIKE '%' || c.name || '%'
+       WHERE lr.company_id = $1
          AND lr.job_title ILIKE $2
        ORDER BY lr.decision_date DESC NULLS LAST
        LIMIT 20`,
@@ -135,8 +134,7 @@ export async function benchmarkSalary(
     const statsResult = await pool.query<{ median_salary: number | null }>(
       `SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY wage_rate_from) AS median_salary
        FROM lca_records lr
-       JOIN companies c ON c.id = $1
-       WHERE lr.employer_name ILIKE '%' || c.name || '%'
+       WHERE lr.company_id = $1
          AND lr.wage_unit ILIKE ANY(ARRAY['%year%', '%annual%'])
          AND lr.wage_rate_from > 40000`,
       [companyId]

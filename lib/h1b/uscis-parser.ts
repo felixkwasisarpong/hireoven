@@ -66,11 +66,36 @@ function levenshtein(a: string, b: string): number {
   return dp[a.length][b.length]
 }
 
-function fuzzyMatch(employer: string, companyName: string): boolean {
+/**
+ * Minimum length for the shorter (contained) normalized name to be eligible for
+ * a containment match. Short tokens like "ati" (ATI Holdings), "arm", "mat" would
+ * otherwise swallow thousands of unrelated employers (communic-ati-ons,
+ * ph-arm-a, infor-mat-ion), so we require at least this many characters.
+ */
+const MIN_CONTAINMENT_LEN = 4
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * True when `needle` appears inside `haystack` as a whole word/phrase (bounded by
+ * spaces or string ends), not as a mid-word substring. Both are already normalized
+ * to space-separated lowercase tokens. This is what keeps "arch" from matching
+ * "research" while still matching "Arch Insurance".
+ */
+function containsAsPhrase(haystack: string, needle: string): boolean {
+  if (needle.length < MIN_CONTAINMENT_LEN) return false
+  if (haystack === needle) return true
+  return new RegExp(`(^| )${escapeRegExp(needle)}( |$)`).test(haystack)
+}
+
+export function fuzzyMatch(employer: string, companyName: string): boolean {
   const a = normalizeEmployerName(employer)
   const b = normalizeEmployerName(companyName)
+  if (!a || !b) return false
   if (a === b) return true
-  if (a.includes(b) || b.includes(a)) return true
+  if (containsAsPhrase(a, b) || containsAsPhrase(b, a)) return true
   return levenshtein(a, b) <= Math.floor(Math.max(a.length, b.length) * 0.15)
 }
 

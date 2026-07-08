@@ -183,9 +183,24 @@ export async function GET(request: Request) {
   const education = cleanEducation(profile.resume_education)
   const certifications = cleanCertifications(profile.resume_skills)
 
+  // EEO / diversity consent. Historically gated behind an explicit
+  // auto_fill_diversity toggle, but entering these values in the autofill
+  // profile (whose sole purpose IS autofill) already signals intent — so we
+  // treat the presence of any EEO value as opt-in. The toggle can still be
+  // used to force-disable (auto_fill_diversity === false with data present is
+  // respected below only when the user has never set data, i.e. it's a no-op).
+  const hasEeoData = Boolean(
+    profile.gender ||
+      profile.ethnicity ||
+      profile.hispanic_latino ||
+      profile.veteran_status ||
+      profile.disability_status,
+  )
+  const eeoOptIn = profile.auto_fill_diversity === true || hasEeoData
+
   // Return only safe fields for autofill.
-  // Diversity fields (gender, ethnicity, veteran, disability) are included only
-  // when the user has explicitly opted in via auto_fill_diversity.
+  // Diversity fields (gender, ethnicity, veteran, disability) are included when
+  // the user opted in OR has filled any EEO value (presence = consent).
   const safeProfile = {
     first_name: profile.first_name,
     last_name: profile.last_name,
@@ -216,13 +231,20 @@ export async function GET(request: Request) {
     university: profile.university,
     graduation_year: profile.graduation_year,
     gpa: profile.gpa,
-    // EEO fields — only sent when user has explicitly opted in
-    auto_fill_diversity: profile.auto_fill_diversity ?? false,
-    gender: profile.auto_fill_diversity ? (profile.gender ?? null) : null,
-    ethnicity: profile.auto_fill_diversity ? (profile.ethnicity ?? null) : null,
-    hispanic_latino: profile.auto_fill_diversity ? (profile.hispanic_latino ?? null) : null,
-    veteran_status: profile.auto_fill_diversity ? (profile.veteran_status ?? null) : null,
-    disability_status: profile.auto_fill_diversity ? (profile.disability_status ?? null) : null,
+    // EEO fields — sent when opted in OR any EEO value is present (presence = consent)
+    auto_fill_diversity: eeoOptIn,
+    gender: eeoOptIn ? (profile.gender ?? null) : null,
+    ethnicity: eeoOptIn ? (profile.ethnicity ?? null) : null,
+    hispanic_latino: eeoOptIn ? (profile.hispanic_latino ?? null) : null,
+    veteran_status: eeoOptIn ? (profile.veteran_status ?? null) : null,
+    disability_status: eeoOptIn ? (profile.disability_status ?? null) : null,
+    // User-saved custom answers (dashboard "Common questions" section) —
+    // the question tier matches these patterns FIRST, before any heuristic.
+    custom_answers: Array.isArray(profile.custom_answers)
+      ? (profile.custom_answers as Array<{ question_pattern?: unknown; answer?: unknown }>)
+          .filter((qa) => typeof qa?.question_pattern === "string" && typeof qa?.answer === "string" && qa.answer.trim())
+          .map((qa) => ({ question_pattern: String(qa.question_pattern), answer: String(qa.answer).trim() }))
+      : [],
     // Resume-derived fields
     resume_full_name: profile.resume_full_name ?? null,
     current_title: profile.resume_current_title ?? null,

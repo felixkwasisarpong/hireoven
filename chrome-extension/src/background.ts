@@ -2122,6 +2122,7 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
       jobTitle:  msg.jobTitle,
       company:   msg.company,
       questions: msg.questions,
+      mode:      msg.mode,
     }),
   },
   EXT_MVP_TRACK_AUTOFILL: {
