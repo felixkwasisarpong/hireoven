@@ -28,7 +28,9 @@ import { gateHostRate, reportHostResult } from "@/lib/harvester/host-rate-gate"
 
 const H2_ENABLED = process.env.HARVESTER_HTTP2 === "true"
 
-const DEFAULT_PROXY_HOST_SUFFIXES = ["myworkdayjobs.com"]
+// apply.workable.com rate-limits per datacenter IP — route through the
+// residential proxy pool so each request presents a different egress IP.
+const DEFAULT_PROXY_HOST_SUFFIXES = ["myworkdayjobs.com", "apply.workable.com"]
 
 let cachedAgent: Agent | null = null
 let cachedProxyAgent: ProxyAgent | null = null
@@ -46,16 +48,18 @@ function getAgent(): Agent {
   return cachedAgent
 }
 
-/** Comma-separated host suffixes to route through the proxy, lowercased. */
+/** Comma-separated host suffixes to route through the proxy, lowercased.
+ *  HARVESTER_PROXY_HOSTS is additive — it extends the defaults rather than
+ *  replacing them, so adding a new host never accidentally drops an existing one. */
 export function proxyHostSuffixes(
   env: Record<string, string | undefined> = process.env
 ): string[] {
   const raw = env.HARVESTER_PROXY_HOSTS
-  if (raw === undefined) return DEFAULT_PROXY_HOST_SUFFIXES
-  return raw
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean)
+  if (!raw) return DEFAULT_PROXY_HOST_SUFFIXES
+  const extra = raw.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+  const merged = [...DEFAULT_PROXY_HOST_SUFFIXES]
+  for (const h of extra) if (!merged.includes(h)) merged.push(h)
+  return merged
 }
 
 /** Pure host matcher — exported for tests. */
