@@ -48,6 +48,8 @@ const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   // Personio and JSONLD endpoints have variable latency; give them headroom.
   personio: 15_000,
   sitemapjsonld: 20_000,
+  // TikTok paginates up to 20 pages — give each fetch call time to respond.
+  tiktok: 30_000,
 }
 
 function tierIntervalSeconds(

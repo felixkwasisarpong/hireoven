@@ -54,6 +54,7 @@ export type AtsName =
   | "jsonld"
   | "sitemapjsonld"
   | "radancy"
+  | "tiktok"
 
 export type HarvestCtx = {
   etag: string | null
