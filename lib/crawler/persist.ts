@@ -220,7 +220,7 @@ function externalIdForJob(job: RawJob) {
     .digest("hex")}`
 }
 
-function normalizePostedAtToIso(
+export function normalizePostedAtToIso(
   postedAt: string | undefined,
   crawledAt: Date
 ): string | null {
@@ -229,7 +229,12 @@ function normalizePostedAtToIso(
 
   const direct = Date.parse(raw)
   if (!Number.isNaN(direct)) {
-    return new Date(direct).toISOString()
+    // A "posted" date can't be AFTER we crawled the job. Some custom scrapers
+    // hand us a FUTURE date (e.g. an application deadline / closing date
+    // mislabeled as the posting date); left unclamped it poisons first_detected_at
+    // and pins the job to the top of the "freshest" feed for months. Clamp any
+    // future value back to crawl time.
+    return new Date(Math.min(direct, crawledAt.getTime())).toISOString()
   }
 
   const normalized = raw.toLowerCase().replace(/^posted\s+/, "").trim()

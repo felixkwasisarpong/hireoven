@@ -321,12 +321,15 @@ SELECT
   COALESCE(NULLIF(v->>'publication_status', ''), 'published')                   AS publication_status,
   true                                                                          AS is_active,
   $2::timestamptz                                                               AS last_seen_at,
-  NULLIF(v->>'posted_at','')::timestamptz                                       AS posted_at,
+  LEAST(NULLIF(v->>'posted_at','')::timestamptz, $2::timestamptz)               AS posted_at,
   decode(v->>'content_hash', 'hex')                                             AS content_hash,
   $3                                                                            AS source_ats,
   $4                                                                            AS source_ats_slug,
   v->'raw_data'                                                                 AS raw_data,
-  COALESCE(NULLIF(v->>'posted_at','')::timestamptz, $2::timestamptz)             AS first_detected_at,
+  -- A posted date can't be after the crawl time; LEAST clamps a FUTURE posted_at
+  -- (e.g. a mislabeled deadline) to crawl time so it never poisons
+  -- first_detected_at / the "freshest" feed ordering.
+  COALESCE(LEAST(NULLIF(v->>'posted_at','')::timestamptz, $2::timestamptz), $2::timestamptz) AS first_detected_at,
   $2::timestamptz                                                               AS created_at,
   $2::timestamptz                                                               AS updated_at,
   NULL::timestamptz                                                             AS closed_at
