@@ -314,6 +314,7 @@ export type BackgroundMessageType =
   | "QUEUE_GET_STATE"
   | "QUEUE_ADD_JOB"
   | "QUEUE_SKIP_JOB"
+  | "QUEUE_SKIP_CURRENT"
   | "QUEUE_RETRY_JOB"
   | "QUEUE_MARK_SUBMITTED"
   | "QUEUE_APPROVE_RESUME"
@@ -493,7 +494,9 @@ export interface QueueAddJobMessage {
   }
 }
 
-export interface QueueSkipJobMessage   { type: "QUEUE_SKIP_JOB";   queueId: string }
+export interface QueueSkipJobMessage     { type: "QUEUE_SKIP_JOB";     queueId: string }
+/** Skip the currently active run job, close its tab, and advance to the next. */
+export interface QueueSkipCurrentMessage { type: "QUEUE_SKIP_CURRENT" }
 export interface QueueRetryJobMessage  { type: "QUEUE_RETRY_JOB";  queueId: string }
 /** Open one queued job in agent mode (fill + submit autonomously) without starting a full run. */
 export interface QueueOpenJobMessage   { type: "QUEUE_OPEN_JOB";   queueId: string }
@@ -553,6 +556,7 @@ export type BackgroundMessage =
   | QueueGetStateMessage
   | QueueAddJobMessage
   | QueueSkipJobMessage
+  | QueueSkipCurrentMessage
   | QueueRetryJobMessage
   | QueueOpenJobMessage
   | QueueMarkSubmittedMessage

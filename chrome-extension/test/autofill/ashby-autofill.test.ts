@@ -198,6 +198,7 @@ describe("Ashby autofill helpers", () => {
   function wireReactSelect(rowId: string, optionLabels: string[]): void {
     const row = document.getElementById(rowId)!
     const input = row.querySelector<HTMLInputElement>("input.select__input")!
+    const control = row.querySelector<HTMLElement>(".select__control")!
     const open = () => {
       if (row.querySelector(".select__menu")) return
       const menu = document.createElement("div")
@@ -211,7 +212,7 @@ describe("Ashby autofill helpers", () => {
           const chip = document.createElement("div")
           chip.className = "select__single-value"
           chip.textContent = label
-          row.querySelector(".select__control")!.prepend(chip)
+          control.prepend(chip)
           input.value = ""
           menu.remove()
         })
@@ -219,8 +220,13 @@ describe("Ashby autofill helpers", () => {
       }
       row.appendChild(menu)
     }
+    // Real react-select opens on a mousedown on the CONTROL (not just the inner
+    // input) — openCombo() drives it that way for the pick-first/no-else-first
+    // path, so model both to keep the fixture faithful.
     input.addEventListener("mousedown", open)
     input.addEventListener("click", open)
+    control.addEventListener("mousedown", open)
+    control.addEventListener("click", open)
   }
 
   const chipText = (rowId: string) =>
@@ -269,6 +275,138 @@ describe("Ashby autofill helpers", () => {
     await fillRequiredAtsFields({ profile: { ...profile, country: "USA" }, doc: document })
 
     expect(chipText("country-row")).toBe("United States")
+  })
+
+  it("never leaves an arbitrary required combobox blank — picks the first option when nothing grounds it", async () => {
+    // The Precisely "describe your AI-tool use" bug: a required react-select
+    // with options that match neither the profile nor a Yes/No default. The
+    // last-resort must still commit a value (first real option) so the field
+    // isn't left empty and blocking submit.
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="ai-row" class="application-question">
+          <label>Please select one of the below that best describes you. <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+      </form>`
+
+    wireReactSelect("ai-row", [
+      "I use AI tools extensively in my current role",
+      "I use AI tools occasionally",
+      "I have experimented with AI tools",
+    ])
+
+    const summary = await fillRequiredAtsFields({ profile, doc: document })
+
+    expect(chipText("ai-row")).toBe("I use AI tools extensively in my current role")
+    expect(summary.filledCount).toBeGreaterThanOrEqual(1)
+  })
+
+  it("prefers a 'No'/decline option over the first when an ungrounded required combobox offers one", async () => {
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="screen-row" class="application-question">
+          <label>Have you previously interned somewhere unrelated? <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+      </form>`
+
+    // Options in a deliberately non-Yes/No order so "first" ≠ the safe answer.
+    wireReactSelect("screen-row", ["Maybe", "Yes", "No"])
+
+    await fillRequiredAtsFields({ profile, doc: document })
+
+    expect(chipText("screen-row")).toBe("No")
+  })
+
+  it("fills a conditional follow-up via AI once the parent option we picked triggers it", async () => {
+    // Precisely's two-part AI question: an ungrounded required select we answer
+    // "extensively", plus a follow-up that only applies to "extensively/
+    // moderately". Picking the parent makes the follow-up OUR obligation.
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="ai-row" class="application-question">
+          <label>Please select one of the below that best describes you. <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+        <div id="followup-row" class="application-question">
+          <label>If you answered extensively or moderately to the above question, please list the AI tools you use and briefly describe how you use them in your work. <span>*</span></label>
+          <textarea id="ai-followup"></textarea>
+        </div>
+      </form>`
+
+    wireReactSelect("ai-row", [
+      "I use AI tools extensively in my work",
+      "I use AI tools moderately",
+      "I have never used AI tools",
+    ])
+
+    const asked: string[] = []
+    const summary = await fillRequiredAtsFields({
+      profile,
+      doc: document,
+      matchQuestions: async (questions) => {
+        asked.push(...questions.map((q) => q.label))
+        // Realistic server behaviour: it answers the free-text follow-up, not
+        // the option select (that's handled by the option tiers).
+        return questions
+          .filter((q) => /list the ai tools/i.test(q.label))
+          .map((q) => ({
+            id: q.id,
+            value: "I use ChatGPT and GitHub Copilot to draft and review code.",
+            confidence: "high" as const,
+          }))
+      },
+    })
+
+    // Parent got the first option, and the now-triggered follow-up was filled.
+    expect(chipText("ai-row")).toBe("I use AI tools extensively in my work")
+    const followup = document.getElementById("ai-followup") as HTMLTextAreaElement
+    expect(followup.value).toBe("I use ChatGPT and GitHub Copilot to draft and review code.")
+    // The follow-up (not the parent select) is what reached the AI tier.
+    expect(asked.some((label) => /list the ai tools/i.test(label))).toBe(true)
+    expect(summary.filledCount).toBeGreaterThanOrEqual(2)
+  })
+
+  it("leaves an UN-triggered conditional follow-up blank", async () => {
+    // Same follow-up, but the parent is answered "never" — the branch isn't
+    // taken, so the follow-up must stay empty (no fabricated essay).
+    document.body.innerHTML = `
+      <form class="application-form">
+        <div id="ai-row" class="application-question">
+          <label>Please select one of the below that best describes you. <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" role="combobox" aria-autocomplete="list" type="text" />
+          </div>
+        </div>
+        <div id="followup-row" class="application-question">
+          <label>If you answered extensively or moderately to the above question, please list the AI tools you use. <span>*</span></label>
+          <textarea id="ai-followup"></textarea>
+        </div>
+      </form>`
+
+    // First option is the "never" answer, so PICK_NO_ELSE_FIRST lands there.
+    wireReactSelect("ai-row", ["I have never used AI tools", "I use AI tools moderately"])
+
+    let followupAsked = false
+    await fillRequiredAtsFields({
+      profile,
+      doc: document,
+      matchQuestions: async (questions) => {
+        if (questions.some((q) => /list the ai tools/i.test(q.label))) followupAsked = true
+        return []
+      },
+    })
+
+    const followup = document.getElementById("ai-followup") as HTMLTextAreaElement
+    expect(followup.value).toBe("")
+    expect(followupAsked).toBe(false)
   })
 
   it("answers 'No' to sponsorship for a work-authorized applicant even when a future-sponsorship flag is set", async () => {
@@ -414,6 +552,93 @@ describe("Ashby autofill helpers", () => {
 
     expect(reactState.g0).toBe(true) // React (click-driven) state registered — would be false on a .checked-only path
     expect(document.querySelector<HTMLInputElement>("#g0")!.checked).toBe(true)
+  })
+
+  it("infers a reworded gender question from its phrasing + profile, mapping 'Man' → the form's 'Male' option", async () => {
+    // Greenhouse's EEO gender field is literally "Do you think of yourself as:"
+    // — no "gender" keyword — so it used to get AI-guessed WRONG (Female for a
+    // Male profile). Recognize the phrasing and map the profile value ("Man")
+    // onto whatever the form offers ("Male").
+    document.body.innerHTML = `
+      <form class="_ashby-application-form">
+        <fieldset class="_fieldEntry">
+          <label class="_label">Do you think of yourself as: <span>*</span></label>
+          <label for="ta0">Male</label><input id="ta0" type="radio" name="think" />
+          <label for="ta1">Female</label><input id="ta1" type="radio" name="think" />
+          <label for="ta2">Non-binary</label><input id="ta2" type="radio" name="think" />
+        </fieldset>
+      </form>`
+    await fillRequiredAtsFields({
+      // Profile stores "Man" (the value the user actually has).
+      profile: { first_name: "Felix", email: "f@x.com", auto_fill_diversity: true, gender: "Man" },
+      doc: document,
+      // The AI would confidently guess "Female" — deterministic inference must win.
+      matchQuestions: async (qs) => qs.map((q) => ({ id: q.id, value: "Female", confidence: "high" as const })),
+    })
+    const checked = document.querySelector<HTMLInputElement>('input[name="think"]:checked')
+    const label = checked ? document.querySelector<HTMLLabelElement>(`label[for="${checked.id}"]`)?.textContent : null
+    expect(label).toBe("Male")
+  })
+
+  it("infers 'No' for 'ever employed at <company>' and 'relatives here' screening questions", async () => {
+    document.body.innerHTML = `
+      <form class="_ashby-application-form">
+        <fieldset class="_fieldEntry">
+          <label class="_label">Have you ever been employed at Precisely? <span>*</span></label>
+          <label for="e0">Yes</label><input id="e0" type="radio" name="prev" />
+          <label for="e1">No</label><input id="e1" type="radio" name="prev" />
+        </fieldset>
+        <fieldset class="_fieldEntry">
+          <label class="_label">Do you have any relatives employed by this organization? <span>*</span></label>
+          <label for="r0">Yes</label><input id="r0" type="radio" name="rel" />
+          <label for="r1">No</label><input id="r1" type="radio" name="rel" />
+        </fieldset>
+      </form>`
+    await fillRequiredAtsFields({
+      profile: { first_name: "Felix", email: "f@x.com" },
+      doc: document,
+      // Even if the AI would say "Yes", the deterministic inference must win.
+      matchQuestions: async (qs) => qs.map((q) => ({ id: q.id, value: "Yes", confidence: "high" as const })),
+    })
+    expect(document.querySelector<HTMLInputElement>('input[name="prev"]:checked')?.id).toBe("e1")
+    expect(document.querySelector<HTMLInputElement>('input[name="rel"]:checked')?.id).toBe("r1")
+  })
+
+  it("last-resort defaults an unmatched required Yes/No COMBOBOX to No (not the first 'Yes' option)", async () => {
+    // react-select whose options aren't in the DOM → type isn't "yesno", so the
+    // old fallback picked the FIRST option ("Yes"). Now it must default to "No".
+    document.body.innerHTML = `
+      <div class="form-section">
+        <sr-question-field-select>
+          <p>Do you reside in any of the following locations (Alaska, Hawaii, Puerto Rico)?</p>
+          <spl-autocomplete id="q_reside"></spl-autocomplete>
+        </sr-question-field-select>
+        <div id="menu-q_reside"></div>
+      </div>`
+    const host = document.querySelector("spl-autocomplete")!
+    const shadow = host.attachShadow({ mode: "open" })
+    const input = document.createElement("input")
+    input.type = "text"
+    input.setAttribute("role", "combobox")
+    input.setAttribute("aria-required", "true")
+    input.setAttribute("aria-controls", "menu-q_reside")
+    shadow.appendChild(input)
+    const menu = document.getElementById("menu-q_reside")!
+    for (const text of ["Yes", "No"]) {
+      // "Yes" is FIRST — the old PICK_FIRST_OPTION fallback wrongly chose it.
+      const opt = document.createElement("spl-select-option")
+      opt.textContent = text
+      opt.addEventListener("click", () => {
+        input.value = text
+      })
+      menu.appendChild(opt)
+    }
+    await fillRequiredAtsFields({
+      profile: { first_name: "Felix", email: "f@x.com" },
+      doc: document,
+      matchQuestions: async (qs) => qs.map((q) => ({ id: q.id, value: null, confidence: "low" as const })),
+    })
+    expect(input.value).toBe("No")
   })
 
   it("writes a PLAIN answer into a free-TEXT 'how did you hear' field, not the raw SOURCE_CANDIDATES sentinel", async () => {

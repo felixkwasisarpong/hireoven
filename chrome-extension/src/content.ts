@@ -10,6 +10,8 @@
 
 import { detectFormFields } from "./autofill/form-detector"
 import { fillRequiredAtsFields } from "./autofill/ashby-autofill"
+import { installFrameAutofillListener } from "./autofill/frame-autofill"
+import { installLearnedAnswerCapture } from "./autofill/learned-answers"
 import { getAutofillProfile, matchQuestions } from "./api-client"
 import { pickResumeFileInput } from "./autofill/resume-target"
 import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
@@ -29,6 +31,7 @@ import {
   isJobBoardSite,
 } from "./detectors/page-mode"
 import { detectSite } from "./detectors/site"
+import { isFillableApplicationForm } from "./detectors/application-form"
 import type {
   ContentMessage,
   ContentResponse,
@@ -100,6 +103,29 @@ function shouldOverlayThisHost(): boolean {
   if (OVERLAY_HOST_ALLOWLIST.some((re) => re.test(host))) return true
   if (CAREER_PATH_PATTERN.test(window.location.pathname)) return true
   return false
+}
+
+/** Denylisted aggregators (LinkedIn/Indeed/…) — never mount the bar there. */
+function isDenylistedHost(): boolean {
+  const host = window.location.hostname.replace(/^www\./i, "").toLowerCase()
+  return OVERLAY_HOST_DENYLIST.some((re) => re.test(host))
+}
+
+/**
+ * Content-based activation: offer autofill on ANY page that exposes a real
+ * application form — not just recognized ATS hosts or career-looking URLs.
+ * Uses the shared detector with a conservative threshold so we DON'T light up on
+ * login / newsletter / search / bare 2-field contact forms:
+ *   - a recognized ATS is enough on its own;
+ *   - on an unknown host, require a stronger application signal (a résumé/CV
+ *     upload, or ≥3 real profile-fillable fields).
+ */
+function pageHasApplicationForm(): boolean {
+  try {
+    return isFillableApplicationForm(document)
+  } catch {
+    return false
+  }
 }
 
 const nativeInputSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set
@@ -661,9 +687,12 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
   }
 }
 
+let lateFormWatchActive = false
+
 async function mountApexBarWhenReady(): Promise<void> {
   if (!isTopFrame()) return
-  if (!shouldOverlayThisHost()) return
+  // Denylisted aggregators never get the bar, regardless of form content.
+  if (isDenylistedHost()) return
 
   if (!document.body) {
     await new Promise<void>((resolve) => {
@@ -675,11 +704,47 @@ async function mountApexBarWhenReady(): Promise<void> {
     })
   }
 
-  // ApexBar manages its own lifecycle (SPA URL observer, mount/teardown).
-  if (!apexBarInstance) {
-    apexBarInstance = new ApexBar()
+  // Mount when the URL/host says this is an application page OR the page
+  // actually contains a fillable application form (any site, any ATS).
+  if (shouldOverlayThisHost() || pageHasApplicationForm()) {
+    // ApexBar manages its own lifecycle (SPA URL observer, mount/teardown).
+    if (!apexBarInstance) {
+      apexBarInstance = new ApexBar()
+    }
+    await apexBarInstance.mount()
+    return
   }
-  await apexBarInstance.mount()
+
+  // Neither signal yet — a form may still render late (SPA hydration, "Apply"
+  // click that reveals a form). Poll briefly, then give up so we don't observe
+  // forever on pages that simply have no application form.
+  watchForLateApplicationForm()
+}
+
+/**
+ * Bounded poll for a late-appearing application form on pages that weren't an
+ * obvious application URL at load. Cheap and self-terminating: ~15s window,
+ * stops as soon as the bar mounts or the window elapses.
+ */
+function watchForLateApplicationForm(): void {
+  if (apexBarInstance || lateFormWatchActive) return
+  if (isDenylistedHost()) return
+  lateFormWatchActive = true
+  let tries = 0
+  const MAX_TRIES = 10
+  const timer = setInterval(() => {
+    tries += 1
+    if (apexBarInstance || tries > MAX_TRIES || !chrome.runtime?.id) {
+      clearInterval(timer)
+      lateFormWatchActive = false
+      return
+    }
+    if (shouldOverlayThisHost() || pageHasApplicationForm()) {
+      clearInterval(timer)
+      lateFormWatchActive = false
+      void mountApexBarWhenReady()
+    }
+  }, 1500)
 }
 
 /**
@@ -979,6 +1044,12 @@ function bootstrap(): void {
 
   registerMessageBridge()
   registerPageBridge()
+  // Runs in every frame; only a CHILD frame with a real application form acts
+  // (cross-origin ATS embeds — e.g. Greenhouse inside a company career page).
+  installFrameAutofillListener()
+  // Auto-remember the user's manual picks (every frame, incl. embedded forms)
+  // so future forms reuse THEIR answer instead of guessing.
+  installLearnedAnswerCapture()
   void mountApexBarWhenReady()
   void mountJobCardBadgesWhenReady()
   maybeRunLinkedInProfileSync()

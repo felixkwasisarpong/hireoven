@@ -89,6 +89,13 @@ function isComboboxInput(el: HTMLElement): boolean {
 // here — those are normal fields the user wants filled from their profile.
 // Sentinel: pick the first real option (used for "preferred location" pickers).
 const PICK_FIRST_OPTION = "__ho_pick_first__"
+// Sentinel: last-resort for an ungrounded REQUIRED option widget — within ONE
+// open menu, prefer a safe "No / None / Prefer not" option, else fall back to
+// the first real option. Doing it in a SINGLE combobox pass matters: two
+// separate passes ("no", then pick-first) re-open a react-select whose menu the
+// first pass already opened, and the second mousedown TOGGLES it shut → the
+// field is left blank. This is the "it still left 1 required field" bug.
+const PICK_NO_ELSE_FIRST = "__ho_no_else_first__"
 // Sentinel: tick EVERY checkbox in the group ("Select all — by selecting all,
 // you acknowledge…" consent blocks).
 const PICK_ALL_OPTIONS = "__ho_pick_all__"
@@ -348,6 +355,212 @@ export async function fillAshbyComboboxes(profile: SafeProfile, doc: Document = 
   return filled
 }
 
+// ── Education section (School / Degree / Discipline / dates) ──────────────────
+// Greenhouse (and Lever/BambooHR/generic) render the Education block as a set of
+// react-select DROPDOWNS — School (typeahead), Degree (fixed list), Discipline
+// (fixed list), plus Start/End "month" dropdowns and "year" text inputs — with
+// an "Add another" to repeat. safe-fields deliberately skips comboboxes, so
+// these never filled even though the résumé carries every value. This drives
+// them from `profile.resume_education`, mapping one résumé row per on-page block.
+
+type EduRole = "school" | "degree" | "discipline" | "start_month" | "start_year" | "end_month" | "end_year"
+
+const EDU_ROLE_MATCHERS: Array<{ role: EduRole; re: RegExp }> = [
+  { role: "start_month", re: /\bstart\b[\s\S]*\bmonth\b/i },
+  { role: "start_year", re: /\bstart\b[\s\S]*\byear\b/i },
+  { role: "end_month", re: /\bend\b[\s\S]*\bmonth\b|\b(graduat|completion)\b[\s\S]*\bmonth\b/i },
+  { role: "end_year", re: /\bend\b[\s\S]*\byear\b|\b(graduat|completion)\b[\s\S]*\byear\b/i },
+  { role: "discipline", re: /\bdiscipline\b|\bfield[\s_-]?of[\s_-]?study\b|\bmajor\b|\bconcentration\b|\bspecial(?:ization|isation)\b|\barea[\s_-]?of[\s_-]?study\b/i },
+  { role: "degree", re: /\bdegree\b|\bqualification\b/i },
+  { role: "school", re: /\bschool\b|\buniversit|\bcollege\b|\binstitution\b|\balma[\s_-]?mater\b/i },
+]
+
+/** A single control's OWN label — aria-label / aria-labelledby / <label for> /
+ *  wrapping <label> / placeholder — used to disambiguate month vs year controls
+ *  that share one field row. */
+function ownControlLabel(control: HTMLElement): string {
+  const aria = normalizeText(control.getAttribute("aria-label"))
+  if (aria) return aria
+  const doc = control.ownerDocument ?? document
+  const labelledby = control.getAttribute("aria-labelledby")
+  if (labelledby) {
+    const text = labelledby
+      .split(/\s+/)
+      .map((id) => normalizeText(doc.getElementById(id)?.textContent))
+      .filter(Boolean)
+      .join(" ")
+    if (text) return text
+  }
+  const id = control.getAttribute("id")
+  if (id) {
+    try {
+      const forLabel = doc.querySelector<HTMLElement>(`label[for="${cssEscape(id)}"]`)
+      const text = normalizeText(forLabel?.textContent)
+      if (text) return text
+    } catch {
+      // invalid id for a selector — ignore
+    }
+  }
+  const wrapping = control.closest("label")
+  if (wrapping) {
+    const text = normalizeText(wrapping.textContent)
+    if (text) return text
+  }
+  return normalizeText(control.getAttribute("placeholder"))
+}
+
+function eduRoleFor(label: string): EduRole | null {
+  const key = normalizeKey(label)
+  if (!key) return null
+  for (const { role, re } of EDU_ROLE_MATCHERS) {
+    if (re.test(key)) return role
+  }
+  return null
+}
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+]
+
+/** Split a résumé education date ("2020", "2020-05", "05/2020", "May 2020") into
+ *  a full month name and a 4-digit year — either may be null. */
+function parseEducationDate(raw: string | null | undefined): { month: string | null; year: string | null } {
+  const value = normalizeText(raw)
+  if (!value) return { month: null, year: null }
+  const yearMatch = value.match(/\b(19|20)\d{2}\b/)
+  const year = yearMatch ? yearMatch[0] : null
+  let month: string | null = null
+  const iso = value.match(/\b(?:19|20)\d{2}[-/](\d{1,2})\b/)
+  const slash = value.match(/\b(\d{1,2})[-/](?:19|20)\d{2}\b/)
+  const num = iso?.[1] ?? slash?.[1]
+  if (num) {
+    const idx = Number.parseInt(num, 10) - 1
+    if (idx >= 0 && idx < 12) month = MONTH_NAMES[idx]
+  }
+  if (!month) {
+    const named = MONTH_NAMES.find((name) => new RegExp(`\\b${name.slice(0, 3)}`, "i").test(value))
+    if (named) month = named
+  }
+  return { month, year }
+}
+
+/** Ordered option candidates for a Degree dropdown, mapped from a free-text
+ *  résumé degree ("BSc Computer Science" → Bachelor's Degree, …). Returns null
+ *  when no level is recognised so the raw text is typed instead. */
+function degreeOptionCandidates(degree: string): string[] | null {
+  const d = degree.toLowerCase()
+  if (/\bmba\b|master of business/.test(d)) return ["Master of Business Administration", "MBA", "Master's Degree"]
+  if (/\bph\.?d\b|doctor|d\.?phil/.test(d)) return ["Doctorate (PhD)", "Doctorate", "Doctor of Philosophy", "PhD"]
+  if (/\bm\.?(s|sc|a|eng|ed|phil)\b|master/.test(d)) return ["Master's Degree", "Master of Science", "Master of Arts", "Master"]
+  if (/\bb\.?(s|sc|a|eng|ba)\b|bachelor|undergrad/.test(d)) return ["Bachelor's Degree", "Bachelor of Science", "Bachelor of Arts", "Bachelor"]
+  if (/\bassociate|a\.?a\b|a\.?s\b/.test(d)) return ["Associate's Degree", "Associate Degree", "Associate"]
+  if (/high school|diploma|ged|secondary/.test(d)) return ["High School Diploma", "High School", "Secondary School"]
+  return null
+}
+
+/**
+ * Fill the Education section's dropdowns/inputs from `profile.resume_education`.
+ * One résumé row per on-page block (blocks delimited by a repeated field role,
+ * e.g. the next "School"). Never clobbers a field the user already answered and
+ * never auto-clicks "Add another" — it fills the blocks already on the page.
+ * Returns the number of fields it committed. Safe to run on any ATS.
+ */
+export async function fillEducationDropdowns(profile: SafeProfile, doc: Document = document): Promise<number> {
+  const rows = Array.isArray(profile.resume_education) ? profile.resume_education : []
+  if (rows.length === 0) return 0
+
+  // Collect at the CONTROL level (not the deduped question collector): repeated
+  // blocks share the label "School"/"Degree"/… so id-keyed dedup would collapse
+  // the 2nd block, AND "Start date month" (dropdown) + "Start date year" (text)
+  // often live in ONE row — a row-level single-role would capture only the month
+  // and drop the year. Roling each control by its OWN label fixes both.
+  const roled: Array<{ target: AshbyQuestionTarget; role: EduRole }> = []
+  for (const row of collectAshbyRows(doc)) {
+    if (!isElementUsable(row)) continue
+    const controls = getControlsForRow(row)
+    if (controls.length === 0) continue
+    const rowLabel = getQuestionLabel(row)
+    for (const control of controls) {
+      // Prefer the control's own label; only fall back to the row label when the
+      // row has a single control (else a shared label mis-assigns siblings).
+      const own = ownControlLabel(control)
+      const role =
+        (own ? eduRoleFor(own) : null) ??
+        (controls.length === 1 && rowLabel ? eduRoleFor(rowLabel) : null)
+      if (!role) continue
+      const label = own || rowLabel
+      const target = buildQuestionTarget(row, label, [control])
+      if (target) roled.push({ target, role })
+    }
+  }
+  if (roled.length === 0) return 0
+
+  // Group targets into per-entry blocks: a role that repeats (typically the
+  // next "School") starts a new block.
+  const blocks: Array<Partial<Record<EduRole, AshbyQuestionTarget>>> = []
+  let current: Partial<Record<EduRole, AshbyQuestionTarget>> = {}
+  for (const { target, role } of roled) {
+    if (current[role]) {
+      blocks.push(current)
+      current = {}
+    }
+    current[role] = target
+  }
+  if (Object.keys(current).length > 0) blocks.push(current)
+
+  let filled = 0
+  for (let i = 0; i < blocks.length && i < rows.length; i += 1) {
+    filled += await fillEducationBlock(blocks[i], rows[i])
+  }
+  return filled
+}
+
+async function fillEducationBlock(
+  block: Partial<Record<EduRole, AshbyQuestionTarget>>,
+  row: {
+    institution?: string | null
+    degree?: string | null
+    field?: string | null
+    start_date?: string | null
+    end_date?: string | null
+  },
+): Promise<number> {
+  let filled = 0
+  const set = async (role: EduRole, value: string | null): Promise<void> => {
+    const target = block[role]
+    if (!target || !value) return
+    if (isQuestionAnswered(target)) return // never overwrite a user's own pick
+    if (await applyAnswerToTarget(target, value)) {
+      filled += 1
+      await sleep(70 + Math.round(Math.random() * 120))
+    }
+  }
+
+  const degree = normalizeText(row.degree)
+  const degreeCandidates = degree ? degreeOptionCandidates(degree) : null
+  const start = parseEducationDate(row.start_date)
+  const end = parseEducationDate(row.end_date)
+  // A résumé often packs the whole span into one field ("2016 – 2020", or just a
+  // single graduation year in end_date). Pull every year seen across both fields
+  // so start/end year still fill when they aren't split cleanly.
+  const allYears = `${normalizeText(row.start_date ?? null)} ${normalizeText(row.end_date ?? null)}`.match(/\b(?:19|20)\d{2}\b/g) ?? []
+  const startYear = start.year ?? allYears[0] ?? null
+  const endYear = end.year ?? (allYears.length > 1 ? allYears[allYears.length - 1] : null) ?? null
+
+  await set("school", normalizeText(row.institution) || null)
+  await set(
+    "degree",
+    degreeCandidates ? SOURCE_CANDIDATES_PREFIX + degreeCandidates.join("|") : degree || null,
+  )
+  await set("discipline", normalizeText(row.field) || null)
+  await set("start_month", start.month)
+  await set("start_year", startYear)
+  await set("end_month", end.month)
+  await set("end_year", endYear)
+  return filled
+}
+
 async function fillAshbyTypeahead(input: HTMLInputElement, value: string, doc: Document): Promise<boolean> {
   try {
     input.focus()
@@ -579,15 +792,40 @@ export async function fillRequiredAtsFields(args: {
     .filter((target) => !isQuestionAnswered(target))
     .filter((target) => !isConditionalFollowUp(normalizeKey(target.label)))
   for (const target of lastResort) {
-    const value = isSensitiveAshbyQuestion(target.label, allowDiversity)
-      ? SOURCE_CANDIDATES_PREFIX + DECLINE_ANSWER_CANDIDATES.join("|")
-      : target.type === "yesno"
-        ? "no"
-        : target.kind === "text" || target.kind === "textarea"
-          ? "N/A"
-          : PICK_FIRST_OPTION
     attemptedCount += 1
-    const filled = await applyAnswerToTarget(target, value)
+    let value: string
+    let filled: boolean
+    if (isSensitiveAshbyQuestion(target.label, allowDiversity)) {
+      value = SOURCE_CANDIDATES_PREFIX + DECLINE_ANSWER_CANDIDATES.join("|")
+      filled = await applyAnswerToTarget(target, value)
+    } else if (target.kind === "text" || target.kind === "textarea") {
+      value = "N/A"
+      filled = await applyAnswerToTarget(target, value)
+    } else if (target.kind === "combobox") {
+      // react-select whose options aren't in the DOM until opened. Do the
+      // "No, else first option" choice in ONE open menu — two passes (try "no",
+      // then pick-first) re-open the menu the first pass already opened, and the
+      // second mousedown toggles it SHUT, leaving the field blank ("it still
+      // left 1 required field"). Prefers a safe No/None/Prefer-not option (the
+      // right answer for screening questions) and otherwise takes the first real
+      // option so an arbitrary required select ("describe your AI-tool use") is
+      // never left empty.
+      value = PICK_NO_ELSE_FIRST
+      filled = await applyAnswerToTarget(target, PICK_NO_ELSE_FIRST)
+    } else {
+      // Native/aria option widget — radio / select / button. Per the product +
+      // user rule, an unsure REQUIRED question defaults to "No" (the safe answer
+      // for "relatives here?", "reside in…?", "worked here before?"). Picking the
+      // FIRST option instead wrongly chose "Yes". Only when "No" isn't an option
+      // (a genuine multi-choice select) do we fall back to the first real option.
+      // These widgets have no popup menu, so the two-pass toggle bug can't occur.
+      value = "no"
+      filled = await applyAnswerToTarget(target, "no")
+      if (!filled) {
+        value = PICK_FIRST_OPTION
+        filled = await applyAnswerToTarget(target, PICK_FIRST_OPTION)
+      }
+    }
     if (filled) filledCount += 1
     notes.push({
       label: target.label,
@@ -598,9 +836,81 @@ export async function fillRequiredAtsFields(args: {
     if (filled) await sleep(70 + Math.round(Math.random() * 120))
   }
 
+  // ── TRIGGERED CONDITIONAL FOLLOW-UPS ─────────────────────────────────────
+  // A follow-up ("If you answered extensively or moderately, list the AI tools
+  // you use…") is normally skipped — its branch usually wasn't taken. But once
+  // the tiers above auto-answer the PARENT with an option that satisfies the
+  // condition (we pick "extensively" for an ungrounded required select), the
+  // follow-up is now OUR obligation: leaving it blank blocks submit and makes
+  // the application self-contradictory. Re-scan for follow-ups whose trigger the
+  // form now meets and answer them (free text → AI-generated from the résumé;
+  // option widgets → the normal safe fallback). Runs LAST so every parent answer
+  // is already committed. Nothing is auto-submitted — the user reviews first.
+  const followUps = collectAshbyQuestionTargets(doc, { requiredOnly: false, allowDiversity })
+    .filter((target) => !isQuestionAnswered(target))
+    .filter((target) => conditionalFollowUpTriggered(target.label, doc))
+  if (followUps.length > 0) {
+    const textFollowUps = followUps.filter((t) => t.kind === "text" || t.kind === "textarea")
+    const optionFollowUps = followUps.filter((t) => t.kind !== "text" && t.kind !== "textarea")
+
+    // Free-text follow-ups → AI. We created the obligation by picking the
+    // triggering parent option, so accept the model's answer even at low
+    // confidence rather than stranding a now-required field.
+    if (textFollowUps.length > 0 && args.matchQuestions) {
+      let answers: AshbyMatchedAnswer[] = []
+      try {
+        answers = await args.matchQuestions(textFollowUps.map((t) => toQuestionRequest(t, true)))
+      } catch {
+        answers = []
+      }
+      const byId = new Map(answers.map((a) => [a.id, a]))
+      for (const target of textFollowUps) {
+        attemptedCount += 1
+        const value = normalizeText(byId.get(target.id)?.value)
+        if (!value) {
+          notes.push({ label: target.label, filled: false, skippedReason: "Needs manual review." })
+          continue
+        }
+        const filled = await applyAnswerToTarget(target, value)
+        if (filled) filledCount += 1
+        notes.push({
+          label: target.label,
+          valuePreview: previewAnswer(value),
+          filled,
+          skippedReason: filled ? undefined : "Could not set the follow-up answer — fill manually.",
+        })
+        if (filled) await sleep(70 + Math.round(Math.random() * 120))
+      }
+    } else {
+      for (const target of textFollowUps) {
+        attemptedCount += 1
+        notes.push({ label: target.label, filled: false, skippedReason: "Needs manual review." })
+      }
+    }
+
+    // Option-widget follow-ups → the same safe fallback the last-resort uses.
+    for (const target of optionFollowUps) {
+      attemptedCount += 1
+      const value = target.kind === "combobox" ? PICK_NO_ELSE_FIRST : "no"
+      let filled = await applyAnswerToTarget(target, value)
+      if (!filled && target.kind !== "combobox") filled = await applyAnswerToTarget(target, PICK_FIRST_OPTION)
+      if (filled) filledCount += 1
+      notes.push({
+        label: target.label,
+        valuePreview: previewAnswer(value),
+        filled,
+        skippedReason: filled ? undefined : "Could not set a fallback value — fill manually.",
+      })
+      if (filled) await sleep(70 + Math.round(Math.random() * 120))
+    }
+  }
+
   const manualReviewCount = collectAshbyQuestionTargets(doc, { requiredOnly: true, allowDiversity: args.profile.auto_fill_diversity === true })
     .filter((target) => !isQuestionAnswered(target))
-    .filter((target) => !isConditionalFollowUp(normalizeKey(target.label)))
+    // A follow-up still counts as "needs review" only when its branch was
+    // actually triggered (and we somehow couldn't fill it) — untriggered
+    // follow-ups are effectively optional, so they don't inflate the count.
+    .filter((target) => !isConditionalFollowUp(normalizeKey(target.label)) || conditionalFollowUpTriggered(target.label, doc))
     .length
 
   return { attemptedCount, filledCount, manualReviewCount, notes }
@@ -609,6 +919,7 @@ export async function fillRequiredAtsFields(args: {
 function previewAnswer(value: string): string {
   // Internal sentinels must never leak into the results panel.
   if (value === PICK_FIRST_OPTION) return "First available option"
+  if (value === PICK_NO_ELSE_FIRST) return "No / first available option"
   if (value === PICK_ALL_OPTIONS) return "All boxes ticked"
   if (value.startsWith(SOURCE_CANDIDATES_PREFIX)) {
     const first = value.slice(SOURCE_CANDIDATES_PREFIX.length).split("|")[0] ?? ""
@@ -645,6 +956,9 @@ function collectAshbyQuestionTargets(
     const label = getQuestionLabel(row)
     if (!label) continue
     if (PHONE_COUNTRY_WIDGET_RE.test(label)) continue
+    // Site chrome (nav search, newsletter) is never an application question.
+    if (/^search\b( for| jobs)?:?$/i.test(label.trim())) continue
+    if (row.closest("nav, [role='navigation'], [role='search']")) continue
     const controls = getControlsForRow(row)
     if (controls.length === 0) continue
     if (controls.some((el) => el instanceof HTMLInputElement && el.type === "file")) continue
@@ -1183,6 +1497,79 @@ function isConditionalFollowUp(key: string): boolean {
   return /^if\b/.test(key)
 }
 
+/**
+ * True when a conditional follow-up's "if <…>" branch was actually taken —
+ * e.g. the parent question is now answered "extensively" and the follow-up
+ * reads "If you answered extensively or moderately, list the AI tools…". Only
+ * then should the follow-up be filled; otherwise it stays skipped (its branch
+ * wasn't taken, so any answer would be wrong). Conservative: when the trigger
+ * clause can't be parsed or nothing on the form matches it, returns false.
+ */
+function conditionalFollowUpTriggered(label: string, doc: Document): boolean {
+  const key = normalizeKey(label)
+  if (!isConditionalFollowUp(key)) return false
+  // Isolate the condition clause: text after "if" up to the instruction part
+  // ("please list…", "provide…", "to the above question", a comma or colon).
+  const match =
+    /^if\s+(.*?)(?:\bthen\b|\bplease\b|\bprovide\b|\blist\b|\bdescribe\b|\bexplain\b|\bto the above\b|[,:]|$)/.exec(key)
+  const clause = (match?.[1] ?? "").trim()
+  if (!clause) return false
+
+  // Trigger tokens = the option words that satisfy the condition, minus filler.
+  // "you answered extensively or moderately" → [extensively, moderately];
+  // "yes" → [yes]; "you selected other" → [other].
+  const stop = new Set([
+    "you", "your", "the", "a", "an", "answered", "answer", "selected", "select", "chose", "choose",
+    "have", "has", "had", "any", "above", "question", "questions", "to", "of", "is", "are", "was",
+    "were", "and", "or", "response", "responded", "this", "that", "for", "with", "in", "on", "at",
+  ])
+  const tokens = clause
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !stop.has(token))
+  if (tokens.length === 0) return false
+
+  const answered = collectAnsweredOptionTexts(doc).join(" | ").toLowerCase()
+  if (!answered) return false
+  return tokens.some((token) => answered.includes(token))
+}
+
+/**
+ * Text of every currently-selected answer on the form — react-select chips,
+ * checked radios/checkboxes, aria-selected custom options, and non-placeholder
+ * native <select> values. Used to evaluate conditional follow-up triggers.
+ */
+function collectAnsweredOptionTexts(doc: Document): string[] {
+  const out: string[] = []
+  const push = (text: string) => {
+    const value = normalizeText(text)
+    if (value) out.push(value)
+  }
+  for (const chip of queryAllDeep<HTMLElement>(
+    doc,
+    '[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i], [class*="multi-value" i]',
+  )) {
+    push(chip.textContent ?? "")
+  }
+  for (const input of queryAllDeep<HTMLInputElement>(doc, 'input[type="radio"], input[type="checkbox"]')) {
+    if (!input.checked) continue
+    const row = findRowForControl(input)
+    push(row ? getOptionLabel(input, row) : input.value)
+  }
+  for (const el of queryAllDeep<HTMLElement>(
+    doc,
+    '[aria-checked="true"], [aria-selected="true"], [aria-pressed="true"]',
+  )) {
+    push(roleOptionLabel(el))
+  }
+  for (const select of queryAllDeep<HTMLSelectElement>(doc, "select")) {
+    const option = select.options[select.selectedIndex]
+    const text = normalizeText(option?.textContent || option?.value)
+    if (text && !/^select|choose|--$/i.test(text)) push(text)
+  }
+  return out
+}
+
 function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfile): string | null {
   const label = target.label
   const key = normalizeKey(label)
@@ -1303,8 +1690,12 @@ function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfil
     return hasCompany(profile, /\b(pricewaterhousecoopers|pwc)\b/i) ? "yes" : "no"
   }
   if (
-    /\b(previously|formerly|ever)\b.*\b(employed|worked|employee)\b.*\b(by|for)\b/.test(key) ||
-    /\b(employed|worked|employee)\b.*\b(previously|formerly)\b.*\b(by|for)\b/.test(key)
+    // "…previously/ever employed/worked AT/BY/FOR/WITH/HERE <company>?" — the
+    // "at"/"here" phrasings ("Have you ever been employed at Precisely?") are as
+    // common as "by/for". Require a company preposition so we don't match
+    // "ever worked in a team".
+    /\b(previously|formerly|ever|before)\b[^?.!]{0,60}\b(employ|work)\w*\b[^?.!]{0,40}\b(at|by|for|with|here|this)\b/.test(key) ||
+    /\b(employ|work)\w*\b[^?.!]{0,40}\b(previously|formerly|before)\b/.test(key)
   ) {
     return "no"
   }
@@ -1335,7 +1726,10 @@ function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfil
   // Yes/No widgets get "No"; free-text referral boxes get "N/A" — offering
   // "N/A" to a Yes/No radio matches nothing and strands the question.
   if (/relatives?.*(work|employ)|(work|employ).*relatives?|do you know (anyone|someone)/.test(key)) {
-    return target.type === "yesno" ? "no" : "N/A"
+    // Only a free-TEXT referral box gets "N/A"; any option widget (radio, select,
+    // AND react-select combobox — whose Yes/No options aren't in the DOM yet) gets
+    // "no", the correct answer for "do you have relatives here?".
+    return target.kind === "text" || target.kind === "textarea" ? "N/A" : "no"
   }
   // Availability / start date (free text).
   if (/\bwhen (are|will|can|could|would) you.*(available|begin|start)\b|\bavailable to (begin|start)\b|\bstart date\b|\bavailability\b|\bnotice period\b/.test(key)) {
@@ -1401,7 +1795,23 @@ function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfil
     return SOURCE_CANDIDATES_PREFIX + candidates.join("|")
   }
 
-  if (DEMOGRAPHIC_QUESTION_RE.test(label) && profile.auto_fill_diversity !== true) {
+  // A gender question isn't always labeled "gender" — e.g. "Do you think of
+  // yourself as:", "How do you identify?" — so it slips past the keyword check
+  // and the AI guesses the WRONG option (observed: a Male profile getting
+  // "Female"). Recognize it by its OPTIONS (both Male and Female present) so the
+  // PROFILE value is used, not a guess.
+  const genderOptions = (target.options ?? []).map((o) => normalizeKey(o))
+  const isGenderQuestion =
+    (/\bgender\b/.test(key) && !/\btransgender\b/.test(key)) ||
+    // Greenhouse's EEO gender field is literally "Do you think of yourself as:".
+    // Match the phrasing so it works even for a react-select whose options
+    // aren't in the DOM yet (the options-based signal below can't see them).
+    /\bthink of yourself as\b|\bgender identity\b|\bhow do you identify your gender\b/.test(key) ||
+    (genderOptions.some((o) => /^(male|man)$/.test(o)) &&
+      genderOptions.some((o) => /^(female|woman)$/.test(o)) &&
+      !/\brac|\bethnic|\bveteran|\bdisab|\bhispan|\blatin|\bpronoun/.test(key))
+
+  if ((DEMOGRAPHIC_QUESTION_RE.test(label) || isGenderQuestion) && profile.auto_fill_diversity !== true) {
     return SOURCE_CANDIDATES_PREFIX + [
       "Prefer not to answer",
       "I do not want to answer",
@@ -1414,7 +1824,7 @@ function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfil
 
   // EEO / self-identification — only when the user opted in (auto_fill_diversity).
   if (profile.auto_fill_diversity === true) {
-    if (/\bgender\b/.test(key) && !/transgender/.test(key)) return mapGenderValue(profile.gender)
+    if (isGenderQuestion) return mapGenderValue(profile.gender)
     if (/\brac(e|ial)\b|\bethnic/.test(key)) return mapEthnicityValue(profile.ethnicity)
     if (/\bhispanic\b|\blatin[ox]?\b/.test(key)) return mapYesNoDeclineValue(profile.hispanic_latino)
     if (/\bveteran\b|\barmed forces\b|\bmilitary service\b/.test(key)) return mapYesNoDeclineValue(profile.veteran_status)
@@ -1722,6 +2132,19 @@ async function fillComboboxOption(
     // their popup at 0×0 (never open) when the field isn't yet in the viewport.
     await sleep(150)
     input.focus({ preventScroll: true })
+    // Clear any residual filter text left by an EARLIER failed attempt on this
+    // same combobox (e.g. the AI tier typed a non-matching value, then dropped
+    // to the last-resort pass). Stale text keeps the menu filtered to nothing,
+    // so the next open would find zero options and leave the field blank. The
+    // committed selection lives in a chip, not input.value, so this is safe.
+    if (input.value) {
+      const clearSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set
+      if (clearSetter) clearSetter.call(input, "")
+      else input.value = ""
+      input.dispatchEvent(
+        new InputEvent("input", { bubbles: true, inputType: "deleteContentBackward", data: null }),
+      )
+    }
     // React-select v5 listens for POINTER events to open/commit; plain
     // MouseEvents open the menu but a subsequent option click silently
     // no-ops (the value never commits). Dispatch the full pointer sequence
@@ -1764,7 +2187,20 @@ async function fillComboboxOption(
         return { value: text, label: text, el }
       })
       let chosen: HTMLElement | undefined
-      if (desiredValue === PICK_FIRST_OPTION) {
+      if (desiredValue === PICK_NO_ELSE_FIRST) {
+        // Prefer a safe negative/decline option; otherwise the first real one.
+        const isPlaceholder = (el: HTMLElement) => /^select|choose|--$/i.test(normalizeText(roleOptionLabel(el)))
+        chosen =
+          opts.find(
+            (el) =>
+              !isPlaceholder(el) &&
+              /^(no\b|none\b|prefer not|i do not|i don'?t|not applicable|n\/a\b)/i.test(
+                normalizeText(roleOptionLabel(el)),
+              ),
+          ) ??
+          opts.find((el) => !isPlaceholder(el)) ??
+          opts[0]
+      } else if (desiredValue === PICK_FIRST_OPTION) {
         chosen = opts.find((el) => !/^select|choose|--$/i.test(normalizeText(roleOptionLabel(el)))) ?? opts[0]
       } else if (desiredValue.startsWith(SOURCE_CANDIDATES_PREFIX)) {
         // Try each source candidate until one matches a real option.
@@ -1829,7 +2265,7 @@ async function fillComboboxOption(
     // 2. Not found in the open list — type to filter. Greenhouse async
     //    typeaheads (Location City) only fetch options from keyboard-like input
     //    events; a plain React value-set leaves the menu empty.
-    if (value === PICK_FIRST_OPTION) {
+    if (value === PICK_FIRST_OPTION || value === PICK_NO_ELSE_FIRST) {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }))
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
       await sleep(220)
