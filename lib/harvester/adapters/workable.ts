@@ -264,7 +264,9 @@ export const workableAdapter: AtsAdapter = {
         .filter((j) => (j.description?.length ?? 0) < MIN_LIST_DESC && !ctx.alreadyDescribedIds?.has(j.externalId))
         .slice(0, DETAIL_MAX_JOBS)
       for (let i = 0; i < targets.length; i += 1) {
-        if (DETAIL_DELAY_MS > 0) await sleep(DETAIL_DELAY_MS)
+        // Jittered delay (base + up to +base) so concurrent Workable workers
+        // desynchronise and don't burst apply.workable.com in lockstep.
+        if (DETAIL_DELAY_MS > 0) await sleep(DETAIL_DELAY_MS + Math.floor(Math.random() * DETAIL_DELAY_MS))
         const job = targets[i]
         const shortcode = job.externalId.replace(/^workable:/, "")
         const res = await fetchWorkableJson<WorkableRawJob>(
