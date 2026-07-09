@@ -339,13 +339,30 @@ async function mergeOne(
   pool: ReturnType<typeof getPostgresPool>,
   canonicalId: string,
   dupId: string
-): Promise<{ moved: number; deleted: number; migratedConfig: boolean }> {
+): Promise<{ moved: number; deleted: number; migratedConfig: boolean; skipped: boolean }> {
   const client = await pool.connect()
   let moved = 0
   let deleted = 0
   let migratedConfig = false
   try {
     await client.query("BEGIN")
+
+    // Cycle/chain safety: ONLY ever merge a dup INTO a row that is itself
+    // canonical (duplicate_of_company_id IS NULL). If you never point at a
+    // duplicate you can never build a dup→dup chain — or, if that row later
+    // points back, an A↔B cycle. Both are catastrophic: the harvester claim
+    // query skips EVERY duplicate_of_company_id row, so the live board silently
+    // drops out of the crawl schedule. This exact failure (1,262 cycles + 782
+    // dead-canonical records, ~104k jobs' boards un-crawled) was repaired
+    // 2026-07-09; this guard is what stops it recurring.
+    const canonState = await client.query<{ dup_of: string | null }>(
+      `SELECT duplicate_of_company_id AS dup_of FROM companies WHERE id = $1 FOR UPDATE`,
+      [canonicalId]
+    )
+    if (canonicalId === dupId || (canonState.rows[0]?.dup_of ?? null) !== null) {
+      await client.query("ROLLBACK")
+      return { moved: 0, deleted: 0, migratedConfig: false, skipped: true }
+    }
 
     // Harvest-config migration: the real-brand-domain canonical often has
     // ats_type set but NO ats_identifier/direct_ats_url (it falls back to a weak
@@ -470,7 +487,7 @@ async function mergeOne(
     client.release()
   }
 
-  return { moved, deleted, migratedConfig }
+  return { moved, deleted, migratedConfig, skipped: false }
 }
 
 async function refreshJobCounts(
@@ -543,6 +560,10 @@ async function main() {
     for (const dup of c.dups) {
       try {
         const r = await mergeOne(pool, c.canonical.id, dup.id)
+        if (r.skipped) {
+          console.warn(`  skipped ${dup.id} → ${c.canonical.id}: canonical is not itself canonical (would create dup-chain/cycle)`)
+          continue
+        }
         merged += 1
         totalMoved += r.moved
         totalDeleted += r.deleted
