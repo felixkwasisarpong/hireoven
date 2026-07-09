@@ -2787,6 +2787,11 @@ export class PageAwareControlSystem {
         await this.addActiveJobToQueue()
         return
 
+      case "queue-skip-current":
+        await sendToBackground({ type: "QUEUE_SKIP_CURRENT" })
+        await this.refreshQueueState()
+        return
+
       case "open-queue":
         this.openQueuePanel()
         return
@@ -3367,6 +3372,11 @@ export class PageAwareControlSystem {
         `
       }
 
+      const isRunJob = this.queueState?.runStatus === "running" && Boolean(this.queueState?.currentQueueId)
+      const skipBtn = isRunJob
+        ? `<button class="action" data-action="queue-skip-current" style="flex-shrink:0;color:#f97316;border-color:rgba(249,115,22,0.4);">Skip</button>`
+        : ""
+
       // Post-fill confirmation
       if (this.autofillFilledCount != null) {
         return `
@@ -3375,6 +3385,7 @@ export class PageAwareControlSystem {
             ✓ ${this.autofillFilledCount} fields filled — Fill again
           </button>
           ${!isSaved ? `<button class="action" data-action="save" style="flex-shrink:0;">Save</button>` : ""}
+          ${skipBtn}
         `
       }
 
@@ -3384,6 +3395,7 @@ export class PageAwareControlSystem {
             style="background:rgba(255,255,255,0.06);color:#64748b;">
             ⟳ Saving…
           </button>
+          ${skipBtn}
         `
       }
 
@@ -3394,6 +3406,7 @@ export class PageAwareControlSystem {
             ${busy ? "⟳ Preparing…" : "⚡ Autofill"}
           </button>
           <button class="action" data-action="save" style="flex-shrink:0;">Save</button>
+          ${skipBtn}
         `
       }
 
@@ -3402,6 +3415,7 @@ export class PageAwareControlSystem {
         <button class="autofill-btn" data-action="autofill" ${busy ? "disabled" : ""}>
           ${busy ? "⟳ Preparing…" : "⚡ Autofill this Application"}
         </button>
+        ${skipBtn}
       `
     }
 

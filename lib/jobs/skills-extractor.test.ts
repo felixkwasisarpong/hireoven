@@ -62,6 +62,36 @@ test("extractSkills: returns sorted unique results", () => {
   assert.deepEqual([...skills].sort(), skills)
 })
 
+test("extractSkills: covers newly-added tooling/testing/BI/cert skills", () => {
+  const skills = extractSkills(
+    "Built E2E tests in Cypress and Selenium; dashboards in Tableau and Power BI. " +
+      "Pipelines with Apache Airflow and dbt. Tracked work in Jira. CFA charterholder. " +
+      "Mobile apps in React Native and Flutter using Tailwind CSS."
+  )
+  for (const expected of [
+    "Cypress",
+    "Selenium",
+    "Tableau",
+    "Power BI",
+    "Apache Airflow",
+    "dbt",
+    "Jira",
+    "CFA",
+    "React Native",
+    "Flutter",
+    "Tailwind CSS",
+  ]) {
+    assert.ok(skills.includes(expected), `expected to extract ${expected}`)
+  }
+})
+
+test("extractSkills: new ambiguous-ish aliases stay word-bounded", () => {
+  // "bootstrap" as a business verb must NOT surface the Bootstrap framework
+  // (only "bootstrap css" / "twitter bootstrap" aliases are registered).
+  const skills = extractSkills("We bootstrapped the company and value a can-do attitude.")
+  assert.equal(skills.includes("Bootstrap"), false)
+})
+
 test("mergeSkills: unions existing + extracted case-insensitively", () => {
   const merged = mergeSkills(["typescript", "PostgreSQL"], ["TypeScript", "Python"])
   // Existing 'typescript' wins (came first), Python added from extracted.

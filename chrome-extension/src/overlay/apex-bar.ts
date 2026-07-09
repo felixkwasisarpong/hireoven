@@ -64,8 +64,17 @@ import {
 import { queryAllDeep } from "../autofill/shadow-dom"
 import { findUnfilledRequiredFields } from "../autofill/required-fields"
 import {
+  dispatchAutofillToChildFrames,
+  dispatchPreviewToChildFrames,
+  onFrameAutofillPreview,
+  onFrameAutofillResults,
+  type FrameAutofillResult,
+} from "../autofill/frame-autofill"
+import { withLearnedAnswers } from "../autofill/learned-answers"
+import {
   fillRequiredAtsFields,
   fillAshbyComboboxes,
+  fillEducationDropdowns,
   type RequiredFieldFillNote,
 } from "../autofill/ashby-autofill"
 import { normalizeHireovenDashboardUrl } from "../utils/hireoven-url"
@@ -2039,13 +2048,14 @@ export class ApexBar {
     const aiCandidates = list.filter(
       (f) => f.skippedReason && /custom question/i.test(f.skippedReason),
     ).length
-    const canConfirm = willFill > 0 || aiCandidates > 0
-    const confirmLabel =
-      willFill > 0
-        ? `Confirm fill (${willFill})`
-        : aiCandidates > 0
-          ? `Fill with AI (${aiCandidates})`
-          : "Nothing to fill"
+    // Enable "Fill form" whenever we've DETECTED fields (including ones detected
+    // inside an embedded cross-origin iframe, which the top frame can't fill
+    // directly but the injected content script inside the frame can). The fill
+    // logic is unchanged — this only stops the button dead-ending on
+    // "Nothing to fill" when fields are clearly present.
+    const fillCount = willFill + aiCandidates
+    const canConfirm = list.length > 0
+    const confirmLabel = fillCount > 0 ? `Fill form (${fillCount})` : "Fill form"
 
     const filledCount = isDone ? list.filter((f) => f.filled).length : 0
     const skippedCount = isDone ? list.filter((f) => !f.filled).length : 0
@@ -2523,6 +2533,7 @@ export class ApexBar {
       } else if (action === "autofill") {
         void this.onAutofillPreview()
       } else if (action === "autofill-confirm") {
+        this.autonomousRun = false // user-triggered fill → conservative
         void this.onAutofillConfirm()
       } else if (action === "autofill-cancel") {
         this.onAutofillCancel()
@@ -2605,6 +2616,7 @@ export class ApexBar {
       return { handled: true }
     }
     if (command === "AGENT_AUTOFILL") {
+      this.autonomousRun = true // hands-off queue run → best-effort every required field
       return await this.runAgentAutofill(payload)
     }
     return { handled: false }
@@ -2851,6 +2863,85 @@ export class ApexBar {
     }
   }
 
+  /**
+   * True only during a hands-off agent run (queue). A plain user-triggered
+   * "Autofill" leaves this false so the fill stays conservative.
+   */
+  private autonomousRun = false
+
+  private frameResultsWired = false
+  private framePreviewWired = false
+
+  /** Listen (once) for fill results posted back by embedded cross-origin forms
+   *  so the results panel reflects what the iframe actually filled. */
+  private ensureFrameResultsWired(): void {
+    if (this.frameResultsWired) return
+    this.frameResultsWired = true
+    onFrameAutofillResults((result) => this.mergeFrameAutofillResults(result))
+  }
+
+  /** Listen (once) for the field list DETECTED by embedded cross-origin forms
+   *  so the preview panel lists those fields (the top frame can't see them). */
+  private ensureFramePreviewWired(): void {
+    if (this.framePreviewWired) return
+    this.framePreviewWired = true
+    onFrameAutofillPreview((result) => this.mergeFramePreview(result))
+  }
+
+  /** Append fields detected in an embedded cross-origin form to the preview
+   *  list, so all fields show even when the form lives in an iframe the top
+   *  frame can't read. De-dupes by label and drops top-page search noise. */
+  private mergeFramePreview(result: FrameAutofillResult): void {
+    if (!result.rows?.length) return
+    if (this.autofillStatus !== "preview" && this.autofillStatus !== "loading") return
+    const seen = new Set(
+      (this.autofillPreview ?? [])
+        .map((row) => row.label.trim().toLowerCase())
+        .filter(Boolean),
+    )
+    const mapped: AutofillFieldResult[] = []
+    for (const r of result.rows) {
+      const label = (r.label || "").trim()
+      if (!label || /^search/i.test(label)) continue
+      const key = label.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      mapped.push({
+        label,
+        valuePreview: r.valuePreview,
+        confidence: r.valuePreview ? "high" : "needs_review",
+        source: "profile",
+        filled: false,
+        skippedReason: r.skippedReason,
+      })
+    }
+    if (!mapped.length) return
+    // Drop the top-page "Search…" placeholder rows once the real embedded form
+    // reports its fields.
+    const prior = (this.autofillPreview ?? []).filter((row) => !/^search/i.test(row.label))
+    this.autofillPreview = [...prior, ...mapped]
+    this.autofillStatus = "preview"
+    this.render()
+  }
+
+  private mergeFrameAutofillResults(result: FrameAutofillResult): void {
+    if (!result.rows?.length) return
+    const mapped: AutofillFieldResult[] = result.rows.map((r) => ({
+      label: r.label || "Embedded form field",
+      valuePreview: r.valuePreview,
+      confidence: r.filled ? "high" : "needs_review",
+      source: "profile",
+      filled: r.filled,
+      skippedReason: r.skippedReason,
+    }))
+    // Drop the top-page noise (e.g. the site "Search For" box) once the real
+    // embedded form reports — keep only meaningful rows.
+    const prior = (this.autofillResults ?? []).filter((row) => !/^search/i.test(row.label))
+    this.autofillResults = [...prior, ...mapped]
+    this.autofillStatus = "done"
+    this.render()
+  }
+
   private async runRequiredQuestionCleanup(): Promise<{
     attemptedCount: number
     filledCount: number
@@ -2868,14 +2959,18 @@ export class ApexBar {
     const summary = await fillRequiredAtsFields({
       profile: this.autofillProfile,
       doc: document,
-      autonomous: true,
+      // Hands-off agent run best-efforts every required field so it can submit.
+      // A MANUAL fill stays conservative — the user is here to review, so we
+      // DON'T guess required yes/no & selects (that produced wrong answers like
+      // "able to commute? → Yes"); unknowns are left for them to pick.
+      autonomous: this.autonomousRun,
       matchQuestions: async (questions) => {
         if (questions.length === 0) return []
         const result = await matchQuestions({
           questions,
           jobTitle: this.job?.title ?? undefined,
           company: this.job?.company ?? undefined,
-          mode: "autonomous",
+          mode: this.autonomousRun ? "autonomous" : "assist",
         })
         return result.answers
       },
@@ -3437,6 +3532,7 @@ export class ApexBar {
       // Load profile once up front so both generic and Workday flows can reuse it.
       const { profile } = await getAutofillProfile()
       this.autofillProfile = profile
+      if (profile) await withLearnedAnswers(profile) // reuse remembered manual picks
       if (!profile) {
         this.autofillStatus = "error"
         this.autofillError = "No saved autofill profile found."
@@ -3737,7 +3833,24 @@ export class ApexBar {
    */
   private async onAutofillPreview(): Promise<void> {
     if (this.autofillStatus === "loading" || this.autofillStatus === "filling") return
-    if (!this.autofillSiteSupported()) return
+
+    // Ask any embedded cross-origin application form (e.g. a Greenhouse iframe
+    // on a company career page) to DETECT its fields and report them up, so the
+    // preview panel lists them even though the top frame can't read the iframe.
+    this.ensureFramePreviewWired()
+    dispatchPreviewToChildFrames()
+
+    if (!this.autofillSiteSupported()) {
+      // The top frame isn't itself a supported form, but an embedded frame may
+      // be. Show a preview shell so the frame-detected fields (arriving async
+      // via mergeFramePreview) have somewhere to land.
+      if (this.autofillStatus !== "preview") {
+        this.autofillPreview = []
+        this.autofillStatus = "preview"
+        this.render()
+      }
+      return
+    }
     const source = this.toAutofillSource()
 
     this.autofillStatus = "loading"
@@ -3748,6 +3861,7 @@ export class ApexBar {
     try {
       const { profile, profileMissing } = await getAutofillProfile()
       this.autofillProfile = profile
+      if (profile) await withLearnedAnswers(profile) // reuse remembered manual picks
 
       if (this.site === "workday") {
         const ready = Boolean(profile) && isWorkdayApplicationPage()
@@ -3888,6 +4002,13 @@ export class ApexBar {
       this.render()
       return
     }
+    // Hand the fill to any embedded cross-origin application form (e.g. a
+    // Greenhouse iframe on a company career site) — the top frame can't reach
+    // it, but the content script injected inside the frame can fill its own
+    // document. Fired regardless of whether THIS frame is a supported form.
+    // Wire the results listener first so the panel shows what the frame filled.
+    this.ensureFrameResultsWired()
+    dispatchAutofillToChildFrames()
     if (!this.autofillSiteSupported()) return
 
     this.autofillStatus = "filling"
@@ -4118,6 +4239,13 @@ export class ApexBar {
         } catch {
           // best-effort — typeahead selection is non-fatal
         }
+      }
+      // Education section dropdowns (School/Degree/Discipline/dates) — driven
+      // from resume_education on any ATS; safe-fields skips these comboboxes.
+      try {
+        await fillEducationDropdowns(this.autofillProfile, document)
+      } catch {
+        // best-effort — non-fatal if the page has no education block
       }
       await this.runRequiredQuestionCleanup()
 

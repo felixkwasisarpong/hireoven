@@ -32,6 +32,17 @@ const H2_ENABLED = process.env.HARVESTER_HTTP2 === "true"
 // residential proxy pool so each request presents a different egress IP.
 const DEFAULT_PROXY_HOST_SUFFIXES = ["myworkdayjobs.com", "apply.workable.com"]
 
+/**
+ * Keep-alive is effectively DISABLED on the proxy path (~1 ms idle). Rotating
+ * residential proxies (WebShare `p.webshare.io`) assign a fresh egress IP per
+ * NEW upstream connection; with a long keep-alive the ProxyAgent reuses ONE
+ * tunnel for 30–120 s, so a burst of requests shares ONE IP and Workable
+ * rate-limits it (the 429 bursts we saw). A ~1 ms idle timeout makes each
+ * request open a fresh CONNECT tunnel → a fresh IP. Direct (non-proxied) hosts
+ * keep the long keep-alive on getAgent().
+ */
+export const PROXY_KEEP_ALIVE_MS = 1
+
 let cachedAgent: Agent | null = null
 let cachedProxyAgent: ProxyAgent | null = null
 let proxyResolved = false
@@ -75,8 +86,11 @@ function getProxyAgent(): ProxyAgent | null {
   if (uri) {
     cachedProxyAgent = new ProxyAgent({
       uri,
-      keepAliveTimeout: 30_000,
-      keepAliveMaxTimeout: 120_000,
+      // No keep-alive on the proxy → fresh connection → fresh rotating IP per request.
+      keepAliveTimeout: PROXY_KEEP_ALIVE_MS,
+      keepAliveMaxTimeout: PROXY_KEEP_ALIVE_MS,
+      // No pipelining: don't multiplex requests onto one tunnel (would re-pin the IP).
+      pipelining: 0,
     })
   }
   return cachedProxyAgent

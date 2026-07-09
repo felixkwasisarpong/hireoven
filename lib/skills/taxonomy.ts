@@ -624,6 +624,21 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Biostatistics",        aliases: ["biostatistics", "biostatistician"] },
   { label: "Epidemiology",         aliases: ["epidemiology", "epidemiologist"] },
   { label: "Regulatory Affairs",   aliases: ["regulatory affairs"] },
+
+  // ── Tooling / testing / security / certs (mirrors skills-dictionary.ts adds) ─
+  { label: "Metabase",             aliases: ["metabase"] },
+  { label: "Hadoop",               aliases: ["hadoop", "apache hadoop"] },
+  { label: "Bitbucket",            aliases: ["bitbucket"] },
+  { label: "Argo CD",              aliases: ["argocd", "argo cd"] },
+  { label: "Bootstrap",            aliases: ["bootstrap css", "twitter bootstrap"] },
+  { label: "jQuery",               aliases: ["jquery"] },
+  { label: "InVision",             aliases: ["invision"] },
+  { label: "Burp Suite",           aliases: ["burp suite"] },
+  { label: "Nmap",                 aliases: ["nmap"] },
+  { label: "CISSP",                aliases: ["cissp"] },
+  { label: "CompTIA",              aliases: ["comptia"] },
+  { label: "CFA",                  aliases: ["cfa", "chartered financial analyst"] },
+  { label: "Certified ScrumMaster", aliases: ["certified scrummaster", "certified scrum master"] },
 ]
 
 const BY_KEY = new Map<string, string>()
@@ -692,6 +707,8 @@ const FRAMEWORK_SKILLS = new Set([
   "REST",
   "gRPC",
   "WebSockets",
+  "Bootstrap",
+  "jQuery",
 ])
 
 const CLOUD_SKILLS = new Set(["AWS", "GCP", "Azure", "Cloud Platforms"])
@@ -736,6 +753,8 @@ const DEVOPS_SKILLS = new Set([
   "Site Reliability Engineering",
   "Platform Engineering",
   "Temporal",
+  "Bitbucket",
+  "Argo CD",
 ])
 
 const AI_ML_SKILLS = new Set([
@@ -767,6 +786,8 @@ const DATA_SKILLS = new Set([
   "Data Visualization",
   "Statistics",
   "A/B Testing",
+  "Hadoop",
+  "Metabase",
 ])
 
 const SECURITY_SKILLS = new Set([
@@ -784,6 +805,10 @@ const SECURITY_SKILLS = new Set([
   "Incident Response",
   "Compliance",
   "OAuth",
+  "Burp Suite",
+  "Nmap",
+  "CISSP",
+  "CompTIA",
 ])
 
 const ENGINEERING_SKILLS = new Set([
@@ -824,7 +849,7 @@ const MEDIA_SKILLS = new Set([
   "Audacity", "Blender", "Cinema 4D", "Maya", "3ds Max", "Unity", "Unreal Engine",
   "WordPress", "Webflow", "Shopify", "Video Production", "Photography", "AR/VR",
   "Adobe Creative Suite", "Canva", "Graphic Design", "Strategic Communications",
-  "Content Calendars",
+  "Content Calendars", "InVision",
 ])
 
 const HEALTHCARE_SKILLS = new Set([

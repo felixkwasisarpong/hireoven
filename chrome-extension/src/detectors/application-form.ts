@@ -361,6 +361,25 @@ export function detectLinkedInEasyApplyModal(doc: Document = document): boolean 
 }
 
 /**
+ * Should the Apex bar activate on this page PURELY because it contains a
+ * fillable application form (i.e. independent of the URL/host allowlist)?
+ *
+ * Deliberately conservative so the bar doesn't light up on login, newsletter,
+ * search, or bare 2-field contact forms:
+ *   - a recognized ATS is enough on its own;
+ *   - on an unknown host, require a stronger application signal — a résumé/CV
+ *     upload, or ≥3 real (non-file) profile-fillable fields.
+ */
+export function isFillableApplicationForm(doc: Document = document): boolean {
+  const detection = detectApplicationForm(doc)
+  if (!detection.hasForm || !detection.supportsAutofill) return false
+  if (detection.detectedAts !== "unknown") return true
+  const nonFileFields = detection.fields.filter((f) => f.type !== "file").length
+  const hasResumeUpload = detection.reasons.some((r) => /resume upload field/i.test(r))
+  return hasResumeUpload || nonFileFields >= 3
+}
+
+/**
  * Pure detection — examines the page and reports what was found. Never
  * touches values, never dispatches events. Safe to call repeatedly (e.g.
  * on every URL change in an SPA).

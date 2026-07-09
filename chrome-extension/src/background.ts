@@ -704,6 +704,9 @@ async function handleMessage(
     case "QUEUE_SKIP_JOB":
       return handleQueueSkipJob(message.queueId)
 
+    case "QUEUE_SKIP_CURRENT":
+      return handleQueueSkipCurrent()
+
     case "QUEUE_RETRY_JOB":
       return handleQueueRetryJob(message.queueId)
 
@@ -1626,6 +1629,20 @@ async function handleQueueSkipJob(queueItemId: string): Promise<QueueActionResul
   if (i < 0) return { type: "QUEUE_ACTION_RESULT", ok: false }
   queue.jobs[i] = { ...queue.jobs[i], status: "skipped" }
   await writeQueue(queue)
+  return { type: "QUEUE_ACTION_RESULT", ok: true }
+}
+
+async function handleQueueSkipCurrent(): Promise<QueueActionResult> {
+  const queue = await readQueue()
+  if (!queue || queue.runStatus !== "running" || !queue.currentQueueId) {
+    return { type: "QUEUE_ACTION_RESULT", ok: false }
+  }
+  const i = queue.jobs.findIndex((j) => j.queueId === queue.currentQueueId)
+  if (i >= 0) {
+    queue.jobs[i] = { ...queue.jobs[i], status: "skipped" }
+    await writeQueue(queue)
+  }
+  await advanceRun()
   return { type: "QUEUE_ACTION_RESULT", ok: true }
 }
 

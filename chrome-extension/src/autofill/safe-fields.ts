@@ -64,6 +64,22 @@ export type SafeProfile = {
     achievements?: string[] | null
     location?: string | null
   }> | null
+  // Education, resume-derived. The server (autofill-profile route) sends both a
+  // multi-row list AND flat "highest degree" fields; the flat ones back-fill a
+  // single-entry form when the list is absent.
+  resume_education?: Array<{
+    institution?: string | null
+    degree?: string | null
+    field?: string | null
+    start_date?: string | null
+    end_date?: string | null
+    gpa?: string | null
+  }> | null
+  highest_degree?: string | null
+  field_of_study?: string | null
+  university?: string | null
+  graduation_year?: number | string | null
+  gpa?: string | null
 }
 
 /** Per-field result returned from detection (preview) and from filling. */
@@ -157,6 +173,11 @@ type SafeKey =
   | "work_exp_end"
   | "work_exp_current"
   | "work_exp_description"
+  | "school"
+  | "degree"
+  | "field_of_study"
+  | "graduation_date"
+  | "gpa"
   | "skills"
 
 interface SafeKeyRule {
@@ -217,6 +238,16 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
   { key: "work_exp_start",   patterns: [/^\s*from\s*$/i, /\bstart[\s_-]?date\b/i, /\bdate[\s_-]?started\b/i, /\bemployment[\s_-]?start\b/i], inputTypes: ["text", "date", "month"], labelOnly: true },
   { key: "work_exp_end",     patterns: [/^\s*to\s*$/i, /\bend[\s_-]?date\b/i, /\bdate[\s_-]?ended\b/i, /\bemployment[\s_-]?end\b/i, /\bthrough\b/i], inputTypes: ["text", "date", "month"], labelOnly: true },
   { key: "work_exp_description", patterns: [/\brole[\s_-]?description\b|\bjob[\s_-]?description\b|\bresponsibilit/i, /\baccomplishment|achievement|duties\b/i], labelOnly: true },
+
+  // Education (resume-derived). labelOnly so opaque name/id tokens don't false-
+  // match; these serve Greenhouse/Lever/Ashby/BambooHR/iCIMS/generic forms with
+  // an education section. Workday has its own multi-step education handler.
+  // "field of study" before "degree"/"school" so "Major" resolves to the field.
+  { key: "field_of_study",  patterns: [/\bfield[\s_-]?of[\s_-]?study\b|\barea[\s_-]?of[\s_-]?study\b|\bcourse[\s_-]?of[\s_-]?study\b|\bconcentration\b|\bspecial(?:ization|isation)\b/i, /\bmajor\b(?!\s*(?:responsibilit|achievement|accomplishment|dut|contribution))/i], labelOnly: true },
+  { key: "graduation_date", patterns: [/\bgraduation\b|\bgrad[\s_-]?(?:date|year)\b|\byear[\s_-]?(?:of[\s_-]?)?graduat|\bexpected[\s_-]?graduation\b|\bcompletion[\s_-]?(?:date|year)\b/i], labelOnly: true },
+  { key: "gpa",             patterns: [/\bgpa\b|\bgrade[\s_-]?point[\s_-]?average\b/i], labelOnly: true },
+  { key: "degree",          patterns: [/\bdegree\b|\bqualification\b|\bhighest[\s_-]?(?:level[\s_-]?of[\s_-]?)?education\b|\beducation[\s_-]?level\b/i], labelOnly: true },
+  { key: "school",          patterns: [/\bschool\b|\buniversit|\bcollege\b|\binstitution\b|\balma[\s_-]?mater\b/i], labelOnly: true },
   { key: "current_title",   patterns: [/current[\s_-]?(?:job[\s_-]?)?title|job[\s_-]?title|\btitle\b|current[\s_-]?role|position[\s_-]?title/i] },
   // Bare "company" must NOT claim message/interest prompts ("Let the company
   // know about your interest…") — require an employer-ish phrasing, or bare
@@ -243,6 +274,26 @@ type LocatedControl = { el: FormControlElement; framePath: number[] }
  * inputs on the page (search bars, newsletter, etc.). Returns the form root
  * element if found, or null when not on a supported application form.
  */
+/**
+ * True for controls that belong to the SITE's chrome, not the application:
+ * nav/header search boxes, footer newsletter signups, cookie banners. These
+ * must never appear in the autofill preview ("Search For:" is not a question).
+ */
+function isSiteChromeControl(el: HTMLElement): boolean {
+  if (el.closest("nav, [role='navigation'], [role='search'], [aria-label*='cookie' i], [id*='cookie' i]")) return true
+  const hay = [
+    el.getAttribute("name") ?? "",
+    el.id,
+    el.getAttribute("placeholder") ?? "",
+    el.getAttribute("aria-label") ?? "",
+  ].join(" ").toLowerCase()
+  if (/\b(search|newsletter|subscribe)\b/.test(hay)) return true
+  // Header-level search widgets often live outside <nav> — a text control whose
+  // resolved label is just "Search…" is never an application question.
+  const label = getFieldLabel(el).toLowerCase().trim()
+  return /^search\b( for| jobs)?:?$/.test(label)
+}
+
 function findApplicationFormRoot(
   doc: Document,
   source: AutofillSource,
@@ -736,6 +787,28 @@ function getWorkExperienceAt(profile: SafeProfile, index: number) {
   return rows[index] ?? null
 }
 
+/**
+ * Education entry at `index`, with the flat "highest degree" profile fields
+ * synthesized into a row 0 fallback so a single-entry form still fills when the
+ * server sent only the flat fields (no resume_education list).
+ */
+function getEducationAt(profile: SafeProfile, index: number) {
+  const rows = Array.isArray(profile.resume_education) ? profile.resume_education : []
+  if (index >= 0 && index < rows.length && rows[index]) return rows[index]
+  if (index === 0) {
+    const flat = {
+      institution: toTrimmed(profile.university ?? null),
+      degree: toTrimmed(profile.highest_degree ?? null),
+      field: toTrimmed(profile.field_of_study ?? null),
+      start_date: null as string | null,
+      end_date: profile.graduation_year != null ? String(profile.graduation_year) : null,
+      gpa: toTrimmed(profile.gpa ?? null),
+    }
+    if (flat.institution || flat.degree || flat.field || flat.end_date || flat.gpa) return flat
+  }
+  return null
+}
+
 function formatMonthYear(raw: string | null | undefined): string | null {
   const value = toTrimmed(raw)
   if (!value) return null
@@ -860,6 +933,31 @@ function profileValueFor(profile: SafeProfile, key: SafeKey, state: ValueResolut
       const row = getWorkExperienceAt(profile, idx)
       return buildWorkDescription(row)
     }
+    case "school": {
+      const row = getEducationAt(profile, nextKeyHitIndex(state, key))
+      return toTrimmed(row?.institution ?? null)
+    }
+    case "degree": {
+      const row = getEducationAt(profile, nextKeyHitIndex(state, key))
+      return toTrimmed(row?.degree ?? null)
+    }
+    case "field_of_study": {
+      const row = getEducationAt(profile, nextKeyHitIndex(state, key))
+      return toTrimmed(row?.field ?? null)
+    }
+    case "graduation_date": {
+      const row = getEducationAt(profile, nextKeyHitIndex(state, key))
+      const raw = toTrimmed(row?.end_date ?? null)
+      if (!raw) return null
+      // A bare year ("2024") stays a year — graduation fields usually want the
+      // year, and synthesizing "01/2024" invents a month the résumé never had.
+      if (/^\d{4}$/.test(raw)) return raw
+      return formatMonthYear(raw)
+    }
+    case "gpa": {
+      const row = getEducationAt(profile, nextKeyHitIndex(state, key))
+      return toTrimmed(row?.gpa ?? null)
+    }
     case "skills": {
       const skills = normalizedTopSkills(profile)
       return skills.length > 0 ? skills.join(", ") : null
@@ -884,10 +982,16 @@ export function buildAutofillPreview(
   if (root) {
     inputs = collectControlsInElement(root, [])
   }
-  if (inputs.length === 0) {
+  // Site-chrome plumbing (nav search boxes, cookie banners) must never count
+  // as application fields — a careers page whose scoped "form root" is the
+  // header search box otherwise shows an EMPTY preview while the real
+  // application (EEO selects, questions) sits un-scanned further down.
+  inputs = inputs.filter(({ el }) => !isSiteChromeControl(el))
+  if (inputs.length < 2) {
     // Fallback: include controls from the whole document tree (including
-    // accessible same-origin iframes) when scoped root detection misses.
-    inputs = collectControlsInDocument(doc)
+    // accessible same-origin iframes) when scoped root detection misses or
+    // catches only plumbing.
+    inputs = collectControlsInDocument(doc).filter(({ el }) => !isSiteChromeControl(el))
   }
 
   const results: AutofillFieldResult[] = []

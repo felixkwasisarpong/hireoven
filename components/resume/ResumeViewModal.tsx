@@ -67,7 +67,7 @@ export default function ResumeViewModal({ fileUrl, title, onClose }: Props) {
             src={fileUrl}
             title={`Resume: ${title}`}
             onLoad={() => setLoaded(true)}
-            className="relative h-full w-full"
+            className="absolute inset-0 h-full w-full border-0"
           />
         </div>
       </div>
