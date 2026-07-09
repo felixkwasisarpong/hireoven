@@ -18,6 +18,7 @@ import { jsonldAdapter } from "@/lib/harvester/adapters/jsonld"
 import { sitemapJsonLdAdapter } from "@/lib/harvester/adapters/sitemap-jsonld"
 import { radancyAdapter } from "@/lib/harvester/adapters/radancy"
 import { tiktokAdapter } from "@/lib/harvester/adapters/tiktok"
+import { googleAdapter } from "@/lib/harvester/adapters/google"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
 import { icimsAdapter } from "@/lib/harvester/adapters/icims"
 import { infosysAdapter } from "@/lib/harvester/adapters/infosys"
@@ -107,6 +108,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   sitemapjsonld: sitemapJsonLdAdapter,
   radancy: radancyAdapter,
   tiktok: tiktokAdapter,
+  google: googleAdapter,
 }
 
 export function getAdapter(name: AtsName): AtsAdapter | undefined {

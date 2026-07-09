@@ -218,6 +218,9 @@ const SUPPORTED_ATS_TYPES = [
   // TikTok careers.tiktok.com / lifeattiktok.com POST API. Single global tenant;
   // must be listed here because careers.tiktok.com has no URL pattern in CLAIM_URL_SQL.
   "tiktok",
+  // Google careers (www.google.com/about/careers/applications results-page scrape).
+  // Single global tenant, claimed by ats_type='google' (no careers_url pattern).
+  "google",
 ] as const satisfies readonly AtsName[]
 
 export type AdapterClaimFilter = {
