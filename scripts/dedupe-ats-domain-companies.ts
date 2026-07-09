@@ -87,8 +87,11 @@ async function findDuplicates(pool: ReturnType<typeof getPostgresPool>): Promise
       name: string
       domain: string
       job_count: string
+      ats_identifier: string | null
+      direct_ats_url: string | null
     }>(
-      `SELECT id, name, domain, COALESCE(job_count, 0)::text AS job_count
+      `SELECT id, name, domain, COALESCE(job_count, 0)::text AS job_count,
+              ats_identifier, direct_ats_url
          FROM companies
         WHERE is_active = true
           AND duplicate_of_company_id IS NULL
@@ -100,6 +103,21 @@ async function findDuplicates(pool: ReturnType<typeof getPostgresPool>): Promise
 
     const canon = canonical.rows[0]
     if (!canon) continue
+
+    // Don't demote a LIVE board into a shell that can't crawl. The dup here is an
+    // ATS-host-domain record (the actual Workday/JazzHR board); this script does
+    // NOT migrate its crawl config onto the canonical, so if the canonical has no
+    // working config of its own, merging buries a job-producing board into a
+    // brand shell that never re-crawls — exactly the Walmart demotion repaired
+    // 2026-07-09. Skip such pairs (leave for manual review) rather than lose the
+    // board. Safe when the dup has no jobs (nothing to lose).
+    const canonCanCrawl =
+      !!(canon.ats_identifier && canon.ats_identifier.trim()) ||
+      !!(canon.direct_ats_url && canon.direct_ats_url.trim())
+    if (Number(row.job_count) > 0 && !canonCanCrawl) {
+      console.warn(`  [skip] ${row.name} (${row.job_count} jobs) → ${canon.name}: canonical has no crawl config; would kill the board`)
+      continue
+    }
 
     dups.push({
       dup_id: row.id,
@@ -119,12 +137,27 @@ async function findDuplicates(pool: ReturnType<typeof getPostgresPool>): Promise
 async function mergeOne(
   pool: ReturnType<typeof getPostgresPool>,
   dup: DupRow
-): Promise<{ moved_jobs: number; deleted_dup_jobs: number }> {
+): Promise<{ moved_jobs: number; deleted_dup_jobs: number; skipped: boolean }> {
   const client = await pool.connect()
   let movedJobs = 0
   let deletedDupJobs = 0
   try {
     await client.query("BEGIN")
+
+    // Cycle/chain safety: ONLY merge a dup INTO a row that is itself canonical
+    // (duplicate_of_company_id IS NULL). Never pointing at a duplicate makes a
+    // dup→dup chain or an A↔B cycle impossible — the harvester claim query skips
+    // EVERY duplicate_of_company_id row, so a chain/cycle silently pulls a live
+    // board out of the crawl schedule (repaired 2026-07-09: 1,262 cycles + 782
+    // dead-canonical records). This guard prevents recurrence.
+    const canonState = await client.query<{ dup_of: string | null }>(
+      `SELECT duplicate_of_company_id AS dup_of FROM companies WHERE id = $1 FOR UPDATE`,
+      [dup.canonical_id]
+    )
+    if (dup.canonical_id === dup.dup_id || (canonState.rows[0]?.dup_of ?? null) !== null) {
+      await client.query("ROLLBACK")
+      return { moved_jobs: 0, deleted_dup_jobs: 0, skipped: true }
+    }
 
     // 1. Drop duplicate-company jobs that conflict on (company_id, external_id)
     //    with the canonical's existing jobs. These are the same posting reached
@@ -227,7 +260,7 @@ async function mergeOne(
     client.release()
   }
 
-  return { moved_jobs: movedJobs, deleted_dup_jobs: deletedDupJobs }
+  return { moved_jobs: movedJobs, deleted_dup_jobs: deletedDupJobs, skipped: false }
 }
 
 async function main() {
@@ -263,6 +296,10 @@ async function main() {
   for (const d of dups) {
     try {
       const r = await mergeOne(pool, d)
+      if (r.skipped) {
+        console.warn(`  skipped ${d.dup_id} → ${d.canonical_id}: canonical is not itself canonical (would create dup-chain/cycle)`)
+        continue
+      }
       merged += 1
       totalMoved += r.moved_jobs
       totalDeleted += r.deleted_dup_jobs
