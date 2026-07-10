@@ -7,6 +7,18 @@ function normalizedList(values?: string[] | null) {
     .filter(Boolean)
 }
 
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** Whole-word / whole-phrase matcher. Bounds the keyword by non-alphanumeric
+ *  edges so "java" no longer matches "javascript", "go" no longer matches
+ *  "goldman"/"category", "ai" no longer matches "maintenance", etc. — the
+ *  substring matching that made alert results noisy. */
+function keywordRegex(keyword: string): RegExp {
+  return new RegExp(`(?:^|[^a-z0-9+#])${escapeRegExp(keyword)}(?:[^a-z0-9+#]|$)`, "i")
+}
+
 function matchesKeywords(alert: JobAlert, job: Job) {
   const keywords = normalizedList(alert.keywords)
   if (!keywords.length) return true
@@ -15,8 +27,10 @@ function matchesKeywords(alert: JobAlert, job: Job) {
   const skills = (job.skills ?? []).map((skill) => skill.toLowerCase())
 
   return keywords.some((keyword) => {
-    if (title.includes(keyword)) return true
-    return skills.some((skill) => skill.includes(keyword))
+    const re = keywordRegex(keyword)
+    if (re.test(title)) return true
+    // Skills: exact token or whole-word match (not substring).
+    return skills.some((skill) => skill === keyword || re.test(skill))
   })
 }
 
@@ -61,7 +75,7 @@ function matchesCompanyIds(alert: JobAlert, job: Job) {
   return alert.company_ids.includes(job.company_id)
 }
 
-function matchesAlert(alert: JobAlert, job: Job) {
+export function matchesAlert(alert: JobAlert, job: Job) {
   return (
     matchesKeywords(alert, job) &&
     matchesLocations(alert, job) &&
