@@ -36,6 +36,8 @@ export type BulkEngineActions = {
   requestBulk:      (jobs: BulkJobItem[]) => void
   confirmStart:     () => void
   cancelConfirm:    () => void
+  /** Remove a single job from the pre-tailoring selection before confirming. */
+  removeConfirmJob: (queueId: string) => void
   retryJob:         (queueId: string) => void
   skipJob:          (queueId: string) => void
   markSubmitted:    (queueId: string) => void
@@ -230,6 +232,14 @@ export function useBulkApplicationEngine(): BulkEngineActions {
     setConfirmJobs([])
   }, [])
 
+  const removeConfirmJob = useCallback((queueId: string) => {
+    setConfirmJobs((prev) => {
+      const next = prev.filter((j) => j.queueId !== queueId)
+      if (next.length === 0) setIsConfirming(false)
+      return next
+    })
+  }, [])
+
   const retryJob = useCallback((queueId: string) => {
     setQueue((prev) => {
       if (!prev) return prev
@@ -260,7 +270,7 @@ export function useBulkApplicationEngine(): BulkEngineActions {
   return {
     queue, initState, initError,
     initQueue, isConfirming, confirmJobs,
-    requestBulk, confirmStart, cancelConfirm,
+    requestBulk, confirmStart, cancelConfirm, removeConfirmJob,
     retryJob, skipJob, markSubmitted, cancelQueue,
     reviewingQueueId, openReview, closeReview,
   }
