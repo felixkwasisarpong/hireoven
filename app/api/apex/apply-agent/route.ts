@@ -45,18 +45,20 @@ function parseClampedInt(
 // "apply to 3 jobs with java skill in it" → "java skill"
 // "apply to 5 remote healthcare jobs" → "healthcare"
 // "apply for 2 frontend roles at fintech companies" → "frontend fintech companies"
+// "apply to the top 2 AI roles" → "AI"
 function extractSearchTerms(raw: string): string {
   return raw
-    .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare)\b/gi, "")
+    .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare|start\s+applying)\b/gi, "")
     .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
     .replace(/\b\d+\b/g, "")
     .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
-    .replace(/\b(remote|onsite|hybrid)\b/gi, "")
+    .replace(/\b(remote|onsite|on.?site|hybrid|in.?office)\b/gi, "")
     .replace(/\b(h-?1b|visa|sponsor(ship)?)\b/gi, "")
     // ATS names are filtered structurally via the `ats` param — strip them here
     // so "Greenhouse ATS" doesn't leak into the title/description text search.
     .replace(/\b(ats|greenhouse|lever|workday|ashby(hq)?|icims|smart\s*recruiters?|bamboo(hr)?)\b/gi, "")
-    .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it)\b/gi, "")
+    .replace(/\b(over|above|greater|than|more|match|score|percent|only)\b/gi, "")
+    .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it|to|my|of|or|be|do|is|me|no|so|us|we|by|as|if)\b/gi, "")
     .replace(/[^\w\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
@@ -121,13 +123,21 @@ export async function GET(request: NextRequest) {
 
   // Free-text search: match any meaningful word from the user's query against
   // title and description so arbitrary conditions ("java", "healthcare NYC",
-  // "Python AWS", "entry level fintech") all work without special parsing.
+  // "Python AWS", "entry level fintech", "AI") all work without special parsing.
+  // Min length is 2 to support short but meaningful terms like AI, ML, UX, PM.
   const searchTerms = rawQuery ? extractSearchTerms(rawQuery) : ""
   const searchWords = Array.from(
-    new Set(searchTerms.split(/\s+/).filter((w) => w.length >= 3))
+    new Set(searchTerms.split(/\s+/).filter((w) => w.length >= 2))
   ).slice(0, 8)
   if (searchWords.length > 0) {
     const wordConditions = searchWords.map((word) => {
+      if (word.length === 2) {
+        // Short acronyms (AI, ML, UX…): word-boundary regex avoids substring
+        // false positives (e.g. "AI" matching "PAID" or "TRAIN").
+        params.push(`\\y${word}\\y`)
+        const p = `$${params.length}`
+        return `(j.title ~* ${p} OR j.description ~* ${p})`
+      }
       params.push(`%${word}%`)
       const p = `$${params.length}`
       return `(j.title ILIKE ${p} OR j.description ILIKE ${p})`

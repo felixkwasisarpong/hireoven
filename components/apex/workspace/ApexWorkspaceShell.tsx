@@ -2837,6 +2837,7 @@ export function ApexWorkspaceShell() {
           onConfirm={bulkEngine.confirmStart}
           onEditList={bulkEngine.cancelConfirm}
           onCancel={bulkEngine.cancelConfirm}
+          onRemoveJob={bulkEngine.removeConfirmJob}
         />
       )}
 

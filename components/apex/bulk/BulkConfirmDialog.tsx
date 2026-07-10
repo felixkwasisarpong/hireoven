@@ -8,9 +8,10 @@ type Props = {
   onConfirm:     () => void
   onEditList:    () => void
   onCancel:      () => void
+  onRemoveJob:   (queueId: string) => void
 }
 
-export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Props) {
+export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel, onRemoveJob }: Props) {
   const count = jobs.length
 
   return (
@@ -41,13 +42,13 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
             <span className="font-semibold text-slate-800"> You review and submit each application manually.</span>
           </p>
 
-          {/* Job preview list */}
-          {jobs.length > 0 && (
-            <ul className="mt-4 max-h-40 space-y-1.5 overflow-y-auto">
+          {/* Job preview list — remove individual jobs before tailoring starts */}
+          {jobs.length > 0 ? (
+            <ul className="mt-4 max-h-48 space-y-1 overflow-y-auto">
               {jobs.map((job) => (
                 <li
                   key={job.queueId}
-                  className="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"
+                  className="group flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2"
                 >
                   <ChevronRight className="h-3 w-3 flex-shrink-0 text-slate-400" />
                   <span className="min-w-0 flex-1 truncate text-xs font-medium text-slate-700">
@@ -61,9 +62,22 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
                       {job.matchScore}%
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveJob(job.queueId)}
+                    title="Remove from queue"
+                    className="ml-1 flex-shrink-0 rounded p-0.5 text-slate-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </li>
               ))}
             </ul>
+          ) : (
+            <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 px-4 py-5 text-center">
+              <p className="text-sm text-slate-500">No jobs left in queue.</p>
+              <p className="mt-1 text-xs text-slate-400">Refine your command or cancel to start over.</p>
+            </div>
           )}
 
           {/* Safety notice */}
@@ -81,7 +95,8 @@ export function BulkConfirmDialog({ jobs, onConfirm, onEditList, onCancel }: Pro
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+            disabled={count === 0}
+            className="flex-1 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Start preparing
           </button>

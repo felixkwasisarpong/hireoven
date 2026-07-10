@@ -349,6 +349,29 @@ function inferBulkWorkspaceDirective(message: string): import("@/lib/apex/types"
   }
 }
 
+/**
+ * Extract the meaningful role/technology keywords from a bulk-apply command,
+ * stripping all command framing so only role intent remains.
+ * "apply to the top 2 AI roles"  → "AI"
+ * "apply for 3 remote product manager jobs" → "product manager"
+ * "queue 5 visa-friendly backend roles"     → "backend"
+ */
+function extractBulkRoleHint(message: string): string {
+  return message
+    .replace(/\b(apply\s+(?:to|for)|queue|batch|bulk|prepare|start\s+applying)\b/gi, "")
+    .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
+    .replace(/\b\d+\b/g, "")
+    .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
+    .replace(/\b(remote|onsite|on.?site|hybrid|in.?office)\b/gi, "")
+    .replace(/\b(h.?1b|visa|sponsor(?:ship)?)\b/gi, "")
+    .replace(/\b(ats|greenhouse|lever|workday|ashby(?:hq)?|icims|smart\s*recruiters?|bamboo(?:hr)?)\b/gi, "")
+    .replace(/\b(over|above|greater|than|more|match|score|percent|only)\b/gi, "")
+    .replace(/\b(with|in|at|for|and|the|that|has|have|a|an|it|to|my|some|few|several|of|or)\b/gi, "")
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 /** Human-readable " with Greenhouse/Lever ATS" suffix from a comma-joined ats payload. */
 function atsLabelHint(ats: unknown): string {
   if (typeof ats !== "string" || !ats) return ""
@@ -1263,6 +1286,9 @@ export async function POST(request: NextRequest) {
     const scoreHint  = typeof bp.minMatchScore === "number" ? ` with match score ${bp.minMatchScore}%+` : ""
     const sponsorHint = bp.requireSponsorshipSignal ? " that sponsor H-1B" : ""
     const atsHint    = atsLabelHint(bp.ats)
+    // Extract role/tech keywords for the job query and the answer text.
+    // e.g. "apply to the top 2 AI roles" → roleQuery = "AI"
+    const roleQuery   = extractBulkRoleHint(userMessage)
 
     // Query matching jobs server-side
     let applyAgentDirective: import("@/lib/apex/apply-agent/types").ApplyAgentDirective | undefined
@@ -1277,8 +1303,9 @@ export async function POST(request: NextRequest) {
       if (bp.ats)                    params.set("ats", String(bp.ats))
       // Keep "top matches" focused on fresh jobs from the last 24h.
       params.set("freshnessHours", "24")
-      // Pass the full message so apply-agent can free-text search any condition
-      params.set("q", userMessage)
+      // Pass extracted role keywords so apply-agent can filter by title/description.
+      // Using the pre-stripped query avoids re-parsing command framing in apply-agent.
+      if (roleQuery) params.set("q", roleQuery)
       const origin = request.nextUrl.origin || process.env.NEXT_PUBLIC_APP_URL || "http://127.0.0.1:3000"
       const res    = await fetch(`${origin}/api/apex/apply-agent?${params.toString()}`, {
         headers: { cookie: request.headers.get("cookie") ?? "" },
@@ -1306,9 +1333,12 @@ export async function POST(request: NextRequest) {
     } catch { /* non-critical */ }
 
     const jobCount = applyAgentDirective?.jobs.length ?? 0
+    const jobNoun  = roleQuery
+      ? `${roleQuery} role${jobCount !== 1 ? "s" : ""}`
+      : `job${jobCount !== 1 ? "s" : ""}`
     const answer   = jobCount > 0
-      ? `I found **${jobCount} job${jobCount !== 1 ? "s" : ""}**${scoreHint}${atsHint}${sponsorHint} in the live feed. I'll walk you through tailoring and applying to each one — starting with the best match.`
-      : `I couldn't find feed jobs${scoreHint}${atsHint}${sponsorHint} right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
+      ? `I found **${jobCount} ${jobNoun}**${scoreHint}${atsHint}${sponsorHint} in the live feed. I’ll walk you through tailoring and applying to each one — starting with the best match.`
+      : `I couldn’t find ${jobNoun}${scoreHint}${atsHint}${sponsorHint} in the live feed right now. Try relaxing filters or lowering the match threshold, and I’ll rebuild the queue.`
 
     const bulkResponse: ApexResponse = {
       answer,
