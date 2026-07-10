@@ -1818,6 +1818,15 @@ export function ApexWorkspaceShell() {
         replayAction: { type: "restore_workspace", payload: { mode: "bulk_application" } },
         metadata: IS_DEV ? { queueId: queue.id, debugOnly: true } : undefined,
       })
+      // Auto-start sequential apply: open the first ready job's review drawer and
+      // its application tab so the user can begin filling without a manual click.
+      const firstReady = queue.jobs.find(
+        (j) => j.status === "ready" || j.status === "needs_review"
+      )
+      if (firstReady) {
+        bulkEngine.openReview(firstReady.queueId)
+        if (firstReady.applyUrl) window.open(firstReady.applyUrl, "_blank", "noopener,noreferrer")
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bulkEngine.queue?.id, bulkEngine.queue?.jobs, bulkEngine.queue?.completedAt])
@@ -2851,6 +2860,20 @@ export function ApexWorkspaceShell() {
           <BulkReviewDrawer
             job={reviewJob}
             onClose={bulkEngine.closeReview}
+            onAdvance={() => {
+              // Sequential apply: after submit/skip, open the next ready job automatically.
+              // Runs synchronously within the user gesture so window.open is never blocked.
+              const jobs = bulkEngine.queue?.jobs ?? []
+              const currentIdx = jobs.findIndex((j) => j.queueId === bulkEngine.reviewingQueueId)
+              const next = jobs.slice(currentIdx + 1).find(
+                (j) => j.status === "ready" || j.status === "needs_review"
+              )
+              bulkEngine.closeReview()
+              if (next) {
+                bulkEngine.openReview(next.queueId)
+                if (next.applyUrl) window.open(next.applyUrl, "_blank", "noopener,noreferrer")
+              }
+            }}
             onOpenApp={(applyUrl, _queueId) => window.open(applyUrl, "_blank", "noopener,noreferrer")}
             onMarkSubmitted={bulkEngine.markSubmitted}
             onSkip={bulkEngine.skipJob}
