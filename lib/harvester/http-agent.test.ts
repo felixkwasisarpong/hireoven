@@ -26,14 +26,16 @@ test("proxyHostSuffixes: defaults include workday + workable; env is additive + 
   )
 })
 
-test("proxied hosts route to the proxy, and its keep-alive is off so IPs rotate per request", () => {
-  // Workable + Workday egress through the rotating residential proxy.
+test("proxied hosts route to the proxy with a moderate keep-alive (reuse tunnel, avoid CONNECT storm)", () => {
+  // Workable + Workday egress through the residential proxy.
   assert.equal(hostMatchesProxy("apply.workable.com", proxyHostSuffixes({})), true)
   assert.equal(hostMatchesProxy("nvidia.wd5.myworkdayjobs.com", proxyHostSuffixes({})), true)
-  // The proxy tunnel must NOT keep-alive — otherwise a burst of requests reuses
-  // one connection = one egress IP, which Workable then rate-limits (429 bursts).
+  // Keep-alive is MODERATE, not off: a fresh CONNECT tunnel per request storms
+  // the proxy under concurrent load and produces >20s hangs logged as timeouts.
+  // A short-lived reused tunnel avoids the storm; the per-host rate gate — not
+  // per-request IP rotation — is what keeps Workable 429s down.
   assert.ok(
-    PROXY_KEEP_ALIVE_MS <= 100,
-    "proxy keep-alive must be ~off (≤100ms) for per-request IP rotation"
+    PROXY_KEEP_ALIVE_MS >= 1_000 && PROXY_KEEP_ALIVE_MS <= 60_000,
+    "proxy keep-alive should be moderate (reuse within a burst, still recycle)"
   )
 })
