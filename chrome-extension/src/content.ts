@@ -1136,8 +1136,13 @@ let agentPullStuck = 0
 let agentPullTimer: ReturnType<typeof setInterval> | null = null
 const AGENT_PULL_MAX_MISSES = 6
 // Bounded retries for a "stuck" agent run (form never detected, no login wait).
-// ~8 × 1.5s ≈ 12s of SPA-hydration grace before we give up and stop looping.
-const AGENT_PULL_MAX_STUCK = 8
+// ~24 × 1.5s ≈ 36s of SPA-hydration grace before we give up and stop looping.
+// 12s proved too tight: Workday tenants (measured on synchronyfinancial.wd5)
+// take 10-15s to render the application after a post-login redirect, and the
+// old budget consumed the agent job as "failed" right before the form appeared
+// — the "agent can't finish the loop after I log in" bug. A genuinely dead
+// page still terminates, just ~36s later.
+const AGENT_PULL_MAX_STUCK = 24
 
 async function checkPendingAgentJob(): Promise<void> {
   if (agentPullActive) return

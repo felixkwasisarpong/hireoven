@@ -452,7 +452,15 @@ function parseMonthYear(value: string | null | undefined): { month: string; year
   return null
 }
 
-function extractNameParts(
+// Particles that legitimately lead a multi-word surname — never stripped as a
+// mistaken middle name (e.g. "De La Cruz", "van der Berg", "Mac Donald").
+const SURNAME_PARTICLES = new Set([
+  "de", "del", "dela", "della", "la", "le", "van", "von", "der", "den", "di",
+  "da", "das", "dos", "du", "el", "al", "bin", "ibn", "mac", "mc", "st", "saint",
+  "san", "santa", "abu", "ben", "ter", "ten", "op", "vom", "zur", "of",
+])
+
+export function extractNameParts(
   profile: ExtendedSafeProfile,
 ): { firstName: string; middleName: string; lastName: string } {
   const first = nonEmpty(profile.first_name)
@@ -471,10 +479,24 @@ function extractNameParts(
   }
 
   if (first || last) {
+    const fullParts = full ? full.split(/\s+/).filter(Boolean) : []
+    const lastTokens = last.split(/\s+/).filter(Boolean)
+    // The structured last_name sometimes absorbs the middle name (e.g. stored
+    // "Kwasi Sarpong" for the full name "Felix Kwasi Sarpong"), which fills
+    // Workday's Last Name with the middle included. If the last name has a
+    // leading token that ISN'T a compound-surname particle (de/la/van/von/…),
+    // treat it as a middle name and keep only the true final surname. Real
+    // compound surnames ("De La Cruz", "Van Der Berg") are left intact.
+    let surname = last
+    if (lastTokens.length >= 2 && !SURNAME_PARTICLES.has(normText(lastTokens[0] ?? ""))) {
+      surname = lastTokens[lastTokens.length - 1] ?? last
+    } else if (!last && fullParts.length >= 3) {
+      surname = fullParts[fullParts.length - 1] ?? ""
+    }
     return {
-      firstName: toTitleCase(first),
+      firstName: toTitleCase(first || fullParts[0] || ""),
       middleName: toTitleCase(middle),
-      lastName: toTitleCase(last),
+      lastName: toTitleCase(surname),
     }
   }
 
@@ -1026,14 +1048,31 @@ class WorkdayAutofillRunner {
 
   static isWorkdayDetected(): boolean {
     const host = window.location.hostname.toLowerCase()
-    return (
-      document.querySelector('[data-automation-id="applicationPage"]') !== null ||
+    if (
       host.includes("myworkdayjobs.com") ||
-      host.includes("wd1.myworkdayjobs.com") ||
-      host.includes("wd3.myworkdayjobs.com") ||
-      host.includes("wd5.myworkdayjobs.com") ||
       /(?:^|\.)wd\d+\.myworkdayjobs\.com$/.test(host) ||
+      host.endsWith(".workdayjobs.com") ||
       host === "apply.workday.com"
+    ) {
+      return true
+    }
+    // DOM signature — covers vanity / custom domains (e.g. Synchrony) that CNAME
+    // to Workday but don't serve from *.myworkdayjobs.com, so the host check
+    // above misses them entirely. These automation-ids are Workday-specific:
+    // the apply page / My-Info flow wrappers AND the pre-form "Start Your
+    // Application" chooser ("Apply Manually" / "Autofill with Resume"). Matching
+    // any one is a strong Workday signal, so the runner engages instead of the
+    // bar reading "Autofill not detected" and never clicking the chooser.
+    return (
+      document.querySelector(
+        '[data-automation-id="applicationPage"], ' +
+        '[data-automation-id="applyFlowMyInfoPage"], ' +
+        '[data-automation-id="legalNameSection_firstName"], ' +
+        '[data-automation-id="applyManually" i], ' +
+        '[data-automation-id="applyManuallyButton" i], ' +
+        '[data-automation-id="fileUploadDropZone"], ' +
+        '[data-automation-id="file-upload-drop-zone"]',
+      ) !== null
     )
   }
 
@@ -1969,7 +2008,10 @@ class WorkdayAutofillRunner {
       '[data-automation-id="formField-state"], ' +
       '[data-automation-id="formField-stateRegion"]',
       /^(state|state\/?\s*province|state\/?\s*region|province|region)$/,
-      this.cv.address.state,
+      // Expand "TX" → "Texas": Workday's State dropdown options are full names,
+      // and the risky-field path matches by option text (no typing), so a bare
+      // 2-letter code never matches and the required field stays empty.
+      normalizeStateToken(this.cv.address.state) || this.cv.address.state,
       "State/Province",
       { riskyApplyFlowField: true, optional: !this.cv.address.state },
     )
@@ -2441,6 +2483,27 @@ class WorkdayAutofillRunner {
       return
     }
 
+    // Last resort: this tenant's source list doesn't offer a "Company Careers"
+    // option (it's LinkedIn / Indeed / Job Board / Other, etc.). A REQUIRED
+    // source field left blank blocks Save-and-Continue and STALLS the whole
+    // wizard, so pick any honest, neutral source via the (fast, backend-queried)
+    // search box. Excludes referral/agency/employee options — auto-claiming a
+    // personal connection could mislead a recruiter. Guarded by the same
+    // settled/broken-flow check as the preferred path.
+    if (
+      (await this.waitForApplyFlowSettled(4000)) &&
+      (await this.fillSourceViaPromptSearch(
+        container,
+        "How Did You Hear About Us?",
+        ["job board", "online", "website", "linkedin", "indeed", "social", "other"],
+        (text) => this.isNeutralSourceOption(text),
+      ))
+    ) {
+      this.bumpFilledCount()
+      this.debug("info", "field.source.filled", { via: "neutral_fallback" })
+      return
+    }
+
     this.logWarning("Manual review needed: How Did You Hear About Us?")
     this.requiredFieldMissesThisStep += 1
     this.markManualReview(container, "How Did You Hear About Us?")
@@ -2524,7 +2587,13 @@ class WorkdayAutofillRunner {
    * Careers Site" while excluding job boards like "Career Builder"). Verified
    * live: results land in ~1s, far faster than drilling the category tree.
    */
-  private async fillSourceViaPromptSearch(container: HTMLElement, fieldName: string): Promise<boolean> {
+  private async fillSourceViaPromptSearch(
+    container: HTMLElement,
+    fieldName: string,
+    searchTerms: string[] = ["careers", "website"],
+    accept: (text: string) => boolean = (text) =>
+      /\bcareers\b/i.test(text) || /\b(corporate|company)\s*websites?\b/i.test(text),
+  ): Promise<boolean> {
     const input =
       container.querySelector<HTMLInputElement>('input[data-uxi-widget-type="selectinput"]') ??
       container.querySelector<HTMLInputElement>('[data-automation-id="multiselectInputContainer"] input')
@@ -2554,8 +2623,8 @@ class WorkdayAutofillRunner {
 
     // Term per tenant vocabulary: "careers" finds "<Company> Careers"
     // (plural \bcareers\b also keeps out job boards like "Career Builder");
-    // "website" finds "Corporate Website" / "Company Website" leaves.
-    const searchTerms = ["careers", "website"]
+    // "website" finds "Corporate Website" / "Company Website" leaves. The
+    // caller can override the terms + acceptance test for the neutral fallback.
     for (let attempt = 0; attempt < searchTerms.length; attempt += 1) {
       input.scrollIntoView({ block: "center" })
       input.focus()
@@ -2566,7 +2635,7 @@ class WorkdayAutofillRunner {
       while (Date.now() < deadline) {
         const target = searchResults().find((option) => {
           const text = optionLabel(option)
-          if (!/\bcareers\b/i.test(text) && !/\b(corporate|company)\s*websites?\b/i.test(text)) return false
+          if (!accept(text)) return false
           if (this.isTopLevelSourceCategory(text)) return false
           if (this.isBackHeaderOption(text, "Company Website")) return false
           return true
@@ -2616,6 +2685,24 @@ class WorkdayAutofillRunner {
     }
 
     return false
+  }
+
+  /**
+   * An honest, neutral "How did you hear about us" option that is safe to
+   * auto-pick when the preferred "Company Careers" option isn't offered — so a
+   * REQUIRED source field never stalls the wizard. Deliberately EXCLUDES
+   * referral / agency / recruiter / employee / friend / family options:
+   * auto-claiming a personal connection could mislead a recruiter. Top-level
+   * category rows are excluded too (we only pick real leaf options).
+   */
+  private isNeutralSourceOption(text: string): boolean {
+    const value = normText(text)
+    if (!value) return false
+    if (this.isTopLevelSourceCategory(value)) return false
+    if (/\b(referr|agenc|recruit|staffing|employee|colleague|friend|family|alumni|current worker|former worker)\b/i.test(value)) {
+      return false
+    }
+    return /\b(career|company website|corporate website|job board|job site|job posting|jobsite|online|internet|website|linkedin|indeed|glassdoor|ziprecruiter|monster|dice|google|search engine|social media|advertisement|other)\b/i.test(value)
   }
 
   private isTopLevelSourceCategory(text: string): boolean {
@@ -3958,6 +4045,15 @@ class WorkdayAutofillRunner {
       // Skip groups that already have a selection (e.g. user pre-answered).
       if (group.some((choice) => choice.checked)) continue
       const label = this.getRadioGroupQuestionLabel(radio, group)
+      // Never auto-answer sensitive work-authorization / immigration / conflict
+      // questions — leave them for the user (a wrong value can auto-reject).
+      if (isSensitiveWorkAuthQuestion(label)) {
+        this.debug("info", "questions.radio.sensitive_manual_review", { label })
+        const container = radio.closest<HTMLElement>("[data-automation-id*='formField'], fieldset") ?? radio
+        this.markManualReview(container, label)
+        this.requiredFieldMissesThisStep += 1
+        continue
+      }
       const answer = this.getYesNoAnswer(label)
       if (answer === null) {
         this.debug("warn", "questions.radio.unanswered", { label: label || "(missing label)" })
@@ -4227,11 +4323,33 @@ class WorkdayAutofillRunner {
         this.markManualReview(container, label)
         continue
       }
+      // Work-authorization / eligibility / sponsorship / immigration / conflict:
+      // high-stakes questions where a wrong answer can auto-reject. Workday's
+      // button-listbox widgets on some tenants revert an auto-selected value
+      // (the click updates the display but not React's committed model), so a
+      // silently-wrong "No" could ship. Never auto-answer these — leave them
+      // blank and flag for the user, UNLESS they're already answered.
+      if (isSensitiveWorkAuthQuestion(label)) {
+        const existingVal = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
+        if (existingVal && !this.isUnansweredSelectPlaceholder(existingVal)) {
+          this.debug("info", "questions.combobox.sensitive_kept_existing", { label, existing: existingVal.slice(0, 40) })
+          continue
+        }
+        this.debug("info", "questions.combobox.sensitive_manual_review", { label })
+        this.markManualReview(container, label)
+        this.requiredFieldMissesThisStep += 1
+        continue
+      }
 
       // Candidate answers in priority order. Agreement dropdowns render
       // "I Agree" / "I Do Not Agree" (not Yes/No), so an affirmative intent
       // must try both — we can't enumerate options without opening the menu.
       const { candidates, confident } = this.questionComboboxCandidates(label)
+      this.debug("info", "questions.combobox.candidates", {
+        label: label.slice(0, 90),
+        candidates: candidates.join("|").slice(0, 80),
+        confident,
+      })
 
       const existing = nonEmpty(extractComboboxDisplayValue(comboboxTarget))
       const deferCombobox = () =>
@@ -4265,15 +4383,32 @@ class WorkdayAutofillRunner {
 
       let ok = false
       let chosen = ""
-      for (const cand of candidates) {
-        ok = await this.selectComboboxElement(comboboxTarget, cand, label, { optional: true, strictOptions: true })
-        if (ok) {
-          chosen = cand
-          break
+      // Retry the whole candidate sweep: Workday's button-dropdowns
+      // (aria-haspopup="listbox") render their option list into a portal
+      // asynchronously on first open, so the very first select can miss the
+      // options and only lands on a second, warmed-up attempt. Without this the
+      // first pass fell through to the AI tier below, which guessed WRONG on
+      // sensitive work-eligibility questions (answered "No" → self-reject).
+      for (let attempt = 0; attempt < 3 && !ok; attempt += 1) {
+        for (const cand of candidates) {
+          ok = await this.selectComboboxElement(comboboxTarget, cand, label, { optional: true, strictOptions: true })
+          if (ok) {
+            chosen = cand
+            break
+          }
         }
+        if (!ok) await sleep(400)
       }
       if (ok) {
         this.debug("info", "questions.combobox.answered", { label, desired: chosen })
+      } else if (confident) {
+        // We KNOW this answer (work authorization, sponsorship, conflict of
+        // interest, agreements…). NEVER hand a confident answer to the AI
+        // semantic tier — a wrong guess on a work-eligibility question can
+        // auto-reject the application. Leave it for the user to complete.
+        this.debug("warn", "questions.combobox.confident_select_failed", { label, tried: candidates.join(" | ") })
+        this.markManualReview(container, label)
+        this.requiredFieldMissesThisStep += 1
       } else {
         this.debug("warn", "questions.combobox.answer_failed", { label, tried: candidates.join(" | ") })
         deferCombobox()
@@ -4449,7 +4584,14 @@ class WorkdayAutofillRunner {
     if (
       q.includes("legally authorized to work") ||
       q.includes("authorized for employment in the u s") ||
-      q.includes("authorized to work in the u s")
+      q.includes("authorized to work in the u s") ||
+      // "Are you eligible to work in the country in which this position is
+      // located?" and variants. Without this the question fell through to the
+      // AI/heuristic fallback, which guessed "No" — contradicting the
+      // sponsorship answer and effectively self-rejecting the application.
+      (q.includes("eligible") && (q.includes("work") || q.includes("employment"))) ||
+      q.includes("authorized to work in the country") ||
+      q.includes("eligible to work in the country")
     ) {
       // Conservative mapping:
       // - if profile says sponsorship required -> answer NO for unrestricted
@@ -4459,6 +4601,13 @@ class WorkdayAutofillRunner {
         return !this.cv.visa.requiresSponsorship
       }
       return true
+    }
+    // Conflict-of-interest disclosures ("are you involved in any activity /
+    // outside business / board position that could conflict…"). Default No —
+    // the honest answer for most candidates, and a false "Yes" wrongly triggers
+    // a disclosure review. A genuine conflict-holder corrects it in review.
+    if (q.includes("conflict of interest") || (q.includes("conflict") && q.includes("interest"))) {
+      return false
     }
     if (
       q.includes("order of prohibition from banking") ||
@@ -5364,9 +5513,12 @@ class WorkdayAutofillRunner {
     }
     // On fragile apply-flow tenants, re-opening country/state/phone-code
     // combos can trigger server refetches that fail with 500/404 and crash the
-    // page bundle. If a risky field already has ANY non-empty value, keep it
-    // and avoid touching the combobox.
-    if (displayed && opts?.riskyApplyFlowField) {
+    // page bundle. If a risky field already has a REAL selection, keep it and
+    // avoid touching the combobox. But an unanswered placeholder ("Select One")
+    // is NOT a real value — treating it as one left required State/Country
+    // dropdowns empty, which fails Workday's "field is required" validation and
+    // blocks Save and Continue (the dominant "can't get past My Information").
+    if (displayed && !this.isUnansweredSelectPlaceholder(displayed) && opts?.riskyApplyFlowField) {
       this.bumpFilledCount()
       this.logWarning(`Manual review needed: ${fieldName} (existing selection kept)`)
       this.debug("warn", "combobox.skipped_risky_existing_value", {
@@ -5416,7 +5568,14 @@ class WorkdayAutofillRunner {
           ? (target.querySelector("input") as HTMLInputElement)
           : null
 
-    if (input && !opts?.riskyApplyFlowField) {
+    // Only type into a VISIBLE search box (real type-ahead combobox). Workday's
+    // Yes/No question widgets are button-triggered listboxes whose backing
+    // <input> is HIDDEN and holds an opaque option-id (e.g. a 32-hex token), not
+    // free text — typing "Yes" into it corrupts React's model so the click
+    // selects "Yes" visually but Workday reverts the committed value (observed:
+    // eligibility showed "Yes" then flipped back to "No"). The risky path
+    // already skips typing for exactly this reason and commits fine.
+    if (input && isVisible(input) && !opts?.riskyApplyFlowField) {
       this.setElementValue(input, clean, `${fieldName} (combobox)`)
     }
 
@@ -5513,7 +5672,7 @@ class WorkdayAutofillRunner {
       return false
     }
 
-    if (input && !opts?.riskyApplyFlowField) {
+    if (input && isVisible(input) && !opts?.riskyApplyFlowField) {
       input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }))
       input.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", code: "Enter", bubbles: true }))
       this.bumpFilledCount()
@@ -5985,6 +6144,22 @@ export async function startWorkdayAutofillModule(): Promise<void> {
 
 export function isWorkdayApplicationPage(): boolean {
   return WorkdayAutofillRunner.isWorkdayDetected()
+}
+
+/**
+ * High-stakes work-authorization / immigration / conflict questions whose
+ * answer depends on the candidate's true legal status and where a wrong value
+ * can auto-reject the application. These are NEVER auto-answered — the runner
+ * leaves them blank and flags them so the user selects the correct answer.
+ * (Also: Workday's button-listbox widgets on some tenants revert an
+ * auto-selected value, so a silently-wrong answer could otherwise ship.)
+ */
+export function isSensitiveWorkAuthQuestion(question: string): boolean {
+  const q = normText(question)
+  if (!q) return false
+  return /work authorization|authoriz(?:ed|ation) to work|authoris(?:ed|ation) to work|legally authoriz|eligible to work|eligible for employment|eligibility to work|right to work|require sponsorship|need sponsorship|visa sponsorship|immigration sponsorship|sponsorship (?:now|to work)|require (?:visa|immigration)|citizenship|are you a citizen|permanent resident|immigration status|conflict of interest/.test(
+    q,
+  )
 }
 
 /**

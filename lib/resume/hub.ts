@@ -561,11 +561,17 @@ export function compareResumeToJob(resume: Resume, jobDescription: string, jobTi
   const jobKeywords = extractKeywords(jobDescription, 24)
   const resumeText = getResumeSearchText(resume).toLowerCase()
   const resumeSkills = normalizeSkillList([...(resume.top_skills ?? []), ...getSkillsBucketValues(resume.skills)])
-  const presentKeywords = jobKeywords.filter((keyword) =>
+  const isPresent = (keyword: string) =>
     resumeSkills.some((skill) => skillMatches(keyword, skill)) || resumeText.includes(normalizeKeyword(keyword))
-  )
-  const missingKeywords = jobKeywords.filter((keyword) => !presentKeywords.includes(keyword)).slice(0, 12)
+  const presentKeywords = jobKeywords.filter(isPresent)
   const matchScore = clampScore(jobKeywords.length ? (presentKeywords.length / jobKeywords.length) * 100 : 35)
+  // User-facing "missing skills" (chips, summary rewrite, suggested skills, bullet
+  // suggestions) must be REAL dictionary skills — not the broad extractKeywords
+  // fallback, which leaks JD boilerplate ("their", "benefits", "status") and
+  // proper nouns ("tiktok", "crowdstrike") that read as nonsense skills to add.
+  const missingKeywords = normalizeSkillList(extractSkillsFromText(jobDescription), 24)
+    .filter((skill) => !isPresent(skill))
+    .slice(0, 12)
   const experienceSources = (resume.work_experience ?? []).flatMap((experience) => {
     const achievements = Array.isArray(experience.achievements) ? experience.achievements : []
     if (achievements.length > 0) return achievements

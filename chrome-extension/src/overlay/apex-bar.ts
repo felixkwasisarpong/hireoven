@@ -1385,6 +1385,14 @@ export class ApexBar {
 
   private runDetection(): void {
     this.site = detectSite()
+    // Vanity / custom Workday domains (e.g. Synchrony) don't match
+    // *.myworkdayjobs.com, so host-only detectSite() returns "unknown" and the
+    // bar shows "Autofill not detected" on the "Start Your Application" chooser
+    // (which has no form fields yet for the generic gate to catch). Fall back to
+    // Workday's DOM signature so the runner engages and auto-clicks the chooser.
+    if (this.site !== "workday" && isWorkdayApplicationPage()) {
+      this.site = "workday"
+    }
     this.job = null
     // Reset per-job action state on every navigation.
     this.saveStatus = "idle"
@@ -3515,12 +3523,29 @@ export class ApexBar {
           // Transitioning toward the form — keep polling (not a stuck retry).
           return { handled: false, waiting: true }
         }
+        // The page may simply still be RENDERING — Workday shows a skeleton
+        // for 10-15s after a post-login redirect. While the document is
+        // loading or a skeleton/spinner is visible, report "waiting" (resets
+        // the stuck budget) instead of burning dead-end retries; the form
+        // will be there on a later poll.
+        const stillRendering =
+          document.readyState !== "complete" ||
+          Boolean(document.querySelector(
+            '[data-automation-id="loadingSpinner"], [data-automation-id*="skeleton" i], [class*="skeleton" i], [aria-busy="true"]',
+          ))
+        if (stillRendering) {
+          this.autofillStatus = "idle"
+          this.autofillError = null
+          this.render()
+          this.sendRunStatus("filling")
+          return { handled: false, waiting: true }
+        }
         this.autofillStatus = "error"
         this.autofillError = "No supported application form detected for agent mode."
         this.render()
-        // No form and no CTA: this is a genuine dead-end, NOT a login wait.
-        // waiting:false → the drivers bound their retries instead of re-running
-        // forever (the Ashby "fill loops unending" bug when detection misses).
+        // No form and no CTA on a FULLY LOADED page: a genuine dead-end, NOT a
+        // login wait. waiting:false → the drivers bound their retries instead
+        // of re-running forever (the Ashby "fill loops unending" bug).
         return { handled: false, waiting: false }
       }
 
