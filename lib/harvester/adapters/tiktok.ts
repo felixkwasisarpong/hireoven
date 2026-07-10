@@ -109,9 +109,11 @@ function buildDescription(raw: TikTokRawJob): string | undefined {
 function mapJob(raw: TikTokRawJob): HarvestedJob | null {
   if (!raw.id || !raw.title) return null
   const externalId = `tiktok:${raw.code ?? raw.id}`
-  // Use the human-readable code (e.g. "A70953") for the URL — the SPA routes on
-  // code, not the internal numeric id. Fall back to numeric id if code is absent.
-  const applyUrl = `https://lifeattiktok.com/position/${raw.code ?? raw.id}`
+  // The public job-detail page is /search/<numeric id> (verified live: the site's
+  // own listing links route there). The human-readable code (e.g. "A186244") is
+  // shown ON the page but is NOT a valid route — /position/<code> 404s, which
+  // silently broke every TikTok apply link. Always use the numeric id.
+  const applyUrl = `https://lifeattiktok.com/search/${raw.id}`
   const location = buildLocation(raw.city_info)
   const description = buildDescription(raw)
   const employmentType = mapEmploymentType(raw.recruit_type)
