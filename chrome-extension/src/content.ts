@@ -71,10 +71,26 @@ const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
   /(?:^|\.)otta\.com$/i,
   /(?:^|\.)ziprecruiter\.com$/i,
   /(?:^|\.)monster\.com$/i,
+  // Enterprise ATS hosts (SAP SuccessFactors, Oracle Taleo/Recruiting,
+  // Jobvite, Workable, Breezy, Eightfold) — career portals live on paths the
+  // generic career-path pattern can miss ("/portalcareer").
+  /(?:^|\.)successfactors\.(?:com|eu)$/i,
+  /(?:^|\.)sapsf\.(?:com|eu|cn)$/i,
+  /(?:^|\.)taleo\.net$/i,
+  /(?:^|\.)oraclecloud\.com$/i,
+  /(?:^|\.)jobvite\.com$/i,
+  /(?:^|\.)workable\.com$/i,
+  /(?:^|\.)breezy\.hr$/i,
+  /(?:^|\.)eightfold\.ai$/i,
 ]
 
 const CAREER_PATH_PATTERN =
-  /\/(?:job|jobs|career|careers|opening|openings|position|positions|vacancy|vacancies|opportunity|opportunities|apply|application)(?:\/|$|\?)/i
+  // Segment may EMBED the keyword ("/portalcareer", "/sap-jobs") — anchoring
+  // to the segment start missed real career portals.
+  /\/[a-z0-9_-]{0,16}(?:job|career|opening|position|vacanc|opportunit|apply|application|recruit)/i
+
+/** Hostname labels like career5.successfactors.eu / jobs.company.com. */
+const CAREER_HOST_LABEL_PATTERN = /^(?:career|careers|jobs?|recruit(?:ing)?|talent|apply|hire|hiring)[0-9]*$/i
 
 
 function isTopFrame(): boolean {
@@ -82,6 +98,37 @@ function isTopFrame(): boolean {
     return window.self === window.top
   } catch {
     return false
+  }
+}
+
+// Enterprise ATS hosts whose application portals are commonly IFRAMED inside
+// the company's own website. The top-frame bar can't reach a cross-origin
+// form, so on these hosts the bar mounts inside the frame itself.
+const EMBED_FRAME_HOSTS: readonly RegExp[] = [
+  /(?:^|\.)successfactors\.(?:com|eu)$/i,
+  /(?:^|\.)sapsf\.(?:com|eu|cn)$/i,
+  /(?:^|\.)taleo\.net$/i,
+  /(?:^|\.)oraclecloud\.com$/i,
+  /(?:^|\.)icims\.com$/i,
+  /(?:^|\.)jobvite\.com$/i,
+]
+
+/**
+ * True when this content script runs inside a cross-origin iframe that IS the
+ * application portal (company site top frame → SuccessFactors iframe). The
+ * frame must be big enough to be the main content, and the parent must be
+ * cross-origin (same-origin parents are handled by the top-frame bar).
+ */
+function isEmbeddedAtsFrame(): boolean {
+  if (isTopFrame()) return false
+  const host = window.location.hostname.replace(/^www\./i, "").toLowerCase()
+  if (!EMBED_FRAME_HOSTS.some((re) => re.test(host))) return false
+  if (window.innerWidth < 600 || window.innerHeight < 350) return false
+  try {
+    void window.top?.location.href
+    return false // same-origin parent — top-frame bar owns the page
+  } catch {
+    return true // cross-origin parent — this frame is the application world
   }
 }
 
@@ -102,6 +149,8 @@ function shouldOverlayThisHost(): boolean {
   if (OVERLAY_HOST_DENYLIST.some((re) => re.test(host))) return false
   if (OVERLAY_HOST_ALLOWLIST.some((re) => re.test(host))) return true
   if (CAREER_PATH_PATTERN.test(window.location.pathname)) return true
+  // career5.successfactors.eu, jobs.acme.com, recruiting.xyz.de …
+  if (host.split(".").some((label) => CAREER_HOST_LABEL_PATTERN.test(label))) return true
   return false
 }
 
@@ -690,7 +739,10 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
 let lateFormWatchActive = false
 
 async function mountApexBarWhenReady(): Promise<void> {
-  if (!isTopFrame()) return
+  // Top frame normally — but ALSO inside a cross-origin enterprise-ATS iframe
+  // (company site embedding its SuccessFactors/Taleo portal): the top-frame
+  // bar can't reach that form, so the frame hosts its own bar.
+  if (!isTopFrame() && !isEmbeddedAtsFrame()) return
   // Denylisted aggregators never get the bar, regardless of form content.
   if (isDenylistedHost()) return
 

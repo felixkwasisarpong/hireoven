@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { ArrowRight, Loader2, Megaphone, X } from "lucide-react"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 
-const DISMISSED_KEY = "launch-promo-dismissed-v1"
+const SNOOZE_KEY = "launch-promo-snooze-until-v2"
+const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Yellow sphere — replicates the 3D floating balls in the reference. */
 function Orb({ className }: { className: string }) {
@@ -49,11 +50,10 @@ export default function LaunchPromoPopup() {
 
     if (isLoading || isPro) return
 
-    const dismissed = !!window.localStorage.getItem(DISMISSED_KEY)
-    if (dismissed) return
+    const snoozeUntil = Number(window.localStorage.getItem(SNOOZE_KEY) || 0)
+    if (snoozeUntil && Date.now() < snoozeUntil) return
 
-    // Delay so it never overlaps the saved-jobs reminder (which fires at 650 ms)
-    const t = window.setTimeout(() => setOpen(true), 3500)
+    const t = window.setTimeout(() => setOpen(true), 2000)
     return () => window.clearTimeout(t)
   }, [isPro, isLoading])
 
@@ -62,8 +62,13 @@ export default function LaunchPromoPopup() {
     window.setTimeout(() => setOpen(false), 220)
   }
 
+  function snoozeDay() {
+    try { window.localStorage.setItem(SNOOZE_KEY, String(Date.now() + DAY_MS)) } catch { /* ignore */ }
+    close()
+  }
+
   function dismiss() {
-    try { window.localStorage.setItem(DISMISSED_KEY, "1") } catch { /* ignore */ }
+    try { window.localStorage.setItem(SNOOZE_KEY, String(Date.now() + 7 * DAY_MS)) } catch { /* ignore */ }
     close()
   }
 
@@ -93,7 +98,7 @@ export default function LaunchPromoPopup() {
       {/* backdrop */}
       <button
         type="button"
-        onClick={dismiss}
+        onClick={snoozeDay}
         aria-label="Close promotion"
         className={`absolute inset-0 bg-slate-900/50 backdrop-blur-sm ${
           leaving ? "opacity-0 transition-opacity duration-220" : "animate-fade-in-backdrop"
@@ -115,7 +120,7 @@ export default function LaunchPromoPopup() {
           {/* close button */}
           <button
             type="button"
-            onClick={dismiss}
+            onClick={snoozeDay}
             aria-label="Dismiss promotion"
             className="absolute right-4 top-4 z-50 rounded-full p-2 text-white/70 transition hover:bg-white/20 hover:text-white"
           >

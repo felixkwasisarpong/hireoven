@@ -561,8 +561,10 @@ export function detectApplicationForm(doc: Document = document): ApplicationForm
   // tier (deterministic rules + AI) answers them, so a known-ATS page with
   // several real controls is still fillable. Without this, multi-step forms
   // lock the Autofill button AND skip the AI cleanup on their later pages.
-  const questionStepFillable =
-    ats !== "unknown" && fields.filter((f) => f.type !== "file").length >= 3
+  // No known-ATS requirement: the overlay only mounts on career hosts/paths,
+  // and enterprise ATSes (SuccessFactors, Taleo) detect as "unknown" while
+  // being perfectly fillable by the question tier.
+  const questionStepFillable = fields.filter((f) => f.type !== "file").length >= 3
   const supportsAutofill =
     isWorkday || safeFieldCount >= 2 || (resumeUpload && safeFieldCount >= 1) || questionStepFillable
 
