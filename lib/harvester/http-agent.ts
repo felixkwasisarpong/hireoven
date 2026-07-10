@@ -33,15 +33,21 @@ const H2_ENABLED = process.env.HARVESTER_HTTP2 === "true"
 const DEFAULT_PROXY_HOST_SUFFIXES = ["myworkdayjobs.com", "apply.workable.com"]
 
 /**
- * Keep-alive is effectively DISABLED on the proxy path (~1 ms idle). Rotating
- * residential proxies (WebShare `p.webshare.io`) assign a fresh egress IP per
- * NEW upstream connection; with a long keep-alive the ProxyAgent reuses ONE
- * tunnel for 30–120 s, so a burst of requests shares ONE IP and Workable
- * rate-limits it (the 429 bursts we saw). A ~1 ms idle timeout makes each
- * request open a fresh CONNECT tunnel → a fresh IP. Direct (non-proxied) hosts
- * keep the long keep-alive on getAgent().
+ * MODERATE keep-alive on the proxy path (~10 s idle).
+ *
+ * History: this was ~1 ms to force a fresh CONNECT tunnel (→ fresh WebShare
+ * egress IP) per request and kill Workable's per-IP 429 bursts. But under
+ * concurrent harvest load, opening a fresh tunnel for EVERY request creates a
+ * CONNECT-handshake storm against the proxy — individual requests then hang past
+ * the 20 s per-attempt timeout and surface as "workable fetch failed: timeout"
+ * (~20% of Workable crawls; isolated calls run ~300 ms, so it's contention, not
+ * a slow proxy). The IP-rotation 429 defense is now redundant: the per-host rate
+ * gate (ATS_RATE_LIMIT_WORKABLE_*) already holds 429s to a trickle (~25/hr).
+ * So we reuse a tunnel for a short window to eliminate the handshake storm — the
+ * rate gate, not per-request IP rotation, is what keeps 429s down. Direct
+ * (non-proxied) hosts keep the longer keep-alive on getAgent().
  */
-export const PROXY_KEEP_ALIVE_MS = 1
+export const PROXY_KEEP_ALIVE_MS = 10_000
 
 let cachedAgent: Agent | null = null
 let cachedProxyAgent: ProxyAgent | null = null
@@ -86,10 +92,12 @@ function getProxyAgent(): ProxyAgent | null {
   if (uri) {
     cachedProxyAgent = new ProxyAgent({
       uri,
-      // No keep-alive on the proxy → fresh connection → fresh rotating IP per request.
+      // Short keep-alive → a burst reuses one tunnel (no per-request CONNECT
+      // storm) but tunnels still recycle quickly. The rate gate prevents 429s.
       keepAliveTimeout: PROXY_KEEP_ALIVE_MS,
       keepAliveMaxTimeout: PROXY_KEEP_ALIVE_MS,
-      // No pipelining: don't multiplex requests onto one tunnel (would re-pin the IP).
+      // No pipelining: keep requests sequential on a reused tunnel rather than
+      // multiplexed (multiplexing a burst onto one IP is what invites 429s).
       pipelining: 0,
     })
   }
