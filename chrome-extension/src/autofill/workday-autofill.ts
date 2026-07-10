@@ -3204,11 +3204,20 @@ class WorkdayAutofillRunner {
 
   private async fillWorkExperienceEntries(): Promise<void> {
     if (!this.cv) return
+    if (this.cv.workExperience.length === 0) return
+
+    // Some Workday tenants (especially when triggered via the "Apply with
+    // resume" path) pre-populate experience panels from the uploaded PDF.
+    // We detect those existing panels up-front so we can fill them in place
+    // rather than clicking Add N times and creating duplicates.
+    const WXP_PREFIXES = ["workExperience", "workExperienceSection", "workExperienceEntry", "workExperienceTableRow"]
+    const preExisting = this.inlineEntryPanels(WXP_PREFIXES, /work experience \d+/i)
+
     const add = this.findAddButtonForSection(
       ["workExperienceSection", "workExperience"],
       /work experience|employment|experience/,
     )
-    if (!add) {
+    if (!add && preExisting.length === 0) {
       this.debug("warn", "experience.add_missing")
       return
     }
@@ -3220,26 +3229,44 @@ class WorkdayAutofillRunner {
         title: job.title,
         company: job.company,
       })
-      // Re-resolve every iteration: after the first inline entry the "Add"
-      // button is replaced by "Add Another".
-      const addButton =
-        index === 0
-          ? add
-          : this.findAddButtonForSection(["workExperienceSection", "workExperience"], /work experience|employment|experience/)
-      if (!addButton) {
-        this.debug("warn", "experience.add_another_missing", { index: index + 1 })
-        break
-      }
-      addButton.click()
-      await sleep(500)
 
-      // Dialog tenants open a modal; inline tenants append a "Work
-      // Experience N" panel directly into the page.
-      const root = await this.resolveEntryRoot(["workExperience"], /work experience \d+/i, index + 1)
-      if (!root) {
-        this.debug("error", "experience.entry_root_missing_after_add", { index: index + 1 })
-        break
+      let root: HTMLElement | null = null
+
+      if (index < preExisting.length) {
+        // Pre-existing panel — fill it in place; no Add click required.
+        root = preExisting[index]
+        this.debug("info", "experience.using_preexisting_panel", { index: index + 1 })
+      } else {
+        // Re-resolve every iteration: after the first inline entry the "Add"
+        // button is replaced by "Add Another".
+        const addButton =
+          index === 0 || index === preExisting.length
+            ? add
+            : this.findAddButtonForSection(["workExperienceSection", "workExperience"], /work experience|employment|experience/)
+        if (!addButton) {
+          this.debug("warn", "experience.add_another_missing", { index: index + 1 })
+          break
+        }
+        addButton.click()
+        // 200ms gives React time to start rendering; resolveEntryRoot polls
+        // for up to 6s so we don't need the old 500ms guaranteed wait.
+        await sleep(200)
+
+        // Dialog tenants open a modal; inline tenants append a numbered
+        // panel directly into the page.
+        root = await this.resolveEntryRoot(WXP_PREFIXES, /work experience \d+/i, index + 1)
+        if (!root) {
+          // One retry — some tenants have a slow dialog animation (4–6s).
+          this.debug("warn", "experience.entry_root_retry", { index: index + 1 })
+          await sleep(2500)
+          root = await this.resolveEntryRoot(WXP_PREFIXES, /work experience \d+/i, index + 1)
+        }
+        if (!root) {
+          this.debug("error", "experience.entry_root_missing_after_add", { index: index + 1 })
+          break
+        }
       }
+
       const isDialog = root.matches('[role="dialog"], [data-automation-id*="modal"]')
 
       await this.fillAutomationIdInRoot(root, "jobTitle", job.title, "Job Title", { labelRe: /job title|title|position/, commit: true })
@@ -3278,7 +3305,7 @@ class WorkdayAutofillRunner {
         }
       }
       this.debug("info", "experience.entry.saved", { index: index + 1, inline: !isDialog })
-      await sleep(250)
+      await sleep(100)
     }
   }
 
