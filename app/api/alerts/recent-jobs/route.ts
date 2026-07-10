@@ -280,6 +280,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // The "Fresh high-match jobs" resume digest is retired — saved-alert instant
+  // notifications cover it. Gated OFF by default so it stays dead even if the
+  // cron is re-added (e.g. a crontab reinstall from the worker template).
+  // Set RECENT_JOBS_DIGEST=on to bring it back.
+  if (process.env.RECENT_JOBS_DIGEST !== "on") {
+    return NextResponse.json({ skipped: true, reason: "recent-jobs digest disabled" })
+  }
+
   if (!resend) {
     return NextResponse.json({ skipped: true, reason: "RESEND_API_KEY not configured" })
   }
