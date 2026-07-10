@@ -5,7 +5,6 @@ import {
   Ban,
   CheckCircle2,
   ExternalLink,
-  Loader2,
   Send,
   SkipForward,
   X,
@@ -24,13 +23,13 @@ function emitTimelineSignal(detail: Record<string, unknown>) {
 type Props = {
   job:            BulkJobItem
   onClose:        () => void
+  onAdvance:      () => void
   onOpenApp:      (applyUrl: string, queueId: string) => void
   onMarkSubmitted:(queueId: string) => void
   onSkip:         (queueId: string) => void
 }
 
-export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onSkip }: Props) {
-  const [submitting, setSubmitting] = useState(false)
+export function BulkReviewDrawer({ job, onClose, onAdvance, onOpenApp, onMarkSubmitted, onSkip }: Props) {
   const [sensitiveAcknowledged, setSensitiveAcknowledged] = useState(false)
 
   const checklist = computeReadiness({
@@ -71,20 +70,19 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
     })
   }, [job, checklist, onOpenApp])
 
-  const handleMarkSubmitted = useCallback(async () => {
-    setSubmitting(true)
-    try {
-      await fetch("/api/apex/mark-submitted", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          jobId:       job.jobId,
-          jobTitle:    job.jobTitle,
-          companyName: job.company,
-          applyUrl:    job.applyUrl,
-        }),
-      })
-    } catch {}
+  const handleMarkSubmitted = useCallback(() => {
+    // Fire-and-forget so onAdvance runs synchronously within the user gesture
+    // (avoids popup-blocker blocking window.open for the next job's tab).
+    void fetch("/api/apex/mark-submitted", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        jobId:       job.jobId,
+        jobTitle:    job.jobTitle,
+        companyName: job.company,
+        applyUrl:    job.applyUrl,
+      }),
+    }).catch(() => {})
 
     logReviewEvent({
       event:        "submitted_manually",
@@ -106,9 +104,8 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
         jobId: job.jobId,
       },
     })
-    onClose()
-    setSubmitting(false)
-  }, [job, checklist, onMarkSubmitted, onClose])
+    onAdvance()
+  }, [job, checklist, onMarkSubmitted, onAdvance])
 
   const handleSkip = useCallback(() => {
     logReviewEvent({
@@ -120,8 +117,8 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
       warningCount: checklist.warnings.length,
     })
     onSkip(job.queueId)
-    onClose()
-  }, [job, checklist, onSkip, onClose])
+    onAdvance()
+  }, [job, checklist, onSkip, onAdvance])
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end">
@@ -253,12 +250,9 @@ export function BulkReviewDrawer({ job, onClose, onOpenApp, onMarkSubmitted, onS
             <button
               type="button"
               onClick={handleMarkSubmitted}
-              disabled={submitting}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
             >
-              {submitting
-                ? <Loader2 className="h-3 w-3 animate-spin" />
-                : <Send className="h-3 w-3" />}
+              <Send className="h-3 w-3" />
               Mark submitted
             </button>
             <button
