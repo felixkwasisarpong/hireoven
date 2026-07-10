@@ -28,6 +28,15 @@ import type { AlertFrequency, Job, NotificationChannel, NotificationType } from 
 
 const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
 
+// Accumulation window: after an alert notifies a user, hold further matches for
+// this many minutes and roll them into the next send — so a user gets at most
+// one alert email per window instead of a ping on every 5-min sweep / real-time
+// batch. Matches arriving mid-window stay un-recorded, so they accumulate.
+// Must be < the lookback window (instantNotifyWindowMinutes) so held-back jobs
+// are still eligible when the window elapses. Env-overridable.
+const ALERT_ACCUMULATE_MS =
+  Math.max(0, Number(process.env.ALERT_ACCUMULATE_MINUTES ?? "30")) * 60_000
+
 type ProfileChannels = {
   id: string
   email: string | null
@@ -111,6 +120,18 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
       const profile = await fetchProfileChannels(userId)
       if (!profile || profile.alert_frequency !== "instant") continue
       if (!profile.email_alerts && !profile.push_alerts) continue
+
+      // Accumulation cooldown: if any of this user's matched alerts fired within
+      // the window, skip now — the fresh jobs stay un-recorded and roll into the
+      // next send once the window elapses (batching, not per-sweep spam).
+      if (ALERT_ACCUMULATE_MS > 0 && entry.alertIds.size > 0) {
+        const { rows } = await getPostgresPool().query<{ last: string | null }>(
+          `SELECT max(last_triggered_at) AS last FROM job_alerts WHERE id = ANY($1::uuid[])`,
+          [[...entry.alertIds]],
+        )
+        const lastMs = rows[0]?.last ? new Date(rows[0].last).getTime() : 0
+        if (lastMs && Date.now() - lastMs < ALERT_ACCUMULATE_MS) continue
+      }
 
       const fresh: Job[] = []
       for (const job of entry.jobs.values()) {
