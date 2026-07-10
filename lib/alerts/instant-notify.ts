@@ -74,9 +74,16 @@ async function recordNotification(
   const pool = getPostgresPool()
   try {
     await pool.query(
+      // The arbiter index (uniq_alert_notifications_user_job_type) is PARTIAL, so
+      // the ON CONFLICT MUST repeat its predicate — otherwise Postgres raises
+      // 42P10 ("no unique/exclusion constraint matching"), the row is never
+      // recorded, and the same job re-notifies on every sweep. This exact bug
+      // silently disabled all alert dedup until 2026-07-10.
       `INSERT INTO alert_notifications (user_id, job_id, alert_id, channel, notification_type)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, job_id, notification_type) DO NOTHING`,
+       ON CONFLICT (user_id, job_id, notification_type)
+         WHERE user_id IS NOT NULL AND job_id IS NOT NULL
+       DO NOTHING`,
       [userId, jobId, alertId, channel, notificationType],
     )
   } catch (error) {
