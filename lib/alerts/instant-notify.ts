@@ -40,7 +40,7 @@ const INSTANT_EMAIL_MIN_MATCH_SCORE = (() => {
 // Must be < the lookback window (instantNotifyWindowMinutes) so held-back jobs
 // are still eligible when the window elapses. Env-overridable.
 const ALERT_ACCUMULATE_MS =
-  Math.max(0, Number(process.env.ALERT_ACCUMULATE_MINUTES ?? "30")) * 60_000
+  Math.max(0, Number(process.env.ALERT_ACCUMULATE_MINUTES ?? "60")) * 60_000
 
 type ProfileChannels = {
   id: string
