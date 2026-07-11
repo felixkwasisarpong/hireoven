@@ -26,7 +26,12 @@ import { scoreJobsForUser } from "@/lib/matching/batch-scorer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
 
-const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
+// Minimum resume-match score for a job to be included in an instant alert email
+// (env-tunable). Raised 75 -> 85 for higher-quality, fewer emails.
+const INSTANT_EMAIL_MIN_MATCH_SCORE = (() => {
+  const n = Number(process.env.INSTANT_EMAIL_MIN_MATCH_SCORE ?? "85")
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 85
+})()
 
 // Accumulation window: after an alert notifies a user, hold further matches for
 // this many minutes and roll them into the next send — so a user gets at most
@@ -35,7 +40,7 @@ const INSTANT_EMAIL_MIN_MATCH_SCORE = 75
 // Must be < the lookback window (instantNotifyWindowMinutes) so held-back jobs
 // are still eligible when the window elapses. Env-overridable.
 const ALERT_ACCUMULATE_MS =
-  Math.max(0, Number(process.env.ALERT_ACCUMULATE_MINUTES ?? "30")) * 60_000
+  Math.max(0, Number(process.env.ALERT_ACCUMULATE_MINUTES ?? "60")) * 60_000
 
 type ProfileChannels = {
   id: string
