@@ -28,6 +28,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // When alert accumulation is on (default), the /api/cron/instant-notify sweep
+  // is the SOLE accumulator: it filters the whole jobs table by first_detected_at
+  // across BOTH the harvester and the crawler, so every source's jobs batch
+  // together over the window. This per-batch real-time path only sees ONE
+  // source's current insert — sending from it would start the accumulation
+  // cooldown and starve the other source's jobs (the "crawl-only" symptom).
+  // So when accumulation is enabled, defer entirely to the sweep.
+  if ((process.env.ALERT_ACCUMULATE_MINUTES ?? "60") !== "0") {
+    return NextResponse.json({ ok: true, deferred: "accumulation-sweep", processed: 0 })
+  }
+
   const body = (await request.json().catch(() => ({}))) as { jobIds?: unknown }
   const ids = Array.isArray(body.jobIds)
     ? body.jobIds.filter((x): x is string => typeof x === "string").slice(0, MAX_IDS)
