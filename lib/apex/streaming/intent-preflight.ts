@@ -20,7 +20,7 @@ const BRAND_RE         = /\b(personal\s+brand|linkedin\s+(?:profile|post|content
 const AUTO_APPLY_RE = /\b(1.?click apply|one.?click apply|auto.?apply|set\s?up.{0,20}apply|pre.?approve.{0,20}appl|apply.{0,15}automatically|applies?\s+for\s+me)\b/i
 const TAILOR_RE     = /\b(tailor|tailor.?my.?resume|tailor.*resume|open.*resume.?studio)\b/i
 const BULK_PREP_RE  =
-  /(?:\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|apply)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:my|the|some|a\s+few|several)\s+)?(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:\S+\s+){0,4}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bstart\s+applying\b)/i
+  /(?:\b(prepare|queue|batch|bulk)\b.{0,80}\b(application[s]?|matches?|apply)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:my|the|some|a\s+few|several)\s+)?(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:\S+\s+){0,4}(?:jobs?|roles?|positions?|openings?|applications?|matches?))|(?:\bstart\s+applying\b)/i
 const WORKFLOW_RE   = /\b(workflow|step.?by.?step|roadmap|prepare.*application)\b/i
 const SEARCH_RE     = /\b(find|search|show|filter|discover)\b.{0,40}\b(job[s]?|role[s]?|position[s]?)\b/i
 const COMPANY_RE    = /\b(tell me about|does|what about|company|employer|sponsor)\b.{0,20}\b(sponsor|visa|h-?1b|hire|hiring)\b/i
