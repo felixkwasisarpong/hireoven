@@ -41,6 +41,16 @@ function parseClampedInt(
   return rounded
 }
 
+// Domain acronyms rarely appear verbatim in job titles ("Artificial
+// Intelligence", not "AI"), so a whole-word acronym search finds almost nothing
+// and bulk-apply silently falls back to unrelated roles. Expand the common ones
+// to their spelled-out forms + close synonyms so "apply to the top 2 ai jobs"
+// actually matches AI/ML roles.
+const ACRONYM_SYNONYMS: Record<string, string[]> = {
+  ai: ["ai", "artificial intelligence", "machine learning", "ml", "llm", "generative ai", "genai", "deep learning"],
+  ml: ["ml", "machine learning", "ai", "artificial intelligence", "deep learning", "mlops"],
+}
+
 // Strip the bulk-apply framing and return the meaningful condition remainder.
 // "apply to 3 jobs with java skill in it" → "java skill"
 // "apply to 5 remote healthcare jobs" → "healthcare"
@@ -130,17 +140,25 @@ export async function GET(request: NextRequest) {
     new Set(searchTerms.split(/\s+/).filter((w) => w.length >= 2))
   ).slice(0, 8)
   if (searchWords.length > 0) {
-    const wordConditions = searchWords.map((word) => {
-      if (word.length === 2) {
-        // Short acronyms (AI, ML, UX…): word-boundary regex avoids substring
-        // false positives (e.g. "AI" matching "PAID" or "TRAIN").
-        params.push(`\\y${word}\\y`)
+    // Single term → SQL fragment. Short bare acronyms (AI, ML, UX…) use a
+    // word-boundary regex to avoid substring false positives ("AI" in "PAID"),
+    // longer terms / phrases use ILIKE.
+    const termCondition = (term: string): string => {
+      if (term.length <= 3 && !/[\s.]/.test(term)) {
+        params.push(`\\y${term}\\y`)
         const p = `$${params.length}`
         return `(j.title ~* ${p} OR j.description ~* ${p})`
       }
-      params.push(`%${word}%`)
+      params.push(`%${term}%`)
       const p = `$${params.length}`
       return `(j.title ILIKE ${p} OR j.description ILIKE ${p})`
+    }
+    const wordConditions = searchWords.map((word) => {
+      // Domain acronyms almost never appear verbatim in titles ("Artificial
+      // Intelligence", not "AI"), so a whole-word "ai" match finds nothing.
+      // Expand the common ones to their spelled-out forms + close synonyms.
+      const terms = ACRONYM_SYNONYMS[word] ?? [word]
+      return `(${terms.map(termCondition).join(" OR ")})`
     })
     conditions.push(`(${wordConditions.join(strictQuery ? " AND " : " OR ")})`)
   }
