@@ -77,31 +77,40 @@ function getLocationLabel(job: JobWithCompanyContext) {
 /** Returns an absolute proxy URL so email clients fetch logos through our
  *  server rather than hitting logo.dev directly (which validates the request
  *  origin and rejects requests from email-client IP ranges). */
+// Synthetic/discovery domains (adzuna-*.placeholder, *.greenhouse.discovered,
+// *.pinpoint-tenant, …) have no real logo — render the letter avatar instead of
+// a broken/globe image.
+const PLACEHOLDER_DOMAIN_RE = /placeholder|discovered|-employer|-tenant|\.apex(\b|$)/i
+function realDomain(domain: string | null | undefined): string | null {
+  if (!domain) return null
+  const d = domain.trim().toLowerCase()
+  return PLACEHOLDER_DOMAIN_RE.test(d) ? null : d
+}
+
 function logoProxyUrl(domain: string | null | undefined): string | null {
   if (!domain) return null
   const base = getBaseUrl()
   return `${base}/api/logo?domain=${encodeURIComponent(domain.trim().toLowerCase())}`
 }
 
-function renderJobRow(job: JobWithCompanyContext, index: number) {
+function renderJobRow(job: JobWithCompanyContext, index: number, matchScore?: number | null) {
   const co = job.company
   const companyName = co?.name ?? "Tracked company"
-  const proxyUrl = logoProxyUrl(co?.domain)
+  const proxyUrl = logoProxyUrl(realDomain(co?.domain))
 
   const logoHtml = proxyUrl
     ? `<img src="${esc(proxyUrl)}" alt="${esc(companyName)}" width="56" height="56"
           style="width:56px;height:56px;border-radius:10px;object-fit:contain;border:1px solid #e2e8f0;background:#fff;display:block;" />`
     : `<div style="width:56px;height:56px;border-radius:10px;background:linear-gradient(135deg,#FF5C18,#FF9A3C);font-size:22px;font-weight:800;color:#fff;text-align:center;line-height:56px;">${esc(companyName.charAt(0).toUpperCase())}</div>`
 
-  // Sponsorship score used as a proxy match signal when no AI score is available
-  const rawScore = job.sponsorship_score ?? null
-  const matchBadge = rawScore !== null && rawScore >= 70
+  // Real AI match score (0–100) when available, shown as an "X% match" badge.
+  const matchBadge = matchScore != null && matchScore >= 1
     ? (() => {
-        const s = Math.round(rawScore)
+        const s = Math.round(matchScore)
         const color = s >= 85 ? "#15803d" : "#1d4ed8"
         const bg   = s >= 85 ? "#f0fdf4" : "#eff6ff"
         const bd   = s >= 85 ? "#bbf7d0" : "#bfdbfe"
-        return `<span style="display:inline-block;background:${bg};border:1px solid ${bd};color:${color};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${s}% signal</span>`
+        return `<span style="display:inline-block;background:${bg};border:1px solid ${bd};color:${color};border-radius:4px;padding:2px 7px;font-size:11px;font-weight:700;">${s}% match</span>`
       })()
     : ""
 
@@ -318,7 +327,12 @@ export async function hasReachedEmailRateLimit(userId: string): Promise<boolean>
 
 // ── Email senders ─────────────────────────────────────────────────────────────
 
-export async function sendEmailAlert(userId: string, jobs: Job[], alertName: string): Promise<void> {
+export async function sendEmailAlert(
+  userId: string,
+  jobs: Job[],
+  alertName: string,
+  scores?: ReadonlyMap<string, { overall_score: number }>,
+): Promise<void> {
   if (!resend) throw new Error("Missing RESEND_API_KEY")
 
   const [profile, hydratedJobs] = await Promise.all([
@@ -329,7 +343,7 @@ export async function sendEmailAlert(userId: string, jobs: Job[], alertName: str
 
   const total = hydratedJobs.length
   const visible = hydratedJobs.slice(0, 5)
-  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
+  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i, scores?.get(j.id)?.overall_score)).join("")
   const viewAllLabel = total > 5 ? `See all ${total} matches` : "View all matching jobs"
 
   const topCompanies = [...new Set(visible.slice(0, 2).map(j => j.company?.name).filter(Boolean))]

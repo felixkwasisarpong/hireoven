@@ -141,11 +141,13 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
 
       // Email is score-gated; push is not (matches the prior per-job behaviour).
       let emailJobs = fresh
+      let scores: Awaited<ReturnType<typeof scoreJobsForUser>> | undefined
       if (profile.email_alerts) {
         try {
-          const scores = await scoreJobsForUser(userId, fresh.map((j) => j.id))
+          scores = await scoreJobsForUser(userId, fresh.map((j) => j.id))
+          const scored = scores
           emailJobs = fresh.filter((j) => {
-            const s = scores.get(j.id)
+            const s = scored.get(j.id)
             return !s || s.overall_score >= INSTANT_EMAIL_MIN_MATCH_SCORE
           })
         } catch {
@@ -158,7 +160,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
       if (!channel) continue
 
       try {
-        if (emailSent) await sendEmailAlert(userId, emailJobs, entry.name)
+        if (emailSent) await sendEmailAlert(userId, emailJobs, entry.name, scores)
         if (profile.push_alerts) await sendBatchPushNotification(userId, fresh, "alert")
         for (const job of fresh) {
           await recordNotification(userId, job.id, channel, "alert")
