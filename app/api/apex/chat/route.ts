@@ -312,7 +312,7 @@ function detectInterviewType(message: string): string | undefined {
 //   "apply for 3 roles"
 //   "start applying to 10 positions"
 const BULK_PREP_RE =
-  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:my|the|some|a\s+few|several)\s+)?(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:\S+\s+){0,4}(?:jobs?|roles?|positions?|openings?|applications?))|(?:\bapply\s+(?:to|for)\s+(?:my\s+)?(?:saved|top|best|watchlist)\s+(?:jobs?|roles?|positions?|openings?))|(?:\bstart\s+applying\b)/i
+  /(?:\b(?:prepare|queue|batch|bulk)\b.{0,80}\b(?:jobs?|roles?|positions?|openings?|application[s]?|matches?|apply|applying)\b)|(?:\bapply\s+(?:to|for)\s+(?:(?:my|the|some|a\s+few|several)\s+)?(?:(?:top|best|strongest|highest)\s+)?\d+\s+(?:\S+\s+){0,4}(?:jobs?|roles?|positions?|openings?|applications?|matches?))|(?:\bapply\s+(?:to|for)\s+(?:my\s+)?(?:saved|top|best|watchlist)\s+(?:jobs?|roles?|positions?|openings?|matches?))|(?:\bstart\s+applying\b)/i
 
 // Intents that require a resolved job context (tailor, workflow, "best job" open)
 const NEEDS_JOB_RESOLVE_RE = /\b(tailor|tailor.?my|prepare.?application|prepare.?my.?resume|workflow.*job|open.?strong|strongest.?match|best.?saved|my.?best.*job|best.*matching)\b/i
@@ -361,7 +361,7 @@ function extractBulkRoleHint(message: string): string {
     .replace(/\b(apply\s+(?:to|for)|queue|batch|bulk|prepare|start\s+applying)\b/gi, "")
     .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
     .replace(/\b\d+\b/g, "")
-    .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
+    .replace(/\b(jobs?|roles?|positions?|openings?|applications?|matches?|applying)\b/gi, "")
     .replace(/\b(remote|onsite|on.?site|hybrid|in.?office)\b/gi, "")
     .replace(/\b(h.?1b|visa|sponsor(?:ship)?)\b/gi, "")
     .replace(/\b(ats|greenhouse|lever|workday|ashby(?:hq)?|icims|smart\s*recruiters?|bamboo(?:hr)?)\b/gi, "")

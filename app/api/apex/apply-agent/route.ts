@@ -49,7 +49,7 @@ function parseClampedInt(
 function extractSearchTerms(raw: string): string {
   return raw
     .replace(/\b(apply\s+(to|for)|queue|batch|bulk|prepare|start\s+applying)\b/gi, "")
-    .replace(/\b(top|best|strongest|highest|matching|matched|scored?)\b/gi, "")
+    .replace(/\b(top|best|strongest|highest|matching|matched|matches?|scored?)\b/gi, "")
     .replace(/\b\d+\b/g, "")
     .replace(/\b(jobs?|roles?|positions?|openings?|applications?|applying)\b/gi, "")
     .replace(/\b(remote|onsite|on.?site|hybrid|in.?office)\b/gi, "")
@@ -168,9 +168,7 @@ export async function GET(request: NextRequest) {
 
   const where = conditions.join(" AND ")
 
-  try {
-    const { rows } = await pool.query<JobRow>(
-       `SELECT
+  const sql = `SELECT
          j.id,
          j.title,
          COALESCE(c.name, 'Unknown Company') AS company_name,
@@ -190,9 +188,21 @@ export async function GET(request: NextRequest) {
        ) AS jms ON TRUE
        WHERE ${where}
        ORDER BY jms.overall_score DESC NULLS LAST, j.first_detected_at DESC
-       LIMIT $${params.length + 1}`,
-      [...params, count],
-    )
+       LIMIT $${params.length + 1}`
+
+  try {
+    let { rows } = await pool.query<JobRow>(sql, [...params, count])
+
+    // Widening fallback: the bulk queue was flaky because it only looked at the
+    // last `freshnessHours` (default 24h) AND excludes already-tracked jobs, so
+    // on a quiet day / after applying to the fresh batch it returned 0 → the
+    // "couldn't find jobs" dead-end. If nothing matched, retry once over the max
+    // 7-day window ($2 = freshnessHours) so top matches still surface.
+    if (rows.length === 0 && freshnessHours < 168) {
+      const widened = [...params]
+      widened[1] = 168
+      ;({ rows } = await pool.query<JobRow>(sql, [...widened, count]))
+    }
 
     const jobs: ApplyAgentJob[] = rows.map((row) => ({
       jobId:             row.id,
