@@ -160,27 +160,51 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
         }
       }
 
-      const emailSent = Boolean(profile.email_alerts) && emailJobs.length > 0
-      const channel = combineChannels({ emailSent, pushSent: Boolean(profile.push_alerts) })
+      const wantEmail = Boolean(profile.email_alerts) && emailJobs.length > 0
+      const wantPush = Boolean(profile.push_alerts)
+
+      // Each channel is attempted independently: a failure in one must not
+      // suppress the other, and — critically — must not skip recordNotification +
+      // the last_triggered_at stamp for the channel that DID land. The old
+      // combined try meant one throwing send (an unverified from-domain, a stale
+      // push subscription) swallowed the whole batch, so the alert never recorded
+      // and re-fired the same jobs every sweep forever. Failures are now logged —
+      // they were silently swallowed, which is exactly why this went unnoticed.
+      let emailOk = false
+      let pushOk = false
+      if (wantEmail) {
+        try {
+          await sendEmailAlert(userId, emailJobs, entry.name, scores)
+          emailOk = true
+        } catch (err) {
+          console.error(`[instant-notify] email send failed for ${userId}:`, err)
+        }
+      }
+      if (wantPush) {
+        try {
+          await sendBatchPushNotification(userId, fresh, "alert")
+          pushOk = true
+        } catch (err) {
+          console.error(`[instant-notify] push send failed for ${userId}:`, err)
+        }
+      }
+
+      const channel = combineChannels({ emailSent: emailOk, pushSent: pushOk })
+      // Nothing was delivered — leave the jobs un-recorded so a transient failure
+      // retries next sweep instead of being silently dropped.
       if (!channel) continue
 
-      try {
-        if (emailSent) await sendEmailAlert(userId, emailJobs, entry.name, scores)
-        if (profile.push_alerts) await sendBatchPushNotification(userId, fresh, "alert")
-        for (const job of fresh) {
-          await recordNotification(userId, job.id, channel, "alert")
-          markNotified(userId, job.id)
-        }
-        // Stamp last_triggered_at on every alert that matched this run
-        if (entry.alertIds.size > 0) {
-          const pool = getPostgresPool()
-          await pool.query(
-            `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
-            [[...entry.alertIds]],
-          )
-        }
-      } catch {
-        // per-user isolation
+      for (const job of fresh) {
+        await recordNotification(userId, job.id, channel, "alert")
+        markNotified(userId, job.id)
+      }
+      // Stamp last_triggered_at on every alert that matched this run
+      if (entry.alertIds.size > 0) {
+        const pool = getPostgresPool()
+        await pool.query(
+          `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
+          [[...entry.alertIds]],
+        )
       }
     }
 
