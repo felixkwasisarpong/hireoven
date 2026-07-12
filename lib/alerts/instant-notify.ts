@@ -240,8 +240,9 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     for (const [userId, byCompany] of watchByUser) {
       const profile = await fetchProfileChannels(userId)
       if (!profile || profile.alert_frequency !== "instant") continue
-      const channel = combineChannels({ emailSent: Boolean(profile.email_alerts), pushSent: Boolean(profile.push_alerts) })
-      if (!channel) continue
+      const wantEmail = Boolean(profile.email_alerts)
+      const wantPush = Boolean(profile.push_alerts)
+      if (!wantEmail && !wantPush) continue
 
       for (const [companyId, list] of byCompany) {
         const fresh: Job[] = []
@@ -252,15 +253,34 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
         if (fresh.length === 0) continue
         const companyName = companyNames.get(companyId) ?? "Tracked company"
 
-        try {
-          if (channel === "email" || channel === "both") await sendWatchlistAlert(userId, fresh, companyName)
-          if (channel === "push" || channel === "both") await sendBatchPushNotification(userId, fresh, "watchlist")
-          for (const job of fresh) {
-            await recordNotification(userId, job.id, channel, "watchlist")
-            markNotified(userId, job.id)
+        // Per-channel isolation (same fix as the alert section): a push failure —
+        // e.g. a stale subscription — must NOT prevent recording an email that
+        // did send. The old combined try swallowed the push throw and skipped
+        // recordNotification, so the watchlist company (e.g. "Apple is hiring")
+        // re-emailed EVERY 5-min sweep until the job aged out of the window.
+        let emailOk = false
+        let pushOk = false
+        if (wantEmail) {
+          try {
+            await sendWatchlistAlert(userId, fresh, companyName)
+            emailOk = true
+          } catch (err) {
+            console.error(`[instant-notify] watchlist email failed for ${userId}:`, err)
           }
-        } catch {
-          // per-user isolation
+        }
+        if (wantPush) {
+          try {
+            await sendBatchPushNotification(userId, fresh, "watchlist")
+            pushOk = true
+          } catch (err) {
+            console.error(`[instant-notify] watchlist push failed for ${userId}:`, err)
+          }
+        }
+        const delivered = combineChannels({ emailSent: emailOk, pushSent: pushOk })
+        if (!delivered) continue
+        for (const job of fresh) {
+          await recordNotification(userId, job.id, delivered, "watchlist")
+          markNotified(userId, job.id)
         }
       }
     }
@@ -309,12 +329,15 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
             await recordNotification(seeker.id, job.id, "push", "alert")
             markNotified(seeker.id, job.id)
           }
-        } catch {
-          // per-user isolation
+        } catch (err) {
+          // per-user isolation — log so stale-subscription failures are visible
+          console.error(`[instant-notify] sponsor push failed for ${seeker.id}:`, err)
         }
       }
     }
-  } catch {
-    // best-effort; callers must not fail on notification errors
+  } catch (err) {
+    // best-effort; callers must not fail on notification errors — but log it,
+    // silent swallowing here is exactly why the send bugs went unnoticed.
+    console.error("[instant-notify] processNotifications failed:", err)
   }
 }
