@@ -41,8 +41,15 @@ const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   ashby: 40_000,
   usajobs: 20_000,
   icims: 15_000,
-  // Workable's API is slow under load — 8s default caused 2k+ timeouts/day.
-  workable: 20_000,
+  // Workable's API is slow under CONTENTION, not rate-limited: isolated calls
+  // run ~300ms, but concurrent harvest load stretches the tail well past the
+  // ceiling (8s → 2k+ timeouts/day; 20s → ~110/6h). Crucially the residual
+  // failures are pure `timeout` with ZERO 429/403 — Workable isn't blocking us,
+  // so the fix is headroom for the slow tail, not backing off. 28s absorbs more
+  // of that tail while staying well inside the 180s per-company watchdog (3
+  // list retries + the detail pass still fit). Overridable via
+  // HARVESTER_WORKABLE_REQUEST_TIMEOUT_MS.
+  workable: 28_000,
   // OracleCloud REST pages can be large; 8s isn't enough for slower tenants.
   oraclecloud: 25_000,
   // Personio and JSONLD endpoints have variable latency; give them headroom.
