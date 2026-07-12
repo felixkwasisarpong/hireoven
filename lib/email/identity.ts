@@ -1,5 +1,10 @@
 function getSupportDomain() {
-  return process.env.MAIL_FROM_DOMAIN ?? "support.hireoven.com"
+  // MUST be a Resend-verified domain or every send throws "domain is not
+  // verified". Only the root `hireoven.com` is verified (DMARC added 2026-07-05);
+  // the `support.hireoven.com` subdomain never was, which silently broke ALL
+  // alert emails (alerts@support.hireoven.com → rejected). Default to the
+  // verified root; override via MAIL_FROM_DOMAIN once a subdomain is verified.
+  return process.env.MAIL_FROM_DOMAIN ?? "hireoven.com"
 }
 
 function formatFrom(displayName: string, email: string) {
