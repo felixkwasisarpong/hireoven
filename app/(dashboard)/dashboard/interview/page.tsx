@@ -6,6 +6,7 @@ import { History } from "lucide-react"
 import InterviewHubCards from "@/components/interview/InterviewHubCards"
 import RecommendedJobsList from "@/components/interview/RecommendedJobsList"
 import RecentSessionsList from "@/components/interview/RecentSessionsList"
+import UpcomingInterviews from "@/components/interview/UpcomingInterviews"
 
 export const dynamic = "force-dynamic"
 
@@ -173,6 +174,8 @@ export default async function InterviewHubPage() {
             Session history
           </Link>
         </div>
+
+        <UpcomingInterviews className="mb-5" />
 
         <div className="mb-7">
           <InterviewHubCards />

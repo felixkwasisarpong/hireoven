@@ -31,6 +31,8 @@ export interface InterviewSession {
   status: InterviewStatus
   durationTargetMin: number
   useResumeContext: boolean
+  scheduledAt: Date | null
+  scheduledTimezone: string | null
   startedAt: Date | null
   endedAt: Date | null
   createdAt: Date
@@ -112,6 +114,8 @@ function mapSession(row: Record<string, unknown>): InterviewSession {
     status: row.status as InterviewStatus,
     durationTargetMin: row.duration_target_min as number,
     useResumeContext: row.use_resume_context as boolean,
+    scheduledAt: row.scheduled_at ? new Date(row.scheduled_at as string) : null,
+    scheduledTimezone: (row.scheduled_timezone as string | null) ?? null,
     startedAt: row.started_at ? new Date(row.started_at as string) : null,
     endedAt: row.ended_at ? new Date(row.ended_at as string) : null,
     createdAt: new Date(row.created_at as string),
@@ -194,12 +198,15 @@ export async function createInterviewSession(input: {
   questionSet: InterviewQuestionSet
   durationTargetMin: number
   useResumeContext: boolean
+  scheduledAt?: Date | null
+  scheduledTimezone?: string | null
 }): Promise<InterviewSession> {
   const pool = getPostgresPool()
   const result = await pool.query<Record<string, unknown>>(
     `INSERT INTO interview_sessions
-       (user_id, job_id, type, persona, question_set, duration_target_min, use_resume_context)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (user_id, job_id, type, persona, question_set, duration_target_min, use_resume_context,
+        scheduled_at, scheduled_timezone)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
     [
       input.userId,
@@ -209,6 +216,8 @@ export async function createInterviewSession(input: {
       input.questionSet,
       input.durationTargetMin,
       input.useResumeContext,
+      input.scheduledAt ? input.scheduledAt.toISOString() : null,
+      input.scheduledTimezone ?? null,
     ]
   )
   return mapSession(result.rows[0])
@@ -248,8 +257,8 @@ export async function listRecentSessions(
   const result = await pool.query<Record<string, unknown>>(
     `SELECT
        s.id, s.user_id, s.job_id, s.type, s.persona, s.question_set, s.status,
-       s.duration_target_min, s.use_resume_context, s.started_at, s.ended_at,
-       s.created_at, s.updated_at,
+       s.duration_target_min, s.use_resume_context, s.scheduled_at, s.scheduled_timezone,
+       s.started_at, s.ended_at, s.created_at, s.updated_at,
        j.title  AS job_title,
        c.name   AS job_company,
        d.id             AS d_id,

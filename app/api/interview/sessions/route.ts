@@ -10,6 +10,14 @@ import {
   type InterviewPersona,
   type InterviewQuestionSet,
 } from "@/lib/apex/interview/queries"
+import {
+  MAX_CONCURRENT_LIVE_SESSIONS,
+  countOverlappingBookings,
+  isValidTimeZone,
+  resetRemindersForSession,
+  validateScheduledAt,
+} from "@/lib/interview/scheduling"
+import { sendScheduleConfirmationEmail } from "@/lib/interview/confirmation-email"
 
 export const runtime = "nodejs"
 
@@ -70,6 +78,8 @@ export async function POST(request: Request) {
     questionSet?: string
     durationTargetMin?: number
     useResumeContext?: boolean
+    scheduledAt?: string
+    timezone?: string
   }
 
   if (!VALID_TYPES.includes(body.type as typeof VALID_TYPES[number])) {
@@ -91,6 +101,20 @@ export async function POST(request: Request) {
   const type = body.type as typeof VALID_TYPES[number]
   // coding type always uses coding question set
   const questionSet = type === "coding" ? "coding" : (body.questionSet as InterviewQuestionSet)
+
+  // Optional scheduling — live sessions can be booked for a future slot
+  // instead of starting immediately.
+  let scheduledAt: Date | null = null
+  let scheduledTimezone: string | null = null
+  if (body.scheduledAt !== undefined) {
+    if (type !== "live") {
+      return NextResponse.json({ error: "Only live interviews can be scheduled" }, { status: 400 })
+    }
+    const validated = validateScheduledAt(body.scheduledAt)
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 })
+    scheduledAt = validated.scheduledAt
+    scheduledTimezone = body.timezone && isValidTimeZone(body.timezone) ? body.timezone : null
+  }
   const feature = type === "live" ? "interview_live" : "interview_prep"
   const plan = await getPlanForUserId(user.id)
   if (!canAccess(plan, feature)) {
@@ -112,6 +136,18 @@ export async function POST(request: Request) {
     }
   }
 
+  // Slot capacity check — scheduling into a fully-booked window is rejected so
+  // system load stays spread across quiet periods.
+  if (scheduledAt) {
+    const overlapping = await countOverlappingBookings(scheduledAt, body.durationTargetMin!)
+    if (overlapping >= MAX_CONCURRENT_LIVE_SESSIONS) {
+      return NextResponse.json(
+        { error: "That time slot is fully booked — pick another slot" },
+        { status: 409 }
+      )
+    }
+  }
+
   try {
     const session = await createInterviewSession({
       userId: user.id,
@@ -121,7 +157,51 @@ export async function POST(request: Request) {
       questionSet,
       durationTargetMin: body.durationTargetMin!,
       useResumeContext: body.useResumeContext,
+      scheduledAt,
+      scheduledTimezone,
     })
+
+    if (scheduledAt) {
+      await resetRemindersForSession(session.id, user.id, scheduledAt)
+
+      let jobTitle: string | null = null
+      let jobCompany: string | null = null
+      if (session.jobId) {
+        const pool = getPostgresPool()
+        const jobResult = await pool.query<{ title: string | null; company_name: string | null }>(
+          `SELECT j.title, c.name AS company_name
+           FROM jobs j
+           LEFT JOIN companies c ON c.id = j.company_id
+           WHERE j.id = $1
+           LIMIT 1`,
+          [session.jobId]
+        )
+        jobTitle = jobResult.rows[0]?.title ?? null
+        jobCompany = jobResult.rows[0]?.company_name ?? null
+      }
+
+      // Best-effort — the booking stands even if the confirmation email fails.
+      sendScheduleConfirmationEmail({
+        userId: user.id,
+        sessionId: session.id,
+        scheduledAt,
+        timeZone: scheduledTimezone,
+        durationMin: session.durationTargetMin,
+        jobTitle,
+        jobCompany,
+      }).catch((err) => {
+        console.error("[interview] schedule confirmation email failed:", err)
+      })
+
+      return NextResponse.json(
+        {
+          sessionId: session.id,
+          scheduledAt: scheduledAt.toISOString(),
+          redirectTo: `/dashboard/interview/scheduled/${session.id}`,
+        },
+        { status: 201 }
+      )
+    }
 
     return NextResponse.json(
       {
