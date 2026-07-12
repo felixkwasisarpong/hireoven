@@ -26,6 +26,7 @@ import { detectAdapter } from "@/lib/harvester/adapters"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { discoverCareersUrl, type DiscoveryProbe } from "@/lib/companies/careers-url-discovery"
 import { resolveDirectAtsUrl, type RenderHtml } from "@/lib/companies/ats-url-resolver"
+import { nameTokens } from "@/lib/companies/domain-resolution"
 import type { BrowserContext, Page } from "playwright"
 
 // Node 20.11's undici can throw an uncatchable ERR_INVALID_STATE in a microtask
@@ -75,7 +76,7 @@ async function withPage<T>(context: BrowserContext, fn: (page: Page) => Promise<
 }
 
 type Company = { id: string; name: string; domain: string }
-type MissReason = "no_page" | "no_ats_detected" | "unsupported_ats" | "ats_already_known" | "no_live_jobs" | "error"
+type MissReason = "no_page" | "no_ats_detected" | "unsupported_ats" | "ats_already_known" | "no_live_jobs" | "name_mismatch" | "error"
 
 async function resolveOne(
   pool: ReturnType<typeof getPostgresPool>,
@@ -114,6 +115,20 @@ async function resolveOne(
     const ats = det.adapter.name
     const slug = det.slug
     const careersUrl = canonicalCareersUrl(ats, slug) ?? resolved.directUrl
+
+    // 2b. STRICT name-match gate. The render pass over-resolves: a name-slug probe
+    // or a stray link can land on a DIFFERENT company's board (e.g. "Skylight" →
+    // Velux's Workday), which would enroll someone else's jobs under this company.
+    // Require a company-name token (>=3 chars) to appear in the ATS slug or its
+    // host before we trust the match. Intentionally strict — we'd rather skip a
+    // real board than enrol a mis-attributed one.
+    const atsHost = (() => { try { return new URL(resolved.directUrl).hostname } catch { return "" } })()
+    const toks = nameTokens(co.name).filter((t) => t.length >= 3)
+    const hay = `${slug} ${atsHost}`.toLowerCase()
+    if (!(toks.length > 0 && toks.some((t) => hay.includes(t)))) {
+      counts.miss.name_mismatch += 1
+      return
+    }
 
     // 3. dedup against a board another company already owns
     const dup = await pool.query<{ id: string }>(
@@ -216,7 +231,7 @@ async function main() {
     return t === "image" || t === "font" || t === "media" ? route.abort() : route.continue()
   })
 
-  const counts = { rendered: 0, ats: 0, jobs: 0, enrolled: 0, miss: { no_page: 0, no_ats_detected: 0, unsupported_ats: 0, ats_already_known: 0, no_live_jobs: 0, error: 0 } as Record<MissReason, number> }
+  const counts = { rendered: 0, ats: 0, jobs: 0, enrolled: 0, miss: { no_page: 0, no_ats_detected: 0, unsupported_ats: 0, ats_already_known: 0, no_live_jobs: 0, name_mismatch: 0, error: 0 } as Record<MissReason, number> }
   const hits: string[] = []
   const limit = pLimit(CONCURRENCY)
 
