@@ -62,6 +62,7 @@ import {
   type SafeProfile,
 } from "../autofill/safe-fields"
 import { queryAllDeep } from "../autofill/shadow-dom"
+import { detectBlockingCaptcha } from "../autofill/captcha-detect"
 import { findUnfilledRequiredFields } from "../autofill/required-fields"
 import {
   dispatchAutofillToChildFrames,
@@ -1309,6 +1310,11 @@ export class ApexBar {
   private confirmationTimer: ReturnType<typeof setInterval> | null = null
   private agentModeRunning: boolean = false
   private agentWaitingForLogin: boolean = false
+  // A visible, interactive, UNSOLVED CAPTCHA is blocking the flow. Like the
+  // login wait, we pause and keep re-checking instead of failing — but we never
+  // solve it (that's bot-evasion); the user solves it by hand and the run
+  // resumes automatically once the challenge clears.
+  private agentWaitingForCaptcha: boolean = false
   // Stop-at-review handoff: the agent filled every step and is parked on the
   // final review page waiting for the user to click submit. The run stays alive
   // in `waiting_review`; the user's submit click navigates to the confirmation
@@ -1777,6 +1783,14 @@ export class ApexBar {
           <div class="agent-login-text">
             <strong>Log in to continue</strong>
             <span>Apex will auto-fill your application once you're signed in.</span>
+          </div>
+        </div>` : ""}
+      ${this.agentWaitingForCaptcha ? `
+        <div class="agent-login-banner" role="status" aria-live="polite">
+          <span class="agent-login-icon">🧩</span>
+          <div class="agent-login-text">
+            <strong>Solve the CAPTCHA to continue</strong>
+            <span>Complete the challenge on the page — Apex resumes filling and submitting automatically once it clears.</span>
           </div>
         </div>` : ""}
       ${this.agentWaitingForReview ? `
@@ -3044,6 +3058,16 @@ export class ApexBar {
   }
 
   /**
+   * True when a visible, interactive, still-unsolved CAPTCHA is blocking the
+   * page. We never solve it (that is bot-evasion) — we only detect one so the
+   * run can pause, prompt the user, and resume once they clear it. Detection
+   * logic (and the deadlock-avoidance rationale) lives in captcha-detect.ts.
+   */
+  private isCaptchaPresent(): boolean {
+    return detectBlockingCaptcha(document)
+  }
+
+  /**
    * On an ATS job posting (no form yet), click the apply CTA — "I'm interested",
    * "Apply", "Apply now" — to navigate to the actual application form. Returns
    * true if it clicked something.
@@ -3430,7 +3454,7 @@ export class ApexBar {
    * when no run is active — the background ignores it unless this tab is the one
    * it is currently driving.
    */
-  private sendRunStatus(phase: "waiting_login" | "waiting_review" | "filling" | "failed", reason?: string): void {
+  private sendRunStatus(phase: "waiting_login" | "waiting_captcha" | "waiting_review" | "filling" | "failed", reason?: string): void {
     if (!chrome.runtime?.id) return
     chrome.runtime.sendMessage({ type: "AGENT_RUN_STATUS", phase, reason }, () => {
       void chrome.runtime.lastError
@@ -3496,8 +3520,21 @@ export class ApexBar {
         return { handled: false, waiting: true }
       }
 
-      // If we were waiting for login and now have a form, clear the banner.
+      // A CAPTCHA is blocking the page — pause and let the user solve it. We do
+      // NOT solve it. Keep the pending agent context so we re-trigger and resume
+      // (fill + submit) automatically once the challenge clears.
+      if (this.isCaptchaPresent()) {
+        this.agentWaitingForCaptcha = true
+        this.autofillStatus = "idle"
+        this.autofillError = null
+        this.render()
+        this.sendRunStatus("waiting_captcha")
+        return { handled: false, waiting: true }
+      }
+
+      // If we were waiting for login/captcha and now have a form, clear the banner.
       this.agentWaitingForLogin = false
+      this.agentWaitingForCaptcha = false
       // A fresh fill pass is starting — drop any prior review handoff state and
       // its submit-button highlight so they don't linger across pages.
       this.agentWaitingForReview = false
@@ -3603,6 +3640,18 @@ export class ApexBar {
           this.autofillError = null
           this.render()
           this.sendRunStatus("waiting_login")
+          return { handled: false, waiting: true }
+        }
+
+        // A CAPTCHA gating the submit (common on the final step) is likewise a
+        // pause-and-wait, not a failure — hold the context so we resume once the
+        // user clears it rather than dropping the job.
+        if (this.isCaptchaPresent()) {
+          this.agentWaitingForCaptcha = true
+          this.autofillStatus = "idle"
+          this.autofillError = null
+          this.render()
+          this.sendRunStatus("waiting_captcha")
           return { handled: false, waiting: true }
         }
 
