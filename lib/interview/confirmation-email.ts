@@ -93,11 +93,9 @@ export async function sendScheduleConfirmationEmail(input: {
             </tr>
           </table>
           <div style="font-size:13px;color:#64748b;margin-top:20px;line-height:1.7;">
-            <strong style="color:#475569;">Join link</strong> — open this when it's time:<br/>
-            <a href="${esc(joinUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(joinUrl)}</a>
-            <br/><br/>
-            <strong style="color:#475569;">Manage booking</strong> — reschedule, cancel, or download the .ics calendar file:<br/>
-            <a href="${esc(detailsUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(detailsUrl)}</a>
+            When it's time, <a href="${esc(joinUrl)}" style="color:#FF5C18;font-weight:600;">join your interview room</a>.<br/>
+            Need changes? <a href="${esc(detailsUrl)}" style="color:#64748b;">Manage this booking</a> —
+            reschedule, cancel, or download the .ics calendar file.
           </div>
         </td></tr>
         <tr><td style="padding:20px 4px 0;">
@@ -167,10 +165,10 @@ export async function sendScheduleCancelledEmail(input: {
             <strong style="color:#0f172a;">${esc(whenLabel)}</strong> was cancelled by our team.
             Your credits were not used.
           </div>
-          <div style="font-size:13px;color:#64748b;line-height:1.7;">
-            <strong style="color:#475569;">Book a new slot</strong>:<br/>
-            <a href="${esc(rebookUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(rebookUrl)}</a>
-          </div>
+          <a href="${esc(rebookUrl)}"
+             style="display:inline-block;background:#FF5C18;color:#ffffff;text-decoration:none;padding:10px 20px;border-radius:999px;font-size:13.5px;font-weight:700;">
+            Book a new slot
+          </a>
         </td></tr>
         <tr><td style="padding:20px 4px 0;">
           <div style="font-size:11px;color:#94a3b8;">&copy; ${new Date().getFullYear()} Hireoven. Jobs served fresh.</div>
