@@ -7,11 +7,17 @@ type Captured = { sql: string; params: unknown[] }
 
 function fakePool(): { pool: Pool; calls: Captured[] } {
   const calls: Captured[] = []
+  const record = async (sql: string, params: unknown[] = []) => {
+    calls.push({ sql, params })
+    return { rows: [] }
+  }
+  // fetchCandidateIds now runs inside a checked-out client so it can scope a
+  // `SET LOCAL statement_timeout` to just its SELECT; markFailure still uses
+  // pool.query directly. Support both, capturing every statement into `calls`.
+  const client = { query: record, release: () => {} }
   const pool = {
-    query: async (sql: string, params: unknown[]) => {
-      calls.push({ sql, params })
-      return { rows: [] }
-    },
+    query: record,
+    connect: async () => client,
   } as unknown as Pool
   return { pool, calls }
 }
@@ -56,11 +62,22 @@ test("processPendingDescriptionEnrichmentBatch: reclaims hidden fetchable ATS jo
     minDescriptionChars: 150,
   })
 
-  assert.equal(calls.length, 1)
-  assert.match(calls[0].sql, /hidden_low_quality/)
-  assert.match(calls[0].sql, /source_ats = ANY\(\$5::text\[\]\)/)
-  assert.match(calls[0].sql, /apply_url ~\* \$6/)
-  assert.equal(calls[0].params[3], 150)
-  assert.match(String(calls[0].params[4]), /icims/)
-  assert.match(String(calls[0].params[5]), /applytojob/)
+  // The candidate scan is wrapped in a txn with a scoped statement_timeout.
+  assert.ok(
+    calls.some((c) => /SET LOCAL statement_timeout/i.test(c.sql)),
+    "expected a scoped statement_timeout"
+  )
+  const select = calls.find((c) => /SELECT id\s+FROM jobs/i.test(c.sql))
+  assert.ok(select, "expected the candidate SELECT")
+  // Bounded by a first_detected_at window so the planner uses the index and
+  // early-terminates at the LIMIT instead of scanning all active rows.
+  assert.match(select!.sql, /first_detected_at > now\(\) - make_interval\(hours =>/)
+  assert.match(select!.sql, /hidden_low_quality/)
+  assert.match(select!.sql, /source_ats = ANY\(\$5::text\[\]\)/)
+  assert.match(select!.sql, /apply_url ~\* \$6/)
+  assert.equal(select!.params[3], 150)
+  assert.match(String(select!.params[4]), /icims/)
+  assert.match(String(select!.params[5]), /applytojob/)
+  // The window lookback is the 7th bind param.
+  assert.equal(typeof select!.params[6], "number")
 })

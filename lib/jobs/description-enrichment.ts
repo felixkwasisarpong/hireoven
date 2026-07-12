@@ -64,6 +64,31 @@ const DEFAULT_STALE_PROCESSING_MS = Math.max(
   Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_STALE_MS ?? "900000", 10)
 )
 
+// Bound the candidate scan to a recent first_detected_at window. The query is
+// `ORDER BY first_detected_at DESC LIMIT N`, so it only ever wants the newest
+// candidates — but WITHOUT a window the planner scans all ~2.2M active rows via
+// idx_jobs_is_active and sorts (~230s of DataFileRead). On the 4GB prod box
+// those scans orphaned when the cron's curl hit its `timeout` (Postgres does not
+// cancel a query when the HTTP client disconnects), piled up run-over-run, and
+// stalled the whole box. A first_detected_at bound lets the planner use
+// idx_jobs_first_detected_at and early-terminate at the LIMIT — same rows, ~30×
+// cheaper. 48h keeps pace with current inflow; older backlog (if any is still
+// enrichable) is a separate off-peak concern, not this hot-path cron's job.
+const DEFAULT_LOOKBACK_HOURS = Math.max(
+  1,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_LOOKBACK_HOURS ?? "48", 10)
+)
+
+// Hard ceiling on the candidate SELECT. Even with the window bound, a stats
+// drift or a cold cache must never let this scan run away and orphan-accumulate
+// again. It self-cancels via statement_timeout well inside the cron cadence; the
+// next run simply retries. Set via SET LOCAL so the pooled connection is never
+// left with a lingering timeout for its next borrower.
+const DEFAULT_CANDIDATE_QUERY_TIMEOUT_MS = Math.max(
+  5_000,
+  Number.parseInt(process.env.JOB_DESCRIPTION_ENRICHMENT_QUERY_TIMEOUT_MS ?? "90000", 10)
+)
+
 // --- Playwright fallback (off by default) -----------------------------------
 // When the plain HTTP fetch returns nothing usable, optionally re-try the URL
 // in a real browser. Heavy, so it's opt-in and tightly bounded: a small
@@ -232,28 +257,48 @@ async function fetchCandidateIds(
   limit: number,
   maxAttempts: number,
   staleMs: number,
-  minDescriptionChars: number
+  minDescriptionChars: number,
+  lookbackHours: number = DEFAULT_LOOKBACK_HOURS,
+  queryTimeoutMs: number = DEFAULT_CANDIDATE_QUERY_TIMEOUT_MS
 ): Promise<string[]> {
-  const { rows } = await pool.query<{ id: string }>(
-    `SELECT id
-       FROM jobs
-      WHERE is_active = true
-        AND ${enrichablePublicationStatusSql("$4", "$5", "$6")}
-        AND apply_url IS NOT NULL
-        AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $1
-        AND ${notProcessingOrStaleSql("$3")}
-      ORDER BY first_detected_at DESC NULLS LAST, updated_at DESC NULLS LAST
-      LIMIT $2`,
-    [
-      maxAttempts,
-      limit,
-      staleMs,
-      minDescriptionChars,
-      DESCRIPTION_ENRICHABLE_SOURCE_ATS,
-      DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN,
-    ]
-  )
-  return rows.map((row) => row.id)
+  // Run inside a short transaction so `SET LOCAL statement_timeout` scopes to
+  // just this SELECT and auto-resets on COMMIT — the pooled connection is never
+  // handed back with a lingering timeout. The `first_detected_at` bound ($7)
+  // keeps the planner on idx_jobs_first_detected_at with early LIMIT
+  // termination instead of a full is_active scan + sort.
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    await client.query(`SET LOCAL statement_timeout = ${Math.round(queryTimeoutMs)}`)
+    const { rows } = await client.query<{ id: string }>(
+      `SELECT id
+         FROM jobs
+        WHERE is_active = true
+          AND first_detected_at > now() - make_interval(hours => $7::int)
+          AND ${enrichablePublicationStatusSql("$4", "$5", "$6")}
+          AND apply_url IS NOT NULL
+          AND COALESCE((raw_data->'description_enrichment'->>'attempts')::int, 0) < $1
+          AND ${notProcessingOrStaleSql("$3")}
+        ORDER BY first_detected_at DESC NULLS LAST, updated_at DESC NULLS LAST
+        LIMIT $2`,
+      [
+        maxAttempts,
+        limit,
+        staleMs,
+        minDescriptionChars,
+        DESCRIPTION_ENRICHABLE_SOURCE_ATS,
+        DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN,
+        lookbackHours,
+      ]
+    )
+    await client.query("COMMIT")
+    return rows.map((row) => row.id)
+  } catch (err) {
+    await client.query("ROLLBACK").catch(() => {})
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 async function claimJob(
