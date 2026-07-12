@@ -13,7 +13,7 @@ import { fillRequiredAtsFields } from "./autofill/ashby-autofill"
 import { installFrameAutofillListener } from "./autofill/frame-autofill"
 import { installLearnedAnswerCapture } from "./autofill/learned-answers"
 import { getAutofillProfile, matchQuestions } from "./api-client"
-import { pickResumeFileInput } from "./autofill/resume-target"
+import { pickResumeFileInput, removeExistingResumeAttachment } from "./autofill/resume-target"
 import { extractLinkedInProfile, isOwnLinkedInProfile } from "./extractors/linkedin-profile"
 import { scrapeConnectionResults } from "./apex-connection-scanner"
 import { syncLinkedInBrandProfile } from "./api-client"
@@ -384,9 +384,11 @@ function registerMessageBridge(): void {
         }
         case "INJECT_RESUME_FILE": {
           const m = message as { base64: string; filename: string }
-          const result = injectResumeFile(m.base64, m.filename)
-          sendResponse(result)
-          break
+          void (async () => {
+            const result = await injectResumeFile(m.base64, m.filename)
+            sendResponse(result)
+          })()
+          return true
         }
         case "EXECUTE_APEX_COMMAND": {
           void (async () => {
@@ -674,7 +676,7 @@ function findDropzoneFor(input: HTMLInputElement): HTMLElement {
   return row ?? input.parentElement ?? input
 }
 
-function injectResumeFile(base64: string, filename: string): { type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string } {
+async function injectResumeFile(base64: string, filename: string): Promise<{ type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string; removedExisting?: boolean }> {
   try {
     // Convert base64 → Uint8Array
     const binary = atob(base64)
@@ -688,6 +690,11 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
     const blob = new Blob([bytes], { type: mimeType })
     const file = new File([blob], filename, { type: mimeType, lastModified: Date.now() })
 
+    // Replace any résumé already on the form: clear the stale attachment first,
+    // then inject, so the tailored résumé is the one that's submitted.
+    const removedExisting = removeExistingResumeAttachment()
+    if (removedExisting) await new Promise((r) => setTimeout(r, 400))
+
     // Find the résumé *submission* input — scored, not first-match, so the
     // résumé doesn't land in an "Autofill from resume" parser banner that
     // sits above the real Resume field (Ashby/Greenhouse-react). Keep the
@@ -696,7 +703,7 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
       pickResumeFileInput(document) ??
       [...document.querySelectorAll<HTMLInputElement>('input[type="file"]')].find(isResumeFileInput) ??
       document.querySelector<HTMLInputElement>('input[type="file"]')
-    if (!target) return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: "No file input found" }
+    if (!target) return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: "No file input found", removedExisting }
 
     const dt = new DataTransfer()
     dt.items.add(file)
@@ -729,8 +736,8 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
     // verify a dropzone's internal React state, but the drop event is fired.)
     const injected = target.files != null && target.files.length > 0
     return injected
-      ? { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector }
-      : { type: "INJECT_RESUME_FILE_RESULT", injected: false, selector, error: "File was rejected by the form" }
+      ? { type: "INJECT_RESUME_FILE_RESULT", injected: true, selector, removedExisting }
+      : { type: "INJECT_RESUME_FILE_RESULT", injected: false, selector, error: "File was rejected by the form", removedExisting }
   } catch (err) {
     return { type: "INJECT_RESUME_FILE_RESULT", injected: false, error: String(err) }
   }

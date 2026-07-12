@@ -82,3 +82,48 @@ export function pickResumeFileInput(doc: Document = document): HTMLInputElement 
   }
   return best?.el ?? inputs[0] ?? null
 }
+
+/**
+ * When a résumé is already attached to the form — a returning applicant, a
+ * profile prefill, or a prior step — the tailored résumé must REPLACE it, not
+ * sit beside the stale file. Find a remove/delete control scoped to a résumé
+ * file attachment and click it, so the field is clear before we inject. Scoped
+ * to BOTH a résumé context AND an actual filename so we never click an unrelated
+ * "remove" (a cover letter, a portfolio item, some other page control). Returns
+ * true if it removed something.
+ */
+export function removeExistingResumeAttachment(root: Document = document): boolean {
+  const RESUME_HINT = /r[eé]sum[eé]|\bcv\b|curriculum/i
+  const FILE_NAME = /\.(pdf|docx?|rtf|txt)\b/i
+  const REMOVE_LABEL = /\b(remove|delete|clear|discard)\b/i
+  const REMOVE_ICON = /^\s*[×✕✖✗xX]\s*$/
+
+  const controls = root.querySelectorAll<HTMLElement>(
+    'button, a[href], [role="button"], [aria-label], [title]',
+  )
+  for (const el of controls) {
+    const style = getComputedStyle(el)
+    if (el.hidden || style.display === "none" || style.visibility === "hidden") continue
+    const label = [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent]
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+    const isRemove =
+      REMOVE_LABEL.test(label) ||
+      REMOVE_ICON.test(el.textContent ?? "") ||
+      /(^|[-_ ])(remove|delete)([-_ ]|$)/i.test(el.className)
+    if (!isRemove) continue
+    // The control must sit inside a résumé file attachment — a container that
+    // mentions résumé/CV AND shows a filename — so we only clear the résumé.
+    const section =
+      el.closest<HTMLElement>(
+        'li, tr, [role="listitem"], section, fieldset, [class*="attach" i], [class*="upload" i], [class*="file" i], [class*="resume" i], [class*="document" i]',
+      ) ?? el.parentElement
+    const text = (section?.textContent ?? "").toLowerCase()
+    if (RESUME_HINT.test(text) && FILE_NAME.test(text)) {
+      el.click()
+      return true
+    }
+  }
+  return false
+}
