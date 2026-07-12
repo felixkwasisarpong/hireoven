@@ -10,6 +10,16 @@ import {
   type InterviewPersona,
   type InterviewQuestionSet,
 } from "@/lib/apex/interview/queries"
+import {
+  bookScheduledLiveSession,
+  countPendingScheduledSessions,
+  getJobContext,
+  isValidTimeZone,
+  resetRemindersForSession,
+  validateScheduledAt,
+} from "@/lib/interview/scheduling"
+import { sendScheduleConfirmationEmail } from "@/lib/interview/confirmation-email"
+import { creditsForDuration, getBalance } from "@/lib/apex/interview/credits"
 
 export const runtime = "nodejs"
 
@@ -70,6 +80,8 @@ export async function POST(request: Request) {
     questionSet?: string
     durationTargetMin?: number
     useResumeContext?: boolean
+    scheduledAt?: string
+    timezone?: string
   }
 
   if (!VALID_TYPES.includes(body.type as typeof VALID_TYPES[number])) {
@@ -91,6 +103,20 @@ export async function POST(request: Request) {
   const type = body.type as typeof VALID_TYPES[number]
   // coding type always uses coding question set
   const questionSet = type === "coding" ? "coding" : (body.questionSet as InterviewQuestionSet)
+
+  // Optional scheduling — live sessions can be booked for a future slot
+  // instead of starting immediately.
+  let scheduledAt: Date | null = null
+  let scheduledTimezone: string | null = null
+  if (body.scheduledAt !== undefined) {
+    if (type !== "live") {
+      return NextResponse.json({ error: "Only live interviews can be scheduled" }, { status: 400 })
+    }
+    const validated = validateScheduledAt(body.scheduledAt)
+    if (!validated.ok) return NextResponse.json({ error: validated.error }, { status: 400 })
+    scheduledAt = validated.scheduledAt
+    scheduledTimezone = body.timezone && isValidTimeZone(body.timezone) ? body.timezone : null
+  }
   const feature = type === "live" ? "interview_live" : "interview_prep"
   const plan = await getPlanForUserId(user.id)
   if (!canAccess(plan, feature)) {
@@ -109,6 +135,86 @@ export async function POST(request: Request) {
     )
     if (ownershipCheck.rows.length === 0) {
       return NextResponse.json({ error: "Job not found in your pipeline" }, { status: 403 })
+    }
+  }
+
+  // Scheduled booking path — gate on credits up front (credits are deducted at
+  // join time, so require enough to cover every not-yet-started booking), then
+  // enforce slot capacity atomically.
+  if (scheduledAt) {
+    const cost = creditsForDuration(body.durationTargetMin!)
+    const [creditBalance, pendingCount] = await Promise.all([
+      getBalance(user.id, plan),
+      countPendingScheduledSessions(user.id),
+    ])
+    const needed = cost * (pendingCount + 1)
+    if (creditBalance.balance < needed) {
+      return NextResponse.json(
+        {
+          error:
+            pendingCount > 0
+              ? `You need ${needed} credits to cover your ${pendingCount + 1} scheduled sessions but have ${creditBalance.balance}. Buy a credit pack to schedule this one.`
+              : "Not enough live interview credits — buy a credit pack to schedule this session.",
+          code: "INSUFFICIENT_CREDITS",
+          balance: creditBalance.balance,
+          needed,
+        },
+        { status: 402 }
+      )
+    }
+
+    try {
+      const booking = await bookScheduledLiveSession({
+        userId: user.id,
+        jobId: body.jobId ?? null,
+        persona: body.persona as InterviewPersona,
+        questionSet,
+        durationTargetMin: body.durationTargetMin!,
+        useResumeContext: body.useResumeContext,
+        scheduledAt,
+        scheduledTimezone,
+      })
+      if (!booking.ok) {
+        return NextResponse.json(
+          { error: "That time slot is fully booked — pick another slot" },
+          { status: 409 }
+        )
+      }
+
+      // Side effects are best-effort — the booking stands even if they fail.
+      try {
+        await resetRemindersForSession(booking.sessionId, user.id, scheduledAt)
+      } catch (err) {
+        console.error("[interview] reminder creation failed:", err)
+      }
+      try {
+        const { jobTitle, jobCompany } = await getJobContext(body.jobId ?? null)
+        await sendScheduleConfirmationEmail({
+          userId: user.id,
+          sessionId: booking.sessionId,
+          scheduledAt,
+          timeZone: scheduledTimezone,
+          durationMin: body.durationTargetMin!,
+          jobTitle,
+          jobCompany,
+        })
+      } catch (err) {
+        console.error("[interview] schedule confirmation email failed:", err)
+      }
+
+      return NextResponse.json(
+        {
+          sessionId: booking.sessionId,
+          scheduledAt: scheduledAt.toISOString(),
+          redirectTo: `/dashboard/interview/scheduled/${booking.sessionId}`,
+        },
+        { status: 201 }
+      )
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to schedule session" },
+        { status: 500 }
+      )
     }
   }
 

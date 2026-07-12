@@ -31,6 +31,8 @@ export interface InterviewSession {
   status: InterviewStatus
   durationTargetMin: number
   useResumeContext: boolean
+  scheduledAt: Date | null
+  scheduledTimezone: string | null
   startedAt: Date | null
   endedAt: Date | null
   createdAt: Date
@@ -112,6 +114,8 @@ function mapSession(row: Record<string, unknown>): InterviewSession {
     status: row.status as InterviewStatus,
     durationTargetMin: row.duration_target_min as number,
     useResumeContext: row.use_resume_context as boolean,
+    scheduledAt: row.scheduled_at ? new Date(row.scheduled_at as string) : null,
+    scheduledTimezone: (row.scheduled_timezone as string | null) ?? null,
     startedAt: row.started_at ? new Date(row.started_at as string) : null,
     endedAt: row.ended_at ? new Date(row.ended_at as string) : null,
     createdAt: new Date(row.created_at as string),
@@ -238,6 +242,14 @@ export async function updateInterviewSessionStatus(
      WHERE id = $1`,
     [id, status, endedAt ?? null]
   )
+  // A session leaving the live pipeline must not keep firing reminders — this
+  // covers every cancel/abandon/complete path, not just the schedule routes.
+  if (status === 'abandoned' || status === 'completed') {
+    await pool.query(
+      `DELETE FROM interview_reminders WHERE session_id = $1 AND sent_at IS NULL`,
+      [id]
+    )
+  }
 }
 
 export async function listRecentSessions(
@@ -248,8 +260,8 @@ export async function listRecentSessions(
   const result = await pool.query<Record<string, unknown>>(
     `SELECT
        s.id, s.user_id, s.job_id, s.type, s.persona, s.question_set, s.status,
-       s.duration_target_min, s.use_resume_context, s.started_at, s.ended_at,
-       s.created_at, s.updated_at,
+       s.duration_target_min, s.use_resume_context, s.scheduled_at, s.scheduled_timezone,
+       s.started_at, s.ended_at, s.created_at, s.updated_at,
        j.title  AS job_title,
        c.name   AS job_company,
        d.id             AS d_id,
@@ -269,6 +281,9 @@ export async function listRecentSessions(
      LEFT JOIN companies c    ON c.id = j.company_id
      LEFT JOIN interview_debriefs d ON d.session_id = s.id
      WHERE s.user_id = $1
+       -- upcoming scheduled bookings live in the "Upcoming interviews" list,
+       -- not in recent-session history
+       AND NOT (s.status = 'setup' AND s.scheduled_at IS NOT NULL AND s.scheduled_at > NOW())
      ORDER BY s.created_at DESC
      LIMIT $2`,
     [userId, limit]
