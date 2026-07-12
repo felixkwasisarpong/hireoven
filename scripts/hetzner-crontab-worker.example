@@ -29,9 +29,10 @@ DATABASE_URL=REPLACE_ME
 
 # ── Schedules ───────────────────────────────────────────────────────────────────
 # m h dom mon dow  command
-# recent-jobs: recent high-match digest for users WITH an active alert, rendered with the
-# INSTANT email UI (sender.ts). Shares alert_notifications dedup with instant-notify (no double-send).
- */30 * * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
+# recent-jobs: DISABLED — instant-notify (below) is the sole alert-email path; it carries this
+# digest's matching logic. Running both double-sent + caused timing/repeat conflicts. The route is
+# also env-gated (RECENT_JOBS_ENABLED=true) so uncommenting this alone won't re-enable it.
+# */30 * * * *     cd $HIREOVEN_REPO && bash scripts/crons.sh recent-jobs        >>/var/log/hireoven/recent-jobs.log 2>&1
  */5 * * * *      cd $HIREOVEN_REPO && bash scripts/crons.sh instant-notify     >>/var/log/hireoven/instant-notify.log 2>&1
  * * * * *         cd $HIREOVEN_REPO && bash scripts/crons.sh signal-api-webhooks >>/var/log/hireoven/signal-api-webhooks.log 2>&1
  20 * * * *        flock -n /tmp/hireoven-crawl.lock -c 'cd $HIREOVEN_REPO && timeout 55m bash scripts/crons.sh crawl >>/var/log/hireoven/crawl.log 2>&1'
