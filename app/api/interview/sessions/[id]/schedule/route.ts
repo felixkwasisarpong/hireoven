@@ -2,12 +2,9 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getInterviewSession, updateInterviewSessionStatus } from "@/lib/apex/interview/queries"
 import {
-  MAX_CONCURRENT_LIVE_SESSIONS,
-  clearRemindersForSession,
-  countOverlappingBookings,
   isValidTimeZone,
+  rescheduleScheduledSession,
   resetRemindersForSession,
-  setSessionSchedule,
   validateScheduledAt,
 } from "@/lib/interview/scheduling"
 
@@ -35,21 +32,25 @@ export async function PATCH(
 
   const timezone = body.timezone && isValidTimeZone(body.timezone) ? body.timezone : session.scheduledTimezone
 
-  const overlapping = await countOverlappingBookings(
-    validated.scheduledAt,
-    session.durationTargetMin,
-    session.id
-  )
-  if (overlapping >= MAX_CONCURRENT_LIVE_SESSIONS) {
-    return NextResponse.json(
-      { error: "That time slot is fully booked — pick another slot" },
-      { status: 409 }
-    )
-  }
-
   try {
-    await setSessionSchedule(session.id, user.id, validated.scheduledAt, timezone)
-    await resetRemindersForSession(session.id, user.id, validated.scheduledAt)
+    const result = await rescheduleScheduledSession({
+      sessionId: session.id,
+      userId: user.id,
+      durationTargetMin: session.durationTargetMin,
+      scheduledAt: validated.scheduledAt,
+      scheduledTimezone: timezone,
+    })
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "That time slot is fully booked — pick another slot" },
+        { status: 409 }
+      )
+    }
+    try {
+      await resetRemindersForSession(session.id, user.id, validated.scheduledAt)
+    } catch (err) {
+      console.error("[interview] reminder reset failed on reschedule:", err)
+    }
     return NextResponse.json({ ok: true, scheduledAt: validated.scheduledAt.toISOString() })
   } catch (err) {
     return NextResponse.json(
@@ -76,8 +77,8 @@ export async function DELETE(
   }
 
   try {
+    // updateInterviewSessionStatus also clears the session's unsent reminders.
     await updateInterviewSessionStatus(session.id, "abandoned")
-    await clearRemindersForSession(session.id)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json(

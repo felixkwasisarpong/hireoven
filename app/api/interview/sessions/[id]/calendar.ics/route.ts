@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { getPostgresPool } from "@/lib/postgres/server"
 import { getInterviewSession } from "@/lib/apex/interview/queries"
-import { buildInterviewIcs } from "@/lib/interview/scheduling"
+import { buildInterviewIcs, getJobContext } from "@/lib/interview/scheduling"
+import { resolveAppOrigin } from "@/lib/app-url"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-}
-
 // GET /api/interview/sessions/[id]/calendar.ics — downloadable calendar event
 // for a scheduled live interview.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
@@ -28,27 +24,13 @@ export async function GET(
     return NextResponse.json({ error: "Session has no scheduled time" }, { status: 400 })
   }
 
-  let jobTitle: string | null = null
-  let jobCompany: string | null = null
-  if (session.jobId) {
-    const pool = getPostgresPool()
-    const result = await pool.query<{ title: string | null; company_name: string | null }>(
-      `SELECT j.title, c.name AS company_name
-       FROM jobs j
-       LEFT JOIN companies c ON c.id = j.company_id
-       WHERE j.id = $1
-       LIMIT 1`,
-      [session.jobId]
-    )
-    jobTitle = result.rows[0]?.title ?? null
-    jobCompany = result.rows[0]?.company_name ?? null
-  }
+  const { jobTitle, jobCompany } = await getJobContext(session.jobId)
 
   const ics = buildInterviewIcs({
     sessionId: session.id,
     scheduledAt: session.scheduledAt,
     durationMin: session.durationTargetMin,
-    joinUrl: `${getBaseUrl()}/dashboard/interview/live/${session.id}`,
+    joinUrl: `${resolveAppOrigin(request)}/dashboard/interview/live/${session.id}`,
     jobTitle,
     jobCompany,
   })

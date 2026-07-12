@@ -92,14 +92,6 @@ export default function SchedulePicker({ durationMin, value, onChange }: Schedul
     }
   }, [dayKey, timeZone, durationMin])
 
-  // Clear a selection that no longer belongs to the visible day.
-  useEffect(() => {
-    if (value && !loading && !slots.some((s) => s.startsAt === value)) {
-      onChange(null)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, loading])
-
   const recommended = slots.filter((s) => s.recommended && s.available)
 
   return (
@@ -112,7 +104,10 @@ export default function SchedulePicker({ durationMin, value, onChange }: Schedul
             <button
               key={key}
               type="button"
-              onClick={() => setDayKey(key)}
+              onClick={() => {
+                if (key !== dayKey) onChange(null) // selection belongs to the old day
+                setDayKey(key)
+              }}
               className={cn(
                 "shrink-0 rounded-lg border px-3 py-1.5 text-[12.5px] font-medium transition",
                 dayKey === key

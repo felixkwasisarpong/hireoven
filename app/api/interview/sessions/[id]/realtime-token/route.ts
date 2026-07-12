@@ -12,6 +12,7 @@ import {
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 import { getBalance, deductCredits } from "@/lib/apex/interview/credits"
+import { JOIN_OPENS_MINUTES } from "@/lib/interview/format"
 import type { InterviewPersona } from "@/lib/apex/interview/queries"
 
 export const runtime = "nodejs"
@@ -99,6 +100,21 @@ export async function POST(
   }
   if (session.status === "completed" || session.status === "abandoned") {
     return NextResponse.json({ error: "Session is already ended" }, { status: 400 })
+  }
+  // Scheduled bookings only open shortly before their slot — otherwise the
+  // capacity planning behind slot suggestions means nothing.
+  if (session.status === "setup" && session.scheduledAt) {
+    const opensAt = session.scheduledAt.getTime() - JOIN_OPENS_MINUTES * 60_000
+    if (Date.now() < opensAt) {
+      return NextResponse.json(
+        {
+          error: `This interview is scheduled for later — the room opens ${JOIN_OPENS_MINUTES} minutes before your slot.`,
+          code: "SCHEDULED_FOR_LATER",
+          scheduledAt: session.scheduledAt.toISOString(),
+        },
+        { status: 403 }
+      )
+    }
   }
   const plan = await getPlanForUserId(user.id)
   const feature = session.type === "live" ? "interview_live" : "interview_prep"

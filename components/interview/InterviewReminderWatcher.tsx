@@ -2,6 +2,7 @@
 
 import { useEffect } from "react"
 import { publishLocalNotificationOnce } from "@/lib/hooks/useNotifications"
+import { JOIN_GRACE_MINUTES, roleLabel } from "@/lib/interview/format"
 
 // Invisible dashboard-wide watcher: polls the user's booked live interviews
 // and raises in-app notifications as the start time approaches. Complements
@@ -15,14 +16,7 @@ type UpcomingSession = {
   jobCompany: string | null
 }
 
-const POLL_INTERVAL_MS = 60_000
-const JOIN_GRACE_MINUTES = 30
-
-function roleLabel(session: UpcomingSession) {
-  return session.jobTitle
-    ? `${session.jobTitle}${session.jobCompany ? ` @ ${session.jobCompany}` : ""}`
-    : "your live mock interview"
-}
+const REFETCH_INTERVAL_MS = 5 * 60_000
 
 function checkSessions(sessions: UpcomingSession[]) {
   const now = Date.now()
@@ -30,32 +24,37 @@ function checkSessions(sessions: UpcomingSession[]) {
     const minutesLeft = (new Date(session.scheduledAt).getTime() - now) / 60_000
     if (minutesLeft < -JOIN_GRACE_MINUTES) continue
 
+    const role = roleLabel(session.jobTitle, session.jobCompany, "your live mock interview")
+    // scheduledAt is baked into the dedupe key so a reschedule re-arms
+    // every tier for the new time.
+    const keyBase = `interview-reminder-${session.id}-${session.scheduledAt}`
+
     if (minutesLeft <= 10) {
       publishLocalNotificationOnce({
-        dedupeKey: `interview-reminder-${session.id}-soon`,
+        dedupeKey: `${keyBase}-soon`,
         cooldownMinutes: 24 * 60,
         type: "system",
         tone: "success",
         title: minutesLeft <= 0 ? "Your interview is starting now ⏰" : "Interview starting soon ⏰",
-        message: `Time for ${roleLabel(session)} — tap to join the room.`,
+        message: `Time for ${role} — tap to join the room.`,
         href: `/dashboard/interview/live/${session.id}`,
       })
     } else if (minutesLeft <= 60) {
       publishLocalNotificationOnce({
-        dedupeKey: `interview-reminder-${session.id}-hour`,
+        dedupeKey: `${keyBase}-hour`,
         cooldownMinutes: 24 * 60,
         type: "system",
         title: "Interview in about an hour",
-        message: `${roleLabel(session)} starts in ~${Math.round(minutesLeft)} min. Find a quiet spot and test your mic.`,
+        message: `${role} starts in ~${Math.round(minutesLeft)} min. Find a quiet spot and test your mic.`,
         href: `/dashboard/interview/scheduled/${session.id}`,
       })
     } else if (minutesLeft <= 24 * 60) {
       publishLocalNotificationOnce({
-        dedupeKey: `interview-reminder-${session.id}-day`,
+        dedupeKey: `${keyBase}-day`,
         cooldownMinutes: 7 * 24 * 60,
         type: "system",
         title: "Interview coming up 🎙️",
-        message: `${roleLabel(session)} is scheduled within the next day.`,
+        message: `${role} is scheduled within the next day.`,
         href: `/dashboard/interview/scheduled/${session.id}`,
       })
     }
@@ -64,35 +63,35 @@ function checkSessions(sessions: UpcomingSession[]) {
 
 export default function InterviewReminderWatcher() {
   useEffect(() => {
-    let sessions: UpcomingSession[] = []
     let cancelled = false
+    let checkTimer: ReturnType<typeof setInterval> | null = null
+
+    function watch(sessions: UpcomingSession[]) {
+      if (checkTimer) clearInterval(checkTimer)
+      checkTimer = null
+      if (sessions.length === 0) return // nothing booked — stay idle until refetch
+      checkSessions(sessions)
+      checkTimer = setInterval(() => checkSessions(sessions), 60_000)
+    }
 
     async function refresh() {
       try {
         const res = await fetch("/api/interview/schedule/upcoming")
-        if (!res.ok) return
+        if (!res.ok || cancelled) return
         const data = await res.json()
-        if (!cancelled) sessions = data.sessions ?? []
+        if (!cancelled) watch(data.sessions ?? [])
       } catch {
-        // transient — keep the last known list
+        // transient — keep watching the last known list
       }
     }
 
-    void refresh().then(() => {
-      if (!cancelled) checkSessions(sessions)
-    })
-
-    // Re-check every minute; refetch the list every five.
-    let ticks = 0
-    const timer = setInterval(() => {
-      ticks += 1
-      if (ticks % 5 === 0) void refresh()
-      checkSessions(sessions)
-    }, POLL_INTERVAL_MS)
+    void refresh()
+    const refetchTimer = setInterval(() => void refresh(), REFETCH_INTERVAL_MS)
 
     return () => {
       cancelled = true
-      clearInterval(timer)
+      clearInterval(refetchTimer)
+      if (checkTimer) clearInterval(checkTimer)
     }
   }, [])
 

@@ -1,45 +1,13 @@
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sendManaged } from "@/lib/email/provider"
 import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
+import { appUrl, esc } from "@/lib/email/templates/layout"
+import { buildGoogleCalendarUrl, roleLabel } from "@/lib/interview/format"
 
 // Booking-confirmation email for a scheduled live interview: when it is, a
-// join link, and add-to-calendar links (ICS download + Google Calendar).
-// Best-effort — a failed send must never fail the booking.
-
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-}
-
-function esc(value: string) {
-  return value
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#39;")
-}
-
-function googleCalendarStamp(date: Date): string {
-  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
-}
-
-export function buildGoogleCalendarUrl(input: {
-  scheduledAt: Date
-  durationMin: number
-  joinUrl: string
-  jobTitle?: string | null
-  jobCompany?: string | null
-}): string {
-  const end = new Date(input.scheduledAt.getTime() + input.durationMin * 60_000)
-  const title = input.jobTitle
-    ? `Live mock interview — ${input.jobTitle}${input.jobCompany ? ` @ ${input.jobCompany}` : ""}`
-    : "Live mock interview — Hireoven"
-  const params = new URLSearchParams({
-    action: "TEMPLATE",
-    text: title,
-    dates: `${googleCalendarStamp(input.scheduledAt)}/${googleCalendarStamp(end)}`,
-    details: `Your ${input.durationMin}-minute live AI mock interview on Hireoven.\nJoin here: ${input.joinUrl}`,
-    location: input.joinUrl,
-  })
-  return `https://calendar.google.com/calendar/render?${params.toString()}`
-}
+// join link, and add-to-calendar links. The Google Calendar link works without
+// a Hireoven session; the .ics download requires auth, so the email points at
+// the booking page (which offers it) rather than the raw file endpoint.
 
 export async function sendScheduleConfirmationEmail(input: {
   userId: string
@@ -58,10 +26,8 @@ export async function sendScheduleConfirmationEmail(input: {
   const profile = result.rows[0]
   if (!profile?.email) return
 
-  const base = getBaseUrl()
-  const joinUrl = `${base}/dashboard/interview/live/${input.sessionId}`
-  const detailsUrl = `${base}/dashboard/interview/scheduled/${input.sessionId}`
-  const icsUrl = `${base}/api/interview/sessions/${input.sessionId}/calendar.ics`
+  const joinUrl = appUrl(`/dashboard/interview/live/${input.sessionId}`)
+  const detailsUrl = appUrl(`/dashboard/interview/scheduled/${input.sessionId}`)
   const googleUrl = buildGoogleCalendarUrl({
     scheduledAt: input.scheduledAt,
     durationMin: input.durationMin,
@@ -77,9 +43,7 @@ export async function sendScheduleConfirmationEmail(input: {
     hour: "numeric", minute: "2-digit", timeZoneName: "short",
   }).format(input.scheduledAt)
 
-  const roleLine = input.jobTitle
-    ? `${input.jobTitle}${input.jobCompany ? ` @ ${input.jobCompany}` : ""}`
-    : "General practice"
+  const roleLine = roleLabel(input.jobTitle, input.jobCompany)
 
   const subject = `Interview scheduled — ${whenLabel}`
   const text =
@@ -88,9 +52,9 @@ export async function sendScheduleConfirmationEmail(input: {
     `Role: ${roleLine}\n` +
     `Duration: ${input.durationMin} minutes\n\n` +
     `Join: ${joinUrl}\n` +
-    `Add to calendar (ICS): ${icsUrl}\n` +
     `Add to Google Calendar: ${googleUrl}\n\n` +
-    `We'll remind you in the app before it starts. Manage the booking: ${detailsUrl}`
+    `We'll remind you in the app before it starts.\n` +
+    `Manage the booking (reschedule, cancel, download .ics): ${detailsUrl}`
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -121,9 +85,9 @@ export async function sendScheduleConfirmationEmail(input: {
                 </a>
               </td>
               <td style="padding-left:10px;">
-                <a href="${esc(icsUrl)}"
+                <a href="${esc(detailsUrl)}"
                    style="display:inline-block;border:1.5px solid #FF5C18;color:#FF5C18;text-decoration:none;padding:10px 20px;border-radius:999px;font-size:13.5px;font-weight:700;">
-                  Download .ics
+                  Manage booking
                 </a>
               </td>
             </tr>
@@ -131,7 +95,8 @@ export async function sendScheduleConfirmationEmail(input: {
           <div style="font-size:13px;color:#64748b;margin-top:20px;line-height:1.6;">
             When it's time, join from the reminder or directly:<br/>
             <a href="${esc(joinUrl)}" style="color:#FF5C18;">${esc(joinUrl)}</a><br/>
-            Need to reschedule or cancel? <a href="${esc(detailsUrl)}" style="color:#64748b;">Manage this booking</a>.
+            The booking page also offers a downloadable .ics calendar file,
+            rescheduling, and cancellation.
           </div>
         </td></tr>
         <tr><td style="padding:20px 4px 0;">

@@ -1,23 +1,12 @@
 import { redirect } from "next/navigation"
 import ScheduledConfirmation from "@/components/interview/ScheduledConfirmation"
 import { getSessionUser } from "@/lib/auth/session-user"
-import { getPostgresPool } from "@/lib/postgres/server"
 import { getInterviewSession } from "@/lib/apex/interview/queries"
-import { buildGoogleCalendarUrl } from "@/lib/interview/confirmation-email"
+import { getJobContext } from "@/lib/interview/scheduling"
+import { PERSONA_LABELS } from "@/lib/interview/format"
+import { resolveAppOrigin } from "@/lib/app-url"
 
 export const dynamic = "force-dynamic"
-
-const PERSONA_LABELS: Record<string, string> = {
-  friendly_recruiter: "Friendly recruiter",
-  skeptical_hm: "Skeptical hiring manager",
-  senior_staff: "Senior staff engineer",
-  founder: "Founder",
-  panel: "Panel",
-}
-
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-}
 
 export default async function ScheduledInterviewPage({
   params,
@@ -38,29 +27,7 @@ export default async function ScheduledInterviewPage({
     redirect("/dashboard/interview")
   }
 
-  let jobTitle: string | null = null
-  let jobCompany: string | null = null
-  if (session.jobId) {
-    const pool = getPostgresPool()
-    const result = await pool.query<{ title: string | null; company_name: string | null }>(
-      `SELECT j.title, c.name AS company_name
-       FROM jobs j
-       LEFT JOIN companies c ON c.id = j.company_id
-       WHERE j.id = $1
-       LIMIT 1`,
-      [session.jobId]
-    )
-    jobTitle = result.rows[0]?.title ?? null
-    jobCompany = result.rows[0]?.company_name ?? null
-  }
-
-  const googleCalendarUrl = buildGoogleCalendarUrl({
-    scheduledAt: session.scheduledAt,
-    durationMin: session.durationTargetMin,
-    joinUrl: `${getBaseUrl()}/dashboard/interview/live/${session.id}`,
-    jobTitle,
-    jobCompany,
-  })
+  const { jobTitle, jobCompany } = await getJobContext(session.jobId)
 
   return (
     <main className="min-h-full bg-[#fbfcfd]">
@@ -72,7 +39,7 @@ export default async function ScheduledInterviewPage({
           personaLabel={PERSONA_LABELS[session.persona] ?? session.persona}
           jobTitle={jobTitle}
           jobCompany={jobCompany}
-          googleCalendarUrl={googleCalendarUrl}
+          appOrigin={resolveAppOrigin()}
         />
       </div>
     </main>

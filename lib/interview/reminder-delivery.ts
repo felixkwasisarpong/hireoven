@@ -1,28 +1,19 @@
 import webpush from "web-push"
+import { getPostgresPool } from "@/lib/postgres/server"
+import { configureWebPush } from "@/lib/alerts/sender"
 import { getUserSubscriptions, removeSubscription } from "@/lib/alerts/push-subscriptions"
-import { env } from "@/lib/env"
+import { resolveAppOrigin } from "@/lib/app-url"
 import {
   listDueReminders,
-  markReminderSent,
   type DueReminder,
 } from "@/lib/interview/scheduling"
 
 // Drains due interview_reminders rows and delivers them as push notifications.
 // A reminder is marked sent after one delivery attempt — the in-app watcher
 // (UpcomingInterviews polling + local notifications) covers users without push
-// subscriptions, so we never retry-spam here.
-
-function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-}
-
-function configureWebPush() {
-  const publicKey = process.env.VAPID_PUBLIC_KEY
-  const privateKey = process.env.VAPID_PRIVATE_KEY
-  const email = env.VAPID_EMAIL
-  if (!publicKey || !privateKey || !email) throw new Error("Missing VAPID environment variables")
-  webpush.setVapidDetails(email, publicKey, privateKey)
-}
+// subscriptions, so we never retry-spam here. If web-push itself is
+// unconfigured we deliver nothing and leave the rows unsent, so reminders
+// resume (rather than vanish) once the VAPID env is fixed.
 
 function reminderCopy(reminder: DueReminder): { title: string; body: string } {
   const minutesLeft = Math.max(
@@ -48,8 +39,13 @@ function reminderCopy(reminder: DueReminder): { title: string; body: string } {
   }
 }
 
-async function pushReminder(reminder: DueReminder): Promise<boolean> {
-  const subscriptions = await getUserSubscriptions(reminder.userId)
+type PushSubscriptionRecord = Awaited<ReturnType<typeof getUserSubscriptions>>[number]
+
+async function pushReminder(
+  reminder: DueReminder,
+  subscriptions: PushSubscriptionRecord[],
+  baseUrl: string
+): Promise<boolean> {
   if (subscriptions.length === 0) return false
 
   const { title, body } = reminderCopy(reminder)
@@ -58,31 +54,33 @@ async function pushReminder(reminder: DueReminder): Promise<boolean> {
     body,
     icon: "/icon-192.png",
     badge: "/badge-72.png",
-    data: { url: `${getBaseUrl()}/dashboard/interview/live/${reminder.sessionId}` },
+    data: { url: `${baseUrl}/dashboard/interview/live/${reminder.sessionId}` },
     actions: [
       { action: "view", title: "Open" },
       { action: "dismiss", title: "Dismiss" },
     ],
   })
 
-  let delivered = false
-  for (const subscription of subscriptions) {
-    try {
-      await webpush.sendNotification(subscription, payload)
-      delivered = true
-    } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode
-      if (statusCode === 404 || statusCode === 410) {
-        await removeSubscription(subscription.endpoint)
-        continue
+  const results = await Promise.allSettled(
+    subscriptions.map(async (subscription) => {
+      try {
+        await webpush.sendNotification(subscription, payload)
+        return true
+      } catch (error) {
+        const statusCode = (error as { statusCode?: number }).statusCode
+        if (statusCode === 404 || statusCode === 410) {
+          await removeSubscription(subscription.endpoint)
+          return false
+        }
+        console.error(
+          `[interview-reminders] push failed for user ${reminder.userId}:`,
+          error instanceof Error ? error.message : error
+        )
+        return false
       }
-      console.error(
-        `[interview-reminders] push failed for user ${reminder.userId}:`,
-        error instanceof Error ? error.message : error
-      )
-    }
-  }
-  return delivered
+    })
+  )
+  return results.some((r) => r.status === "fulfilled" && r.value)
 }
 
 export async function deliverDueInterviewReminders(): Promise<{
@@ -92,27 +90,42 @@ export async function deliverDueInterviewReminders(): Promise<{
   const due = await listDueReminders()
   if (due.length === 0) return { processed: 0, pushed: 0 }
 
-  let webPushReady = true
   try {
     configureWebPush()
-  } catch {
-    webPushReady = false
+  } catch (err) {
+    // Leave the rows unsent — consuming them here would permanently drop
+    // reminders over a fixable misconfiguration.
+    console.error(
+      "[interview-reminders] web-push unconfigured, leaving reminders pending:",
+      err instanceof Error ? err.message : err
+    )
+    return { processed: 0, pushed: 0 }
   }
 
-  let pushed = 0
-  for (const reminder of due) {
-    if (webPushReady) {
-      try {
-        if (await pushReminder(reminder)) pushed += 1
-      } catch (error) {
-        console.error(
-          `[interview-reminders] delivery error for reminder ${reminder.id}:`,
-          error instanceof Error ? error.message : error
-        )
-      }
-    }
-    await markReminderSent(reminder.id)
-  }
+  const baseUrl = resolveAppOrigin()
+
+  // One subscription lookup per user, not per reminder.
+  const userIds = [...new Set(due.map((r) => r.userId))]
+  const subscriptionsByUser = new Map<string, PushSubscriptionRecord[]>(
+    await Promise.all(
+      userIds.map(async (userId) =>
+        [userId, await getUserSubscriptions(userId)] as const
+      )
+    )
+  )
+
+  const results = await Promise.allSettled(
+    due.map((reminder) =>
+      pushReminder(reminder, subscriptionsByUser.get(reminder.userId) ?? [], baseUrl)
+    )
+  )
+  const pushed = results.filter((r) => r.status === "fulfilled" && r.value).length
+
+  const pool = getPostgresPool()
+  await pool.query(
+    `UPDATE interview_reminders SET sent_at = NOW() WHERE id = ANY($1::uuid[])`,
+    [due.map((r) => r.id)]
+  )
 
   return { processed: due.length, pushed }
 }

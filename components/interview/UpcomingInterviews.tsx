@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { CalendarClock, Video } from "lucide-react"
+import {
+  PERSONA_LABELS,
+  countdownLabel,
+  isJoinOpen,
+  roleLabel,
+} from "@/lib/interview/format"
 import { cn } from "@/lib/utils"
 
 type UpcomingSession = {
@@ -12,16 +18,6 @@ type UpcomingSession = {
   persona: string
   jobTitle: string | null
   jobCompany: string | null
-}
-
-const JOIN_OPENS_MINUTES = 10
-
-const PERSONA_LABELS: Record<string, string> = {
-  friendly_recruiter: "Recruiter",
-  skeptical_hm: "Skeptical HM",
-  senior_staff: "Senior Peer",
-  founder: "Founder",
-  panel: "Panel",
 }
 
 function formatWhen(iso: string) {
@@ -34,19 +30,11 @@ function formatWhen(iso: string) {
   })
 }
 
-function countdownLabel(iso: string) {
-  const diffMin = Math.round((new Date(iso).getTime() - Date.now()) / 60_000)
-  if (diffMin <= 0) return "now"
-  if (diffMin < 60) return `in ${diffMin}m`
-  if (diffMin < 24 * 60) return `in ${Math.round(diffMin / 60)}h`
-  return `in ${Math.round(diffMin / (60 * 24))}d`
-}
-
 export default function UpcomingInterviews({ className }: { className?: string }) {
   const [sessions, setSessions] = useState<UpcomingSession[]>([])
   const [loaded, setLoaded] = useState(false)
   // Re-render every minute so countdowns and the join gate stay fresh.
-  const [, setTick] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
 
   useEffect(() => {
     fetch("/api/interview/schedule/upcoming")
@@ -55,7 +43,7 @@ export default function UpcomingInterviews({ className }: { className?: string }
       .catch(() => {})
       .finally(() => setLoaded(true))
 
-    const timer = setInterval(() => setTick((t) => t + 1), 60_000)
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
     return () => clearInterval(timer)
   }, [])
 
@@ -75,8 +63,7 @@ export default function UpcomingInterviews({ className }: { className?: string }
 
       <ul className="space-y-2">
         {sessions.map((session) => {
-          const joinable =
-            Date.now() >= new Date(session.scheduledAt).getTime() - JOIN_OPENS_MINUTES * 60_000
+          const joinable = isJoinOpen(session.scheduledAt, now)
           return (
             <li
               key={session.id}
@@ -86,21 +73,20 @@ export default function UpcomingInterviews({ className }: { className?: string }
                 <p className="text-[13px] font-semibold text-[#0d1424]">
                   {formatWhen(session.scheduledAt)}
                   <span className="ml-2 rounded-full bg-[#f3eeff] px-2 py-0.5 text-[10.5px] font-semibold text-[#7c3aed]">
-                    {countdownLabel(session.scheduledAt)}
+                    {countdownLabel(session.scheduledAt, now)}
                   </span>
                 </p>
                 <p className="mt-0.5 truncate text-[12px] text-[#5b6573]">
-                  {session.jobTitle
-                    ? `${session.jobTitle}${session.jobCompany ? ` @ ${session.jobCompany}` : ""}`
-                    : "General practice"}{" "}
-                  · {session.durationTargetMin} min ·{" "}
-                  {PERSONA_LABELS[session.persona] ?? session.persona}
+                  {roleLabel(session.jobTitle, session.jobCompany)} · {session.durationTargetMin}{" "}
+                  min · {PERSONA_LABELS[session.persona] ?? session.persona}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {joinable ? (
                   <Link
                     href={`/dashboard/interview/live/${session.id}`}
+                    target="_blank"
+                    rel="noopener"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-emerald-600"
                   >
                     <Video className="h-3.5 w-3.5" aria-hidden />

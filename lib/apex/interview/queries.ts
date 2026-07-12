@@ -198,15 +198,12 @@ export async function createInterviewSession(input: {
   questionSet: InterviewQuestionSet
   durationTargetMin: number
   useResumeContext: boolean
-  scheduledAt?: Date | null
-  scheduledTimezone?: string | null
 }): Promise<InterviewSession> {
   const pool = getPostgresPool()
   const result = await pool.query<Record<string, unknown>>(
     `INSERT INTO interview_sessions
-       (user_id, job_id, type, persona, question_set, duration_target_min, use_resume_context,
-        scheduled_at, scheduled_timezone)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       (user_id, job_id, type, persona, question_set, duration_target_min, use_resume_context)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING *`,
     [
       input.userId,
@@ -216,8 +213,6 @@ export async function createInterviewSession(input: {
       input.questionSet,
       input.durationTargetMin,
       input.useResumeContext,
-      input.scheduledAt ? input.scheduledAt.toISOString() : null,
-      input.scheduledTimezone ?? null,
     ]
   )
   return mapSession(result.rows[0])
@@ -247,6 +242,14 @@ export async function updateInterviewSessionStatus(
      WHERE id = $1`,
     [id, status, endedAt ?? null]
   )
+  // A session leaving the live pipeline must not keep firing reminders — this
+  // covers every cancel/abandon/complete path, not just the schedule routes.
+  if (status === 'abandoned' || status === 'completed') {
+    await pool.query(
+      `DELETE FROM interview_reminders WHERE session_id = $1 AND sent_at IS NULL`,
+      [id]
+    )
+  }
 }
 
 export async function listRecentSessions(
@@ -278,6 +281,9 @@ export async function listRecentSessions(
      LEFT JOIN companies c    ON c.id = j.company_id
      LEFT JOIN interview_debriefs d ON d.session_id = s.id
      WHERE s.user_id = $1
+       -- upcoming scheduled bookings live in the "Upcoming interviews" list,
+       -- not in recent-session history
+       AND NOT (s.status = 'setup' AND s.scheduled_at IS NOT NULL AND s.scheduled_at > NOW())
      ORDER BY s.created_at DESC
      LIMIT $2`,
     [userId, limit]

@@ -21,7 +21,7 @@ function getBaseUrl() {
   return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 }
 
-function configureWebPush() {
+export function configureWebPush() {
   const publicKey = process.env.VAPID_PUBLIC_KEY
   const privateKey = process.env.VAPID_PRIVATE_KEY
   const email = env.VAPID_EMAIL

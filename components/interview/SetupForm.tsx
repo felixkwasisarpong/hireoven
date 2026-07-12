@@ -177,12 +177,25 @@ export default function SetupForm({
       const data = await res.json()
       if (!res.ok) {
         preOpenedTab?.close()
+        if (res.status === 402 && data.code === "INSUFFICIENT_CREDITS") {
+          // Trip the credit gate above so the buy-credits screen takes over.
+          setCredits({ balance: data.balance ?? 0, costs: { short: data.needed ?? 1 } })
+          pushToast({ tone: "error", title: data.error ?? "Not enough interview credits" })
+          return
+        }
         pushToast({ tone: "error", title: data.error ?? "Failed to create session" })
         return
       }
 
+      const redirectTo = typeof data.redirectTo === "string" ? data.redirectTo : null
+      if (!redirectTo) {
+        preOpenedTab?.close()
+        pushToast({ tone: "error", title: "Unexpected server response — please try again" })
+        return
+      }
+
       if (opensInNewTab && preOpenedTab) {
-        preOpenedTab.location.href = data.redirectTo
+        preOpenedTab.location.href = redirectTo
         preOpenedTab.focus()
         router.push("/dashboard/interview")
         return
@@ -195,7 +208,7 @@ export default function SetupForm({
         })
       }
 
-      router.push(data.redirectTo)
+      router.push(redirectTo)
     } catch {
       preOpenedTab?.close()
       pushToast({ tone: "error", title: "Network error — please try again" })

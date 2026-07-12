@@ -1,11 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { CalendarPlus, CheckCircle2, Download, Video, X } from "lucide-react"
 import SchedulePicker from "@/components/interview/SchedulePicker"
 import { useToast } from "@/components/ui/ToastProvider"
+import {
+  JOIN_OPENS_MINUTES,
+  buildGoogleCalendarUrl,
+  countdownLabel,
+  isJoinOpen,
+  roleLabel,
+} from "@/lib/interview/format"
 import { cn } from "@/lib/utils"
 
 type ScheduledConfirmationProps = {
@@ -15,10 +22,9 @@ type ScheduledConfirmationProps = {
   personaLabel: string
   jobTitle: string | null
   jobCompany: string | null
-  googleCalendarUrl: string
+  /** Absolute origin for calendar links (server-resolved, avoids hydration drift). */
+  appOrigin: string
 }
-
-const JOIN_OPENS_MINUTES = 10
 
 function formatWhen(iso: string) {
   return new Date(iso).toLocaleString("en-US", {
@@ -31,14 +37,6 @@ function formatWhen(iso: string) {
   })
 }
 
-function countdownLabel(iso: string) {
-  const diffMin = Math.round((new Date(iso).getTime() - Date.now()) / 60_000)
-  if (diffMin <= 0) return "starting now"
-  if (diffMin < 60) return `in ${diffMin} min`
-  if (diffMin < 48 * 60) return `in ${Math.round(diffMin / 60)} hour${Math.round(diffMin / 60) === 1 ? "" : "s"}`
-  return `in ${Math.round(diffMin / (60 * 24))} days`
-}
-
 export default function ScheduledConfirmation({
   sessionId,
   scheduledAt: initialScheduledAt,
@@ -46,7 +44,7 @@ export default function ScheduledConfirmation({
   personaLabel,
   jobTitle,
   jobCompany,
-  googleCalendarUrl,
+  appOrigin,
 }: ScheduledConfirmationProps) {
   const router = useRouter()
   const { pushToast } = useToast()
@@ -55,12 +53,28 @@ export default function ScheduledConfirmation({
   const [rescheduling, setRescheduling] = useState(false)
   const [newSlot, setNewSlot] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  // Ticks so the join gate unlocks while the page stays open.
+  const [now, setNow] = useState(() => Date.now())
 
-  const joinable = useMemo(
-    () => Date.now() >= new Date(scheduledAt).getTime() - JOIN_OPENS_MINUTES * 60_000,
-    [scheduledAt]
-  )
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const joinable = isJoinOpen(scheduledAt, now)
   const icsUrl = `/api/interview/sessions/${sessionId}/calendar.ics`
+  // Built client-side from the CURRENT time so a reschedule updates the link.
+  const googleCalendarUrl = useMemo(
+    () =>
+      buildGoogleCalendarUrl({
+        scheduledAt: new Date(scheduledAt),
+        durationMin,
+        joinUrl: `${appOrigin}/dashboard/interview/live/${sessionId}`,
+        jobTitle,
+        jobCompany,
+      }),
+    [scheduledAt, durationMin, appOrigin, sessionId, jobTitle, jobCompany]
+  )
 
   async function confirmReschedule() {
     if (!newSlot) {
@@ -138,11 +152,9 @@ export default function ScheduledConfirmation({
         <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-5">
           <p className="text-[15px] font-bold text-slate-900">{formatWhen(scheduledAt)}</p>
           <p className="mt-1 text-[13px] text-slate-600">
-            Starts {countdownLabel(scheduledAt)} · {durationMin} min live session · {personaLabel}
+            Starts {countdownLabel(scheduledAt, now)} · {durationMin} min live session · {personaLabel}
           </p>
-          <p className="mt-0.5 text-[13px] text-slate-500">
-            {jobTitle ? `${jobTitle}${jobCompany ? ` @ ${jobCompany}` : ""}` : "General practice"}
-          </p>
+          <p className="mt-0.5 text-[13px] text-slate-500">{roleLabel(jobTitle, jobCompany)}</p>
         </div>
 
         {/* Add to calendar */}
@@ -165,6 +177,8 @@ export default function ScheduledConfirmation({
           </a>
           <Link
             href={`/dashboard/interview/live/${sessionId}`}
+            target="_blank"
+            rel="noopener"
             aria-disabled={!joinable}
             className={cn(
               "inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-[13px] font-semibold transition",

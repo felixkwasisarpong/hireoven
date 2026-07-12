@@ -11,13 +11,15 @@ import {
   type InterviewQuestionSet,
 } from "@/lib/apex/interview/queries"
 import {
-  MAX_CONCURRENT_LIVE_SESSIONS,
-  countOverlappingBookings,
+  bookScheduledLiveSession,
+  countPendingScheduledSessions,
+  getJobContext,
   isValidTimeZone,
   resetRemindersForSession,
   validateScheduledAt,
 } from "@/lib/interview/scheduling"
 import { sendScheduleConfirmationEmail } from "@/lib/interview/confirmation-email"
+import { creditsForDuration, getBalance } from "@/lib/apex/interview/credits"
 
 export const runtime = "nodejs"
 
@@ -136,14 +138,82 @@ export async function POST(request: Request) {
     }
   }
 
-  // Slot capacity check — scheduling into a fully-booked window is rejected so
-  // system load stays spread across quiet periods.
+  // Scheduled booking path — gate on credits up front (credits are deducted at
+  // join time, so require enough to cover every not-yet-started booking), then
+  // enforce slot capacity atomically.
   if (scheduledAt) {
-    const overlapping = await countOverlappingBookings(scheduledAt, body.durationTargetMin!)
-    if (overlapping >= MAX_CONCURRENT_LIVE_SESSIONS) {
+    const cost = creditsForDuration(body.durationTargetMin!)
+    const [creditBalance, pendingCount] = await Promise.all([
+      getBalance(user.id, plan),
+      countPendingScheduledSessions(user.id),
+    ])
+    const needed = cost * (pendingCount + 1)
+    if (creditBalance.balance < needed) {
       return NextResponse.json(
-        { error: "That time slot is fully booked — pick another slot" },
-        { status: 409 }
+        {
+          error:
+            pendingCount > 0
+              ? `You need ${needed} credits to cover your ${pendingCount + 1} scheduled sessions but have ${creditBalance.balance}. Buy a credit pack to schedule this one.`
+              : "Not enough live interview credits — buy a credit pack to schedule this session.",
+          code: "INSUFFICIENT_CREDITS",
+          balance: creditBalance.balance,
+          needed,
+        },
+        { status: 402 }
+      )
+    }
+
+    try {
+      const booking = await bookScheduledLiveSession({
+        userId: user.id,
+        jobId: body.jobId ?? null,
+        persona: body.persona as InterviewPersona,
+        questionSet,
+        durationTargetMin: body.durationTargetMin!,
+        useResumeContext: body.useResumeContext,
+        scheduledAt,
+        scheduledTimezone,
+      })
+      if (!booking.ok) {
+        return NextResponse.json(
+          { error: "That time slot is fully booked — pick another slot" },
+          { status: 409 }
+        )
+      }
+
+      // Side effects are best-effort — the booking stands even if they fail.
+      try {
+        await resetRemindersForSession(booking.sessionId, user.id, scheduledAt)
+      } catch (err) {
+        console.error("[interview] reminder creation failed:", err)
+      }
+      try {
+        const { jobTitle, jobCompany } = await getJobContext(body.jobId ?? null)
+        await sendScheduleConfirmationEmail({
+          userId: user.id,
+          sessionId: booking.sessionId,
+          scheduledAt,
+          timeZone: scheduledTimezone,
+          durationMin: body.durationTargetMin!,
+          jobTitle,
+          jobCompany,
+        })
+      } catch (err) {
+        console.error("[interview] schedule confirmation email failed:", err)
+      }
+
+      return NextResponse.json(
+        {
+          sessionId: booking.sessionId,
+          scheduledAt: scheduledAt.toISOString(),
+          redirectTo: `/dashboard/interview/scheduled/${booking.sessionId}`,
+        },
+        { status: 201 }
+      )
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Failed to schedule session" },
+        { status: 500 }
       )
     }
   }
@@ -157,51 +227,7 @@ export async function POST(request: Request) {
       questionSet,
       durationTargetMin: body.durationTargetMin!,
       useResumeContext: body.useResumeContext,
-      scheduledAt,
-      scheduledTimezone,
     })
-
-    if (scheduledAt) {
-      await resetRemindersForSession(session.id, user.id, scheduledAt)
-
-      let jobTitle: string | null = null
-      let jobCompany: string | null = null
-      if (session.jobId) {
-        const pool = getPostgresPool()
-        const jobResult = await pool.query<{ title: string | null; company_name: string | null }>(
-          `SELECT j.title, c.name AS company_name
-           FROM jobs j
-           LEFT JOIN companies c ON c.id = j.company_id
-           WHERE j.id = $1
-           LIMIT 1`,
-          [session.jobId]
-        )
-        jobTitle = jobResult.rows[0]?.title ?? null
-        jobCompany = jobResult.rows[0]?.company_name ?? null
-      }
-
-      // Best-effort — the booking stands even if the confirmation email fails.
-      sendScheduleConfirmationEmail({
-        userId: user.id,
-        sessionId: session.id,
-        scheduledAt,
-        timeZone: scheduledTimezone,
-        durationMin: session.durationTargetMin,
-        jobTitle,
-        jobCompany,
-      }).catch((err) => {
-        console.error("[interview] schedule confirmation email failed:", err)
-      })
-
-      return NextResponse.json(
-        {
-          sessionId: session.id,
-          scheduledAt: scheduledAt.toISOString(),
-          redirectTo: `/dashboard/interview/scheduled/${session.id}`,
-        },
-        { status: 201 }
-      )
-    }
 
     return NextResponse.json(
       {
