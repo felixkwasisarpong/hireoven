@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { notificationFreshnessDate, sqlNotificationFreshnessDate } from "@/lib/alerts/job-freshness"
+import { sendEmailAlert } from "@/lib/alerts/sender"
 import { getEmailCompanyLogoUrl, getHireovenEmailLogoUrl, getHireovenJobDetailUrl, renderEmailExtensionFooter } from "@/lib/email/branding"
 import { getRecentJobsFromEmail } from "@/lib/email/identity"
 import { requireCronAuth } from "@/lib/env"
@@ -280,14 +281,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // The "Fresh high-match jobs" resume digest is retired — saved-alert instant
-  // notifications cover it. Gated OFF by default so it stays dead even if the
-  // cron is re-added (e.g. a crontab reinstall from the worker template).
-  // Set RECENT_JOBS_DIGEST=on to bring it back.
-  if (process.env.RECENT_JOBS_DIGEST !== "on") {
-    return NextResponse.json({ skipped: true, reason: "recent-jobs digest disabled" })
-  }
-
   if (!resend) {
     return NextResponse.json({ skipped: true, reason: "RESEND_API_KEY not configured" })
   }
@@ -541,28 +534,22 @@ export async function GET(request: NextRequest) {
       })
 
       const topJobs = filtered
-        .filter((row) => row.jobs)
+        .filter((row) => row.jobFull)
         .slice(0, 5)
         .map((row) => ({
-          ...row.jobs!,
+          ...(row.jobFull as Job),
           score: row.overall_score,
         }))
 
       if (!topJobs.length) continue
 
       try {
-        await resend.emails.send({
-          from: getRecentJobsFromEmail(),
-          to: [user.email!],
-          subject: `${topJobs.length} high-match jobs just added for you`,
-          html: buildEmail({
-            firstName: firstNameOf(user.full_name),
-            title: "Fresh high-match jobs",
-            subtitle: "These new roles are 75%+ matches for your resume.",
-            jobsTableRows: renderJobRows(topJobs),
-            ctaLabel: "View more high-match jobs",
-          }),
-        })
+        // Render with the INSTANT alert email UI (sender.ts), not the legacy blue
+        // digest template. Same recent-high-match selection above (gated to users
+        // who have an active alert + matchesAlert filter) — instant look + "X%
+        // match" badges from the resume scores.
+        const scoreMap = new Map(topJobs.map((j) => [j.id, { overall_score: j.score }]))
+        await sendEmailAlert(user.id, topJobs, userAlerts[0]?.name ?? "Job alert", scoreMap)
         sentWithResume += 1
         try {
           await recordEmailSends(user.id, topJobs.map((j) => j.id), userAlerts.map((a) => a.id))
