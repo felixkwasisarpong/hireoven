@@ -281,6 +281,19 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
+  // OFF by default. The instant-notify sweep is the SOLE alert-email path now —
+  // it already carries this digest's matching logic. Running both produced a
+  // second, duplicate email stream (and timing/repeat conflicts), so this legacy
+  // "recent jobs" digest stays dark unless RECENT_JOBS_ENABLED=true. The env gate
+  // (not just a disabled crontab line) guarantees a crontab reinstall from the
+  // template can't silently resurrect it.
+  if (process.env.RECENT_JOBS_ENABLED !== "true") {
+    return NextResponse.json({
+      skipped: true,
+      reason: "recent-jobs digest disabled — instant-notify is the sole alert path",
+    })
+  }
+
   if (!resend) {
     return NextResponse.json({ skipped: true, reason: "RESEND_API_KEY not configured" })
   }
