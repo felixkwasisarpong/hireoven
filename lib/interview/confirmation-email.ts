@@ -92,11 +92,12 @@ export async function sendScheduleConfirmationEmail(input: {
               </td>
             </tr>
           </table>
-          <div style="font-size:13px;color:#64748b;margin-top:20px;line-height:1.6;">
-            When it's time, join from the reminder or directly:<br/>
-            <a href="${esc(joinUrl)}" style="color:#FF5C18;">${esc(joinUrl)}</a><br/>
-            The booking page also offers a downloadable .ics calendar file,
-            rescheduling, and cancellation.
+          <div style="font-size:13px;color:#64748b;margin-top:20px;line-height:1.7;">
+            <strong style="color:#475569;">Join link</strong> — open this when it's time:<br/>
+            <a href="${esc(joinUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(joinUrl)}</a>
+            <br/><br/>
+            <strong style="color:#475569;">Manage booking</strong> — reschedule, cancel, or download the .ics calendar file:<br/>
+            <a href="${esc(detailsUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(detailsUrl)}</a>
           </div>
         </td></tr>
         <tr><td style="padding:20px 4px 0;">
@@ -113,6 +114,78 @@ export async function sendScheduleConfirmationEmail(input: {
     emailType: "interview_schedule",
     dedupeKey: `interview-schedule-${input.sessionId}-${input.scheduledAt.toISOString()}`,
     toEmail: profile.email,
+    subject,
+    html,
+    text,
+  })
+}
+
+/** Notify the user when an admin cancels their scheduled interview. */
+export async function sendScheduleCancelledEmail(input: {
+  userId: string
+  sessionId: string
+  scheduledAt: Date
+  timeZone: string | null
+  durationMin: number
+}): Promise<void> {
+  const pool = getPostgresPool()
+  const result = await pool.query<{ email: string | null }>(
+    `SELECT email FROM profiles WHERE id = $1 LIMIT 1`,
+    [input.userId]
+  )
+  const email = result.rows[0]?.email
+  if (!email) return
+
+  const whenLabel = new Intl.DateTimeFormat("en-US", {
+    timeZone: input.timeZone ?? "UTC",
+    weekday: "long", month: "long", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZoneName: "short",
+  }).format(input.scheduledAt)
+  const rebookUrl = appUrl("/dashboard/interview/setup?type=live")
+
+  const subject = `Your interview on ${whenLabel} was cancelled`
+  const text =
+    `Your ${input.durationMin}-minute live mock interview scheduled for ${whenLabel} ` +
+    `was cancelled by our team. Your credits were not used.\n\n` +
+    `Book a new slot here:\n${rebookUrl}`
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
+<body style="margin:0;padding:0;background:#f3f2ef;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f3f2ef;padding:24px 16px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:584px;" cellpadding="0" cellspacing="0">
+        <tr><td style="padding:0 0 16px;">
+          <img src="${getHireovenEmailLogoUrl("wordmark")}" alt="Hireoven" height="28"
+               style="display:block;height:28px;width:auto;border:0;" />
+        </td></tr>
+        <tr><td style="background:#ffffff;border-radius:8px;border:1px solid #e2e8f0;padding:24px;">
+          <div style="font-size:22px;font-weight:800;color:#0f172a;margin-bottom:4px;">Interview cancelled</div>
+          <div style="font-size:14px;color:#64748b;margin-bottom:16px;">
+            Your ${input.durationMin}-minute live mock interview scheduled for
+            <strong style="color:#0f172a;">${esc(whenLabel)}</strong> was cancelled by our team.
+            Your credits were not used.
+          </div>
+          <div style="font-size:13px;color:#64748b;line-height:1.7;">
+            <strong style="color:#475569;">Book a new slot</strong>:<br/>
+            <a href="${esc(rebookUrl)}" style="color:#FF5C18;word-break:break-all;">${esc(rebookUrl)}</a>
+          </div>
+        </td></tr>
+        <tr><td style="padding:20px 4px 0;">
+          <div style="font-size:11px;color:#94a3b8;">&copy; ${new Date().getFullYear()} Hireoven. Jobs served fresh.</div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`
+
+  await sendManaged({
+    userId: input.userId,
+    emailType: "interview_schedule",
+    dedupeKey: `interview-cancelled-${input.sessionId}-${input.scheduledAt.toISOString()}`,
+    toEmail: email,
     subject,
     html,
     text,

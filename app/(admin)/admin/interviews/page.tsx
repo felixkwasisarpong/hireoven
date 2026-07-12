@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Loader2, Search } from "lucide-react"
 import {
   AdminBadge,
+  AdminButton,
   AdminInput,
   AdminPageHeader,
   AdminPanel,
@@ -37,6 +38,27 @@ export default function AdminInterviewsPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [now, setNow] = useState(Date.now())
+  const [cancellingId, setCancellingId] = useState<string | null>(null)
+
+  async function cancelBooking(row: ScheduledRow) {
+    const who = row.userEmail ?? row.userName ?? "this user"
+    if (!window.confirm(`Cancel ${who}'s interview? They'll be notified by email.`)) return
+    setCancellingId(row.id)
+    try {
+      const res = await fetch(`/api/admin/interview/schedule/${row.id}`, { method: "DELETE" })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        pushToast({ tone: "error", title: data.error ?? "Failed to cancel interview" })
+        return
+      }
+      setRows((current) => current.filter((r) => r.id !== row.id))
+      pushToast({ tone: "success", title: "Interview cancelled — user notified" })
+    } catch {
+      pushToast({ tone: "error", title: "Network error — please try again" })
+    } finally {
+      setCancellingId(null)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -163,6 +185,7 @@ export default function AdminInterviewsPage() {
                   <th className="px-3 py-2">Session</th>
                   <th className="px-3 py-2">Reminders</th>
                   <th className="px-3 py-2">Booked</th>
+                  <th className="px-3 py-2"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -205,6 +228,16 @@ export default function AdminInterviewsPage() {
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500">
                       {formatRelativeTime(row.createdAt)}
+                    </td>
+                    <td className="px-3 py-3 whitespace-nowrap">
+                      <AdminButton
+                        tone="danger"
+                        className="px-3 py-1.5 text-xs"
+                        disabled={cancellingId === row.id}
+                        onClick={() => void cancelBooking(row)}
+                      >
+                        {cancellingId === row.id ? "Cancelling…" : "Cancel"}
+                      </AdminButton>
                     </td>
                   </tr>
                 ))}
