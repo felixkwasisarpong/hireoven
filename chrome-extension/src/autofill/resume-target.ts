@@ -82,3 +82,98 @@ export function pickResumeFileInput(doc: Document = document): HTMLInputElement 
   }
   return best?.el ?? inputs[0] ?? null
 }
+
+const RESUME_HINT = /r[eé]sum[eé]|\bcv\b|curriculum/i
+// No trailing anchor: in DOM textContent the filename often runs straight into
+// an adjacent control's label ("Resume.pdf" + "Remove" → "Resume.pdfRemove"), so
+// a word/letter boundary would miss it. A "." + doc extension is signal enough.
+const FILE_NAME = /\.(pdf|docx?|rtf|txt)/i
+// Explicit "clear this file" affordances — labels, aria, title, icons, classes.
+const CLEAR_HINT = /\b(remove|delete|clear|discard|reset|trash|detach|unattach|start\s*over)\b|^\s*[×✕✖✗xX🗑␡]\s*$/i
+const CLEAR_CLASS = /(^|[-_ ])(remove|delete|clear|trash|close|dismiss|bin)([-_ ]|$)/i
+// The control is a "replace/change" affordance — also fine to click, AS LONG AS
+// it doesn't open a native OS file dialog (handled by opensNativePicker below).
+const REPLACE_HINT = /\b(replace|change|update|swap|re-?upload|re-?attach|different\s+file)\b/i
+// Controls we must NOT click: they only view the file, or they pop a native file
+// dialog that would block an autonomous run.
+const NON_REMOVE = /\b(download|view|preview|open|see|show|edit\s+details)\b/i
+
+function isControlVisible(el: HTMLElement): boolean {
+  if (el.hidden) return false
+  const s = getComputedStyle(el)
+  return s.display !== "none" && s.visibility !== "hidden"
+}
+
+/** True when clicking this control would open a native OS file picker (a
+ *  <label for=fileinput>, a control wrapping/pointing at an <input type=file>),
+ *  which we can't drive and would deadlock the flow — so we avoid it. */
+function opensNativePicker(el: HTMLElement): boolean {
+  if (el.tagName === "LABEL") return true
+  const forId = (el as HTMLLabelElement).htmlFor
+  if (forId && el.ownerDocument.getElementById(forId)?.matches('input[type="file"]')) return true
+  if (el.querySelector('input[type="file"]')) return true
+  if (el.closest("label")) return true
+  return false
+}
+
+function controlLabel(el: HTMLElement): string {
+  return [el.getAttribute("aria-label"), el.getAttribute("title"), el.textContent, el.className]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+/**
+ * When a résumé is already attached to the form — a returning applicant, a
+ * profile prefill, or a prior step — the tailored résumé must REPLACE it, not
+ * sit beside the stale file. This finds the résumé attachment row (context: it
+ * mentions résumé/CV AND shows a filename) and clicks its clear/replace control
+ * so the field is empty before we inject.
+ *
+ * The control's LABEL varies wildly (Remove, Delete, Clear, Replace, Change, an
+ * × or trash icon, or nothing), so we don't rely on a fixed word list: we scope
+ * to the résumé row and pick its clear/replace control by intent, explicitly
+ * skipping (a) view/download controls and (b) anything that would open a native
+ * OS file dialog. Falls back to the row's sole actionable control when the label
+ * is unrecognisable. Returns true if it clicked one.
+ */
+export function removeExistingResumeAttachment(root: Document = document): boolean {
+  // 1. Résumé attachment rows: tightest containers that mention résumé + a file.
+  const rows = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'li, tr, [role="listitem"], section, fieldset, div, [class*="attach" i], [class*="upload" i], [class*="file" i], [class*="resume" i], [class*="document" i]',
+    ),
+  ).filter((row) => {
+    const t = (row.textContent ?? "").toLowerCase()
+    return RESUME_HINT.test(t) && FILE_NAME.test(t)
+  })
+  // Tightest first, so we act on the attachment row itself, not the whole form.
+  rows.sort((a, b) => (a.textContent ?? "").length - (b.textContent ?? "").length)
+
+  const seen = new Set<HTMLElement>()
+  for (const row of rows) {
+    const controls = Array.from(
+      row.querySelectorAll<HTMLElement>('button, a[href], [role="button"], [aria-label], [title]'),
+    ).filter((el) => !seen.has(el) && isControlVisible(el) && !opensNativePicker(el))
+    controls.forEach((el) => seen.add(el))
+    if (controls.length === 0) continue
+
+    // Prefer an explicit clear control; then a safe replace/change control; then,
+    // if the row has exactly one plausible control, trust it whatever it says.
+    const scored = controls.filter((el) => {
+      const l = controlLabel(el)
+      return !NON_REMOVE.test(l) || CLEAR_HINT.test(l)
+    })
+    const target =
+      scored.find((el) => CLEAR_HINT.test(controlLabel(el)) || CLEAR_CLASS.test(el.className)) ??
+      scored.find((el) => REPLACE_HINT.test(controlLabel(el))) ??
+      (scored.length === 1 ? scored[0] : null)
+    if (target) {
+      target.click()
+      return true
+    }
+  }
+  return false
+}
