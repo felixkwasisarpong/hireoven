@@ -26,6 +26,14 @@ const DETAIL_MAX_JOBS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKAB
 // 500 ms between detail fetches to avoid triggering Workable's per-IP 429 rate
 // limit during the enrichment pass (observed ~1.9k 429s/day at 200 ms).
 const DETAIL_DELAY_MS = Math.max(0, Number.parseInt(process.env.HARVESTER_WORKABLE_DETAIL_DELAY_MS ?? "500", 10))
+// The list POST is the #1 Workable failure ("workable fetch failed: timeout"):
+// it hangs the full per-attempt timeout when the rotating proxy hands us a
+// dead/slow residential exit IP. A timed-out attempt destroys its tunnel, so the
+// next attempt opens a fresh tunnel = a fresh egress IP. We can't shorten the 20s
+// timeout (Workable is genuinely slow under load — 8s once caused 2k+ timeouts/day)
+// so more fresh-IP attempts is the lever. 4 * 20s = 80s worst case, comfortably
+// inside HARVESTER_WORKABLE_PER_COMPANY_TIMEOUT_MS (180s).
+const LIST_MAX_ATTEMPTS = Math.max(1, Number.parseInt(process.env.HARVESTER_WORKABLE_LIST_MAX_ATTEMPTS ?? "4", 10))
 
 function detailUrl(slug: string, shortcode: string): string {
   return `https://apply.workable.com/api/v2/accounts/${encodeURIComponent(slug)}/jobs/${encodeURIComponent(shortcode)}`
@@ -194,6 +202,7 @@ async function fetchPage(
   return fetchWorkableJson<WorkableResponse>(listingUrl(slug), ctx, {
     method: "POST",
     body: JSON.stringify(token ? { token } : {}),
+    maxAttempts: LIST_MAX_ATTEMPTS,
   })
 }
 
