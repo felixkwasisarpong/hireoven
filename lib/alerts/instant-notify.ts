@@ -95,11 +95,28 @@ async function recordNotification(
  */
 export async function processNotifications(jobs: Job[]): Promise<void> {
   const windowMinutes = instantNotifyWindowMinutes()
-  const freshJobs = jobs.filter((job) =>
+  let freshJobs = jobs.filter((job) =>
     isWithinInstantNotifyWindow(notificationFreshnessDate(job), { windowMinutes })
   )
   if (freshJobs.length === 0) return
   try {
+    // Company gate: aggregator ingests (Adzuna etc.) still insert jobs under
+    // inactive placeholder companies flagged duplicate_of — usually stale
+    // copies of roles already harvested under the canonical company. Never
+    // alert on them. Lives here (not in the callers' SQL) so the cron sweep,
+    // the internal notify-jobs trigger, and any future caller all get it.
+    const batchCompanyIds = [...new Set(freshJobs.map((j) => j.company_id))]
+    const { rows: eligibleCompanies } = await getPostgresPool().query<{ id: string }>(
+      `SELECT id FROM companies
+        WHERE id = ANY($1::uuid[])
+          AND is_active = true
+          AND duplicate_of_company_id IS NULL`,
+      [batchCompanyIds],
+    )
+    const eligible = new Set(eligibleCompanies.map((c) => c.id))
+    freshJobs = freshJobs.filter((j) => eligible.has(j.company_id))
+    if (freshJobs.length === 0) return
+
     // (userId -> jobIds notified this run) so a user the alert pass reached
     // isn't also hit by the watchlist / sponsor pass for the same job.
     const notified = new Map<string, Set<string>>()
