@@ -83,6 +83,15 @@ export const RESTRICTED_PROMO_CODES: Record<
     message: "The LAUNCH offer is for Pro Max monthly only.",
     withholdsInterviewCreditFirstPeriod: true,
   },
+  // Product Hunt launch code (Stripe promo PHUNT20, 20% off first payment,
+  // expires 2026-08-13). Monthly only — the advertised offer is "20% off your
+  // first month", and an unrestricted code would take 20% off a full year.
+  PHUNT20: {
+    plans: ["pro", "pro_max"],
+    intervals: ["monthly"],
+    message: "The PHUNT20 offer applies to monthly plans only.",
+    withholdsInterviewCreditFirstPeriod: true,
+  },
 }
 
 export function getSignupUrl(plan: PlanKey, interval: BillingInterval): string {
