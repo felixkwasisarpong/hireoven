@@ -3443,11 +3443,36 @@ export class ApexBar {
       }
 
       if (result.reachedReview) {
-        // Stop-at-review: the agent filled every step but does NOT click the
-        // final submit. Hand off to the user for a 1-click confirm. The caller
-        // raises the Final Review panel, highlights the real Submit button, and
-        // parks the run in `waiting_review` until the user submits (which
-        // navigates to the confirmation page and advances the run).
+        // Clean-finish auto-submit (autonomous runs only): Workday's own
+        // validator blocks Save-and-Continue on any missing required field, so
+        // REACHING the review step already means every prior step was accepted.
+        // If the review page itself is clean — no error banner, no field the
+        // driver flagged for manual review, no unfilled required field, no
+        // captcha — the application is "filled to the end with no errors" and
+        // the agent submits it, then the loop's confirmation-page check
+        // advances the run to the next job. Anything less parks at review for
+        // the user, exactly as before. Manual (non-autonomous) fills always park.
+        if (this.autonomousRun && this.reviewPageCleanForAutoSubmit()) {
+          const reviewSubmit = this.findBestActionButton("submit")
+          if (reviewSubmit) {
+            const progressed = await this.clickAndWaitForProgress(reviewSubmit)
+            if (this.isConfirmationPage()) return { submitted: true }
+            if (this.isLoginOrAccountPage()) {
+              return {
+                submitted: false,
+                needsLogin: true,
+                reason: "Sign in to finish submitting your application.",
+              }
+            }
+            // Next iteration re-detects: confirmation page → submitted; a
+            // validation surprise → the clean check fails and we park below.
+            if (progressed) continue
+          }
+        }
+        // Stop-at-review: hand off for a 1-click confirm. The caller raises the
+        // Final Review panel, highlights the real Submit button, and parks the
+        // run in `waiting_review` until the user submits (which navigates to
+        // the confirmation page and advances the run).
         return { submitted: false, reachedReview: true }
       }
 
@@ -3459,6 +3484,38 @@ export class ApexBar {
     }
 
     return { submitted: false, reason: "Workday agent mode reached max step transitions before confirmation." }
+  }
+
+  /**
+   * "Filled to the end with no errors" check for the Workday review page —
+   * the ONLY state in which an autonomous run may auto-submit. Fails closed:
+   * any visible error banner, any field the driver flagged for manual review,
+   * any unfilled required field, or any captcha widget parks the run at review
+   * for the user instead.
+   */
+  private reviewPageCleanForAutoSubmit(): boolean {
+    const visible = (el: Element | null): boolean => {
+      if (!(el instanceof HTMLElement)) return false
+      const rect = el.getBoundingClientRect()
+      return rect.width > 0 && rect.height > 0
+    }
+    // Workday error banner / inline alerts → validation failed somewhere.
+    const errorEl = document.querySelector(
+      '[data-automation-id="errorBanner"], [data-automation-id*="errorMessage" i], [role="alert"]',
+    )
+    if (errorEl && visible(errorEl) && (errorEl.textContent ?? "").trim().length > 0) return false
+    // A field the Workday driver marked "manual review needed" is still on-screen
+    // (attribute set by markManualReview in workday-autofill.ts).
+    const flagged = document.querySelector("[data-ho-workday-manual-review]")
+    if (flagged && visible(flagged)) return false
+    // Bot-detection gate — a human must complete this.
+    const captcha = document.querySelector(
+      'iframe[src*="captcha" i], .g-recaptcha, [data-sitekey], [class*="hcaptcha" i]',
+    )
+    if (captcha && visible(captcha)) return false
+    // Any required field still unfilled anywhere on the page.
+    if (findUnfilledRequiredFields(document).length > 0) return false
+    return true
   }
 
   /**
