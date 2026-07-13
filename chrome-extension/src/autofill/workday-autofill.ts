@@ -1,5 +1,5 @@
 import { fetchPrimaryResume, getAutofillProfile, matchQuestions } from "../api-client"
-import type { MatchQuestion } from "../api-client"
+import type { MatchQuestion, MatchedAnswer } from "../api-client"
 import type { SafeProfile } from "./safe-fields"
 import type { AutofillFieldResult } from "./safe-fields"
 import { isCurrentlyAuthorizedVisa } from "./work-auth"
@@ -209,6 +209,15 @@ type WorkdayAutofillRunnerOptions = {
   resumeVersionId?: string | null
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
+  /**
+   * Hands-off queue run. When true the driver best-effort-answers every
+   * required field so the agent can auto-submit. When false (the default, and
+   * what user-triggered "Fill form" passes) the driver stays CONSERVATIVE:
+   * it fills only profile-grounded / high-confidence answers and leaves
+   * ungrounded required yes/no & selects for manual review instead of guessing
+   * (guessing produced wrong answers like "employed here before? → Yes").
+   */
+  autonomous?: boolean
 }
 
 const TOOLBAR_ROOT_ID = "__ho_workday_toolbar"
@@ -258,10 +267,30 @@ type RunInBarOptions = {
   onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   onWarning?: (line: string) => void
   maxCycles?: number
+  /** Hands-off queue run — see WorkdayAutofillRunnerOptions.autonomous.
+   *  Defaults to false (conservative) when omitted. */
+  autonomous?: boolean
+}
+
+// Global pacing multiplier for the Workday driver. The fixed `sleep()` calls
+// here are conservative "let Workday's React settle" pads and poll intervals —
+// the actual correctness guarantees are the polling DEADLINES (`Date.now() + N`,
+// which are NOT scaled). So shrinking the sleeps just reaches the same settled
+// state sooner (or polls a touch more often) without removing any safety cap,
+// which is what keeps the whole multi-step autofill fast for the apply agent.
+// Floored so nothing collapses to zero. Override live via
+// `window.__hoWorkdayAutofillSpeed` (0.25–1) to slow it back down if a tenant
+// needs more settle time.
+const DEFAULT_AUTOFILL_SPEED = 0.6
+function autofillSpeed(): number {
+  const raw = (globalThis as { __hoWorkdayAutofillSpeed?: unknown }).__hoWorkdayAutofillSpeed
+  const n = typeof raw === "number" ? raw : DEFAULT_AUTOFILL_SPEED
+  return Number.isFinite(n) && n > 0 ? Math.min(1, Math.max(0.25, n)) : DEFAULT_AUTOFILL_SPEED
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+  const scaled = Math.max(50, Math.round(ms * autofillSpeed()))
+  return new Promise((resolve) => setTimeout(resolve, scaled))
 }
 
 function isTopFrame(): boolean {
@@ -343,6 +372,39 @@ function isControlReachable(input: HTMLElement): boolean {
 
 function nonEmpty(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : ""
+}
+
+/**
+ * Availability / earliest-start value, guarded so a STALE PAST date can never be
+ * written to a Workday start-date field (we saw a stored "06/16/2025" — 13
+ * months in the past — typed verbatim into "When are you able to start?").
+ *
+ * - empty            → "2 weeks notice required" (unchanged fallback)
+ * - free text        → passed through ("Immediately", "2 weeks notice", …)
+ * - future/today date → passed through unchanged
+ * - PAST date        → re-based to ~2 weeks from today, in the SAME format the
+ *                      stored value used (ISO YYYY-MM-DD vs MM/DD/YYYY), so the
+ *                      date input still parses it.
+ */
+export function clampAvailabilityToFuture(raw: string | null | undefined, now: Date = new Date()): string {
+  const text = nonEmpty(raw)
+  if (!text) return "2 weeks notice required"
+  // Only treat purely-numeric date strings as calendar dates; anything with
+  // letters ("Immediately", "2 weeks notice required") is free text — keep it.
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+  const mdy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(text)
+  let parsed: Date | null = null
+  if (iso) parsed = new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+  else if (mdy) parsed = new Date(Number(mdy[3]), Number(mdy[1]) - 1, Number(mdy[2]))
+  if (!parsed || Number.isNaN(parsed.getTime())) return text // not a date we recognize → free text
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  if (parsed.getTime() >= today.getTime()) return text // already today/future
+  const future = new Date(today.getTime())
+  future.setDate(future.getDate() + 14)
+  const yyyy = future.getFullYear()
+  const mm = String(future.getMonth() + 1).padStart(2, "0")
+  const dd = String(future.getDate()).padStart(2, "0")
+  return iso ? `${yyyy}-${mm}-${dd}` : `${mm}/${dd}/${yyyy}`
 }
 
 /**
@@ -711,7 +773,7 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
     },
     salaryExpectation,
     salaryExpectationSingle,
-    availability: nonEmpty(profile.earliest_start_date) || "2 weeks notice required",
+    availability: clampAvailabilityToFuture(profile.earliest_start_date),
     citizenship: "",
     yearsOfExperience,
     diversity: {
@@ -972,6 +1034,10 @@ class WorkdayAutofillRunner {
   private readonly resumeVersionId: string | null
   private readonly showToolbar: boolean
   private readonly externalProfile: ExtendedSafeProfile | null
+  /** When false (default), stay conservative: fill only grounded / high-
+   *  confidence answers, leave ungrounded required yes/no & selects for manual
+   *  review instead of guessing. See WorkdayAutofillRunnerOptions.autonomous. */
+  private readonly autonomous: boolean
   private readonly onSnapshot?: (snapshot: WorkdayAutofillSnapshot) => void
   private readonly onWarning?: (line: string) => void
 
@@ -1030,6 +1096,7 @@ class WorkdayAutofillRunner {
   constructor(options?: WorkdayAutofillRunnerOptions) {
     this.showToolbar = options?.showToolbar === true
     this.externalProfile = options?.profile ?? null
+    this.autonomous = options?.autonomous === true
     this.onSnapshot = options?.onSnapshot
     this.onWarning = options?.onWarning
     this.resumeFile = options?.resumeFile ?? null
@@ -2460,6 +2527,23 @@ class WorkdayAutofillRunner {
       return
     }
 
+    // Single-select dropdown variant: a plain button[aria-haspopup="listbox"] with
+    // <li role="option"> leaves (e.g. Moderna's list: Company Website, LinkedIn,
+    // Indeed, Glassdoor, …). The prompt-search + two-level drill below ONLY handle
+    // Workday's multiselect prompt widget, so for a single-select this field was
+    // silently skipped — leaving a REQUIRED field blank and stalling
+    // Save-and-Continue. Open it once and pick the best honest source in the
+    // user's preference order (company website → career website / careers →
+    // LinkedIn → Indeed → other neutral). Only for the non-multiselect widget so
+    // it can't mis-click a multiselect category as if it were a leaf.
+    if (!isMultiselectWidget) {
+      if (await this.fillSourceSingleSelect(comboTarget)) {
+        this.bumpFilledCount()
+        this.debug("info", "field.source.filled", { via: "single_select" })
+        return
+      }
+    }
+
     // Workday's "How Did You Hear About Us?" prompt is a two-level picker:
     // parent category → company-specific child. For this field, click
     // "Company Website", then the first careers child under it (e.g.
@@ -2510,6 +2594,89 @@ class WorkdayAutofillRunner {
   }
 
   /**
+   * Fill a single-select "How Did You Hear About Us?" dropdown — a plain
+   * button[aria-haspopup="listbox"] whose options are <li role="option"> leaves
+   * (Moderna and many other tenants). Opens the list once and clicks the
+   * best-ranked honest source: company website → career website / careers →
+   * LinkedIn → Indeed → any other neutral job-search source. NEVER a referral /
+   * employee / "I was referred" option (auto-claiming a personal connection
+   * could mislead a recruiter) — those rank as ineligible. Returns false if no
+   * acceptable leaf is offered, so the caller can fall through.
+   */
+  private async fillSourceSingleSelect(target: HTMLElement): Promise<boolean> {
+    this.setToolbarField("How Did You Hear About Us?")
+    const shell =
+      target.closest<HTMLElement>('[role="combobox"], button[aria-haspopup="listbox"], [aria-haspopup="listbox"]') ??
+      target
+    try {
+      shell.scrollIntoView({ block: "center" })
+    } catch {
+      // best-effort
+    }
+    await sleep(80)
+    shell.focus()
+    shell.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    shell.click()
+    shell.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+
+    // Lower rank = stronger preference. -1 = never pick (placeholder / referral /
+    // employee / contingent-worker — anything that would assert a relationship we
+    // can't truthfully claim).
+    const rank = (raw: string): number => {
+      const t = normText(raw)
+      if (!t || this.isUnansweredSelectPlaceholder(t)) return -1
+      if (/\b(referr|refer|colleague|friend|family|current (employee|worker|contingent)|contingent worker|service provider|\bemployee\b|alumni|recruiter|agency|staffing)\b/i.test(t)) {
+        return -1
+      }
+      if (/\bcompany\s*websites?\b/i.test(t)) return 0
+      if (/\bcareer\s*websites?\b/i.test(t) || /\bcareers\b/i.test(t)) return 1
+      if (/\blinked\s?in\b/i.test(t)) return 2
+      if (/\bindeed\b/i.test(t)) return 3
+      if (/\b(glassdoor|job\s*(board|fair|site|posting)|website|online|internet|search engine|google|social|twitter|facebook|advertisement|other)\b/i.test(t)) {
+        return 4
+      }
+      return -1
+    }
+
+    const deadline = Date.now() + 3000
+    while (Date.now() < deadline) {
+      // Prefer the currently-open popup so a stale/other dropdown's options
+      // (Country, Phone Device Type) can't be picked by mistake.
+      const activePopup = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-automation-activepopup="true"] [role="option"], ' +
+            '[data-automation-activepopup="true"] [role="menuitem"], ' +
+            '[data-automation-activepopup="true"] li[role="option"]',
+        ),
+      )
+      const options = (
+        activePopup.length
+          ? activePopup
+          : Array.from(document.querySelectorAll<HTMLElement>('li[role="option"], [role="option"], [role="menuitem"]'))
+      ).filter((el) => isVisible(el))
+
+      let best: { el: HTMLElement; r: number } | null = null
+      for (const el of options) {
+        const r = rank(el.textContent ?? "")
+        if (r < 0) continue
+        if (!best || r < best.r) best = { el, r }
+      }
+      if (best) {
+        const clickTarget = best.el.closest<HTMLElement>('[role="option"], [role="menuitem"]') ?? best.el
+        clickTarget.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+        clickTarget.click()
+        clickTarget.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+        await sleep(150)
+        return true
+      }
+      await sleep(100)
+    }
+    // No acceptable option — close so it doesn't block the page; caller falls through.
+    shell.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
+    return false
+  }
+
+  /**
    * Wait until the apply flow looks settled: no visible loading indicator and
    * no broken-state signals. Touching the source prompt while Workday is still
    * creating the application record makes the widget fire CXS calls with an
@@ -2549,8 +2716,31 @@ class WorkdayAutofillRunner {
     }
     // Fast path: the prompt's search box queries the backend directly and
     // returns leaf options in ~1s (e.g. "Caterpillar Careers"), skipping the
-    // two-level drill and its not-ready "No Items." dance entirely.
-    if (await this.fillSourceViaPromptSearch(container, fieldName)) return true
+    // two-level drill and its not-ready "No Items." dance entirely. Search the
+    // user's preference order and take the first available leaf: company website
+    // / career website / careers first (the company's own site), then LinkedIn /
+    // Indeed. Trying LinkedIn HERE — instead of only in the post-drill neutral
+    // fallback — is what makes tenants whose source list is LinkedIn/Indeed (no
+    // "Company Careers") pick instantly instead of grinding through the drill.
+    if (
+      await this.fillSourceViaPromptSearch(
+        container,
+        fieldName,
+        ["company website", "career website", "careers", "linkedin", "indeed"],
+        (text) => {
+          const t = text.toLowerCase()
+          if (/\bcareer\s?builder\b/.test(t)) return false // job board, not a company careers site
+          return (
+            /\b(?:company|corporate)\s*websites?\b/.test(t) ||
+            /\bcareers?\s*(?:site|website|page)?\b/.test(t) ||
+            /\blinked\s?in\b/.test(t) ||
+            /\bindeed\b/.test(t)
+          )
+        },
+      )
+    ) {
+      return true
+    }
     // Several quick attempts: on a freshly created application the submenu
     // answers "No Items." until the backend source list exists; each attempt
     // bails fast on that state, so more retries are cheap and eventually one
@@ -2632,14 +2822,24 @@ class WorkdayAutofillRunner {
       pressEnter()
 
       const deadline = Date.now() + 2500
+      let resultsFirstSeenAt = 0
       while (Date.now() < deadline) {
-        const target = searchResults().find((option) => {
+        const results = searchResults()
+        const target = results.find((option) => {
           const text = optionLabel(option)
           if (!accept(text)) return false
           if (this.isTopLevelSourceCategory(text)) return false
           if (this.isBackHeaderOption(text, "Company Website")) return false
           return true
         })
+        // Early-break: once the typeahead has returned results (which land in
+        // ~1s) and none of them is an acceptable leaf, stop waiting out the full
+        // deadline — move to the next preference term. This is what keeps a
+        // multi-term preference search from costing 2.5s per non-matching term.
+        if (!target && results.length > 0) {
+          if (!resultsFirstSeenAt) resultsFirstSeenAt = Date.now()
+          else if (Date.now() - resultsFirstSeenAt > 900) break
+        }
         if (target) {
           target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
           target.click()
@@ -4232,9 +4432,12 @@ class WorkdayAutofillRunner {
     }
 
     // Everything on the Workday semantic queue is a REQUIRED field the
-    // deterministic matcher couldn't answer, and the Workday runner is always a
-    // hands-off (autonomous) agent — so ask the server to best-effort answer
-    // each rather than nulling out and stranding the step at manual review.
+    // deterministic matcher couldn't answer. In autonomous (hands-off queue)
+    // mode we ask the server to best-effort answer each so the agent can submit.
+    // In conservative mode (user-triggered "Fill form") we ask in "assist" mode
+    // and only apply high/medium-confidence answers — a low-confidence guess for
+    // a required yes/no or select is exactly what produced wrong answers like
+    // "employed here before? → Yes", so we leave those for manual review.
     const questions: MatchQuestion[] = queue.map((q, index) => ({
       id: String(index),
       label: q.label,
@@ -4243,15 +4446,15 @@ class WorkdayAutofillRunner {
       required: true,
     }))
 
-    let answers: Map<string, string | null>
+    let answers: Map<string, { value: string | null; confidence: MatchedAnswer["confidence"] }>
     try {
-      this.debug("info", "questions.semantic.request", { count: questions.length })
+      this.debug("info", "questions.semantic.request", { count: questions.length, autonomous: this.autonomous })
       const res = await matchQuestions({
         questions,
         jobTitle: this.detectJobTitle(),
-        mode: "autonomous",
+        mode: this.autonomous ? "autonomous" : "assist",
       })
-      answers = new Map(res.answers.map((a) => [a.id, a.value]))
+      answers = new Map(res.answers.map((a) => [a.id, { value: a.value, confidence: a.confidence }]))
       this.debug("info", "questions.semantic.response", {
         answered: res.answers.filter((a) => a.value != null).length,
         total: questions.length,
@@ -4269,8 +4472,12 @@ class WorkdayAutofillRunner {
     for (let index = 0; index < queue.length; index++) {
       if (this.stopped) return
       const q = queue[index]
-      const value = answers.get(String(index)) ?? null
-      if (!value) {
+      const answer = answers.get(String(index))
+      const value = answer?.value ?? null
+      // Conservative mode: a low-confidence answer for a required field is a
+      // guess — drop it to manual review rather than write a wrong value the
+      // user then has to notice and fix on a real application.
+      if (!value || (!this.autonomous && answer?.confidence === "low")) {
         this.markManualReview(q.el, q.label)
         continue
       }
@@ -4377,6 +4584,17 @@ class WorkdayAutofillRunner {
 
       if (!candidates.length) {
         this.debug("warn", "questions.combobox.unanswered", { label })
+        deferCombobox()
+        continue
+      }
+
+      // Conservative mode: a non-confident answer here is a HEURISTIC guess
+      // (inferDefaultQuestionComboboxAnswer defaulting to "Yes"/"No" by keyword).
+      // Don't write it — that's exactly what put "Yes" on "employed here before?".
+      // Route it through the confidence-gated semantic tier, which fills only
+      // high/medium-confidence answers and drops the rest to manual review.
+      if (!confident && !this.autonomous) {
+        this.debug("info", "questions.combobox.deferred_unconfident_conservative", { label })
         deferCombobox()
         continue
       }
@@ -4639,7 +4857,30 @@ class WorkdayAutofillRunner {
     if (q.includes("worked for any consulting firms") && (q.includes("u s bank") || q.includes("elavon"))) return false
     if (q.includes("willing to submit to a review of my criminal history")) return true
     if (q.includes("unable to obtain bonding")) return true
-    if (q.includes("willing to work from the location")) return true
+    // Willingness/ability to work at the job's specified location (onsite / in
+    // the listed office). The candidate applied to THIS role at THIS location,
+    // so the sensible answer is Yes — and critically, a wrong "No" here
+    // auto-rejects the application. Returning a value here makes it CONFIDENT, so
+    // the combobox tier selects "Yes" or drops to manual review, but NEVER falls
+    // through to the AI tier that guessed "No" (e.g. "willing and able to work at
+    // the location specified in the Job Description?"). A genuine "won't work
+    // there" case is corrected in review. Excludes relocation (a bigger, genuine
+    // choice) — that stays a heuristic/AI question.
+    if (
+      (q.includes("willing") || q.includes("able")) &&
+      q.includes("work") &&
+      !q.includes("relocat") &&
+      (q.includes("location") ||
+        q.includes("on site") ||
+        q.includes("onsite") ||
+        q.includes("in office") ||
+        q.includes("in the office") ||
+        q.includes("this office") ||
+        q.includes("specified") ||
+        q.includes("job description"))
+    ) {
+      return true
+    }
     if (q.includes("as a condition of new or continued employment") && q.includes("background check")) return true
     if (q.includes("18 or older")) return true
     if (q.includes("degree")) return this.cv.education.length > 0
@@ -6223,6 +6464,7 @@ export async function runWorkdayAutofillInExistingBar(options: RunInBarOptions):
     resumeVersionId: options.resumeVersionId ?? null,
     onSnapshot: options.onSnapshot,
     onWarning: options.onWarning,
+    autonomous: options.autonomous === true,
   })
   const result = await runner.runUntilSettled(options.maxCycles ?? 12)
   window[GLOBAL_LAST_RESULT_KEY] = result

@@ -674,6 +674,32 @@ function findDropzoneFor(input: HTMLInputElement): HTMLElement {
   return row ?? input.parentElement ?? input
 }
 
+/**
+ * JazzHR / resumator: reveal the collapsed upload wrapper so a programmatically
+ * set file is shown and submitted. resumator's "Attach resume" link handler is
+ * just `$('#resumator-resume-upload-wrapper').removeClass('none'); $('#resumator-resume-options').hide()`
+ * — there is no change/upload handler on the input itself (it's a plain
+ * multipart field submitted with the form). We replicate that reveal. No-op on
+ * any non-resumator page.
+ */
+function revealResumatorUploadWidget(target: HTMLInputElement): void {
+  try {
+    const isResumator =
+      target.id === "resumator-resume-value" ||
+      target.name === "resumator-resume-value" ||
+      target.closest("#resumator-resume-upload-wrapper") != null
+    if (!isResumator) return
+    const wrapper =
+      target.closest<HTMLElement>("#resumator-resume-upload-wrapper") ??
+      document.getElementById("resumator-resume-upload-wrapper")
+    wrapper?.classList.remove("none")
+    const options = document.getElementById("resumator-resume-options")
+    if (options instanceof HTMLElement) options.style.display = "none"
+  } catch {
+    /* best-effort — never let a widget quirk break the injection result */
+  }
+}
+
 function injectResumeFile(base64: string, filename: string): { type: "INJECT_RESUME_FILE_RESULT"; injected: boolean; selector?: string; error?: string } {
   try {
     // Convert base64 → Uint8Array
@@ -717,6 +743,15 @@ function injectResumeFile(base64: string, filename: string): { type: "INJECT_RES
     // a populated dataTransfer on the dropzone root — fire that too. Doing both
     // is safe: each ATS reacts to the mechanism it listens for.
     dispatchDropWithFile(findDropzoneFor(target), file)
+
+    // JazzHR / resumator: the resume <input> is a plain multipart file field,
+    // but it lives inside "#resumator-resume-upload-wrapper" which starts
+    // collapsed (class "none") behind an "Attach resume" link. Our file lands in
+    // the hidden input but the widget stays in its "choose option" state, so the
+    // filename never shows and resumator's UI/validation still reads "no resume".
+    // Reveal the wrapper (exactly what the link's own handler does) so the
+    // just-set file becomes the visible, submitted attachment.
+    revealResumatorUploadWidget(target)
 
     // Build a stable selector for the result
     const selector = target.id

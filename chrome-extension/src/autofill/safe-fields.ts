@@ -228,7 +228,7 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
   // legal-name box. Reject when followed by your/the/a/if/why/how/what.
   { key: "state",     patterns: [/\bstate\b(?![\s:]*\b(your|the|a|an|if|why|how|what|where|which|below))|\bprovince\b|\baddress[\s_-]?level[\s_-]?1\b/i] },
   { key: "city",      patterns: [/\bcity\b|\btown\b|\bmunicipalit/i, /\baddress[\s_-]?level[\s_-]?2\b/i] },
-  { key: "zip_code",  patterns: [/\bzip\b|\bzip[\s_-]?code\b|\bpostal[\s_-]?code\b|\bpost[\s_-]?code\b|\bpostcode\b/i] },
+  { key: "zip_code",  patterns: [/\bzip\b|\bzip[\s_-]?code\b|\bpostal\b|\bpost[\s_-]?code\b|\bpostcode\b/i] },
 
   // Location (single-line city/region)
   { key: "location", patterns: [/\blocation\b|\bcity\b|\baddress\b(?!\s*line\s*2)/i] },
@@ -1454,6 +1454,32 @@ function findDropzoneFor(input: HTMLInputElement): HTMLElement {
  * isolated worlds the right to set `input.files` even though regular page
  * scripts cannot.
  */
+/**
+ * JazzHR / resumator: reveal the collapsed upload wrapper so a programmatically
+ * set file shows and submits. resumator's "Attach resume" link handler is just
+ * `$('#resumator-resume-upload-wrapper').removeClass('none'); $('#resumator-resume-options').hide()`
+ * — there is no change/upload handler on the input (plain multipart field
+ * submitted with the form). We replicate that reveal. No-op on non-resumator pages.
+ */
+function revealResumatorUploadWidget(target: HTMLInputElement): void {
+  try {
+    const isResumator =
+      target.id === "resumator-resume-value" ||
+      target.name === "resumator-resume-value" ||
+      target.closest("#resumator-resume-upload-wrapper") != null
+    if (!isResumator) return
+    const doc = target.ownerDocument ?? document
+    const wrapper =
+      target.closest<HTMLElement>("#resumator-resume-upload-wrapper") ??
+      doc.getElementById("resumator-resume-upload-wrapper")
+    wrapper?.classList.remove("none")
+    const options = doc.getElementById("resumator-resume-options")
+    if (options instanceof HTMLElement) options.style.display = "none"
+  } catch {
+    /* best-effort — never let a widget quirk break the injection result */
+  }
+}
+
 function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean {
   try {
     const binary = atob(bytes.base64)
@@ -1493,6 +1519,15 @@ function injectResumeFile(target: HTMLInputElement, bytes: ResumeBytes): boolean
     if (rootNode instanceof ShadowRoot && rootNode.host instanceof HTMLElement) {
       dispatchDropWithFile(rootNode.host, file)
     }
+
+    // JazzHR / resumator: the resume <input> is a plain multipart field inside
+    // "#resumator-resume-upload-wrapper", which starts collapsed (class "none")
+    // behind an "Attach resume" link and has NO change/upload handler. Our file
+    // lands in the hidden input but the widget stays in its "choose option"
+    // state — the filename never shows and resumator reads "no resume". Reveal
+    // the wrapper (exactly what the link's own click handler does) so the
+    // just-set file becomes the visible, submitted attachment. No-op elsewhere.
+    revealResumatorUploadWidget(target)
 
     // Verify the attach actually took (some forms re-validate and reject
     // synthetic file events — better to surface that than silently "succeed").

@@ -16,6 +16,7 @@ import { isProbablyJobPage } from "../detectors/site"
 import { isWorkdayAuthPage } from "../detectors/ats"
 import {
   detectApplicationForm,
+  isFillableApplicationForm,
   type ApplicationFormDetection,
 } from "../detectors/application-form"
 import {
@@ -1443,6 +1444,19 @@ export class ApexBar {
       return
     }
 
+    // Universal-autofill parity with content.ts's mount gate: a page that
+    // exposes a real, fillable application form must keep the bar even when it
+    // isn't a recognized "job detail" page (e.g. Apple's /app/apply form, JazzHR
+    // applytojob.com). Without this, mountApexBarWhenReady() creates the bar and
+    // runDetection() immediately tears it down — so autofill (and the tailored
+    // resume upload) never runs on non-allowlisted ATS hosts.
+    let hasFillableForm = false
+    try {
+      hasFillableForm = isFillableApplicationForm(document)
+    } catch {
+      hasFillableForm = false
+    }
+
     // Confirmation pages may not match isProbablyJobPage (the URL/DOM tells a
     // different story). Always run confirmation detection first so we can keep
     // the bar visible to prompt for proof on real success screens.
@@ -1462,7 +1476,7 @@ export class ApexBar {
       void this.onSaveProof()
     }
 
-    if (!isJob && !(confirmation?.isConfirmation && confirmation.confidence !== "low")) {
+    if (!isJob && !hasFillableForm && !(confirmation?.isConfirmation && confirmation.confidence !== "low")) {
       this.state = "not_job_page"
       this.tearDownSurface()
       this.stopConfirmationPolling()
@@ -3049,10 +3063,24 @@ export class ApexBar {
    * true if it clicked something.
    */
   private tryClickApplyCta(): boolean {
-    const CTA_RE = /^(i'?m interested|apply now|apply for this job|apply online|apply|start application|continue|get started)$/
+    // Apply-entry CTAs are worded countless ways across ATSes, so match apply
+    // INTENT as word-boundary substrings rather than an exact allow-list — we
+    // catch "Apply", "Apply now", "Apply for this job", "Submit resume",
+    // "Submit your application", "Start application", "I'm interested", "Easy
+    // apply", "Get started", etc., whatever the site happens to call it.
+    // No trailing \b: JS \b treats "é" (in "résumé") as a non-word char, so a
+    // trailing boundary would fail to match "submit résumé". The leading \b plus
+    // the specific vocabulary keep it from over-matching.
+    const APPLY_INTENT_RE = /\b(apply|submit\s+(your\s+)?(resume|résumé|cv|application)|start\s+(your\s+)?application|i'?m\s+interested|easy\s+apply|quick\s+apply|one[-\s]?click\s+apply|begin\s+application)/
+    // Generic entry buttons that only count as an apply CTA when that's the
+    // WHOLE label (matched exactly so we don't grab "continue reading" or
+    // "get started with our newsletter").
+    const GENERIC_EXACT_RE = /^(continue|get started)$/
+    // Reject look-alikes that share a keyword but don't start an application.
+    const NEGATIVE_RE = /\b(apply\s+(filter|filters|coupon|promo|code|discount)|filter|search|sign\s?in|log\s?in|save|share|feedback|refer|subscribe|newsletter|cookie|how\s+to\s+apply|learn\s+more|read\s+more)\b/
     const candidates = Array.from(
       document.querySelectorAll<HTMLElement>(
-        'a[href], button, [role="button"], [data-test*="apply" i], [data-ui*="apply" i]',
+        'a[href], button, [role="button"], [data-test*="apply" i], [data-ui*="apply" i], [data-automation-id*="apply" i]',
       ),
     ).filter((el) => {
       if (!isActionableButton(el)) return false
@@ -3061,19 +3089,25 @@ export class ApexBar {
         .trim()
         .toLowerCase()
       if (!text) return false
-      // Avoid "apply filters" / "apply to saved" style false positives.
-      if (/filter|search|sign in|log ?in|save|share/.test(text)) return false
-      return CTA_RE.test(text)
+      if (NEGATIVE_RE.test(text)) return false
+      return APPLY_INTENT_RE.test(text) || GENERIC_EXACT_RE.test(text)
     })
     if (candidates.length === 0) return false
-    // Prefer an explicit "I'm interested"/"Apply" over generic "Continue".
+    // Prefer an explicit apply/interested CTA over a generic "Continue".
     const score = (el: HTMLElement): number => {
-      const t = (el.textContent ?? "").toLowerCase()
-      if (t.includes("interested")) return 100
-      if (t.includes("apply")) return 90
-      if (t.includes("start application")) return 70
-      if (t.includes("get started")) return 50
-      return 10
+      const t = (el.textContent ?? "").replace(/\s+/g, " ").trim().toLowerCase()
+      let s = 0
+      if (/\bi'?m\s+interested\b/.test(t)) s += 100
+      else if (/\bsubmit\s+(your\s+)?(resume|résumé|cv)/.test(t)) s += 95
+      else if (/\beasy\s+apply\b|\bquick\s+apply\b|\bone[-\s]?click\s+apply\b/.test(t)) s += 92
+      else if (/\bapply\b/.test(t)) s += 90
+      else if (/\bsubmit\s+(your\s+)?application\b/.test(t)) s += 85
+      else if (/\bstart\s+(your\s+)?application\b|\bbegin\s+application\b/.test(t)) s += 70
+      else if (/\bget\s+started\b/.test(t)) s += 50
+      else s += 10
+      // Prefer short, CTA-like labels over long descriptive links/paragraphs.
+      if (t.length <= 24) s += 15
+      return s
     }
     candidates.sort((a, b) => score(b) - score(a))
     const cta = candidates[0]
@@ -3376,6 +3410,8 @@ export class ApexBar {
         resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
         resumeId: this.currentTailoredResumeId(),
         resumeVersionId: this.currentTailoredVersionId(),
+        // Hands-off queue loop → best-effort answer every required field.
+        autonomous: this.autonomousRun,
         onSnapshot: (snapshot) => {
           this.workdaySnapshot = snapshot
           this.render()
@@ -4053,6 +4089,10 @@ export class ApexBar {
           resumeJobId: this.knownJobId ?? this.analysis?.jobId ?? this.saveResult?.jobId ?? undefined,
           resumeId: this.currentTailoredResumeId(),
           resumeVersionId: this.currentTailoredVersionId(),
+          // User-triggered "Fill form" is conservative (autonomousRun=false):
+          // ground-or-skip rather than guess required yes/no & selects. The
+          // hands-off queue run sets autonomousRun=true for best-effort answers.
+          autonomous: this.autonomousRun,
           onSnapshot: (snapshot) => {
             this.workdaySnapshot = snapshot
             this.autofillPreview = [
