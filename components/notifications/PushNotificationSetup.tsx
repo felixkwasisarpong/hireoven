@@ -21,6 +21,37 @@ async function fetchPublicKey() {
   return payload.publicKey
 }
 
+/**
+ * True when the browser's existing subscription was created under the
+ * server's CURRENT VAPID key. After a key rotation old subscriptions live on
+ * in the browser but every push is rejected (Apple: VapidPkHashMismatch), so
+ * they must be re-minted under the new key.
+ */
+function subscriptionMatchesKey(subscription: PushSubscription, publicKey: string): boolean {
+  const current = subscription.options?.applicationServerKey
+  if (!current) return true // browser doesn't expose it — assume fine, server prunes if not
+  const expected = urlBase64ToUint8Array(publicKey)
+  const actual = new Uint8Array(current)
+  if (actual.length !== expected.length) return false
+  return expected.every((byte, i) => actual[i] === byte)
+}
+
+/** Re-subscribe under the current key when the existing subscription is stale. */
+async function ensureFreshSubscription(
+  registration: ServiceWorkerRegistration,
+  publicKey: string
+): Promise<PushSubscription> {
+  const existing = await registration.pushManager.getSubscription()
+  if (existing) {
+    if (subscriptionMatchesKey(existing, publicKey)) return existing
+    await existing.unsubscribe()
+  }
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  })
+}
+
 async function persistSubscription(subscription: PushSubscription) {
   const response = await fetch("/api/alerts/subscribe", {
     method: "POST",
@@ -67,7 +98,12 @@ export default function PushNotificationSetup() {
       if (existingSubscription) {
         setSubscribed(true)
         try {
-          await persistSubscription(existingSubscription)
+          // Self-heal: if the subscription predates a VAPID key rotation,
+          // silently re-mint it under the current key (permission is already
+          // granted, so no prompt) — otherwise every push to it is rejected.
+          const publicKey = await fetchPublicKey()
+          const subscription = await ensureFreshSubscription(registration, publicKey)
+          await persistSubscription(subscription)
         } catch {
           // Keep UI calm if the server sync fails during initialization.
         }
@@ -109,14 +145,7 @@ export default function PushNotificationSetup() {
         navigator.serviceWorker.ready,
       ])
 
-      let subscription = await registration.pushManager.getSubscription()
-      if (!subscription) {
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
-        })
-      }
-
+      const subscription = await ensureFreshSubscription(registration, publicKey)
       await persistSubscription(subscription)
       setSubscribed(true)
     } catch (nextError) {

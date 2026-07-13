@@ -68,3 +68,22 @@ export async function removeSubscription(
     subscriptionEndpoint,
   ])
 }
+
+/**
+ * True when a web-push send error means the subscription can never succeed
+ * and should be pruned:
+ * - 404/410: endpoint gone (browser unsubscribed / expired)
+ * - 400/403 with a VAPID mismatch reason: the subscription was created under
+ *   a previous VAPID key pair (Apple: `{"reason":"VapidPkHashMismatch"}`,
+ *   FCM: 403 sender mismatch). After a key rotation these fail on every send
+ *   forever — deleting them lets the client mint a fresh subscription.
+ */
+export function isDeadSubscriptionError(error: unknown): boolean {
+  const statusCode = (error as { statusCode?: number }).statusCode
+  if (statusCode === 404 || statusCode === 410) return true
+  if (statusCode === 400 || statusCode === 403) {
+    const body = String((error as { body?: unknown }).body ?? "")
+    return /vapid/i.test(body)
+  }
+  return false
+}
