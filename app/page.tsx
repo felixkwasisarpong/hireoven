@@ -321,7 +321,7 @@ export default async function HomePage() {
             </div>
           )}
           <p className="mt-6 text-center text-xs text-slate-400">
-            …and thousands more across Greenhouse, Lever, Ashby, and Workday.
+            …and thousands more across Greenhouse, Lever, Ashby, Workday, Workable, iCIMS, SmartRecruiters, Jobvite, SuccessFactors, and more.
           </p>
         </div>
       </section>
@@ -353,7 +353,7 @@ export default async function HomePage() {
               Match scores &amp; one-click autofill on every job posting.
             </p>
             <p className="mt-0.5 text-[13px] text-white/50">
-              Free Chrome extension — works on LinkedIn, Greenhouse, Lever, Ashby, Workday &amp; more.
+              Free Chrome extension — works on LinkedIn plus Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, and BambooHR.
             </p>
           </div>
           <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition group-hover:bg-[#FF5C18] group-hover:text-white">
@@ -452,7 +452,7 @@ export default async function HomePage() {
               </div>
               <p className="mt-3 text-[15px] font-bold text-slate-900">Original source, not copies</p>
               <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-                Jobs pulled straight from companies' own ATS — Greenhouse, Lever, Ashby, Workday — not recycled from aggregators. The original posting, minutes after it goes live.
+                Jobs pulled straight from companies' own ATS — Greenhouse, Lever, Ashby, Workday, Workable, iCIMS, SmartRecruiters, Jobvite, SuccessFactors, and more — not recycled from aggregators. The original posting, minutes after it goes live.
               </p>
             </div>
             <div className="rounded-2xl border border-[#D8E8FF] bg-[#F5FAFF] p-5 shadow-[0_2px_12px_rgba(37,99,235,0.08)]">

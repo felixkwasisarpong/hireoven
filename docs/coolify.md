@@ -28,7 +28,7 @@ Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`]
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only; never expose to browser |
 | `NEXT_PUBLIC_APP_URL` | Public site URL, e.g. `https://hireoven.com` |
 | `NEXT_PUBLIC_SITE_URL` | Same as app URL if you use it for OG/links |
-| `RESEND_API_KEY` / `MAIL_FROM_DOMAIN` / `RECENT_JOBS_FROM_EMAIL` | Email identities |
+| `RESEND_API_KEY` / `MAIL_FROM_DOMAIN` | Email identities |
 | `ANTHROPIC_API_KEY` | If you use AI routes in prod |
 | `STRIPE_*` | If billing enabled |
 | `CRON_SECRET`, `SUPABASE_WEBHOOK_SECRET` | As in example |
@@ -56,8 +56,6 @@ The production **Dockerfile** installs **`curl`** in the final image so schedule
 | `/api/cron/job-description-enrichment?batch=200&concurrency=4` | `*/15 * * * *` | Deterministically fills descriptions for pending crawler jobs so they can publish |
 | `/api/alerts/digest` | `0 8 * * *` (UTC) | Daily digest emails |
 | `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
-| `/api/alerts/recent-jobs?segment=with-resume` | `0 */6 * * *` | 75%+ resume-match recent jobs |
-| `/api/alerts/recent-jobs?segment=without-resume` | `0 20 * * *` | End-of-day jobs for users without resumes |
 | `/api/cron/refresh-title-suggestions` | `30 3 * * *` (UTC) | Rebuild title_suggestions lookup that backs the feed Job-title typeahead |
 
 Example (replace host and secret):
