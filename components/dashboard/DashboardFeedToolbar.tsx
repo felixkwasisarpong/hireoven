@@ -1003,14 +1003,14 @@ export default function DashboardFeedToolbar({
             href="/dashboard/upgrade?plan=pro"
             title="Your 99–100% matches are reserved for Pro. Upgrade to unlock them."
             className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-3 text-[13px] font-semibold text-amber-800 shadow-sm transition",
-              canHover && "hover:from-amber-100 hover:to-orange-100"
+              "inline-flex h-8 items-center gap-1.5 rounded-lg border border-violet-300 bg-violet-50 px-3 text-[13px] font-semibold text-violet-700 shadow-sm transition",
+              canHover && "hover:bg-violet-100"
             )}
           >
             <Lock className="h-3.5 w-3.5" strokeWidth={2} />
             Hidden jobs
             {(feedMeta.hiddenTopMatches ?? 0) > 0 && (
-              <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+              <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold leading-none text-white">
                 {feedMeta.hiddenTopMatches}
               </span>
             )}
