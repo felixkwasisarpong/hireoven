@@ -1067,6 +1067,35 @@ export function detectProviderFromUrl(url: URL): string | undefined {
   return undefined
 }
 
+// Bot walls and CDN error pages often come back HTTP 200, so the generic
+// extractor happily returns their text — which the enrichment then SAVED as
+// the job description ("Access Denied … errors.edgesuite.net" overwrote 21
+// live Infosys JDs on 2026-07-13 when Akamai rate-limited the fetch burst).
+// Only short texts are checked: a real 4KB JD that merely mentions "captcha"
+// must not be rejected.
+const BLOCK_PAGE_MAX_CHARS = 1_000
+const BLOCK_PAGE_SIGNATURES: RegExp[] = [
+  /access denied/i,
+  /don'?t have permission to access/i,
+  /errors\.edgesuite\.net/i,
+  /attention required!?\s*\|\s*cloudflare/i,
+  /just a moment\.\.\./i,
+  /checking your browser before accessing/i,
+  /verify (?:that )?you are (?:a )?human/i,
+  /are you a robot/i,
+  /pardon our interruption/i,
+  /request unavailable/i,
+  /enable javascript and cookies to continue/i,
+]
+
+/** True when extracted text is a bot-wall / CDN error page, not a job description. */
+export function looksLikeBlockedOrErrorPage(text: string | null | undefined): boolean {
+  if (!text) return false
+  const trimmed = text.trim()
+  if (trimmed.length === 0 || trimmed.length > BLOCK_PAGE_MAX_CHARS) return false
+  return BLOCK_PAGE_SIGNATURES.some((re) => re.test(trimmed))
+}
+
 export async function fetchJobDescription(
   url: string,
   timeoutMs = DEFAULT_TIMEOUT_MS,
@@ -1124,7 +1153,8 @@ export async function fetchJobDescription(
       const infosysDescription = extractInfosysDescriptionFromHtml(html)
       if (infosysDescription) return infosysDescription
     }
-    return extractJobDescriptionFromHtml(html, resolvedProvider)
+    const extracted = extractJobDescriptionFromHtml(html, resolvedProvider)
+    return looksLikeBlockedOrErrorPage(extracted) ? null : extracted
   } catch {
     return null
   } finally {
