@@ -29,6 +29,12 @@ export const ATS_LABELS: Record<AtsSlug, string> = {
   bamboohr:        "BambooHR",
 }
 
+/** Every ATS the extension has an autofill driver for — the DEFAULT pool
+ *  filter for autonomous apply (see apply-agent route): the agent can only
+ *  drive jobs its drivers know, so custom career portals (login-gated,
+ *  unknown forms — e.g. Infosys BrassRing) must not occupy queue slots. */
+export const ALL_ATS_SLUGS: AtsSlug[] = Object.keys(ATS_LABELS) as AtsSlug[]
+
 /**
  * SQL ILIKE patterns matched against `jobs.apply_url`. Mirrors the host checks
  * in chrome-extension guessAtsFromUrl + bulk-prepare detectAtsFromApplyUrl.

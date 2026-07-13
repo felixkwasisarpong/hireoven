@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
-import { buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
+import { ALL_ATS_SLUGS, buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
 
 export const runtime = "nodejs"
 
@@ -91,14 +91,21 @@ export async function GET(request: NextRequest) {
   const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
   // ats=greenhouse or ats=greenhouse,lever — filters the pool to jobs whose
   // apply_url is on the given ATS(es), i.e. jobs that ATS driver can autofill.
-  const atsSlugs = Array.from(
+  // DEFAULT (no ats param): ALL driver-supported ATS. The autonomous agent can
+  // only drive forms its drivers know — custom career portals (login-gated, no
+  // known form, e.g. Infosys's BrassRing site) stalled queue slots silently.
+  // Pass ats=any to opt back into the unfiltered pool.
+  const rawAts = (searchParams.get("ats") ?? "").trim()
+  const requestedSlugs = Array.from(
     new Set(
-      (searchParams.get("ats") ?? "")
+      rawAts
         .split(",")
         .map((s) => canonicalizeAts(s))
         .filter((s): s is AtsSlug => s !== null),
     ),
   )
+  const atsSlugs: AtsSlug[] =
+    rawAts.toLowerCase() === "any" ? [] : requestedSlugs.length > 0 ? requestedSlugs : ALL_ATS_SLUGS
 
   const pool = getPostgresPool()
 

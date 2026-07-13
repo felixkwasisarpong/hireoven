@@ -2631,6 +2631,8 @@ class WorkdayAutofillRunner {
       // Fairs/events are things the user did not attend — factually false picks.
       if (/\b(?:career|job|recruit(?:ing|ment)?|virtual|campus)\s*(?:fair|event|expo)\b/i.test(t)) return -1
       if (/\bcompany\s*websites?\b/i.test(t)) return 0
+      // "{Company} Website" (e.g. "Aerospace Website") IS the company website.
+      if (/\bwebsites?\b/i.test(t)) return 1
       if (/\bcareer\s*websites?\b/i.test(t) || /\bcareers\b/i.test(t)) return 1
       if (/\blinked\s?in\b/i.test(t)) return 2
       if (/\bindeed\b/i.test(t)) return 3
@@ -2728,7 +2730,7 @@ class WorkdayAutofillRunner {
       await this.fillSourceViaPromptSearch(
         container,
         fieldName,
-        ["company website", "career website", "careers", "linkedin", "indeed"],
+        ["website", "company website", "career website", "careers", "linkedin", "indeed"],
         (text) => {
           const t = text.toLowerCase()
           if (/\bcareer\s?builder\b/.test(t)) return false // job board, not a company careers site
@@ -2737,7 +2739,11 @@ class WorkdayAutofillRunner {
           // careers? regex let bare "career" match "Career Fair" on Aerospace.)
           if (/\b(?:career|job|recruit(?:ing|ment)?|virtual|campus)\s*(?:fair|event|expo)\b/.test(t)) return false
           return (
-            /\b(?:company|corporate)\s*websites?\b/.test(t) ||
+            // Tenants label the company site "{Company} Website" (e.g.
+            // "Aerospace Website"), not just "Company Website" — any leaf
+            // ending in Website counts as the company website. Fairs/boards
+            // are already excluded above.
+            /\bwebsites?\b/.test(t) ||
             /\bcareers\b/.test(t) || // plural only — never bare "career"
             /\bcareer\s*(?:site|website|page|portal)\b/.test(t) ||
             /\blinked\s?in\b/.test(t) ||
@@ -2764,7 +2770,12 @@ class WorkdayAutofillRunner {
       // (Caterpillar) or "Career Websites" → "Corporate Website" (others).
       const ok = await this.fillWorkdayMultiselect(container, ["Company Website", ...childPreferred], fieldName, {
         parentPreferred: ["Company Website", "Career Websites"],
-        parentMatcher: (text) => /\b(company|corporate|career)s?\s*websites?\b/i.test(text),
+        // Tenants often brand the parent "{Company} Website" (e.g. "Aerospace
+        // Website") — any "... Website(s)" category is the company-site parent;
+        // the child fallback then picks the first leaf under it.
+        parentMatcher: (text) =>
+          /\bwebsites?\b/i.test(text) &&
+          !/\b(?:career|job|recruit(?:ing|ment)?|virtual|campus)\s*(?:fair|event|expo)\b/i.test(text),
         childMatcher: (text) =>
           /\bcareers?\b/i.test(text) || /\b(corporate|company)\s*websites?\b/i.test(text),
         childPreferred,
@@ -4134,8 +4145,24 @@ class WorkdayAutofillRunner {
         (el) => isVisible(el) && nonEmpty(el.textContent).length > 0 && !this.isUnansweredSelectPlaceholder(el.textContent ?? ""),
       )
 
-    for (const skill of this.cv.skills.slice(0, 24)) {
+    // Skills is an OPTIONAL Workday field, but a tenant whose catalog doesn't
+    // match the résumé's skill names (observed on aero.wd5) can burn
+    // 24 skills × 2 attempts × 2.5s ≈ 2 min here — exhausting the agent run's
+    // budget so the Experience step looks stuck. Autonomous runs use a tighter
+    // budget, and BOTH modes bail out of the loop after 3 consecutive misses:
+    // if the catalog isn't matching, more typing won't fix it, and missing
+    // pills never block Save-and-Continue.
+    const maxSkills = this.autonomous ? 12 : 24
+    const maxAttempts = this.autonomous ? 1 : 2
+    const matchDeadlineMs = this.autonomous ? 1_500 : 2_500
+    let consecutiveMisses = 0
+
+    for (const skill of this.cv.skills.slice(0, maxSkills)) {
       if (this.stopped || this.paused) return
+      if (consecutiveMisses >= 3) {
+        this.debug("warn", "skills.prompt_bailout_catalog_mismatch", { after: skill })
+        break
+      }
       const want = normText(skill)
       if (!want) continue
       // Exact-equality checks ONLY: substring logic made "JavaScript" look
@@ -4146,7 +4173,7 @@ class WorkdayAutofillRunner {
       const newPill = (): string | null => pillTexts().find((t) => !before.has(t)) ?? null
 
       let added = false
-      for (let attempt = 0; attempt < 2 && !added; attempt += 1) {
+      for (let attempt = 0; attempt < maxAttempts && !added; attempt += 1) {
         // Open the widget (skills search only fires once the popup is active),
         // then type + Enter — the same trigger the working School/Field-of-
         // Study prompt uses to populate results.
@@ -4158,7 +4185,7 @@ class WorkdayAutofillRunner {
         nativeSet(skill)
         pressKey("Enter", 13)
 
-        const deadline = Date.now() + 2500
+        const deadline = Date.now() + matchDeadlineMs
         while (Date.now() < deadline && !added) {
           if (newPill()) {
             added = true
@@ -4185,9 +4212,11 @@ class WorkdayAutofillRunner {
         }
       }
       if (added) {
+        consecutiveMisses = 0
         this.bumpFilledCount()
         this.debug("info", "skills.prompt_added", { skill, pill: newPill() })
       } else {
+        consecutiveMisses += 1
         this.debug("warn", "skills.prompt_not_added", { skill })
         nativeSet("")
         input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }))
