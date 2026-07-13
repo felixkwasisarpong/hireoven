@@ -137,6 +137,12 @@ function PromoCard({ promo }: { promo: ActivePromo }) {
             </p>
             <h3 className="mt-1 text-[13px] font-bold leading-snug text-slate-900">{promo.subtitle}</h3>
             <p className="mt-2 text-[12px] leading-relaxed text-slate-700">{promo.description}</p>
+            {promo.ends_at && (
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Offer ends{" "}
+                {new Date(promo.ends_at).toLocaleDateString("en-US", { month: "long", day: "numeric" })}
+              </p>
+            )}
           </div>
         </div>
 

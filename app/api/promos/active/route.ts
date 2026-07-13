@@ -15,6 +15,7 @@ export type ActivePromo = {
   icon: string
   cta_label: string
   cta_url: string
+  ends_at: string | null
 }
 
 export async function GET() {
@@ -22,7 +23,7 @@ export async function GET() {
   const now = new Date().toISOString()
 
   const result = await pool.query<ActivePromo>(
-    `SELECT id, title, subtitle, description, badge_label, is_new, theme, icon, cta_label, cta_url
+    `SELECT id, title, subtitle, description, badge_label, is_new, theme, icon, cta_label, cta_url, ends_at
      FROM promos
      WHERE is_active = true
        AND (starts_at IS NULL OR starts_at <= $1::timestamptz)
