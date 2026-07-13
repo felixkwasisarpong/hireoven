@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { absoluteLogoUrl } from "@/lib/companies/logo-url"
 
 export const runtime = "nodejs"
 
@@ -7,7 +8,7 @@ const teal = "#1D9E75"
 
 type Props = { params: Promise<{ id: string }> }
 
-export async function GET(_req: Request, { params }: Props) {
+export async function GET(req: Request, { params }: Props) {
   const { id } = await params
 
   let title = "Job Opening"
@@ -39,7 +40,7 @@ export async function GET(_req: Request, { params }: Props) {
         title = row.title
         company = row.company_name ?? ""
         location = row.is_remote ? "Remote" : (row.location ?? "")
-        logoUrl = row.logo_url ?? null
+        logoUrl = absoluteLogoUrl(row.logo_url, req)
         logoLetter = (row.company_name ?? "H")[0].toUpperCase()
       }
     } catch {

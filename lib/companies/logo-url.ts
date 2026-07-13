@@ -1,9 +1,26 @@
 import { isAtsDomain } from "@/lib/companies/ats-domains"
+import { resolveAppOrigin } from "@/lib/app-url"
 
 /**
  * Default company logo image URLs derived from email-style domain (e.g. stripe.com).
  * Used to backfill companies.logo_url when you don't store your own assets.
  */
+
+/**
+ * Absolute form of a stored logo_url, for renderers that reject relative
+ * paths — the @vercel/og image renderer throws "Image source must be an
+ * absolute URL" on local /company-logos/* assets, killing the whole OG
+ * response. Pass the incoming request when available so the origin matches
+ * the host actually being served (falls back to the validated env origin).
+ */
+export function absoluteLogoUrl(
+  logoUrl: string | null | undefined,
+  request?: Request
+): string | null {
+  const url = logoUrl?.trim()
+  if (!url) return null
+  return url.startsWith("/") ? `${resolveAppOrigin(request)}${url}` : url
+}
 
 /**
  * Returns true when the stored `logo_url` value is safe to use as-is:

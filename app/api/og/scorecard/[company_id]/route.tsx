@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og"
 import { getCompanyScorecard } from "@/lib/h1b/scorecard-query"
+import { absoluteLogoUrl } from "@/lib/companies/logo-url"
 import type { ScoreHue } from "@/types/h1b-scorecard"
 
 // pg requires the Node runtime (not edge).
@@ -12,14 +13,6 @@ const HUE_TO_HEX: Record<ScoreHue, { bg: string; fg: string; accent: string }> =
   amber: { bg: "#3a2208", fg: "#fef3c7", accent: "#fbbf24" },
   orange: { bg: "#3a1808", fg: "#ffedd5", accent: "#fb923c" },
   red: { bg: "#3a0808", fg: "#fee2e2", accent: "#f87171" },
-}
-
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
-
-// Relative logo paths (/company-logos/...) don't resolve inside the OG renderer; absolutize.
-function absoluteLogo(url: string | null): string | null {
-  if (!url) return null
-  return url.startsWith("/") ? `${BASE}${url}` : url
 }
 
 function StatBlock({
@@ -129,7 +122,7 @@ export async function GET(
   if (!data) return new Response("Not found", { status: 404 })
 
   const colors = HUE_TO_HEX[data.bucket.hue] ?? HUE_TO_HEX.blue
-  const logo = absoluteLogo(data.company.logo_url)
+  const logo = absoluteLogoUrl(data.company.logo_url)
   const certifiedValue =
     data.metrics.filed_latest_fy > 0
       ? `${data.metrics.certified_latest_fy.toLocaleString()} of ${data.metrics.filed_latest_fy.toLocaleString()}`

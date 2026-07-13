@@ -2,10 +2,10 @@ import { ImageResponse } from "next/og"
 import { getSocRoleBySlug } from "@/lib/salaries/soc-roles"
 import { getWageForCompanyRole, type WageRollup } from "@/lib/salaries/wage-query"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { absoluteLogoUrl } from "@/lib/companies/logo-url"
 
 export const runtime = "nodejs"
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
 const usd = (n: number) => `$${Math.round(n).toLocaleString()}`
 
 async function co(id: string): Promise<{ name: string; logo: string | null } | null> {
@@ -16,12 +16,7 @@ async function co(id: string): Promise<{ name: string; logo: string | null } | n
   )
   const r = rows[0]
   if (!r) return null
-  const logo = r.logo_url
-    ? r.logo_url.startsWith("/")
-      ? `${BASE}${r.logo_url}`
-      : r.logo_url
-    : null
-  return { name: r.name, logo }
+  return { name: r.name, logo: absoluteLogoUrl(r.logo_url) }
 }
 
 function Side({
