@@ -19,7 +19,7 @@ import type { JobFilters } from "@/types"
 interface JobFeedProps {
   filters: JobFilters
   searchQuery: string
-  onMetaChange?: (meta: { totalCount: number }) => void
+  onMetaChange?: (meta: { totalCount: number; hiddenTopMatches: number }) => void
   hasPrimaryResume?: boolean
   /** Force a specific view — hides the view toggle when set */
   defaultView?: JobFeedView
@@ -94,10 +94,23 @@ export default function JobFeed({
     : []
   const { user, profile } = useAuth()
   const { getScore, isLoading: scoresLoading } = useMatchScores(missingScoreIds, user?.id)
-  const { isProInternational } = useSubscription()
+  const { isProInternational, isPro, isLoading: subLoading } = useSubscription()
   const h1bEnabled = Boolean(
     profile?.needs_sponsorship || profile?.is_international || isProInternational
   )
+
+  // Top-match paywall: free users don't see 99-100% scored jobs — they're
+  // held back and surfaced as a locked "Hidden jobs" chip in the toolbar.
+  // Only kicks in once the plan is known (no flash-hide while loading), and
+  // only for signed-in users (public feeds carry no personal scores anyway).
+  const hideTopMatches = Boolean(user) && !subLoading && !isPro
+  const visibleJobs = hideTopMatches
+    ? jobs.filter((job) => {
+        const overall = (job.match_score ?? getScore(job.id))?.overall_score
+        return overall == null || overall < 99
+      })
+    : jobs
+  const hiddenTopMatches = jobs.length - visibleJobs.length
 
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
@@ -129,12 +142,13 @@ export default function JobFeed({
   }
   const signalFingerprintRef = useRef("")
 
-  const lastTotalRef = useRef(-1)
+  const lastMetaRef = useRef("")
   useEffect(() => {
-    if (lastTotalRef.current === totalCount) return
-    lastTotalRef.current = totalCount
-    onMetaChange?.({ totalCount })
-  }, [onMetaChange, totalCount])
+    const key = `${totalCount}:${hiddenTopMatches}`
+    if (lastMetaRef.current === key) return
+    lastMetaRef.current = key
+    onMetaChange?.({ totalCount, hiddenTopMatches })
+  }, [onMetaChange, totalCount, hiddenTopMatches])
 
   useEffect(() => {
     if (!sentinelRef.current || !hasMore) return
@@ -166,7 +180,7 @@ export default function JobFeed({
   let bestMatchJobId: string | null = null
   if (filters.sort === "match") {
     let top = -1
-    for (const job of jobs) {
+    for (const job of visibleJobs) {
       const ms = job.match_score ?? getScore(job.id)
       const overall = ms?.overall_score
       if (overall == null) continue
@@ -250,7 +264,7 @@ export default function JobFeed({
 
       {jobs.length > 0 && (
         <div className={cn(view === "list" ? "space-y-1.5" : "space-y-3", "animate-fade-in")}>
-          {jobs.map((job, i) => {
+          {visibleJobs.map((job, i) => {
             const matchScore = job.match_score ?? getScore(job.id)
             const isMatchScoreLoading =
               hasPrimaryResume && !job.match_score && scoresLoading && !getScore(job.id)
