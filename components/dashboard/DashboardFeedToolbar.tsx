@@ -12,6 +12,7 @@ import {
   Clock,
   DollarSign,
   Globe2,
+  Lock,
   MapPin,
   Plane,
   RotateCcw,
@@ -21,6 +22,7 @@ import {
   Tag,
   X,
 } from "lucide-react"
+import Link from "next/link"
 import { useToast } from "@/components/ui/ToastProvider"
 import {
   EMPLOYMENT_OPTIONS,
@@ -136,7 +138,7 @@ type TitleSuggestion = { title: string; n: number }
 type Props = {
   filters: JobFilters
   searchQuery: string
-  feedMeta: { totalCount: number }
+  feedMeta: { totalCount: number; hiddenTopMatches?: number }
   filterDropdown: FeedToolbarDropdown
   setFilterDropdown: Dispatch<SetStateAction<FeedToolbarDropdown>>
   filtersBarRef: RefObject<HTMLDivElement | null>
@@ -990,6 +992,25 @@ export default function DashboardFeedToolbar({
             </span>
           )}
         </button>
+
+        {/* Top-match paywall: free users' 99-100% matches are held out of the
+            feed (JobFeed) and teased here — the chip is the upsell. */}
+        {(feedMeta.hiddenTopMatches ?? 0) > 0 && (
+          <Link
+            href="/dashboard/upgrade?plan=pro"
+            title="Your 99–100% matches are reserved for Pro. Upgrade to unlock them."
+            className={cn(
+              "inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 px-3 text-[13px] font-semibold text-amber-800 shadow-sm transition",
+              canHover && "hover:from-amber-100 hover:to-orange-100"
+            )}
+          >
+            <Lock className="h-3.5 w-3.5" strokeWidth={2} />
+            Hidden jobs
+            <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+              {feedMeta.hiddenTopMatches}
+            </span>
+          </Link>
+        )}
       </div>
 
       <AdvancedFiltersDrawer
