@@ -2,7 +2,7 @@ import webpush from "web-push"
 import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
-import { removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import { isDeadSubscriptionError, removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
 import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
@@ -468,8 +468,7 @@ export async function sendPushNotification(userId: string, job: Job, type: "aler
       await webpush.sendNotification(subscription, payload)
       successCount += 1
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode
-      if (statusCode === 404 || statusCode === 410) { await removeSubscription(subscription.endpoint); continue }
+      if (isDeadSubscriptionError(error)) { await removeSubscription(subscription.endpoint); continue }
       throw error
     }
   }
@@ -523,8 +522,7 @@ export async function sendBatchPushNotification(
       await webpush.sendNotification(subscription, payload)
       successCount += 1
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode
-      if (statusCode === 404 || statusCode === 410) { await removeSubscription(subscription.endpoint); continue }
+      if (isDeadSubscriptionError(error)) { await removeSubscription(subscription.endpoint); continue }
       throw error
     }
   }

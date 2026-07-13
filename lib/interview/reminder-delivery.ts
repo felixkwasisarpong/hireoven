@@ -1,7 +1,7 @@
 import webpush from "web-push"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { configureWebPush } from "@/lib/alerts/sender"
-import { getUserSubscriptions, removeSubscription } from "@/lib/alerts/push-subscriptions"
+import { getUserSubscriptions, isDeadSubscriptionError, removeSubscription } from "@/lib/alerts/push-subscriptions"
 import { resolveAppOrigin } from "@/lib/app-url"
 import {
   listDueReminders,
@@ -67,8 +67,7 @@ async function pushReminder(
         await webpush.sendNotification(subscription, payload)
         return true
       } catch (error) {
-        const statusCode = (error as { statusCode?: number }).statusCode
-        if (statusCode === 404 || statusCode === 410) {
+        if (isDeadSubscriptionError(error)) {
           await removeSubscription(subscription.endpoint)
           return false
         }
