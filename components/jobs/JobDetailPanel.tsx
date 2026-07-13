@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
-import JobNetworkingContacts from "@/components/jobs/JobNetworkingContacts"
 import {
   AlertTriangle,
   ArrowRight,
@@ -574,16 +573,6 @@ export default function JobDetailPanel({
               </div>
             )
           ) : null}
-        </div>
-
-        {/* ── Networking Finder ── */}
-        <div className={sectionCls}>
-          <IntelLabel>Networking finder</IntelLabel>
-          <JobNetworkingContacts
-            jobId={job.id}
-            jobTitle={displayTitle}
-            companyName={job.company?.name ?? null}
-          />
         </div>
 
         {/* ── Match Score ── */}

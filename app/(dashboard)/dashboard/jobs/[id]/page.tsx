@@ -16,7 +16,6 @@ import {
   Plane,
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
-import JobShareRow from "@/components/jobs/JobShareRow"
 import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
@@ -907,18 +906,6 @@ export default async function DashboardJobDetailPage({ params }: Props) {
                 </section>
               )}
 
-              {/* Share */}
-              <div className={cn("px-6 py-5", div)}>
-                <div className="flex items-center justify-between gap-4">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400">
-                    Share this role
-                  </p>
-                  <JobShareRow
-                    jobTitle={displayTitle}
-                    shareUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"}/jobs/${id}`}
-                  />
-                </div>
-              </div>
             </div>
           </div>
 
