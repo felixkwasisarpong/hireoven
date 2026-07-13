@@ -35,13 +35,13 @@ export const metadata: Metadata = {
     siteName: "Hireoven",
     title: "Hireoven – Jobs served fresh",
     description:
-      "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
+      "Every job sponsorship-checked against DOL and USCIS records, surfaced minutes after it posts. Apex AI applies for you.",
     images: [
       {
-        url: "/api/og",
+        url: "/brand/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Hireoven – Jobs served fresh",
+        alt: "Hireoven: jobs served fresh",
       },
     ],
   },
@@ -49,8 +49,8 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Hireoven – Jobs served fresh",
     description:
-      "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
-    images: ["/api/og"],
+      "Every job sponsorship-checked against DOL and USCIS records, surfaced minutes after it posts. Apex AI applies for you.",
+    images: ["/brand/og-image.png"],
   },
   manifest: "/manifest.json",
   appleWebApp: {
