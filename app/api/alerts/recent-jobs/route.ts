@@ -43,6 +43,7 @@ type UserProfile = {
   email: string | null
   full_name: string | null
   email_alerts: boolean
+  alert_frequency: string | null
 }
 
 type CompanyShape = { name: string; domain: string | null; logo_url: string | null }
@@ -316,10 +317,11 @@ export async function GET(request: NextRequest) {
 
   try {
     const usersResult = await pool.query<UserProfile>(
-      `SELECT id, email, full_name, email_alerts
+      `SELECT id, email, full_name, email_alerts, alert_frequency
        FROM profiles
        WHERE email_alerts = true
-         AND email IS NOT NULL`
+         AND email IS NOT NULL
+         AND COALESCE(alert_frequency, 'instant') <> 'instant'`
     )
     const users = usersResult.rows
     if (!users.length) return NextResponse.json({ sent: 0, skipped: "No eligible users" })
@@ -364,7 +366,7 @@ export async function GET(request: NextRequest) {
     if (userIds.length === 0 || jobIds.length === 0) return out
     const { rows: sent } = await pool.query<{ user_id: string; job_id: string }>(
       `SELECT user_id, job_id FROM alert_notifications
-        WHERE channel = 'email'
+        WHERE channel IN ('email', 'both')
           AND user_id = ANY($1::uuid[])
           AND job_id = ANY($2::uuid[])
           AND sent_at > now() - interval '14 days'`,
@@ -386,7 +388,7 @@ export async function GET(request: NextRequest) {
     const { rows } = await pool.query<{ user_id: string }>(
       `SELECT DISTINCT user_id
        FROM alert_notifications
-       WHERE channel = 'email'
+       WHERE channel IN ('email', 'both')
          AND user_id = ANY($1::uuid[])
          AND sent_at > now() - ($2::int * interval '1 minute')`,
       [userIds, windowMinutes]
@@ -399,13 +401,15 @@ export async function GET(request: NextRequest) {
       `INSERT INTO alert_notifications (user_id, job_id, channel, notification_type)
        SELECT $1::uuid, ids.job_id, 'email', 'alert'
        FROM unnest($2::uuid[]) AS ids(job_id)
-       WHERE NOT EXISTS (
-         SELECT 1
-         FROM alert_notifications an
-         WHERE an.user_id = $1::uuid
-           AND an.job_id = ids.job_id
-           AND an.channel = 'email'
-       )`,
+       ON CONFLICT (user_id, job_id, notification_type)
+         WHERE user_id IS NOT NULL AND job_id IS NOT NULL
+       DO UPDATE SET
+         channel = CASE
+           WHEN alert_notifications.channel IN ('push', 'both') THEN 'both'
+           ELSE 'email'
+         END,
+         alert_id = COALESCE(alert_notifications.alert_id, EXCLUDED.alert_id),
+         sent_at = now()`,
       [userId, jobIds]
     )
     // Stamp last_triggered_at so the UI shows when the alert last fired

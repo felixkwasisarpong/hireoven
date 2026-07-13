@@ -5,12 +5,11 @@
  * handlers + config.
  */
 export function instantNotifyWindowMinutes(env: Record<string, string | undefined> = process.env): number {
-  // Default 65: must exceed ALERT_ACCUMULATE_MINUTES (60) + the sweep interval
-  // so jobs held back during the 1-hour accumulation window are still inside the
-  // lookback when it elapses (otherwise a batched job would be dropped, unsent).
-  // It also bounds "how old" a job can be when sent — nothing older than ~65 min.
-  const n = Number(env.INSTANT_NOTIFY_WINDOW_MIN ?? "65")
-  return Number.isFinite(n) && n > 0 ? Math.min(n, 180) : 65
+  // Default 75: exceeds ALERT_ACCUMULATE_MINUTES (60) + the 5-minute sweep
+  // interval with drift buffer, so held-back jobs are still inside the lookback
+  // when accumulation elapses. It also bounds how old a job can be when sent.
+  const n = Number(env.INSTANT_NOTIFY_WINDOW_MIN ?? "75")
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 180) : 75
 }
 
 export function isWithinInstantNotifyWindow(

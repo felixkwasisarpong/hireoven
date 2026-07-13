@@ -1,14 +1,13 @@
 /**
  * Event trigger for instant notifications.
  *
- * The harvester calls this right after persisting a company's jobs, so an alert
- * fires the moment a matching job lands — not on a timer. It hands the new job
- * IDs to the web app (which holds the VAPID / Resend keys and does the sending),
- * rather than sending from the harvester box.
+ * The harvester calls this right after persisting a company's jobs. The web app
+ * receives the new IDs and either sends immediately when accumulation is
+ * disabled, or acknowledges and lets the hourly accumulator sweep batch email.
  *
  * Best-effort and non-blocking: env-gated, never throws, bounded. If it can't
- * reach the app (or env isn't configured), the /api/cron/instant-notify sweep is
- * the safety net.
+ * reach the app (or env isn't configured), /api/cron/instant-notify is the
+ * safety net and default email accumulator.
  */
 import { resolveAppOrigin } from "@/lib/app-url"
 

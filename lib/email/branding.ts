@@ -37,7 +37,7 @@ const CHROME_STORE_URL =
 
 /**
  * Light, tasteful Chrome-extension promo block rendered just above the
- * unsubscribe footer in every notification email (digest, weekly, recent-jobs).
+ * unsubscribe footer in notification emails.
  *
  * Inline-styled tables — no flex, no max-width media queries, no SVG —
  * so it renders consistently across Gmail / Outlook / Apple Mail / mobile.
