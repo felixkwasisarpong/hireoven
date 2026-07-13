@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
     ]
   )
 
-  // Creating an alert is the explicit opt-in signal — flip email_alerts on
-  // for this user so the recent-jobs cron starts sending to them. Best-effort
+  // Creating an alert is the explicit opt-in signal — flip email_alerts on so
+  // the scheduled alert email pipeline can include this user. Best-effort
   // (we don't fail alert creation if the profile update errors).
   try {
     await pool.query(

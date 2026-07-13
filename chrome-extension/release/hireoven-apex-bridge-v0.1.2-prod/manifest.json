@@ -1,0 +1,100 @@
+{
+  "manifest_version": 3,
+  "name": "Hireoven Apex Bridge",
+  "version": "0.1.2",
+  "description": "Detect and save job listings to Hireoven from any ATS.",
+  "permissions": [
+    "activeTab",
+    "alarms",
+    "cookies",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://hireoven.com/*",
+    "https://*.hireoven.com/*",
+    "https://*.greenhouse.io/*",
+    "https://*.lever.co/*",
+    "https://*.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.icims.com/*",
+    "https://*.smartrecruiters.com/*",
+    "https://*.bamboohr.com/*",
+    "https://www.linkedin.com/*",
+    "https://*.linkedin.com/*",
+    "https://www.glassdoor.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.indeed.com/*",
+    "https://app.joinhandshake.com/*",
+    "https://www.google.com/*"
+  ],
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Hireoven Apex Bridge",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://*.glassdoor.com/*",
+        "https://*.indeed.com/*",
+        "https://*.joinhandshake.com/*",
+        "https://www.google.com/*",
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.ashbyhq.com/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.workday.com/*",
+        "https://*.icims.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://*.bamboohr.com/*",
+        "https://*/*",
+        "http://*/*"
+      ],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
+      "matches": ["https://www.linkedin.com/*", "https://*.linkedin.com/*"],
+      "js": ["dist/content/aggregators/linkedin/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.glassdoor.com/*", "https://*.glassdoor.com/*"],
+      "js": ["dist/content/aggregators/glassdoor/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.indeed.com/*"],
+      "js": ["dist/content/aggregators/indeed/handler.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://app.joinhandshake.com/*"],
+      "js": ["dist/content/aggregators/handshake/handler.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

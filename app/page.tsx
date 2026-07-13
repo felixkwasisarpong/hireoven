@@ -1,9 +1,8 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ArrowRight, Check, CheckCircle2, Globe2, Radar, ShieldCheck, Sparkles, Users, Zap } from "lucide-react"
+import { ArrowRight, Check, CheckCircle2, ShieldCheck, Sparkles, Users, Zap } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import LogoWall from "@/components/marketing/LogoWall"
-import { WaitlistInlineForm } from "@/components/marketing/WaitlistInlineForm"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
@@ -137,7 +136,7 @@ function PlanCard({
         ))}
       </ul>
       <Link
-        href="/launch"
+        href="/signup"
         className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white transition"
         style={{
           background: highlight
@@ -145,7 +144,7 @@ function PlanCard({
             : "linear-gradient(135deg,#7C3AED,#C026D3)",
         }}
       >
-        Join the waitlist
+        Get started
         <ArrowRight className="h-3.5 w-3.5" />
       </Link>
     </div>
@@ -197,25 +196,29 @@ export default async function HomePage() {
               Live · {stats.jobs > 0 ? stats.jobs.toLocaleString() : "10,000+"} jobs tracked right now
             </div>
 
+            <p className="mb-4 text-[15px] font-semibold italic text-white/50">
+              &ldquo;Do you sponsor?&rdquo; shouldn&apos;t be a final-round question.
+            </p>
+
             <h1 className="text-[2.8rem] font-black leading-[1.04] tracking-tight text-white sm:text-5xl md:text-[3.75rem]">
-              Your next job —{" "}
+              Know they sponsor{" "}
               <span style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C,#FFD280)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                found first,
+                before
               </span>{" "}
-              sponsorship-checked.
+              you apply.
             </h1>
 
             <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
-              Real-time alerts the second a role posts and AI match scores on every listing — each one
-              checked for H-1B sponsorship with petition history and visa-language signals. Apex AI
-              researches, tailors, and prepares; you stay in control.
+              Every listing checked against real DOL and USCIS petition records. Every opening
+              surfaced minutes after it posts. Apex applies for you with a tailored resume, so you
+              show up first, with proof instead of hope.
             </p>
 
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-              <Link href="/launch"
+              <Link href="/signup"
                 className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
                 style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-                Join the waitlist
+                Get started free
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link href="/pricing"
@@ -225,7 +228,7 @@ export default async function HomePage() {
             </div>
 
             <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
-              {["Early access", "No credit card", "Invite sent when approved"].map((t) => (
+              {["Free to start", "No credit card", "Set up in 2 minutes"].map((t) => (
                 <li key={t} className="inline-flex items-center gap-1.5 text-sm text-white/45">
                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                   {t}
@@ -234,60 +237,79 @@ export default async function HomePage() {
             </ul>
           </div>
 
-          {/* Mock product preview */}
-          <div className="mx-auto mt-16 max-w-2xl">
-            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md">
-              {/* Toolbar */}
-              <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                <div className="flex gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-red-400/60" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-amber-400/60" />
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/60" />
-                </div>
-                <p className="text-[11px] font-medium text-white/30">hireoven.com/dashboard</p>
-                <div className="w-16" />
-              </div>
-              {/* Job cards */}
-              <div className="space-y-2 p-4">
-                {[
-                  { co: "Stripe", role: "Senior Frontend Engineer", loc: "Remote · SF", match: 94, sponsor: 89, fresh: "2m" },
-                  { co: "Anthropic", role: "ML Platform Engineer", loc: "San Francisco, CA", match: 88, sponsor: 95, fresh: "8m" },
-                  { co: "Figma", role: "Staff Software Engineer", loc: "Remote · NYC", match: 81, sponsor: 72, fresh: "14m" },
-                ].map((job, i) => (
-                  <div key={i} className={["rounded-xl border p-3.5 transition", i === 0 ? "border-[#FF5C18]/40 bg-white/8" : "border-white/8 bg-white/4"].join(" ")}>
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
-                        style={{ background: i === 0 ? "linear-gradient(135deg,#FF5C18,#FF9A3C)" : "rgba(255,255,255,0.1)" }}>
-                        {job.co[0]}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[13px] font-semibold text-white">{job.role}</p>
-                        <p className="text-[11px] text-white/45">{job.co} · {job.loc}</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-400">
-                          {job.fresh} ago
-                        </span>
-                        {i === 0 && (
-                          <span className="rounded-lg px-2.5 py-1 text-[11px] font-bold text-white"
-                            style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
-                            Apply
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {i === 0 && (
-                      <div className="mt-2.5 grid grid-cols-3 gap-2">
-                        {[["Match", job.match, "#FF5C18"], ["Sponsor", job.sponsor, "#7C3AED"], ["Approval", 81, "#10B981"]].map(([l, v, c]) => (
-                          <div key={String(l)} className="rounded-lg bg-white/5 px-2 py-1.5 text-center">
-                            <p className="text-[18px] font-black tabular-nums" style={{ color: String(c) }}>{v}</p>
-                            <p className="text-[9px] font-semibold uppercase tracking-wide text-white/35">{l}</p>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+          {/* Workflow: detected → checked → applied */}
+          <div className="mx-auto mt-16 max-w-5xl">
+            <div className="grid gap-3 md:grid-cols-[1fr,auto,1fr,auto,1fr] md:items-stretch">
+
+              {/* Step 1: job detected */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">1 · Job detected</p>
+                <div className="mt-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
+                    style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                    S
                   </div>
-                ))}
+                  <div className="min-w-0">
+                    <p className="truncate text-[13.5px] font-semibold text-white">Senior Frontend Engineer</p>
+                    <p className="text-[11.5px] text-white/45">Stripe · Remote · $180k+</p>
+                  </div>
+                </div>
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Posted 2 minutes ago
+                </span>
+                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                  Straight from the company&apos;s career page, before job boards index it.
+                </p>
+              </div>
+
+              <div className="hidden items-center md:flex" aria-hidden>
+                <ArrowRight className="h-5 w-5 text-white/25" />
+              </div>
+
+              {/* Step 2: sponsorship checked */}
+              <div className="rounded-2xl border border-[#FF5C18]/40 bg-white/8 p-5 backdrop-blur-md shadow-[0_8px_40px_rgba(255,92,24,0.15)]">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FF9A3C]">2 · Sponsorship checked</p>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {[["Sponsor", "89", "#FF9A3C"], ["Petitions", "412", "#A78BFA"], ["Approval", "81%", "#34D399"]].map(([l, v, c]) => (
+                    <div key={l} className="rounded-lg bg-white/5 px-2 py-2 text-center">
+                      <p className="text-[19px] font-black tabular-nums" style={{ color: c }}>{v}</p>
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-white/35">{l}</p>
+                    </div>
+                  ))}
+                </div>
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-bold text-white/70">
+                  <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                  DOL + USCIS public records
+                </span>
+                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                  Real petition history, not a guess. You know they file before you apply.
+                </p>
+              </div>
+
+              <div className="hidden items-center md:flex" aria-hidden>
+                <ArrowRight className="h-5 w-5 text-white/25" />
+              </div>
+
+              {/* Step 3: applied with confidence */}
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">3 · Applied with confidence</p>
+                <div className="mt-4 flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-400/15">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  </span>
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-white">Application sent</p>
+                    <p className="text-[11.5px] text-white/45">Tailored resume + cover letter attached</p>
+                  </div>
+                </div>
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#FF5C18]/15 px-2.5 py-1 text-[11px] font-bold text-[#FF9A3C]">
+                  <Zap className="h-3 w-3" />
+                  You&apos;re applicant #4, not #2,401
+                </span>
+                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                  Apex autofills the form. You review and hit send while the role is still hot.
+                </p>
               </div>
             </div>
           </div>
@@ -321,82 +343,115 @@ export default async function HomePage() {
             </div>
           )}
           <p className="mt-6 text-center text-xs text-slate-400">
-            …and thousands more across Greenhouse, Lever, Ashby, and Workday.
+            …and thousands more across Greenhouse, Lever, Ashby, Workday, Workable, iCIMS, SmartRecruiters, Jobvite, SuccessFactors, and more.
           </p>
         </div>
       </section>
 
-      {/* ── Chrome extension launch ribbon ─────────────────────────────── */}
-      <section className="border-y border-slate-100 bg-white px-6 py-8">
-        <Link
-          href="/extension"
-          className="group relative mx-auto flex max-w-5xl flex-col items-center gap-4 overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-[#0C0A1E] via-[#1a1033] to-[#2a0e2e] p-6 shadow-[0_24px_60px_-30px_rgba(255,92,24,0.55)] ring-1 ring-white/5 transition duration-300 hover:ring-[#FF5C18]/30 sm:flex-row sm:gap-5"
-        >
-          <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-[#FF5C18]/20 blur-[70px] transition duration-500 group-hover:bg-[#FF5C18]/30" />
-          <span aria-hidden className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-violet-500/10 blur-[50px]" />
-          <span
-            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl shadow-lg ring-1 ring-white/20"
-            style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}
-            aria-hidden
-          >
-            🧩
-          </span>
-          <div className="relative min-w-0 flex-1 text-center sm:text-left">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FF5C18]/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#FF9A3C] ring-1 ring-[#FF5C18]/25">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF9A3C] opacity-75" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF9A3C]" />
-              </span>
-              New · Chrome Web Store
-            </span>
-            <p className="mt-2 text-[16px] font-semibold text-white sm:text-[17px]">
-              Match scores &amp; one-click autofill on every job posting.
-            </p>
-            <p className="mt-0.5 text-[13px] text-white/50">
-              Free Chrome extension — works on LinkedIn, Greenhouse, Lever, Ashby, Workday &amp; more.
-            </p>
-          </div>
-          <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition group-hover:bg-[#FF5C18] group-hover:text-white">
-            Get the extension
-            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-          </span>
-        </Link>
-      </section>
+      {/* ── Extension + H-1B data cards ─────────────────────────────────── */}
+      <section className="border-y border-slate-100 bg-white px-6 py-14">
+        <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2">
 
-      {/* ── H-1B sponsor leaderboard strip ──────────────────────────────── */}
-      <section className="border-b border-slate-100 bg-white px-6 py-8">
-        <Link
-          href="/h1b-sponsors/leaderboard"
-          className="group relative mx-auto flex max-w-5xl flex-col items-center gap-4 overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-[#06251d] via-[#0c3a2c] to-[#08324a] p-6 shadow-[0_24px_60px_-30px_rgba(16,185,129,0.55)] ring-1 ring-white/5 transition duration-300 hover:ring-emerald-400/30 sm:flex-row sm:gap-5"
-        >
-          <span aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-emerald-500/20 blur-[70px] transition duration-500 group-hover:bg-emerald-500/30" />
-          <span aria-hidden className="pointer-events-none absolute -left-10 bottom-0 h-32 w-32 rounded-full bg-sky-500/10 blur-[50px]" />
-          <span
-            className="relative inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-lg ring-1 ring-white/20"
-            style={{ background: "linear-gradient(135deg,#10b981,#34d399)" }}
-            aria-hidden
+          {/* Chrome extension */}
+          <Link
+            href="/extension"
+            className="group relative overflow-hidden rounded-[28px] p-8 ring-1 ring-white/10 transition duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_-20px_rgba(255,92,24,0.5)]"
+            style={{ background: "linear-gradient(145deg,#131029 0%,#1d1230 55%,#2a1220 100%)" }}
           >
-            <ShieldCheck className="h-6 w-6 text-white" />
-          </span>
-          <div className="relative min-w-0 flex-1 text-center sm:text-left">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300 ring-1 ring-emerald-500/25">
-              <ShieldCheck className="h-3 w-3" />
-              Free public data
-            </span>
-            <p className="mt-2 text-[16px] font-semibold text-white sm:text-[17px]">
-              {stats.jobs > 0
-                ? `Browse ${stats.jobs.toLocaleString()} jobs by H-1B sponsorship.`
-                : "Browse employers by H-1B sponsorship."}
-            </p>
-            <p className="mt-0.5 text-[13px] text-white/50">
-              See who actually files — petition history from DOL &amp; USCIS public records. No signup.
-            </p>
-          </div>
-          <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-[13px] font-bold text-slate-900 shadow-sm transition group-hover:bg-emerald-500 group-hover:text-white">
-            View leaderboard
-            <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
-          </span>
-        </Link>
+            <span aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#FF5C18]/25 blur-[80px] transition duration-500 group-hover:bg-[#FF5C18]/40" />
+            <span aria-hidden className="pointer-events-none absolute inset-0 opacity-40"
+              style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
+
+            <div className="relative">
+              <span className="inline-flex items-center gap-2 rounded-full bg-[#FF5C18]/15 px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.18em] text-[#FF9A3C] ring-1 ring-[#FF5C18]/30">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#FF9A3C] opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#FF9A3C]" />
+                </span>
+                New · Chrome Web Store
+              </span>
+
+              <h3 className="mt-5 text-[26px] font-black leading-tight tracking-tight text-white">
+                Autofill any application{" "}
+                <span style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C,#FFD280)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  in one click.
+                </span>
+              </h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-white/55">
+                Match scores and autofill on LinkedIn plus Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, and BambooHR. Free.
+              </p>
+
+              {/* Mini autofill visual */}
+              <div className="mt-6 space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3.5 backdrop-blur-sm">
+                {[["FULL NAME", "Felix S."], ["WORK AUTHORIZATION", "Filled from profile"], ["RESUME", "Tailored + attached"]].map(([l, v]) => (
+                  <div key={l} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2">
+                    <div>
+                      <p className="text-[8.5px] font-bold tracking-wider text-white/35">{l}</p>
+                      <p className="text-[12px] font-semibold text-white/85">{v}</p>
+                    </div>
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-400/20">
+                      <Check className="h-3 w-3 text-emerald-400" strokeWidth={3.5} />
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <span className="mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold text-white shadow-[0_8px_24px_rgba(255,92,24,0.4)] transition group-hover:brightness-110"
+                style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
+                Get the extension
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+              </span>
+            </div>
+          </Link>
+
+          {/* H-1B sponsor leaderboard */}
+          <Link
+            href="/h1b-sponsors/leaderboard"
+            className="group relative overflow-hidden rounded-[28px] p-8 ring-1 ring-white/10 transition duration-300 hover:-translate-y-1 hover:shadow-[0_30px_80px_-20px_rgba(16,185,129,0.5)]"
+            style={{ background: "linear-gradient(145deg,#07231c 0%,#0b3527 55%,#0a2e40 100%)" }}
+          >
+            <span aria-hidden className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-500/25 blur-[80px] transition duration-500 group-hover:bg-emerald-500/40" />
+            <span aria-hidden className="pointer-events-none absolute inset-0 opacity-40"
+              style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)", backgroundSize: "22px 22px" }} />
+
+            <div className="relative">
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-500/15 px-3 py-1.5 text-[10.5px] font-bold uppercase tracking-[0.18em] text-emerald-300 ring-1 ring-emerald-500/30">
+                <ShieldCheck className="h-3 w-3" />
+                Free public data · No signup
+              </span>
+
+              <h3 className="mt-5 text-[26px] font-black leading-tight tracking-tight text-white">
+                {stats.jobs > 0 ? `${stats.jobs.toLocaleString()} jobs,` : "Every job,"}{" "}
+                <span style={{ background: "linear-gradient(90deg,#34d399,#6ee7b7,#a7f3d0)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+                  sponsorship-ranked.
+                </span>
+              </h3>
+              <p className="mt-2 text-[14px] leading-relaxed text-white/55">
+                See who actually files: petition history from DOL and USCIS public records.
+              </p>
+
+              {/* Mini leaderboard visual */}
+              <div className="mt-6 space-y-2 rounded-2xl border border-white/10 bg-white/5 p-3.5 backdrop-blur-sm">
+                {[["1", "Amazon", "w-[92%]", "9,265"], ["2", "Google", "w-[74%]", "5,842"], ["3", "Microsoft", "w-[61%]", "4,725"]].map(([r, co, w, n]) => (
+                  <div key={co} className="flex items-center gap-3 rounded-lg bg-white/5 px-3 py-2">
+                    <span className="w-3 text-[11px] font-black text-emerald-300">{r}</span>
+                    <span className="w-20 truncate text-[12px] font-semibold text-white/85">{co}</span>
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <span className={`block h-full rounded-full bg-gradient-to-r from-emerald-500 to-emerald-300 ${w}`} />
+                    </span>
+                    <span className="text-[11px] font-bold tabular-nums text-white/60">{n}</span>
+                  </div>
+                ))}
+              </div>
+
+              <span className="mt-6 inline-flex items-center gap-2 rounded-xl px-5 py-3 text-[14px] font-bold text-white shadow-[0_8px_24px_rgba(16,185,129,0.4)] transition group-hover:brightness-110"
+                style={{ background: "linear-gradient(135deg,#10b981,#34d399)" }}>
+                View the leaderboard
+                <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+              </span>
+            </div>
+          </Link>
+        </div>
       </section>
 
       {/* ── Core features ───────────────────────────────────────────────── */}
@@ -409,78 +464,78 @@ export default async function HomePage() {
         <div className="relative mx-auto max-w-6xl">
           <div className="mx-auto mb-14 max-w-2xl text-center">
             <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
-              Everything in one place
+              Why people land interviews here
             </p>
             <h2 className="text-3xl font-black tracking-tight text-slate-700 sm:text-4xl">
-              From posted to applied —
+              Two things decide your search:
               <span className="block" style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                in the time it takes to pour a coffee.
+                speed and certainty.
               </span>
             </h2>
-            <p className="mt-4 text-lg text-slate-500">
-              No spreadsheets, no 12 browser tabs. Hireoven replaces the duct-taped stack.
-            </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <FeatureCard icon="⚡" title="Real-time, from the source" body="We watch companies' actual ATS — not aggregators — so new roles appear within minutes of posting, before most job boards even index them." accent="Original source, not copies" color="#FF5C18" />
-            <FeatureCard icon="🎯" title="AI match scores" body="Every job gets a match score against your profile, skills, and target role. Algorithmic, instant." color="#7C3AED" />
-            <FeatureCard icon="🤖" title="One-click autofill" body="The extension detects fields and pre-fills them from your profile. You review before it goes in." accent="Chrome extension" color="#0EA5E9" />
-            <FeatureCard icon="✍️" title="Resume tailoring" body="Apex adapts your CV to the job description. Keyword gaps flagged. Every edit needs your approval." color="#10B981" />
-            <FeatureCard icon="📄" title="Cover letter AI" body="Generates a tailored, ATS-aware letter in seconds. Role-specific, honest, ready to personalise." color="#F59E0B" />
-            <FeatureCard icon="🛡️" title="Ghost job detector" body="Signals whether a role is actively hiring or just collecting CVs — before you spend time on it." color="#EF4444" />
-            <FeatureCard icon="🇺🇸🇨🇦" title="Built for the US + Canada market" body="Every role is in the United States or Canada — no overseas noise to filter out. The feed, match scores, and location signals are tuned to the North American job market." accent="US + Canada" color="#2563EB" />
-          </div>
-        </div>
-      </section>
+          {/* Two core benefits, weighted */}
+          <div className="grid gap-5 lg:grid-cols-2">
+            <div className="relative overflow-hidden rounded-3xl border border-[#FFE0CC] bg-white p-8 shadow-[0_4px_28px_rgba(255,92,24,0.10)]">
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">Speed</p>
+              <h3 className="mt-2 text-[22px] font-black tracking-tight text-slate-900">
+                Be applicant #4, not #2,401.
+              </h3>
+              <p className="mt-2.5 text-[14.5px] leading-relaxed text-slate-500">
+                We watch companies&apos; own career pages, so roles hit your feed minutes after they
+                post. The first applicants get read. Hireoven puts you in that group, every time.
+              </p>
+              {/* Mini visual */}
+              <div className="mt-6 flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
+                  style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                  S
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold text-slate-800">Senior Frontend Engineer</p>
+                  <p className="text-[11px] text-slate-400">Stripe · Remote</p>
+                </div>
+                <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10.5px] font-bold text-emerald-700">2m ago</span>
+                <span className="rounded-lg px-3 py-1.5 text-[11.5px] font-bold text-white"
+                  style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                  Apply
+                </span>
+              </div>
+            </div>
 
-      {/* ── Differentiators ────────────────────────────────────────────── */}
-      <section className="border-y border-slate-100 bg-white px-6 py-20">
-        <div className="mx-auto max-w-5xl">
-          <div className="mx-auto mb-12 max-w-2xl text-center">
-            <p className="mb-3 text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">
-              Why Hireoven
-            </p>
-            <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-              Differentiators built into the core flow
-            </h2>
+            <div className="relative overflow-hidden rounded-3xl border border-[#D8E8FF] bg-white p-8 shadow-[0_4px_28px_rgba(37,99,235,0.09)]">
+              <p className="text-[10.5px] font-bold uppercase tracking-[0.2em] text-[#2563EB]">Certainty</p>
+              <h3 className="mt-2 text-[22px] font-black tracking-tight text-slate-900">
+                Never waste an application on a non-sponsor.
+              </h3>
+              <p className="mt-2.5 text-[14.5px] leading-relaxed text-slate-500">
+                Petition history from DOL and USCIS public records sits on every listing: who files,
+                how often, and how it ends. The final-round surprise, moved to minute one.
+              </p>
+              {/* Mini visual */}
+              <div className="mt-6 grid grid-cols-3 gap-2.5">
+                {[["Sponsor score", "89", "#FF5C18"], ["H-1B petitions", "412", "#7C3AED"], ["Approval rate", "81%", "#059669"]].map(([l, v, c]) => (
+                  <div key={l} className="rounded-xl border border-slate-100 bg-slate-50/70 px-2 py-3 text-center">
+                    <p className="text-[22px] font-black tabular-nums" style={{ color: c }}>{v}</p>
+                    <p className="mt-0.5 text-[9.5px] font-bold uppercase tracking-wide text-slate-400">{l}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-2xl border border-[#FFE0CC] bg-[#FFF7F2] p-5 shadow-[0_2px_12px_rgba(255,92,24,0.09)]">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#FF5C18]">
-                <Radar className="h-4.5 w-4.5" />
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-slate-900">Original source, not copies</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-                Jobs pulled straight from companies' own ATS — Greenhouse, Lever, Ashby, Workday — not recycled from aggregators. The original posting, minutes after it goes live.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[#D8E8FF] bg-[#F5FAFF] p-5 shadow-[0_2px_12px_rgba(37,99,235,0.08)]">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#2563EB]">
-                <Globe2 className="h-4.5 w-4.5" />
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-slate-900">H-1B Intel</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-                Petition history, sponsorship likelihood, and visa-language signals on each matching role.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[#E8DBFF] bg-[#FAF7FF] p-5 shadow-[0_2px_12px_rgba(124,58,237,0.09)]">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#7C3AED]">
-                <Users className="h-4.5 w-4.5" />
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-slate-900">Cohorts</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-                See how people with similar background are performing and adjust your weekly job search strategy.
-              </p>
-            </div>
-            <div className="rounded-2xl border border-[#D7F2E2] bg-[#F3FBF6] p-5 shadow-[0_2px_12px_rgba(4,120,87,0.09)]">
-              <div className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#047857]">
-                <ShieldCheck className="h-4.5 w-4.5" />
-              </div>
-              <p className="mt-3 text-[15px] font-bold text-slate-900">Fair Chance</p>
-              <p className="mt-1.5 text-[13px] leading-relaxed text-slate-600">
-                Find fair-chance friendly employers and get preparation guidance before you apply.
-              </p>
+
+          {/* Everything else, compact */}
+          <div className="mt-14">
+            <p className="mb-6 text-center text-[13px] font-bold text-slate-400">
+              And the rest of the kitchen, built in:
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <FeatureCard icon="🤖" title="Apply in one click" body="The extension autofills any career page from your profile. You review, then send." accent="Chrome extension" color="#0EA5E9" />
+              <FeatureCard icon="✍️" title="Resume + cover letter, per job" body="Apex tailors both to the posting. Keyword gaps flagged, every edit approved by you." color="#10B981" />
+              <FeatureCard icon="🛡️" title="Ghost job detector" body="Skip listings that are just collecting CVs. We flag them before you spend time." color="#EF4444" />
+              <FeatureCard icon="🎯" title="AI match scores" body="Every job scored against your profile, so you spend effort only where you can win." color="#7C3AED" />
+              <FeatureCard icon="👥" title="Cohorts" body="See how people with your background are landing interviews, and adjust weekly." color="#F59E0B" />
+              <FeatureCard icon="🇺🇸🇨🇦" title="US + Canada only" body="Every role is North American. No overseas noise to filter out." accent="Fair Chance friendly" color="#2563EB" />
             </div>
           </div>
         </div>
@@ -523,10 +578,10 @@ export default async function HomePage() {
           </div>
 
           <div className="mt-12 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-            <Link href="/launch"
+            <Link href="/signup"
               className="inline-flex items-center gap-2 rounded-2xl px-7 py-3.5 text-sm font-bold text-white transition hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-              Join the waitlist
+              Try Apex free
               <ArrowRight className="h-4 w-4" />
             </Link>
             <p className="text-xs text-white/30">Pro feature · Paid plans start at $19/month</p>
@@ -605,29 +660,6 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* ── Waitlist section ────────────────────────────────────────────── */}
-      <section className="border-y border-slate-100 px-6 py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#FF5C18]/25 bg-[#FF5C18]/8 px-4 py-1.5 text-[12px] font-bold uppercase tracking-widest text-[#FF5C18]">
-            <Users className="h-3.5 w-3.5" />
-            Early access · Waitlist open
-          </div>
-          <h2 className="text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">
-            Get in before the doors open.
-          </h2>
-          <p className="mx-auto mt-4 max-w-lg text-lg text-slate-500">
-            Hireoven is currently invite-only. Join the waitlist and we&apos;ll send you an invite link as soon as your spot is ready — no spam, no waiting in the dark.
-          </p>
-
-          {/* Inline email form */}
-          <WaitlistInlineForm />
-
-          <p className="mt-4 text-xs text-slate-400">
-            We review every application. You&apos;ll hear back within 24–48 hours.
-          </p>
-        </div>
-      </section>
-
       {/* ── Final CTA ───────────────────────────────────────────────────── */}
       <section className="px-6 py-24"
         style={{ background: "linear-gradient(150deg,#0f0a1e 0%,#1a0800 50%,#080614 100%)" }}>
@@ -644,10 +676,10 @@ export default async function HomePage() {
             The first 10 applicants get the most attention. Hireoven makes sure you&apos;re one of them.
           </p>
           <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <Link href="/launch"
+            <Link href="/signup"
               className="inline-flex items-center gap-2 rounded-2xl px-9 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
               style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
-              Join the waitlist
+              Get started free
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/pricing"
@@ -655,7 +687,7 @@ export default async function HomePage() {
               See pricing
             </Link>
           </div>
-          <p className="mt-5 text-xs text-white/30">No credit card · Invite sent when approved · Early access</p>
+          <p className="mt-5 text-xs text-white/30">Free plan · No credit card · Cancel anytime</p>
         </div>
       </section>
 
@@ -687,7 +719,7 @@ export default async function HomePage() {
             ]} />
             <FooterColumn title="Account" links={[
               { href: "/login", label: "Sign in" },
-              { href: "/launch", label: "Join waitlist" },
+              { href: "/signup", label: "Create account" },
             ]} />
             <FooterColumn title="Company" links={[
               { href: "/contact", label: "Contact" },

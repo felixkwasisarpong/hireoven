@@ -5,11 +5,11 @@ import {
   isWithinInstantNotifyWindow,
 } from "./instant-notify-window"
 
-test("defaults to 65 minutes when unset or invalid (must exceed the 60-min accumulation window)", () => {
-  assert.equal(instantNotifyWindowMinutes({}), 65)
-  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "abc" }), 65)
-  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "0" }), 65)
-  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "-5" }), 65)
+test("defaults to 75 minutes when unset or invalid (60-min accumulation + sweep drift buffer)", () => {
+  assert.equal(instantNotifyWindowMinutes({}), 75)
+  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "abc" }), 75)
+  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "0" }), 75)
+  assert.equal(instantNotifyWindowMinutes({ INSTANT_NOTIFY_WINDOW_MIN: "-5" }), 75)
 })
 
 test("honors a valid override and caps at 180", () => {

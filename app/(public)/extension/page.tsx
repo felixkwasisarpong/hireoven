@@ -18,7 +18,7 @@ import Navbar from "@/components/layout/Navbar"
 export const metadata: Metadata = {
   title: "Hireoven Apex Bridge — Match scores & autofill on every job posting",
   description:
-    "The Chrome extension that overlays a match score, missing-skills analysis, and one-click autofill on Greenhouse, Lever, Ashby, Workday, iCIMS and more. Free.",
+    "The Chrome extension that overlays a match score, missing-skills analysis, and one-click autofill on Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR and more. Free.",
   openGraph: {
     title: "Hireoven Apex Bridge for Chrome",
     description:
@@ -29,6 +29,44 @@ export const metadata: Metadata = {
 
 const CHROME_STORE_URL =
   "https://chromewebstore.google.com/detail/hireoven-apex-bridge/mkmfffcaimjnaecoelnanifookmdbfok"
+
+const EXTENSION_NATIVE_ATS = [
+  "Greenhouse",
+  "Lever",
+  "Ashby",
+  "Workday",
+  "iCIMS",
+  "SmartRecruiters",
+  "BambooHR",
+]
+
+const HIREOVEN_TRACKED_ATS = [
+  "Workable",
+  "Recruitee",
+  "Teamtailor",
+  "Personio",
+  "JazzHR",
+  "Jobvite",
+  "SAP SuccessFactors",
+  "Taleo",
+  "Oracle Recruiting",
+  "USAJOBS",
+  "Eightfold",
+  "Avature",
+  "Rippling",
+  "Breezy",
+  "Pinpoint",
+  "Gem",
+  "Radancy",
+  "IBM",
+  "Google",
+  "TikTok",
+  "Apple",
+  "Netflix",
+  "Walmart",
+  "Adecco",
+  "Kelly",
+]
 
 // ── Local primitives ─────────────────────────────────────────────────────────
 
@@ -172,7 +210,8 @@ export default function ExtensionPage() {
               <p className="mt-5 max-w-xl text-[16px] leading-[1.65] text-white/65">
                 Hireoven Apex Bridge overlays a real-time match score, missing-skills
                 analysis, and one-click autofill on the ATS pages you&apos;re already on
-                — Greenhouse, Lever, Ashby, Workday, iCIMS, and more.
+                — Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters,
+                BambooHR, and more.
               </p>
 
               <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
@@ -224,17 +263,38 @@ export default function ExtensionPage() {
         </section>
 
         {/* ── ATS strip ───────────────────────────────────────────────────── */}
-        <section className="border-y border-slate-200/60 bg-white px-4 py-7 sm:px-6">
-          <div className="mx-auto flex max-w-5xl flex-col items-center gap-3 text-center sm:flex-row sm:justify-between sm:text-left">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
-              Works on every major ATS
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2">
-              {["Greenhouse", "Lever", "Ashby", "Workday", "iCIMS", "SmartRecruiters", "Workable"].map(
-                (ats) => (
-                  <AtsPill key={ats} name={ats} />
-                )
-              )}
+        <section className="border-y border-slate-200/60 bg-white px-4 py-8 sm:px-6">
+          <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400">
+                ATS coverage
+              </p>
+              <p className="mt-2 text-[13px] leading-relaxed text-slate-500">
+                Native autofill on the major application systems, with broad
+                tracking across the rest of the Hireoven job graph.
+              </p>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  Extension-native autofill
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {EXTENSION_NATIVE_ATS.map((ats) => (
+                    <AtsPill key={ats} name={ats} />
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                  Also tracked by Hireoven
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  {HIREOVEN_TRACKED_ATS.map((ats) => (
+                    <AtsPill key={ats} name={ats} />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -426,8 +486,8 @@ export default function ExtensionPage() {
               The extension is the easy part.
             </h2>
             <p className="mt-4 text-[16px] leading-[1.65] text-white/55">
-              Install it once. It works on every ATS page you visit, with no setup
-              beyond signing into your Hireoven account.
+              Install it once. It works on supported ATS and job pages, with no
+              setup beyond signing into your Hireoven account.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <CtaButton href={CHROME_STORE_URL}>Add to Chrome — free</CtaButton>

@@ -2,10 +2,11 @@
  * POST /api/internal/notify-jobs
  *
  * Event-driven instant notifications. The harvester POSTs the IDs of jobs it
- * just inserted; the app (which holds the VAPID / Resend keys) matches them
- * against alerts/watchlists + the sponsor-match push and sends. This is the
- * primary trigger — an alert fires the moment a matching job is harvested.
- * /api/cron/instant-notify is the periodic safety net.
+ * just inserted; the app (which holds the VAPID / Resend keys) can match them
+ * against alerts/watchlists + sponsor-match push and send immediately.
+ *
+ * By default, instant-alert email is hourly accumulated, so this route defers
+ * to /api/cron/instant-notify unless ALERT_ACCUMULATE_MINUTES=0.
  *
  * Body: { jobIds: string[] }   Auth: CRON_SECRET bearer.
  */
@@ -28,13 +29,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  // When alert accumulation is on (default), the /api/cron/instant-notify sweep
-  // is the SOLE accumulator: it filters the whole jobs table by first_detected_at
-  // across BOTH the harvester and the crawler, so every source's jobs batch
-  // together over the window. This per-batch real-time path only sees ONE
-  // source's current insert — sending from it would start the accumulation
-  // cooldown and starve the other source's jobs (the "crawl-only" symptom).
-  // So when accumulation is enabled, defer entirely to the sweep.
+  // Hourly accumulated instant-alert email is handled by the sweep. The event
+  // path remains available when accumulation is explicitly disabled.
   if ((process.env.ALERT_ACCUMULATE_MINUTES ?? "60") !== "0") {
     return NextResponse.json({ ok: true, deferred: "accumulation-sweep", processed: 0 })
   }

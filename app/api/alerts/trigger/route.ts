@@ -11,8 +11,9 @@ import type { Job, JobAlert, NotificationType, Profile } from "@/types"
 /**
  * Instant email alerts were removed — every webhook fire used to mail every
  * matching alert regardless of match quality, which burned Resend credit
- * during big crawls. The daily / weekly / recent-jobs digest crons still
- * cover the email channel. This route now only triggers push notifications.
+ * during big crawls. The daily / weekly digest crons and hourly instant-notify
+ * accumulator cover the email channel. This route now only triggers push
+ * notifications.
  */
 
 type JobWebhookPayload = {

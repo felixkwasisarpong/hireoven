@@ -32,9 +32,16 @@ export async function POST(request: NextRequest) {
   const job = payload.record
 
   // Return 200 immediately — Supabase retries on non-2xx, so we must not block.
-  // Shared with the harvester-driven /api/cron/instant-notify path.
-  void processNotifications([job])
+  // Hourly accumulated instant-alert email is handled by /api/cron/instant-notify
+  // unless accumulation is explicitly disabled.
+  if ((process.env.ALERT_ACCUMULATE_MINUTES ?? "60") === "0") {
+    void processNotifications([job])
+  }
   void scoreNewJobForAllUsers(job)
 
-  return NextResponse.json({ received: true, jobId: job.id })
+  return NextResponse.json({
+    received: true,
+    jobId: job.id,
+    notifications: (process.env.ALERT_ACCUMULATE_MINUTES ?? "60") === "0" ? "processed" : "deferred",
+  })
 }
