@@ -75,7 +75,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ failReason: "missing_apply_url" satisfies BulkFailReason })
   }
 
-  // ── Hard gate 2: explicit no-sponsorship blocker ─────────────────────────────
+  // ── Hard gate 2: driver-supported ATS only ───────────────────────────────────
+  // The apply-agent SELECTION pool is already ATS-filtered by default, but jobs
+  // can also enter preparation hand-picked (or from queues built before the
+  // filter). The autonomous agent can only drive forms its extension drivers
+  // know — a custom career portal (login walls, unknown forms) stalls its queue
+  // slot silently, so reject it here with a labeled reason instead.
+  if (atsProvider === "Generic ATS") {
+    return NextResponse.json({ failReason: "unsupported_ats" satisfies BulkFailReason })
+  }
+
+  // ── Hard gate 3: explicit no-sponsorship blocker ─────────────────────────────
   if (requireSponsorshipSignal && sponsorshipSignal) {
     const sig = sponsorshipSignal.toLowerCase()
     if (/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig)) {
