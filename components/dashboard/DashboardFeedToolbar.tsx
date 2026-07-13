@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react"
 import Link from "next/link"
+import { useSubscription } from "@/lib/hooks/useSubscription"
 import { useToast } from "@/components/ui/ToastProvider"
 import {
   EMPLOYMENT_OPTIONS,
@@ -158,6 +159,7 @@ export default function DashboardFeedToolbar({
   const router = useRouter()
   const searchParams = useSearchParams()
   const { pushToast } = useToast()
+  const { isPro, isLoading: subLoading } = useSubscription()
   const pills = useMemo(() => buildFilterPills(filters), [filters])
 
   const [savedDefault, setSavedDefault] = useState<string | null>(null)
@@ -994,8 +996,9 @@ export default function DashboardFeedToolbar({
         </button>
 
         {/* Top-match paywall: free users' 99-100% matches are held out of the
-            feed (JobFeed) and teased here — the chip is the upsell. */}
-        {(feedMeta.hiddenTopMatches ?? 0) > 0 && (
+            feed (JobFeed). The chip is a STANDING upsell for every free user —
+            the count badge appears when the current feed actually held some back. */}
+        {!subLoading && !isPro && (
           <Link
             href="/dashboard/upgrade?plan=pro"
             title="Your 99–100% matches are reserved for Pro. Upgrade to unlock them."
@@ -1006,9 +1009,11 @@ export default function DashboardFeedToolbar({
           >
             <Lock className="h-3.5 w-3.5" strokeWidth={2} />
             Hidden jobs
-            <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
-              {feedMeta.hiddenTopMatches}
-            </span>
+            {(feedMeta.hiddenTopMatches ?? 0) > 0 && (
+              <span className="ml-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-white">
+                {feedMeta.hiddenTopMatches}
+              </span>
+            )}
           </Link>
         )}
       </div>
