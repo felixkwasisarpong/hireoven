@@ -22,10 +22,36 @@ const jakarta = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  // Production fallback, NOT localhost: metadataBase is baked into every
+  // absolute og:/twitter: URL, and a blank build-time env would otherwise put
+  // localhost links in social shares.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hireoven.com"),
   title: "Hireoven – Jobs served fresh",
   description:
     "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "Hireoven",
+    title: "Hireoven – Jobs served fresh",
+    description:
+      "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
+    images: [
+      {
+        url: "/api/og",
+        width: 1200,
+        height: 630,
+        alt: "Hireoven – Jobs served fresh",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Hireoven – Jobs served fresh",
+    description:
+      "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",
+    images: ["/api/og"],
+  },
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
