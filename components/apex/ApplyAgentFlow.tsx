@@ -693,7 +693,12 @@ export function ApplyAgentFlow({
 
       if (prep.failReason) {
         const failLabel = BULK_FAIL_LABELS[prep.failReason] ?? "Preparation failed"
-        const isSkippable = prep.failReason === "missing_apply_url" || prep.failReason === "no_sponsorship_blocker"
+        const isSkippable =
+          prep.failReason === "missing_apply_url" ||
+          prep.failReason === "no_sponsorship_blocker" ||
+          // Not drivable by any extension autofill driver — skip past it
+          // rather than surfacing a scary failure the user can't act on.
+          prep.failReason === "unsupported_ats"
         const patch: Partial<JobState> = {
           prepResult: prep,
           skipped: isSkippable ? true : undefined,

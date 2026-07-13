@@ -75,7 +75,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ failReason: "missing_apply_url" satisfies BulkFailReason })
   }
 
-  // ── Hard gate 2: explicit no-sponsorship blocker ─────────────────────────────
+  // ── Hard gate 2: driver-supported ATS only ───────────────────────────────────
+  // The apply-agent SELECTION pool is already ATS-filtered by default, but jobs
+  // can also enter preparation hand-picked (or from queues built before the
+  // filter). The autonomous agent can only drive forms its extension drivers
+  // know — a custom career portal (login walls, unknown forms) stalls its queue
+  // slot silently, so reject it here with a labeled reason instead.
+  if (atsProvider === "Generic ATS") {
+    return NextResponse.json({ failReason: "unsupported_ats" satisfies BulkFailReason })
+  }
+
+  // ── Hard gate 3: explicit no-sponsorship blocker ─────────────────────────────
   if (requireSponsorshipSignal && sponsorshipSignal) {
     const sig = sponsorshipSignal.toLowerCase()
     if (/\bno\b|\bnone\b|\bnot\b|\bdoes not sponsor\b|\bwithout sponsorship\b/.test(sig)) {
@@ -202,8 +212,8 @@ export async function POST(request: Request) {
 
   const resolvedJobTitle = job?.title ?? jobTitle ?? "Job"
   const resolvedCompany = company ?? job?.company?.name ?? "Unknown Company"
-  const atsSuffix = atsProvider !== "Generic ATS" ? ` · ${atsProvider}` : ""
-  const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany}${atsSuffix}`
+  // Generic ATS was hard-gated above, so atsProvider is always a real ATS here.
+  const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany} · ${atsProvider}`
 
   if (job) {
     try {
