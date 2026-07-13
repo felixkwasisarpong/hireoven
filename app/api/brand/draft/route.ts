@@ -3,6 +3,17 @@ import { createClient } from "@/lib/supabase/server"
 import { writeDraft } from "@/lib/brand/draft-writer"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { DraftRequest } from "@/lib/brand/draft-writer"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+
+
+/** Server-side plan gate — this endpoint exposes the paid "personal_brand" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "personal_brand")) return null
+  const needed = requiredPlanFor("personal_brand")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -11,6 +22,8 @@ export async function POST(request: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   let body: unknown
   try { body = await request.json() } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }) }
@@ -41,6 +54,8 @@ export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const pool = getPostgresPool()
   const result = await pool.query(

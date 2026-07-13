@@ -4,11 +4,15 @@ import { generateCounterOffer } from "@/lib/offers/counter-offer-generator"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { OfferDetails as NegotiationOfferDetails, NegotiationUserProfile } from "@/lib/offers/types"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
 
 export async function POST(request: Request) {
+  // Paid feature — auth + plan gate in one ("offer_analysis").
+  const gate = await requireFeature("offer_analysis")
+  if (gate instanceof NextResponse) return gate
   let body: unknown
   try {
     body = await request.json()

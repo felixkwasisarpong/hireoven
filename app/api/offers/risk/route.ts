@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { calculateOfferRisk, analyzeOfferForNegotiation } from "@/lib/offers/offer-risk-analyzer"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import type {
   Company,
   EmployerLCAStats,
@@ -120,6 +121,9 @@ async function enrichInput(input: OfferRiskInput): Promise<OfferRiskInput> {
 }
 
 export async function POST(request: NextRequest) {
+  // Paid feature — auth + plan gate in one ("offer_analysis").
+  const gate = await requireFeature("offer_analysis")
+  if (gate instanceof NextResponse) return gate
   const { searchParams } = new URL(request.url)
   const includeNegotiation = searchParams.get("includeNegotiation") === "true"
 

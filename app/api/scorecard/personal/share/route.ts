@@ -2,6 +2,17 @@ import { NextResponse } from "next/server"
 import { z } from "zod"
 import { getSessionUser } from "@/lib/auth/session-user"
 import { setPersonalShare } from "@/lib/scorecard/personal-scorecard"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+
+
+/** Server-side plan gate — this endpoint exposes the paid "personal_scorecard" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "personal_scorecard")) return null
+  const needed = requiredPlanFor("personal_scorecard")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -15,6 +26,8 @@ const BodySchema = z.object({
 export async function POST(req: Request) {
   const user = await getSessionUser()
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+  const planGate = await requirePlanGate(user.sub)
+  if (planGate) return planGate
 
   const parsed = BodySchema.safeParse(await req.json().catch(() => null))
   if (!parsed.success) {
