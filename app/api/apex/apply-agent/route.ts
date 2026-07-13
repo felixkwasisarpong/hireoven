@@ -15,6 +15,17 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
 import { buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+
+
+/** Server-side plan gate — this endpoint exposes the paid "apex_actions" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "apex_actions")) return null
+  const needed = requiredPlanFor("apex_actions")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
 
 export const runtime = "nodejs"
 
@@ -78,6 +89,8 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const { searchParams } = request.nextUrl
   const minMatchScore      = parseClampedInt(searchParams.get("minMatchScore"), { min: 0, max: 100, fallback: 0 })

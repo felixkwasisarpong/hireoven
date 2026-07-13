@@ -6,16 +6,29 @@ import {
   getAutoApplyLog,
 } from "@/lib/apex/auto-apply/store"
 import { AUTO_APPLY_DEFAULTS } from "@/lib/apex/auto-apply/types"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 
 function err(status: number, message: string) {
   return NextResponse.json({ error: message }, { status })
 }
 
 /** GET /api/apex/auto-apply — return current prefs + today's log */
+
+/** Server-side plan gate — this endpoint exposes the paid "apex_actions" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "apex_actions")) return null
+  const needed = requiredPlanFor("apex_actions")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
+
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return err(401, "Unauthorized")
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const [prefs, log] = await Promise.all([
     getAutoApplyPrefs(user.id),
@@ -29,6 +42,8 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return err(401, "Unauthorized")
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const body = await req.json().catch(() => null)
   if (!body) return err(400, "Invalid JSON")

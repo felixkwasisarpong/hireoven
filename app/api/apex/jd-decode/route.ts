@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server"
 import { runRuleBasedDecode } from "@/lib/apex/jd-decoder/analyzer"
 import { buildJDDecodePrompt } from "@/lib/apex/jd-decoder/prompts"
 import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 
 const anthropic = new Anthropic()
 
@@ -18,10 +20,21 @@ function err(status: number, msg: string) {
  * Returns a full JDDecodeResult combining fast rule-based analysis
  * with a Claude deep-read for hidden expectations, must-haves, and TLDR.
  */
+
+/** Server-side plan gate — this endpoint exposes the paid "apex_deep_analysis" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "apex_deep_analysis")) return null
+  const needed = requiredPlanFor("apex_deep_analysis")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return err(401, "Unauthorized")
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const body = await req.json().catch(() => null)
   if (!body?.title || !body?.description) return err(400, "title and description are required")
