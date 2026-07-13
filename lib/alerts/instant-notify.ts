@@ -79,9 +79,18 @@ async function recordNotification(
   const pool = getPostgresPool()
   try {
     await pool.query(
+      // The arbiter index (uniq_alert_notifications_user_job_type) is PARTIAL,
+      // so the ON CONFLICT target MUST repeat its predicate — without it
+      // Postgres raises 42P10 ("no unique or exclusion constraint matching")
+      // on EVERY insert, the row is never recorded, last_triggered_at never
+      // stamps, and the same job re-emails on every 5-minute sweep for the
+      // whole lookback window (observed live: ModernaTX ×3, GEICO ×4+ on
+      // 2026-07-13).
       `INSERT INTO alert_notifications (user_id, job_id, alert_id, channel, notification_type)
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (user_id, job_id, notification_type) DO NOTHING`,
+       ON CONFLICT (user_id, job_id, notification_type)
+         WHERE user_id IS NOT NULL AND job_id IS NOT NULL
+       DO NOTHING`,
       [userId, jobId, alertId, channel, notificationType],
     )
   } catch (error) {
@@ -331,7 +340,10 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
         }
       }
     }
-  } catch {
-    // best-effort; callers must not fail on notification errors
+  } catch (error) {
+    // Best-effort — callers must not fail on notification errors — but NEVER
+    // silent: this catch swallowed the 42P10 record failures that re-emailed
+    // users every sweep, twice (2026-07-12 and 2026-07-13), with zero trace.
+    console.error("[instant-notify] processNotifications failed:", error)
   }
 }
