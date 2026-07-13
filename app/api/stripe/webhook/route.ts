@@ -80,6 +80,18 @@ export async function POST(request: NextRequest) {
         trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
         cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
       })
+
+      // The free monthly interview credit is a Pro Max perk. If this event
+      // leaves the user without an active Pro Max plan (cancel/downgrade),
+      // claw back this period's UNUSED grant — otherwise a 10-minute test
+      // subscription walks away with a free live session. Purchased credits
+      // are untouched; already-spent grants are left alone.
+      const { getPlanForUserId } = await import("@/lib/gates/server-gate")
+      const planAfter = await getPlanForUserId(userId)
+      if (planAfter !== "pro_max") {
+        const { clawbackUnusedMonthlyGrant } = await import("@/lib/apex/interview/credits")
+        await clawbackUnusedMonthlyGrant(userId)
+      }
       break
     }
 
