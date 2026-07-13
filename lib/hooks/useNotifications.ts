@@ -51,6 +51,26 @@ type UseNotificationsOptions = {
 const LOCAL_NOTIFICATION_EVENT = "hireoven:local-notification"
 const LOCAL_NOTIFICATION_STORAGE_KEY = "hireoven:local-notifications"
 const LOCAL_NOTIFICATION_SEEN_KEY = "hireoven:local-notifications-seen"
+// Local notifications live in localStorage, which is shared by every account
+// that signs in on this browser. Track which user the store belongs to and
+// wipe it when a different user signs in — otherwise user B inherits user A's
+// entire notification feed (matches, resume events, application activity).
+const LOCAL_NOTIFICATION_OWNER_KEY = "hireoven:local-notifications-owner"
+
+/** Wipe the local-notification store if it belongs to a different user. */
+export function reconcileLocalNotificationOwner(userId: string) {
+  if (typeof window === "undefined" || !userId) return
+  try {
+    const owner = window.localStorage.getItem(LOCAL_NOTIFICATION_OWNER_KEY)
+    if (owner !== userId) {
+      window.localStorage.removeItem(LOCAL_NOTIFICATION_STORAGE_KEY)
+      window.localStorage.removeItem(LOCAL_NOTIFICATION_SEEN_KEY)
+      window.localStorage.setItem(LOCAL_NOTIFICATION_OWNER_KEY, userId)
+    }
+  } catch {
+    // storage unavailable — nothing to reconcile
+  }
+}
 const LOCAL_NOTIFICATION_TYPES: LocalNotificationType[] = [
   "resume",
   "system",
@@ -387,6 +407,14 @@ export function useNotifications(
     }
     void refresh()
   }, [refresh])
+
+  // Once the session user is known, claim (or wipe) the local store before
+  // trusting its contents — see reconcileLocalNotificationOwner.
+  useEffect(() => {
+    if (!userId) return
+    reconcileLocalNotificationOwner(userId)
+    setLocalNotifications(readLocalNotifications())
+  }, [userId])
 
   useEffect(() => {
     setLocalNotifications(readLocalNotifications())
