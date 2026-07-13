@@ -3,7 +3,8 @@ import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { getUserPlan } from "@/lib/gates/server-gate"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getUserPlan } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 
@@ -25,8 +26,13 @@ export async function POST(request: Request) {
     )
   }
 
-  const { userId } = await getUserPlan()
+  const { userId, plan } = await getUserPlan()
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Credits and top-up packs are purchasable on paid plans only.
+  if (!canAccess(plan ?? "free", "credit_topups")) {
+    const needed = requiredPlanFor("credit_topups")
+    return gateResponse(403, `Buying credits requires the ${needed} plan`, needed ?? undefined)
+  }
 
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 503 })

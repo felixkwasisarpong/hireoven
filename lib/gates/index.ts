@@ -23,6 +23,7 @@ export type FeatureKey =
   | "skill_gap"
   | "personal_scorecard"
   | "salary_compare"
+  | "credit_topups"
 
 export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   // Free forever
@@ -45,6 +46,7 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   skill_gap:              "pro",
   personal_scorecard:     "pro",
   salary_compare:         "pro",
+  credit_topups:          "pro",   // buying interview credits / top-up packs
   apex_deep_analysis:    "pro",
   apex_actions:          "pro",
   // Pro Max only
@@ -59,6 +61,7 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   skill_gap:              "Skill gap analysis",
   personal_scorecard:     "Shareable personal scorecard",
   salary_compare:         "Side-by-side salary comparison",
+  credit_topups:          "Buy interview credits and top-up packs",
   watchlist:              "Save companies to your watchlist",
   basic_alerts:           "Create job alerts",
   job_applications:       "Track job applications",
