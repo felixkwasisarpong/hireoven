@@ -2628,11 +2628,13 @@ class WorkdayAutofillRunner {
       if (/\b(referr|refer|colleague|friend|family|current (employee|worker|contingent)|contingent worker|service provider|\bemployee\b|alumni|recruiter|agency|staffing)\b/i.test(t)) {
         return -1
       }
+      // Fairs/events are things the user did not attend — factually false picks.
+      if (/\b(?:career|job|recruit(?:ing|ment)?|virtual|campus)\s*(?:fair|event|expo)\b/i.test(t)) return -1
       if (/\bcompany\s*websites?\b/i.test(t)) return 0
       if (/\bcareer\s*websites?\b/i.test(t) || /\bcareers\b/i.test(t)) return 1
       if (/\blinked\s?in\b/i.test(t)) return 2
       if (/\bindeed\b/i.test(t)) return 3
-      if (/\b(glassdoor|job\s*(board|fair|site|posting)|website|online|internet|search engine|google|social|twitter|facebook|advertisement|other)\b/i.test(t)) {
+      if (/\b(glassdoor|job\s*(board|site|posting)|website|online|internet|search engine|google|social|twitter|facebook|advertisement|other)\b/i.test(t)) {
         return 4
       }
       return -1
@@ -2730,9 +2732,14 @@ class WorkdayAutofillRunner {
         (text) => {
           const t = text.toLowerCase()
           if (/\bcareer\s?builder\b/.test(t)) return false // job board, not a company careers site
+          // "Career Fair" / "Job Fair" / "Recruiting Event" are events the user
+          // did NOT attend — a factually false pick. (Live bug: an optional-suffix
+          // careers? regex let bare "career" match "Career Fair" on Aerospace.)
+          if (/\b(?:career|job|recruit(?:ing|ment)?|virtual|campus)\s*(?:fair|event|expo)\b/.test(t)) return false
           return (
             /\b(?:company|corporate)\s*websites?\b/.test(t) ||
-            /\bcareers?\s*(?:site|website|page)?\b/.test(t) ||
+            /\bcareers\b/.test(t) || // plural only — never bare "career"
+            /\bcareer\s*(?:site|website|page|portal)\b/.test(t) ||
             /\blinked\s?in\b/.test(t) ||
             /\bindeed\b/.test(t)
           )
@@ -2902,7 +2909,10 @@ class WorkdayAutofillRunner {
     if (/\b(referr|agenc|recruit|staffing|employee|colleague|friend|family|alumni|current worker|former worker)\b/i.test(value)) {
       return false
     }
-    return /\b(career|company website|corporate website|job board|job site|job posting|jobsite|online|internet|website|linkedin|indeed|glassdoor|ziprecruiter|monster|dice|google|search engine|social media|advertisement|other)\b/i.test(value)
+    // Fairs / events / expos are claims of attendance — factually false, never
+    // "neutral" (bare `career` in the old regex let "Career Fair" through).
+    if (/\b(?:career|job|virtual|campus)\s*(?:fair|event|expo)\b/i.test(value)) return false
+    return /\b(careers|career (?:site|website|page|portal)|company website|corporate website|job board|job site|job posting|jobsite|online|internet|website|linkedin|indeed|glassdoor|ziprecruiter|monster|dice|google|search engine|social media|advertisement|other)\b/i.test(value)
   }
 
   private isTopLevelSourceCategory(text: string): boolean {
