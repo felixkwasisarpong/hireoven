@@ -212,8 +212,8 @@ export async function POST(request: Request) {
 
   const resolvedJobTitle = job?.title ?? jobTitle ?? "Job"
   const resolvedCompany = company ?? job?.company?.name ?? "Unknown Company"
-  const atsSuffix = atsProvider !== "Generic ATS" ? ` · ${atsProvider}` : ""
-  const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany}${atsSuffix}`
+  // Generic ATS was hard-gated above, so atsProvider is always a real ATS here.
+  const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany} · ${atsProvider}`
 
   if (job) {
     try {
