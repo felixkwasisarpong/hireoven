@@ -104,11 +104,11 @@ export async function grantCredits(
      ins AS (
        INSERT INTO interview_credit_transactions
          (user_id, amount, reason, stripe_payment_intent_id, session_id)
-       SELECT $1, $2, $3, $4, $5
+       SELECT $1::uuid, $2::int, $3::text, $4::text, $5::uuid
        FROM lock
        WHERE ($6::int IS NULL OR NOT EXISTS (
          SELECT 1 FROM interview_credit_transactions
-         WHERE user_id = $1 AND reason = $3
+         WHERE user_id = $1::uuid AND reason = $3::text
            AND created_at > NOW() - make_interval(days => $6::int)
        ))
        ON CONFLICT DO NOTHING
@@ -116,7 +116,7 @@ export async function grantCredits(
      ),
      bump AS (
        INSERT INTO interview_credit_balances (user_id, balance, updated_at)
-       SELECT $1, $2, NOW()
+       SELECT $1::uuid, $2::int, NOW()
        WHERE EXISTS (SELECT 1 FROM ins)
        ON CONFLICT (user_id) DO UPDATE
          SET balance    = interview_credit_balances.balance + $2,
@@ -126,7 +126,7 @@ export async function grantCredits(
      SELECT
        COALESCE(
          (SELECT balance FROM bump),
-         (SELECT balance FROM interview_credit_balances WHERE user_id = $1),
+         (SELECT balance FROM interview_credit_balances WHERE user_id = $1::uuid),
          0
        ) AS balance,
        EXISTS(SELECT 1 FROM ins) AS granted`,
