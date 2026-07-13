@@ -4,6 +4,7 @@ import {
   cleanJobDescription,
   extractJobDescriptionFromHtml,
   fetchJobDescription,
+  looksLikeBlockedOrErrorPage,
   parseJobDescriptionSections,
 } from "@/lib/jobs/description"
 
@@ -219,4 +220,24 @@ test("fetchJobDescription prefers rich Lever HTML description over short plain f
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test("looksLikeBlockedOrErrorPage flags short bot-wall/CDN error text", () => {
+  assert.equal(
+    looksLikeBlockedOrErrorPage(
+      "Access Denied\nYou don't have permission to access \"http://www.infosys.com/404/\" on this server.\nReference #18.e50c0317\nhttps://errors.edgesuite.net/18.e50c0317"
+    ),
+    true
+  )
+  assert.equal(looksLikeBlockedOrErrorPage("Attention Required! | Cloudflare"), true)
+  assert.equal(looksLikeBlockedOrErrorPage("Just a moment..."), true)
+  assert.equal(looksLikeBlockedOrErrorPage(null), false)
+  assert.equal(looksLikeBlockedOrErrorPage(""), false)
+})
+
+test("looksLikeBlockedOrErrorPage keeps real JDs that mention security terms", () => {
+  const realJd =
+    "We are hiring a Security Engineer. You will design systems that prevent access denied errors for customers, build captcha integrations, and harden APIs. " +
+    "Responsibilities include: ".padEnd(1200, "x")
+  assert.equal(looksLikeBlockedOrErrorPage(realJd), false)
 })

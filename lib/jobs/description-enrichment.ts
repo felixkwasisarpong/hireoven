@@ -1,7 +1,7 @@
 import pLimit from "p-limit"
 import type { Pool } from "pg"
 import { counter } from "@/lib/observability/metrics"
-import { fetchJobDescription } from "@/lib/jobs/description"
+import { fetchJobDescription, looksLikeBlockedOrErrorPage } from "@/lib/jobs/description"
 import {
   createBrowserDescriptionFetcher,
   type BrowserDescriptionFetcher,
@@ -609,7 +609,13 @@ export async function processPendingDescriptionEnrichmentBatch(options?: {
             } catch {
               description = null
             }
-            if (description && description.trim().length >= minDescriptionChars) {
+            if (
+              description &&
+              description.trim().length >= minDescriptionChars &&
+              // A rendered bot-wall (Akamai/Cloudflare) must never be saved as
+              // the JD — same guard fetchJobDescription applies to plain HTTP.
+              !looksLikeBlockedOrErrorPage(description)
+            ) {
               return finalizeSuccess(job, description)
             }
             await markFailure(
