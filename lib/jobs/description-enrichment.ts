@@ -142,6 +142,10 @@ const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
   "gem",
   "greenhouse",
   "icims",
+  // Infosys's list-page adapter ships ~200-char preview stubs by design
+  // ("phase-2 enrichment can populate the full JD" — infosys.ts); without this
+  // entry those stubs were never revisited (155 live jobs, 0 attempts).
+  "infosys",
   "jazzhr",
   "jobvite",
   "lever",
@@ -153,7 +157,7 @@ const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
 ] as const
 
 const DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN =
-  "(ashbyhq\\.com|avature\\.net|bamboohr\\.com|breezy\\.hr|eightfold\\.ai|greenhouse\\.io|icims\\.com|applytojob\\.com|jobs\\.gem\\.com|jobvite\\.com|jobs\\.lever\\.co|oraclecloud\\.com|ats\\.rippling\\.com|smartrecruiters\\.com|teamtailor\\.com|myworkdayjobs\\.com)"
+  "(ashbyhq\\.com|avature\\.net|bamboohr\\.com|breezy\\.hr|eightfold\\.ai|greenhouse\\.io|icims\\.com|applytojob\\.com|jobs\\.gem\\.com|jobvite\\.com|jobs\\.lever\\.co|oraclecloud\\.com|ats\\.rippling\\.com|smartrecruiters\\.com|teamtailor\\.com|myworkdayjobs\\.com|digitalcareers\\.infosys\\.com)"
 
 type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
