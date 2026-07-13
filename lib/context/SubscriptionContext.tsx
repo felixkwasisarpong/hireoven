@@ -93,7 +93,16 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
       }
       if (cancelled) return
 
-      if (data.plan) {
+      // /api/subscription returns canceled rows too (the billing page needs
+      // them for history/status display) — but a canceled or expired plan
+      // grants NO entitlements. Mirror getPlanForUserId's server semantics:
+      // paid statuses only, and the paid window must not have lapsed.
+      // Without this, every useSubscription() consumer (gates, upsells,
+      // paywalled sections) treated canceled subscribers as still paying.
+      const ENTITLED_STATUSES = new Set(["active", "trialing", "past_due", "unpaid"])
+      const withinPaidWindow =
+        !data.currentPeriodEnd || new Date(data.currentPeriodEnd).getTime() > Date.now()
+      if (data.plan && ENTITLED_STATUSES.has(data.status ?? "") && withinPaidWindow) {
         const p = data.plan === "pro_international" ? "pro_max" : data.plan
         setPlan(p as Plan)
       } else {
