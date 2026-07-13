@@ -7,6 +7,12 @@ import { useSubscription } from "@/lib/hooks/useSubscription"
 const SNOOZE_KEY = "launch-promo-snooze-until-v2"
 const DAY_MS = 24 * 60 * 60 * 1000
 
+// Mirrors the LAUNCH promotion in Stripe (20% off Pro Max monthly) and the
+// promos-table row that ends 2026-08-04 — after that the code is inactive and
+// checkout would reject it, so stop advertising it.
+const LAUNCH_PROMO_CODE = "LAUNCH"
+const OFFER_ENDS_AT = Date.parse("2026-08-04T17:25:00Z")
+
 /** Yellow sphere — replicates the 3D floating balls in the reference. */
 function Orb({ className }: { className: string }) {
   return (
@@ -49,6 +55,7 @@ export default function LaunchPromoPopup() {
     }
 
     if (isLoading || isPro) return
+    if (Date.now() >= OFFER_ENDS_AT) return
 
     const snoozeUntil = Number(window.localStorage.getItem(SNOOZE_KEY) || 0)
     if (snoozeUntil && Date.now() < snoozeUntil) return
@@ -78,7 +85,7 @@ export default function LaunchPromoPopup() {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: "pro", interval: "yearly" }),
+        body: JSON.stringify({ plan: "pro_max", interval: "monthly", promoCode: LAUNCH_PROMO_CODE }),
       })
       const data = await res.json().catch(() => ({}))
       if (data.url) { window.location.href = data.url; return }
@@ -171,13 +178,13 @@ export default function LaunchPromoPopup() {
                     className="text-4xl font-black tracking-wide"
                     style={{ color: "#DC2626", textShadow: "0 2px 0 rgba(0,0,0,0.12)" }}
                   >
-                    PRO PLAN
+                    PRO MAX
                   </p>
                   <p
                     className="mt-0.5 text-xs font-bold uppercase tracking-widest"
                     style={{ color: "#9A1515" }}
                   >
-                    Founding Member Price
+                    First month with code {LAUNCH_PROMO_CODE}
                   </p>
                 </div>
               </div>
@@ -192,8 +199,7 @@ export default function LaunchPromoPopup() {
               }}
             >
               <p className="font-black text-white drop-shadow">
-                <span className="text-lg uppercase tracking-widest">Up to </span>
-                <span className="text-6xl">40%</span>
+                <span className="text-6xl">20%</span>
                 <span className="text-lg uppercase tracking-widest"> off</span>
               </p>
             </div>
