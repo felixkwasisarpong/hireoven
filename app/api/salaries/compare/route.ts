@@ -3,6 +3,7 @@ import { z } from "zod"
 import { getSocRoleBySlug } from "@/lib/salaries/soc-roles"
 import { getWageForCompanyRole } from "@/lib/salaries/wage-query"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -24,6 +25,9 @@ async function companyName(id: string): Promise<string | null> {
 }
 
 export async function GET(req: Request) {
+  // Paid feature — auth + plan gate in one ("salary_compare").
+  const gate = await requireFeature("salary_compare")
+  if (gate instanceof NextResponse) return gate
   const parsed = Q.safeParse(Object.fromEntries(new URL(req.url).searchParams))
   if (!parsed.success) {
     return NextResponse.json({ error: "invalid_query", code: "VALIDATION_ERROR" }, { status: 400 })

@@ -74,7 +74,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     requestId: req.id,
     userId: user.id,
     customerEmail: req.contact_email ?? user.email ?? null,
-    successUrl: `${origin}/dashboard/international/services?paid=${req.id}`,
+    successUrl: `${origin}/dashboard/international/services?paid=${req.id}&session_id={CHECKOUT_SESSION_ID}`,
     cancelUrl: `${origin}/dashboard/international/services?canceled=${req.id}`,
   })
 

@@ -228,7 +228,9 @@ export default function SetupForm({
   // ── Plan + credit gates ──────────────────────────────────────────────────
   if (!subLoading) {
     // Text / coding require Pro
-    if ((type === "text" || type === "coding") && !isPro) {
+    // ALL interview modes are Pro+ now — live sessions run on credits, and
+    // buying credits itself requires a paid plan (credit_topups gate).
+    if (!isPro) {
       return (
         <div className="space-y-4">
           <Link href="/dashboard/interview" className="text-[13px] font-medium text-slate-500 hover:text-slate-700">
@@ -237,7 +239,7 @@ export default function SetupForm({
           <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
             <Lock className="mx-auto mb-3 h-8 w-8 text-slate-400" />
             <h2 className="text-[16px] font-bold text-slate-900">
-              {type === "coding" ? "Coding Test" : "Text Interview"} requires Pro
+              {type === "coding" ? "Coding Test" : type === "live" ? "Live Interview" : "Text Interview"} requires Pro
             </h2>
             <p className="mt-2 text-[13px] text-slate-500">
               Upgrade to Pro to unlock AI interviews with real debriefs.

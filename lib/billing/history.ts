@@ -1,4 +1,5 @@
 import { getPostgresPool } from "@/lib/postgres/server"
+import { FEATURE_PACKS, isPackKey } from "@/lib/billing/packs"
 
 type SubscriptionStripeRow = {
   stripe_customer_id: string | null
@@ -35,6 +36,87 @@ function normalizeCurrency(code: string | null | undefined): string {
   return code.toUpperCase()
 }
 
+/**
+ * One-time purchases (interview credit packs, feature credit packs) don't
+ * produce Stripe invoices, so the invoice list alone shows subscribers-only
+ * history. Merge in the DB-side purchase records so every charge a user made
+ * appears in one ledger.
+ */
+async function getOneTimePurchaseHistory(userId: string): Promise<BillingHistoryItem[]> {
+  const pool = getPostgresPool()
+  const [creditTxns, packs] = await Promise.all([
+    pool.query<{ id: string; amount: number; reason: string; created_at: string; stripe_payment_intent_id: string | null }>(
+      `SELECT id, amount, reason, created_at, stripe_payment_intent_id
+       FROM interview_credit_transactions
+       WHERE user_id = $1 AND reason IN ('purchase', 'stripe_refund')
+       ORDER BY created_at DESC
+       LIMIT 12`,
+      [userId],
+    ),
+    pool.query<{ id: string; pack_key: string; credits_granted: number; amount_cents: number | null; created_at: string; refunded_at: string | null }>(
+      `SELECT id, pack_key, credits_granted, amount_cents, created_at, refunded_at
+       FROM feature_credit_packs
+       WHERE user_id = $1
+       ORDER BY created_at DESC
+       LIMIT 12`,
+      [userId],
+    ),
+  ])
+
+  // Interview credit purchase price isn't stored locally — resolve it from the
+  // payment intent when possible (bounded: ≤12 lookups).
+  const piAmounts = new Map<string, { amount: number; currency: string }>()
+  if (process.env.STRIPE_SECRET_KEY) {
+    const Stripe = (await import("stripe")).default
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2026-03-25.dahlia" })
+    const ids = [...new Set(creditTxns.rows.map((r) => r.stripe_payment_intent_id).filter((v): v is string => Boolean(v)))]
+    const results = await Promise.allSettled(ids.map((id) => stripe.paymentIntents.retrieve(id)))
+    results.forEach((res, i) => {
+      if (res.status === "fulfilled") {
+        piAmounts.set(ids[i], { amount: res.value.amount, currency: normalizeCurrency(res.value.currency) })
+      }
+    })
+  }
+
+  const creditItems: BillingHistoryItem[] = creditTxns.rows.map((row) => {
+    const pi = row.stripe_payment_intent_id ? piAmounts.get(row.stripe_payment_intent_id) : undefined
+    const isRefund = row.reason === "stripe_refund"
+    return {
+      id: `credit-${row.id}`,
+      createdAt: new Date(row.created_at).toISOString(),
+      description: isRefund
+        ? `Refund — ${Math.abs(row.amount)} live interview credit${Math.abs(row.amount) === 1 ? "" : "s"}`
+        : `${row.amount} live interview credit${row.amount === 1 ? "" : "s"}`,
+      amountCents: pi ? (isRefund ? -pi.amount : pi.amount) : 0,
+      currency: pi?.currency ?? "USD",
+      status: isRefund ? "refunded" : "paid",
+      hostedInvoiceUrl: null,
+      invoicePdfUrl: null,
+    }
+  })
+
+  const packItems: BillingHistoryItem[] = packs.rows.map((row) => ({
+    id: `pack-${row.id}`,
+    createdAt: new Date(row.created_at).toISOString(),
+    description: isPackKey(row.pack_key)
+      ? `Credit pack: ${FEATURE_PACKS[row.pack_key].label}`
+      : `Credit pack (${row.credits_granted} credits)`,
+    amountCents: row.amount_cents ?? 0,
+    currency: "USD",
+    status: row.refunded_at ? "refunded" : "paid",
+    hostedInvoiceUrl: null,
+    invoicePdfUrl: null,
+  }))
+
+  return [...creditItems, ...packItems]
+}
+
+function sortHistoryDesc(items: BillingHistoryItem[]): BillingHistoryItem[] {
+  return items
+    .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
+    .slice(0, 20)
+}
+
 export async function getBillingHistoryByUserId(userId: string): Promise<BillingHistorySnapshot> {
   const pool = getPostgresPool()
   const rowResult = await pool.query<SubscriptionStripeRow>(
@@ -46,10 +128,12 @@ export async function getBillingHistoryByUserId(userId: string): Promise<Billing
     [userId],
   )
 
+  const oneTimeItems = await getOneTimePurchaseHistory(userId).catch(() => [] as BillingHistoryItem[])
+
   const sub = rowResult.rows[0]
   if (!sub?.stripe_customer_id || !process.env.STRIPE_SECRET_KEY) {
     return {
-      history: [],
+      history: sortHistoryDesc(oneTimeItems),
       summary: {
         nextRenewalAt: null,
         nextAmountCents: null,
@@ -133,7 +217,7 @@ export async function getBillingHistoryByUserId(userId: string): Promise<Billing
   }
 
   return {
-    history,
+    history: sortHistoryDesc([...history, ...oneTimeItems]),
     summary: {
       nextRenewalAt,
       nextAmountCents,

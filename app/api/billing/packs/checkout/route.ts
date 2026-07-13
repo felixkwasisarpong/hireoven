@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { resolveAppOrigin } from "@/lib/app-url"
 import { isPaymentsDisabled } from "@/lib/admin/feature-flags"
-import { getUserPlan } from "@/lib/gates/server-gate"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getUserPlan } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { FEATURE_PACKS, isPackKey } from "@/lib/billing/packs"
@@ -16,8 +17,13 @@ export async function POST(request: Request) {
     )
   }
 
-  const { userId } = await getUserPlan()
+  const { userId, plan } = await getUserPlan()
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Credits and top-up packs are purchasable on paid plans only.
+  if (!canAccess(plan ?? "free", "credit_topups")) {
+    const needed = requiredPlanFor("credit_topups")
+    return gateResponse(403, `Buying credits requires the ${needed} plan`, needed ?? undefined)
+  }
 
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json({ error: "Stripe not configured" }, { status: 503 })
@@ -100,7 +106,7 @@ export async function POST(request: Request) {
         credits: String(pack.credits),
         amountCents: String(pack.amountCents),
       },
-      success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}`,
+      success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}${returnUrl}`,
     })
 

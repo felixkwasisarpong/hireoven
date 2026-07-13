@@ -9,6 +9,7 @@ import DashboardProductTour from "@/components/dashboard/DashboardProductTour"
 import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
 import SavedJobReminderPopup from "@/components/apex/SavedJobReminderPopup"
 import InterviewReminderWatcher from "@/components/interview/InterviewReminderWatcher"
+import PurchaseVerifier from "@/components/billing/PurchaseVerifier"
 import LaunchPromoPopup from "@/components/apex/LaunchPromoPopup"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
@@ -127,6 +128,7 @@ export default function DashboardLayout({
           <DashboardProductTour />
           <SavedJobReminderPopup />
           <InterviewReminderWatcher />
+          <PurchaseVerifier />
           <LaunchPromoPopup />
         </div>
       </DashboardMobileNavProvider>

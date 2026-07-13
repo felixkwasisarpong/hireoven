@@ -14,6 +14,17 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { computeSkillGaps, type SkillGapJob } from "@/lib/grow/skill-gap"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+
+
+/** Server-side plan gate — this endpoint exposes the paid "skill_gap" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "skill_gap")) return null
+  const needed = requiredPlanFor("skill_gap")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
 
 export const runtime = "nodejs"
 
@@ -28,6 +39,8 @@ export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   const pool = getPostgresPool()
 

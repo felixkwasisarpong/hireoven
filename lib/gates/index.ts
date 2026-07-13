@@ -18,6 +18,12 @@ export type FeatureKey =
   | "international"
   | "international_advanced"
   | "interview_live"
+  | "personal_brand"
+  | "offer_analysis"
+  | "skill_gap"
+  | "personal_scorecard"
+  | "salary_compare"
+  | "credit_topups"
 
 export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   // Free forever
@@ -35,6 +41,12 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   cover_letter:           "auth",
   // Pro-only
   interview_prep:         "pro",
+  personal_brand:         "pro",
+  offer_analysis:         "pro",
+  skill_gap:              "pro",
+  personal_scorecard:     "pro",
+  salary_compare:         "pro",
+  credit_topups:          "pro",   // buying interview credits / top-up packs
   apex_deep_analysis:    "pro",
   apex_actions:          "pro",
   // Pro Max only
@@ -44,6 +56,12 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
 }
 
 export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
+  personal_brand:         "Personal brand content studio",
+  offer_analysis:         "Offer risk analysis and counter scripts",
+  skill_gap:              "Skill gap analysis",
+  personal_scorecard:     "Shareable personal scorecard",
+  salary_compare:         "Side-by-side salary comparison",
+  credit_topups:          "Buy interview credits and top-up packs",
   watchlist:              "Save companies to your watchlist",
   basic_alerts:           "Create job alerts",
   job_applications:       "Track job applications",

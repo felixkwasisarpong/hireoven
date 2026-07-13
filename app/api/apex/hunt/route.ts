@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { buildAutonomousHuntPlan } from "@/lib/apex/hunt/planner"
+import { canAccess, requiredPlanFor } from "@/lib/gates"
+import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
+
+
+/** Server-side plan gate — this endpoint exposes the paid "apex_strategy" feature. */
+async function requirePlanGate(userId: string) {
+  const plan = await getPlanForUserId(userId)
+  if (canAccess(plan, "apex_strategy")) return null
+  const needed = requiredPlanFor("apex_strategy")
+  return gateResponse(403, `This feature requires the ${needed} plan`, needed ?? undefined)
+}
 
 export const runtime = "nodejs"
 export const maxDuration = 30
@@ -18,6 +29,8 @@ export async function GET() {
   if (!user) {
     return apexError(401, "Unauthorized")
   }
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   try {
     const plan = await buildAutonomousHuntPlan(user.id)
@@ -37,6 +50,8 @@ export async function POST(request: NextRequest) {
   if (!user) {
     return apexError(401, "Unauthorized")
   }
+  const planGate = await requirePlanGate(user.id)
+  if (planGate) return planGate
 
   try {
     const body = (await request.json().catch(() => ({}))) as { message?: string }

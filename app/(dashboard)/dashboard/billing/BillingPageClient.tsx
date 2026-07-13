@@ -805,8 +805,31 @@ export default function BillingPageClient({
           </section>
         )}
 
+        {/* ── Credits & top-ups: paid plans only ── */}
+        {!isPro && (
+          <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
+            <div className="flex flex-col gap-3 p-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <Zap className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-hidden />
+                <div>
+                  <h2 className="text-sm font-semibold text-slate-900">Interview credits &amp; top-up packs</h2>
+                  <p className="mt-1 text-[13px] text-slate-500">
+                    Live interview credits and à-la-carte top-up packs are available on Pro plans.
+                  </p>
+                </div>
+              </div>
+              <a
+                href="/dashboard/upgrade?plan=pro"
+                className="inline-flex shrink-0 items-center rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600"
+              >
+                Upgrade to Pro
+              </a>
+            </div>
+          </section>
+        )}
+
         {/* ── Interview credits ── */}
-        {usage && usage.interviewCredits && (
+        {isPro && usage && usage.interviewCredits && (
           <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
             <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
               <Headphones className="h-4 w-4 text-slate-500" aria-hidden />
@@ -841,7 +864,7 @@ export default function BillingPageClient({
         )}
 
         {/* ── Top-up packs ── */}
-        {usage && (
+        {isPro && usage && (
           <section className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.04)]">
             <div className="flex items-center gap-2 border-b border-slate-100 px-6 py-4">
               <Zap className="h-4 w-4 text-amber-500" aria-hidden />
