@@ -51,7 +51,10 @@ export async function getBalance(userId: string, plan: Plan | null): Promise<Cre
 
   const shouldGrant = plan === "pro_max" && !onLaunchHold && daysSinceGrant >= GRANT_INTERVAL_DAYS
   if (shouldGrant) {
-    await grantCredits(userId, PRO_MAX_MONTHLY_GRANT, "monthly_pro_max_grant")
+    // dedupeWindowDays closes the race when two balance calls arrive together.
+    await grantCredits(userId, PRO_MAX_MONTHLY_GRANT, "monthly_pro_max_grant", {
+      dedupeWindowDays: GRANT_INTERVAL_DAYS,
+    })
   }
 
   const result = await pool.query<{ balance: number }>(
@@ -67,32 +70,76 @@ export async function getBalance(userId: string, plan: Plan | null): Promise<Cre
 
 // ── Grant credits ───────────────────────────────────────────────────────────
 
+export type GrantOptions = {
+  /** Dedupe key for purchases/refunds fulfilled from Stripe events — a webhook
+   *  retry with the same payment intent must not grant twice. */
+  stripePaymentIntentId?: string
+  /** Ties the ledger row to a session (one refund per session, enforced by a
+   *  partial unique index). */
+  sessionId?: string
+  /** Skip the grant when the same (user, reason) was granted within this many
+   *  days — closes the race on the lazy monthly Pro Max grant. */
+  dedupeWindowDays?: number
+}
+
+/**
+ * Grant credits atomically and idempotently: the ledger row is inserted FIRST
+ * (deduped by the partial unique indexes on stripe_payment_intent_id/session_id
+ * and by the optional recency window), and the balance is bumped ONLY when the
+ * ledger row actually landed. A per-user advisory xact lock serializes
+ * concurrent grants so the window check can't race. Returns the balance and
+ * whether this call actually granted.
+ */
 export async function grantCredits(
   userId: string,
   amount: number,
   reason: string,
-  stripePaymentIntentId?: string
-): Promise<number> {
+  options?: GrantOptions
+): Promise<{ balance: number; granted: boolean }> {
   const pool = getPostgresPool()
-
-  const result = await pool.query<{ balance: number }>(
-    `INSERT INTO interview_credit_balances (user_id, balance, updated_at)
-     VALUES ($1, $2, NOW())
-     ON CONFLICT (user_id) DO UPDATE
-       SET balance    = interview_credit_balances.balance + $2,
-           updated_at = NOW()
-     RETURNING balance`,
-    [userId, amount]
+  const result = await pool.query<{ balance: number; granted: boolean }>(
+    `WITH lock AS (
+       SELECT pg_advisory_xact_lock(hashtextextended('interview-credit-grant:' || $1::text, 0)) AS ok
+     ),
+     ins AS (
+       INSERT INTO interview_credit_transactions
+         (user_id, amount, reason, stripe_payment_intent_id, session_id)
+       SELECT $1, $2, $3, $4, $5
+       FROM lock
+       WHERE ($6::int IS NULL OR NOT EXISTS (
+         SELECT 1 FROM interview_credit_transactions
+         WHERE user_id = $1 AND reason = $3
+           AND created_at > NOW() - make_interval(days => $6::int)
+       ))
+       ON CONFLICT DO NOTHING
+       RETURNING id
+     ),
+     bump AS (
+       INSERT INTO interview_credit_balances (user_id, balance, updated_at)
+       SELECT $1, $2, NOW()
+       WHERE EXISTS (SELECT 1 FROM ins)
+       ON CONFLICT (user_id) DO UPDATE
+         SET balance    = interview_credit_balances.balance + $2,
+             updated_at = NOW()
+       RETURNING balance
+     )
+     SELECT
+       COALESCE(
+         (SELECT balance FROM bump),
+         (SELECT balance FROM interview_credit_balances WHERE user_id = $1),
+         0
+       ) AS balance,
+       EXISTS(SELECT 1 FROM ins) AS granted`,
+    [
+      userId,
+      amount,
+      reason,
+      options?.stripePaymentIntentId ?? null,
+      options?.sessionId ?? null,
+      options?.dedupeWindowDays ?? null,
+    ]
   )
-
-  await pool.query(
-    `INSERT INTO interview_credit_transactions
-       (user_id, amount, reason, stripe_payment_intent_id)
-     VALUES ($1, $2, $3, $4)`,
-    [userId, amount, reason, stripePaymentIntentId ?? null]
-  )
-
-  return result.rows[0].balance
+  return result.rows[0]
 }
 
 // ── Deduct credits (atomic check-and-deduct) ────────────────────────────────
@@ -160,9 +207,12 @@ export async function deductCredits(
   }
 
   await pool.query(
+    // ON CONFLICT: one deduct ledger row per session (partial unique index) —
+    // the balance mutation above is already guarded by credit_deducted.
     `INSERT INTO interview_credit_transactions
        (user_id, amount, reason, session_id)
-     VALUES ($1, $2, 'session_deduct', $3)`,
+     VALUES ($1, $2, 'session_deduct', $3)
+     ON CONFLICT DO NOTHING`,
     [userId, -needed, sessionId]
   )
 
@@ -187,7 +237,10 @@ export async function refundCredits(
   )
   if (Number(turns.rows[0]?.count) > 0) return
 
-  await grantCredits(userId, amount, "refund")
+  // sessionId dedupe: at most one refund ledger row per session, so a retried
+  // abandon-refund can't credit twice.
+  const { granted } = await grantCredits(userId, amount, "refund", { sessionId })
+  if (!granted) return
 
   // Reset the deducted flag so the session shows as un-billed
   await pool.query(

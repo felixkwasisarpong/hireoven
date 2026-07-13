@@ -179,7 +179,7 @@ export async function POST(request: Request) {
         amountCents: String(getPlanAmountCents(plan as PlanKey, interval as BillingInterval)),
       },
     },
-    success_url: `${appUrl}/dashboard?upgrade=success&plan=${plan}`,
+    success_url: `${appUrl}/dashboard?upgrade=success&plan=${plan}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${appUrl}/dashboard/upgrade`,
     metadata: {
       userId: user.id,

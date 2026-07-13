@@ -102,7 +102,7 @@ export async function POST(request: Request) {
         credits: String(pack.credits),
         pack: packKey!,
       },
-      success_url: `${appUrl}/dashboard/interview?credits=purchased&amount=${pack.credits}`,
+      success_url: `${appUrl}/dashboard/interview?credits=purchased&amount=${pack.credits}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${appUrl}/dashboard/interview`,
     })
 

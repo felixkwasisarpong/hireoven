@@ -100,7 +100,7 @@ export async function POST(request: Request) {
         credits: String(pack.credits),
         amountCents: String(pack.amountCents),
       },
-      success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}`,
+      success_url: `${appUrl}${returnUrl}?pack=purchased&feature=${pack.feature}&credits=${pack.credits}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${appUrl}${returnUrl}`,
     })
 
