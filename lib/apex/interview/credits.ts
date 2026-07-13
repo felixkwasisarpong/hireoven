@@ -248,3 +248,47 @@ export async function refundCredits(
     [sessionId]
   )
 }
+
+// ── Clawback: the monthly grant is a Pro Max perk, not a keepsake ───────────
+
+/**
+ * Revoke the current period's unused monthly Pro Max grant when the user no
+ * longer has an active Pro Max plan (cancel or downgrade). Purchased credits
+ * are never touched. Idempotent: the clawback ledger row is keyed to the
+ * specific grant transaction via the (stripe_payment_intent_id, reason)
+ * partial unique index, so webhook retries can't double-deduct — and a user
+ * who already SPENT the credit (balance 0) is left alone.
+ */
+export async function clawbackUnusedMonthlyGrant(userId: string): Promise<boolean> {
+  const pool = getPostgresPool()
+  const result = await pool.query<{ clawed: boolean }>(
+    `WITH lock AS (
+       SELECT pg_advisory_xact_lock(hashtextextended('interview-credit-grant:' || $1::text, 0)) AS ok
+     ),
+     latest_grant AS (
+       SELECT id FROM interview_credit_transactions
+       WHERE user_id = $1::uuid AND reason = 'monthly_pro_max_grant'
+         AND created_at > NOW() - INTERVAL '28 days'
+       ORDER BY created_at DESC
+       LIMIT 1
+     ),
+     ins AS (
+       INSERT INTO interview_credit_transactions
+         (user_id, amount, reason, stripe_payment_intent_id)
+       SELECT $1::uuid, -1, 'monthly_grant_clawback', 'grant:' || latest_grant.id::text
+       FROM latest_grant, lock
+       WHERE COALESCE((SELECT balance FROM interview_credit_balances WHERE user_id = $1::uuid), 0) >= 1
+       ON CONFLICT DO NOTHING
+       RETURNING id
+     ),
+     upd AS (
+       UPDATE interview_credit_balances
+          SET balance = GREATEST(0, balance - 1), updated_at = NOW()
+        WHERE user_id = $1::uuid AND EXISTS (SELECT 1 FROM ins)
+        RETURNING balance
+     )
+     SELECT EXISTS(SELECT 1 FROM ins) AS clawed`,
+    [userId]
+  )
+  return result.rows[0]?.clawed ?? false
+}

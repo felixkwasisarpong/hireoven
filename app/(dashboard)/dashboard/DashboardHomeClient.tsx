@@ -11,6 +11,7 @@ import DashboardFeedToolbar, {
 import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
+import ResumeNudgeBanner from "@/components/dashboard/ResumeNudgeBanner"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import dynamic from "next/dynamic"
 const ApexMiniPanel  = dynamic(() => import("@/components/apex/ApexMiniPanel").then(m => ({ default: m.ApexMiniPanel })), { ssr: false })
@@ -44,7 +45,7 @@ export default function DashboardHomeClient({
   const router = useRouter()
   const searchParams = useSearchParams()
 
-  const { primaryResume, isLoading: resumeLoading } = useResumeContext()
+  const { primaryResume, hasResume, isLoading: resumeLoading } = useResumeContext()
   /**
    * While the client-side resume context is still hydrating, trust the server-rendered
    * snapshot so we don't render a single intermediate frame with the wrong assumption.
@@ -235,6 +236,10 @@ export default function DashboardHomeClient({
                 />
 
                 {focusMode && <ApexFocusBanner />}
+
+                {/* New users see empty match rings with no explanation — tell
+                    them the fix. Gone the moment any resume exists. */}
+                {!resumeLoading && !hasResume && <ResumeNudgeBanner />}
 
                 <JobFeed
                   filters={filters}
