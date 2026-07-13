@@ -8,10 +8,10 @@ const SNOOZE_KEY = "launch-promo-snooze-until-v2"
 const DAY_MS = 24 * 60 * 60 * 1000
 
 // Mirrors the LAUNCH promotion in Stripe (20% off Pro Max monthly) and the
-// promos-table row that ends 2026-08-04 — after that the code is inactive and
-// checkout would reject it, so stop advertising it.
+// promos-table row — extended to 2026-08-13 for the Product Hunt launch. After
+// that the code is inactive and checkout would reject it, so stop advertising.
 const LAUNCH_PROMO_CODE = "LAUNCH"
-const OFFER_ENDS_AT = Date.parse("2026-08-04T17:25:00Z")
+const OFFER_ENDS_AT = Date.parse("2026-08-13T23:59:59Z")
 
 /** Yellow sphere — replicates the 3D floating balls in the reference. */
 function Orb({ className }: { className: string }) {
@@ -201,6 +201,10 @@ export default function LaunchPromoPopup() {
               <p className="font-black text-white drop-shadow">
                 <span className="text-6xl">20%</span>
                 <span className="text-lg uppercase tracking-widest"> off</span>
+              </p>
+              <p className="mt-1 text-[11px] font-bold uppercase tracking-[0.2em] text-white/85">
+                Offer ends{" "}
+                {new Date(OFFER_ENDS_AT).toLocaleDateString("en-US", { month: "long", day: "numeric" })}
               </p>
             </div>
           </div>
