@@ -156,8 +156,12 @@ const DESCRIPTION_ENRICHABLE_SOURCE_ATS = [
   "workday",
 ] as const
 
+// adzuna.com: aggregator landing pages (source_ats is NULL on those rows, so
+// the source-list check can't catch them). The browser fallback renders them
+// fine — without this, sub-120-char Adzuna snippets landed hidden_low_quality
+// and were never retried (~300/day).
 const DESCRIPTION_ENRICHABLE_APPLY_URL_PATTERN =
-  "(ashbyhq\\.com|avature\\.net|bamboohr\\.com|breezy\\.hr|eightfold\\.ai|greenhouse\\.io|icims\\.com|applytojob\\.com|jobs\\.gem\\.com|jobvite\\.com|jobs\\.lever\\.co|oraclecloud\\.com|ats\\.rippling\\.com|smartrecruiters\\.com|teamtailor\\.com|myworkdayjobs\\.com|digitalcareers\\.infosys\\.com)"
+  "(ashbyhq\\.com|avature\\.net|bamboohr\\.com|breezy\\.hr|eightfold\\.ai|greenhouse\\.io|icims\\.com|applytojob\\.com|jobs\\.gem\\.com|jobvite\\.com|jobs\\.lever\\.co|oraclecloud\\.com|ats\\.rippling\\.com|smartrecruiters\\.com|teamtailor\\.com|myworkdayjobs\\.com|digitalcareers\\.infosys\\.com|adzuna\\.com)"
 
 type DescriptionEnrichmentJob = PersistedJobForNormalization & {
   updated_at?: string | null
