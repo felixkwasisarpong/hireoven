@@ -112,6 +112,7 @@ case "${1:-}" in
   pipeline-cleanup)  run "api/cron/pipeline-cleanup?days=${PIPELINE_CLEANUP_DAYS:-7}" ;;
   refresh-title-suggestions) run api/cron/refresh-title-suggestions ;;
   instant-notify)    run api/cron/instant-notify ;;
+  interview-reminders) run api/cron/interview-reminders ;;
   ghost-scan)        run api/cron/ghost-scan ;;
   timing-refresh)    run api/cron/timing-refresh ;;
   cohort-detect)     run api/cron/cohort-detect ;;

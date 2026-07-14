@@ -70,6 +70,8 @@ export async function PATCH(request: NextRequest) {
 
   const body = (await request.json().catch(() => ({}))) as {
     id?: string
+    jobId?: string
+    clicked?: boolean
     markAllRead?: boolean
   }
 
@@ -85,15 +87,30 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // A click implies the notification was seen, so clicked stamps opened_at
+  // too — email opens (no tracking pixel) and push taps have no separate
+  // open event to rely on.
+  const setClause = body.clicked
+    ? `opened_at = COALESCE(opened_at, now()), clicked_at = COALESCE(clicked_at, now())`
+    : `opened_at = COALESCE(opened_at, now())`
+
   if (body.id) {
     await pool.query(
-      `UPDATE alert_notifications
-       SET opened_at = COALESCE(opened_at, now())
-       WHERE id = $1 AND user_id = $2`,
+      `UPDATE alert_notifications SET ${setClause} WHERE id = $1 AND user_id = $2`,
       [body.id, user.id]
     )
     return NextResponse.json({ ok: true })
   }
 
-  return NextResponse.json({ error: "id or markAllRead required" }, { status: 400 })
+  // Email links and push taps land on a job, not a notification id — resolve
+  // the row by (user, job) instead.
+  if (body.jobId) {
+    await pool.query(
+      `UPDATE alert_notifications SET ${setClause} WHERE user_id = $1 AND job_id = $2`,
+      [user.id, body.jobId]
+    )
+    return NextResponse.json({ ok: true })
+  }
+
+  return NextResponse.json({ error: "id, jobId or markAllRead required" }, { status: 400 })
 }

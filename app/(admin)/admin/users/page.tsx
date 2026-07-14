@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, Loader2, Mail, Shield, UserRound, UserX } from "lucide-react"
+import { ChevronDown, FileText, Loader2, Mail, Shield, UserRound, UserX } from "lucide-react"
 import {
   AdminBadge,
   AdminButton,
@@ -25,6 +25,7 @@ type UserRow = {
   watchlistCount: number
   alertCount: number
   pushEnabled: boolean
+  hasResume: boolean
   plan: string
   planStatus: string
 }
@@ -250,6 +251,7 @@ export default function AdminUsersPage() {
                 <th className="px-3 py-3">Joined</th>
                 <th className="px-3 py-3">Plan</th>
                 <th className="px-3 py-3">Visa</th>
+                <th className="px-3 py-3">Resume</th>
                 <th className="px-3 py-3">Watch</th>
                 <th className="px-3 py-3">Last active</th>
                 <th className="px-3 py-3">Admin</th>
@@ -259,14 +261,14 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
+                  <td colSpan={10} className="px-3 py-10 text-center text-gray-400">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                     Loading users…
                   </td>
                 </tr>
               ) : visibleUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-3 py-10 text-center text-gray-400">
+                  <td colSpan={10} className="px-3 py-10 text-center text-gray-400">
                     No users match your search.
                   </td>
                 </tr>
@@ -292,6 +294,15 @@ export default function AdminUsersPage() {
                       </AdminBadge>
                     ) : (
                       <span className="text-xs text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3">
+                    {user.hasResume ? (
+                      <AdminBadge tone="success">
+                        <FileText className="mr-1 h-3 w-3" /> Uploaded
+                      </AdminBadge>
+                    ) : (
+                      <AdminBadge tone="neutral">None</AdminBadge>
                     )}
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-600">{formatNumber(user.watchlistCount)}</td>
@@ -357,6 +368,7 @@ export default function AdminUsersPage() {
               { label: "Watchlist",   value: String(selectedUser.watchlistCount) },
               { label: "Alerts",      value: String(selectedUser.alertCount) },
               { label: "Push",        value: selectedUser.pushEnabled ? "Enabled" : "Disabled" },
+              { label: "Resume",      value: selectedUser.hasResume ? "Uploaded" : "Not uploaded" },
               { label: "Visa status", value: selectedUser.visaStatus ?? "Not set" },
             ].map(({ label, value }) => (
               <div key={label} className="rounded-2xl border border-gray-200 bg-gray-50 p-4">

@@ -373,7 +373,7 @@ export function useNotifications(
       await fetch("/api/notifications", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: notificationId }),
+        body: JSON.stringify({ id: notificationId, clicked }),
       })
     },
     []

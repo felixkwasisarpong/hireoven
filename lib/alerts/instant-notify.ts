@@ -166,12 +166,15 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     const wasNotified = (userId: string, jobId: string) => notified.get(userId)?.has(jobId) ?? false
 
     // ── 1. Alert matches, grouped per user ────────────────────────────────────
-    const alertsByUser = new Map<string, { name: string; alertIds: Set<string>; jobs: Map<string, Job> }>()
+    const alertsByUser = new Map<string, { name: string; alertIds: Set<string>; jobs: Map<string, Job>; jobAlertIds: Map<string, string> }>()
     for (const job of freshJobs) {
       for (const alert of await matchJobToAlerts(job)) {
-        const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", alertIds: new Set(), jobs: new Map() }
+        const entry = alertsByUser.get(alert.user_id) ?? { name: alert.name ?? "Job alert", alertIds: new Set(), jobs: new Map(), jobAlertIds: new Map() }
         entry.alertIds.add(alert.id)
         entry.jobs.set(job.id, job)
+        // First matching alert wins attribution; the admin log needs SOME
+        // owning alert to resolve a name, and multi-alert overlap is rare.
+        if (!entry.jobAlertIds.has(job.id)) entry.jobAlertIds.set(job.id, alert.id)
         alertsByUser.set(alert.user_id, entry)
       }
     }
@@ -267,7 +270,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
             pushSent: pushSent && pushJobIds.has(job.id),
           })
           if (!channel) continue
-          await recordNotification(userId, job.id, channel, "alert")
+          await recordNotification(userId, job.id, channel, "alert", entry.jobAlertIds.get(job.id) ?? null)
           markNotified(userId, job.id)
           recordedAny = true
         }

@@ -125,7 +125,10 @@ function renderJobRow(job: JobWithCompanyContext, index: number, matchScore?: nu
 
   const badges = [matchBadge, sponsorBadge].filter(Boolean).join("&nbsp;")
 
-  const jobUrl = `${getBaseUrl()}/dashboard?jobId=${esc(job.id)}`
+  // Deep-link straight to the job detail page (the old /dashboard?jobId= form
+  // was never consumed by the feed — users landed on the generic feed). ntf=1
+  // marks an email-notification referral so the page stamps clicked_at.
+  const jobUrl = `${getBaseUrl()}/dashboard/jobs/${esc(job.id)}?ntf=1`
   const divider = index > 0 ? `<tr><td colspan="2" style="padding:0 0 18px;"><div style="height:1px;background:#f1f5f9;"></div></td></tr>` : ""
 
   return `

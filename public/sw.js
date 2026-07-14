@@ -194,6 +194,22 @@ self.addEventListener("push", (event) => {
   )
 })
 
+// Stamp alert_notifications.clicked_at for the tapped push. Best-effort:
+// session cookies ride along automatically (same-origin), failures are
+// swallowed — attribution must never block opening the job.
+async function reportNotificationClick(data) {
+  const jobIds = data?.jobId ? [data.jobId] : Array.isArray(data?.jobIds) ? data.jobIds : []
+  await Promise.all(
+    jobIds.map((jobId) =>
+      fetch("/api/notifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId, clicked: true }),
+      }).catch(() => {})
+    )
+  )
+}
+
 self.addEventListener("notificationclick", (event) => {
   const { action, notification } = event
   const applyUrl = notification.data?.applyUrl
@@ -207,6 +223,8 @@ self.addEventListener("notificationclick", (event) => {
       if (action === "dismiss") {
         return
       }
+
+      await reportNotificationClick(notification.data)
 
       if (action === "apply" && applyUrl) {
         await self.clients.openWindow(applyUrl)
