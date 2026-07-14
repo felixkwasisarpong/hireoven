@@ -187,8 +187,16 @@ export async function GET(request: NextRequest) {
     ? CANDIDATE_CEILING
     : Math.min(CANDIDATE_CEILING, Math.max(limit + offset, candidateFloor) * fetchMultiplier)
 
+  const globalScope = sp.get("global") === "1"
+
   const pool = getPostgresPool()
-  const where: string[] = ["jobs.is_active = true", sqlPublishedJob("jobs"), sqlJobLocatedInUsa("jobs")]
+  const where: string[] = [
+    "jobs.is_active = true",
+    sqlPublishedJob("jobs"),
+    // Skip the US/CA location gate when the caller is viewing a specific
+    // company's profile and has opted into global scope.
+    ...(globalScope && companyIds?.length ? [] : [sqlJobLocatedInUsa("jobs")]),
+  ]
   const params: Array<string | number | string[]> = []
   const addParam = (value: string | number | string[]) => {
     params.push(value)
@@ -301,6 +309,8 @@ export async function GET(request: NextRequest) {
          WHERE jobs.is_active = true
            AND ${sqlPublishedJob("jobs")}
            AND jobs.id NOT IN (SELECT id FROM base)
+           ${companyIds?.length ? `AND jobs.company_id::text = ANY(${addParam(companyIds)}::text[])` : ""}
+           ${titles.length ? `AND (jobs.normalized_title ILIKE ANY(${addParam(titles.map((t) => `%${t}%`))}::text[]) OR jobs.title ILIKE ANY(${addParam(titles.map((t) => `%${t}%`))}::text[]))` : ""}
        )
        SELECT * FROM base
        UNION ALL

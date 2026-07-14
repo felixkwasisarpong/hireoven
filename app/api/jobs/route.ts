@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
   const sp = new URL(request.url).searchParams
   const q = sp.get("q")
   const companyId = sp.get("company_id")
+  const globalScope = sp.get("global") === "1"
   const seniority = sp.get("seniority")?.split(",").filter(Boolean)
   const empType = sp.get("employment_type")?.split(",").filter(Boolean)
   const remote = sp.get("remote") === "true"
@@ -80,10 +81,12 @@ export async function GET(request: NextRequest) {
   // Keep the global feed on the strict generated location column. Passing a
   // company alias enables the null-location H1B rescue path, but that OR forces
   // Postgres into a multi-million-row scan on the hot feed route.
+  // Skip the US/CA location gate when the caller requests a specific company's
+  // jobs and has opted into global scope (company profile pages).
   const where: string[] = [
     "jobs.is_active = true",
     sqlPublishedJob("jobs"),
-    sqlJobLocatedInUsa("jobs"),
+    ...(globalScope && companyId ? [] : [sqlJobLocatedInUsa("jobs")]),
   ]
   const values: Array<string | number | boolean | string[]> = []
 

@@ -391,6 +391,7 @@ export function useJobs(
           params.set("employment", filters.employment_type.join(","))
         }
         if (filters.company_ids?.length) params.set("companies", filters.company_ids.join(","))
+        if (filters.location_scope === "global" && filters.company_ids?.length) params.set("global", "1")
         if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
         // Tell the server which ranked surface we're on. Best Match drops the
         // saved-jobs UNION (fresh fit only) and orders by score; Most Relevant
@@ -449,6 +450,7 @@ export function useJobs(
       if (filters.seniority?.length) params.set("seniority", filters.seniority.join(","))
       if (filters.employment_type?.length) params.set("employment_type", filters.employment_type.join(","))
       if (filters.company_ids?.length) params.set("company_id", filters.company_ids[0])
+      if (filters.location_scope === "global" && filters.company_ids?.length) params.set("global", "1")
       if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
       if (filters.titles?.length) params.set("titles", filters.titles.join(","))
       if (withScores) params.set("withScores", "1")

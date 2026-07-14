@@ -70,9 +70,17 @@ function makeDraft(job: JobRow): JobDraft {
   }
 }
 
+type JobStats = {
+  totalActive: number
+  totalInactive: number
+  totalRemote: number
+  failedNormalization: number
+}
+
 export default function AdminJobsPage() {
   const { pushToast } = useToast()
   const [jobs, setJobs] = useState<JobRow[]>([])
+  const [stats, setStats] = useState<JobStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [atsFilter, setAtsFilter] = useState("")
@@ -85,6 +93,13 @@ export default function AdminJobsPage() {
   const [draft, setDraft] = useState<JobDraft | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
+
+  async function loadStats() {
+    const res = await fetch("/api/admin/jobs/stats")
+    if (!res.ok) return
+    const data = (await res.json()) as JobStats
+    setStats(data)
+  }
 
   async function loadJobs() {
     setLoading(true)
@@ -100,6 +115,7 @@ export default function AdminJobsPage() {
   }
 
   useEffect(() => {
+    void loadStats()
     void loadJobs()
   }, [])
 
@@ -237,7 +253,7 @@ export default function AdminJobsPage() {
               )}
               Re-normalize selected
             </AdminButton>
-            <AdminButton tone="secondary" onClick={() => void loadJobs()}>
+            <AdminButton tone="secondary" onClick={() => { void loadStats(); void loadJobs() }}>
               Refresh
             </AdminButton>
           </>
@@ -245,20 +261,23 @@ export default function AdminJobsPage() {
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <AdminStatCard label="Visible jobs" value={formatNumber(visibleJobs.length)} />
         <AdminStatCard
           label="Active jobs"
-          value={formatNumber(visibleJobs.filter((job) => job.is_active).length)}
+          value={stats ? formatNumber(stats.totalActive) : "—"}
           tone="success"
         />
         <AdminStatCard
+          label="Inactive jobs"
+          value={stats ? formatNumber(stats.totalInactive) : "—"}
+        />
+        <AdminStatCard
           label="Remote jobs"
-          value={formatNumber(visibleJobs.filter((job) => job.is_remote).length)}
+          value={stats ? formatNumber(stats.totalRemote) : "—"}
           tone="info"
         />
         <AdminStatCard
           label="Failed normalization"
-          value={formatNumber(visibleJobs.filter((job) => isNormalizationFailed(job)).length)}
+          value={stats ? formatNumber(stats.failedNormalization) : "—"}
           tone="danger"
         />
       </div>
