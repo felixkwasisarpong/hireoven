@@ -89,6 +89,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
   const [loading, setLoading] = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [inviteResolved, setInviteResolved] = useState(false)
+  const isReferral = searchParams.get("ref") === "1"
   const [error, setError] = useState<string | null>(() => {
     const raw = searchParams.get("error")
     if (!raw) return null
@@ -106,6 +107,24 @@ export function AuthForm({ defaultMode = "login" }: Props) {
       })
       .catch(() => setInviteResolved(true))
   })
+
+  async function claimReferralIfPresent() {
+    try {
+      const match = document.cookie.match(/(?:^|;\s*)hireoven_ref=([^;]+)/)
+      const code = match?.[1]
+      if (!code) return
+      await fetch("/api/referral/claim", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      })
+      // Clear cookie regardless of response
+      document.cookie = "hireoven_ref=; Path=/; Max-Age=0; SameSite=Lax"
+    } catch {
+      // Best-effort — never block signup
+    }
+  }
 
   function switchMode(m: AuthMode) {
     if (inviteToken) return // locked to signup when arriving via invite link
@@ -184,6 +203,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, full_name: fullName }),
       })
+      await claimReferralIfPresent()
       window.location.assign(next ?? "/dashboard/onboarding")
     }
   }
@@ -263,6 +283,19 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         </Link>
 
         <div className="w-full max-w-[400px]">
+
+          {/* Referral welcome banner */}
+          {isReferral && !inviteToken && (
+            <div className="mb-5 flex items-start gap-3 rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+              <span className="mt-0.5 text-lg">🎁</span>
+              <div>
+                <p className="text-[13px] font-bold text-orange-800">You got 7 days of Pro free!</p>
+                <p className="text-[12px] text-orange-700 leading-relaxed">
+                  A friend invited you. Create your account to claim your free Pro trial.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Invite banner — shown when arriving via invite link */}
           {inviteToken && (
