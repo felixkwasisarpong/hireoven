@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { generateDigestForAllActiveUsers } from "@/lib/apex/salary/weekly-digest"
+import { requireCronAuth } from "@/lib/env"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 300
@@ -8,8 +9,7 @@ export const maxDuration = 300
 // { "path": "/api/cron/salary-digest", "schedule": "0 8 * * 1" }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   await generateDigestForAllActiveUsers()

@@ -2,14 +2,15 @@
 #
 # All heavy batch work runs HERE, against a private app-worker container on this
 # same box (http://localhost:3100 — the `app-worker` service in
-# docker-compose.prod.yml, started with `docker compose --profile worker up -d`).
+# docker-compose.harvester.yml, started with
+# `docker compose -f docker-compose.harvester.yml up -d app-worker harvester`).
 # Because APP_URL points at localhost, the crawl/enrichment/ingest CPU+RAM stay
 # on this box and never touch the user-facing 4 GB web box (which only serves the
 # site + Postgres + MinIO). That's what stops the 502s.
 #
 # Setup (one-time):
-#   1. On the harvester box, bring up the worker:
-#        docker compose --profile worker up -d app-worker
+#   1. On the harvester box, bring up the worker-side stack:
+#        docker compose -f docker-compose.harvester.yml up -d app-worker harvester
 #      (set DATABASE_URL + MINIO_ENDPOINT in .env to the web box host first.)
 #   2. crontab -e  →  paste the contents below  →  save.  Confirm: crontab -l
 #   3. sudo mkdir -p /var/log/hireoven && sudo chown $USER:$USER /var/log/hireoven

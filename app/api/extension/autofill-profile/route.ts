@@ -16,7 +16,8 @@ import {
   requireExtensionAuth,
   handleExtensionPreflight,
 } from "@/lib/extension/auth"
-import type { AutofillProfile } from "@/types"
+import { restoreResumeFromSnapshot } from "@/lib/resume/hub"
+import type { AutofillProfile, Resume, ResumeVersion } from "@/types"
 
 export const runtime = "nodejs"
 
@@ -111,6 +112,15 @@ function cleanEducation(value: unknown, maxItems = 6): SafeResumeEducation[] {
   return out
 }
 
+function splitFullName(value: string | null): { first: string | null; last: string | null } {
+  const cleaned = cleanString(value, 240)
+  if (!cleaned) return { first: null, last: null }
+  const parts = cleaned.split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { first: null, last: null }
+  if (parts.length === 1) return { first: parts[0], last: null }
+  return { first: parts[0], last: parts.slice(1).join(" ") }
+}
+
 export async function GET(request: Request) {
   const origin = request.headers.get("origin")
   const headers = extensionCorsHeaders(origin)
@@ -119,45 +129,11 @@ export async function GET(request: Request) {
   if (errResponse) return errResponse
 
   const pool = getPostgresPool()
-  const result = await pool.query<AutofillProfile & {
-    resume_full_name: string | null
-    resume_current_title: string | null
-    resume_current_company: string | null
-    resume_email: string | null
-    resume_phone: string | null
-    resume_location: string | null
-    resume_linkedin_url: string | null
-    resume_portfolio_url: string | null
-    resume_summary: string | null
-    resume_top_skills: string[] | null
-    resume_work_experience: unknown
-    resume_education: unknown
-    resume_skills: unknown
-  }>(
-    `SELECT ap.*,
-            r.full_name     AS resume_full_name,
-            r.primary_role   AS resume_current_title,
-            r.work_experience->0->>'company' AS resume_current_company,
-            r.email         AS resume_email,
-            r.phone         AS resume_phone,
-            r.location      AS resume_location,
-            r.linkedin_url  AS resume_linkedin_url,
-            r.portfolio_url AS resume_portfolio_url,
-            r.summary        AS resume_summary,
-            r.top_skills     AS resume_top_skills,
-            r.work_experience AS resume_work_experience,
-            r.education       AS resume_education,
-            r.skills          AS resume_skills
-     FROM autofill_profiles ap
-     LEFT JOIN LATERAL (
-       SELECT full_name, primary_role, email, phone, location, linkedin_url, portfolio_url, summary, top_skills, work_experience, education, skills
-       FROM resumes
-       WHERE user_id = $1
-       ORDER BY is_primary DESC, updated_at DESC
-       LIMIT 1
-     ) r ON true
-     WHERE ap.user_id = $1
-     ORDER BY ap.updated_at DESC
+  const profileResult = await pool.query<AutofillProfile>(
+    `SELECT *
+     FROM autofill_profiles
+     WHERE user_id = $1
+     ORDER BY updated_at DESC
      LIMIT 1`,
     [user.sub]
   ).catch((err) => {
@@ -165,23 +141,83 @@ export async function GET(request: Request) {
     return null
   })
 
-  if (!result) {
+  if (!profileResult) {
     return extensionError(request, 500, "Failed to fetch autofill profile")
   }
 
-  const profile = result.rows[0] ?? null
+  const profile = profileResult.rows[0] ?? null
 
-  if (!profile) {
+  const { searchParams } = new URL(request.url)
+  const versionId = searchParams.get("versionId")
+  const resumeId = searchParams.get("resumeId")
+  const jobId = searchParams.get("jobId")
+
+  let resume: Resume | null = null
+  if (versionId) {
+    const versionResult = await pool.query<ResumeVersion>(
+      `SELECT * FROM resume_versions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [versionId, user.sub],
+    )
+    const version = versionResult.rows[0] ?? null
+    if (version) {
+      const baseResult = await pool.query<Resume>(
+        `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [version.resume_id, user.sub],
+      )
+      const baseResume = baseResult.rows[0] ?? null
+      if (baseResume) {
+        resume = version.snapshot ? restoreResumeFromSnapshot(baseResume, version.snapshot) : baseResume
+      }
+    }
+  } else if (resumeId) {
+    const resumeResult = await pool.query<Resume>(
+      `SELECT * FROM resumes WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [resumeId, user.sub],
+    )
+    resume = resumeResult.rows[0] ?? null
+  } else if (jobId) {
+    const resumeResult = await pool.query<Resume>(
+      `(
+         SELECT * FROM resumes
+         WHERE user_id = $1 AND tailored_for_job_id = $2
+         ORDER BY updated_at DESC
+         LIMIT 1
+       )
+       UNION ALL
+       (
+         SELECT * FROM resumes
+         WHERE user_id = $1
+         ORDER BY is_primary DESC NULLS LAST, updated_at DESC
+         LIMIT 1
+       )
+       LIMIT 1`,
+      [user.sub, jobId],
+    )
+    resume = resumeResult.rows[0] ?? null
+  } else {
+    const resumeResult = await pool.query<Resume>(
+      `SELECT * FROM resumes
+       WHERE user_id = $1
+       ORDER BY is_primary DESC NULLS LAST, updated_at DESC
+       LIMIT 1`,
+      [user.sub],
+    )
+    resume = resumeResult.rows[0] ?? null
+  }
+
+  if (!profile && !resume) {
     return NextResponse.json(
       { profile: null, profileMissing: true },
       { status: 200, headers }
     )
   }
 
-  const topSkills = cleanStringArray(profile.resume_top_skills, 24, 100)
-  const workExperience = cleanWorkExperience(profile.resume_work_experience)
-  const education = cleanEducation(profile.resume_education)
-  const certifications = cleanCertifications(profile.resume_skills)
+  const topSkills = cleanStringArray(resume?.top_skills, 24, 100)
+  const workExperience = cleanWorkExperience(resume?.work_experience)
+  const education = cleanEducation(resume?.education)
+  const certifications = cleanCertifications(resume?.skills)
+  const resumeName = splitFullName(resume?.full_name ?? null)
+  const currentCompany = workExperience[0]?.company ?? null
 
   // EEO / diversity consent. Historically gated behind an explicit
   // auto_fill_diversity toggle, but entering these values in the autofill
@@ -190,71 +226,71 @@ export async function GET(request: Request) {
   // used to force-disable (auto_fill_diversity === false with data present is
   // respected below only when the user has never set data, i.e. it's a no-op).
   const hasEeoData = Boolean(
-    profile.gender ||
-      profile.ethnicity ||
-      profile.hispanic_latino ||
-      profile.veteran_status ||
-      profile.disability_status,
+    profile?.gender ||
+      profile?.ethnicity ||
+      profile?.hispanic_latino ||
+      profile?.veteran_status ||
+      profile?.disability_status,
   )
-  const eeoOptIn = profile.auto_fill_diversity === true || hasEeoData
+  const eeoOptIn = profile?.auto_fill_diversity === true || hasEeoData
 
   // Return only safe fields for autofill.
   // Diversity fields (gender, ethnicity, veteran, disability) are included when
   // the user opted in OR has filled any EEO value (presence = consent).
   const safeProfile = {
-    first_name: profile.first_name,
-    last_name: profile.last_name,
-    email: profile.email,
-    phone: profile.phone,
-    linkedin_url: profile.linkedin_url,
-    github_url: profile.github_url,
-    portfolio_url: profile.portfolio_url,
-    website_url: profile.website_url,
-    address_line1: profile.address_line1,
-    address_line2: profile.address_line2,
-    city: profile.city,
-    state: profile.state,
-    zip_code: profile.zip_code,
-    country: profile.country ?? null,
-    authorized_to_work: profile.authorized_to_work ?? null,
-    requires_sponsorship: profile.requires_sponsorship ?? null,
-    sponsorship_statement: profile.sponsorship_statement,
-    work_authorization: profile.work_authorization,
-    years_of_experience: profile.years_of_experience,
-    salary_expectation_min: profile.salary_expectation_min,
-    salary_expectation_max: profile.salary_expectation_max,
-    earliest_start_date: profile.earliest_start_date,
-    willing_to_relocate: profile.willing_to_relocate ?? null,
-    preferred_work_type: profile.preferred_work_type,
-    highest_degree: profile.highest_degree,
-    field_of_study: profile.field_of_study,
-    university: profile.university,
-    graduation_year: profile.graduation_year,
-    gpa: profile.gpa,
+    first_name: profile?.first_name ?? resumeName.first,
+    last_name: profile?.last_name ?? resumeName.last,
+    email: profile?.email ?? resume?.email ?? null,
+    phone: profile?.phone ?? resume?.phone ?? null,
+    linkedin_url: profile?.linkedin_url ?? resume?.linkedin_url ?? null,
+    github_url: profile?.github_url ?? null,
+    portfolio_url: profile?.portfolio_url ?? resume?.portfolio_url ?? null,
+    website_url: profile?.website_url ?? resume?.portfolio_url ?? null,
+    address_line1: profile?.address_line1 ?? null,
+    address_line2: profile?.address_line2 ?? null,
+    city: profile?.city ?? null,
+    state: profile?.state ?? null,
+    zip_code: profile?.zip_code ?? null,
+    country: profile?.country ?? null,
+    authorized_to_work: profile?.authorized_to_work ?? null,
+    requires_sponsorship: profile?.requires_sponsorship ?? null,
+    sponsorship_statement: profile?.sponsorship_statement ?? null,
+    work_authorization: profile?.work_authorization ?? null,
+    years_of_experience: profile?.years_of_experience ?? null,
+    salary_expectation_min: profile?.salary_expectation_min ?? null,
+    salary_expectation_max: profile?.salary_expectation_max ?? null,
+    earliest_start_date: profile?.earliest_start_date ?? null,
+    willing_to_relocate: profile?.willing_to_relocate ?? null,
+    preferred_work_type: profile?.preferred_work_type ?? null,
+    highest_degree: profile?.highest_degree ?? null,
+    field_of_study: profile?.field_of_study ?? null,
+    university: profile?.university ?? null,
+    graduation_year: profile?.graduation_year ?? null,
+    gpa: profile?.gpa ?? null,
     // EEO fields — sent when opted in OR any EEO value is present (presence = consent)
     auto_fill_diversity: eeoOptIn,
-    gender: eeoOptIn ? (profile.gender ?? null) : null,
-    ethnicity: eeoOptIn ? (profile.ethnicity ?? null) : null,
-    hispanic_latino: eeoOptIn ? (profile.hispanic_latino ?? null) : null,
-    veteran_status: eeoOptIn ? (profile.veteran_status ?? null) : null,
-    disability_status: eeoOptIn ? (profile.disability_status ?? null) : null,
+    gender: eeoOptIn ? (profile?.gender ?? null) : null,
+    ethnicity: eeoOptIn ? (profile?.ethnicity ?? null) : null,
+    hispanic_latino: eeoOptIn ? (profile?.hispanic_latino ?? null) : null,
+    veteran_status: eeoOptIn ? (profile?.veteran_status ?? null) : null,
+    disability_status: eeoOptIn ? (profile?.disability_status ?? null) : null,
     // User-saved custom answers (dashboard "Common questions" section) —
     // the question tier matches these patterns FIRST, before any heuristic.
-    custom_answers: Array.isArray(profile.custom_answers)
-      ? (profile.custom_answers as Array<{ question_pattern?: unknown; answer?: unknown }>)
+    custom_answers: Array.isArray(profile?.custom_answers)
+      ? (profile?.custom_answers as Array<{ question_pattern?: unknown; answer?: unknown }>)
           .filter((qa) => typeof qa?.question_pattern === "string" && typeof qa?.answer === "string" && qa.answer.trim())
           .map((qa) => ({ question_pattern: String(qa.question_pattern), answer: String(qa.answer).trim() }))
       : [],
     // Resume-derived fields
-    resume_full_name: profile.resume_full_name ?? null,
-    current_title: profile.resume_current_title ?? null,
-    current_company: profile.resume_current_company ?? null,
-    resume_email: profile.resume_email ?? null,
-    resume_phone: profile.resume_phone ?? null,
-    resume_location: profile.resume_location ?? null,
-    resume_linkedin_url: profile.resume_linkedin_url ?? null,
-    resume_portfolio_url: profile.resume_portfolio_url ?? null,
-    resume_summary: profile.resume_summary ?? null,
+    resume_full_name: resume?.full_name ?? null,
+    current_title: resume?.primary_role ?? null,
+    current_company: currentCompany,
+    resume_email: resume?.email ?? null,
+    resume_phone: resume?.phone ?? null,
+    resume_location: resume?.location ?? null,
+    resume_linkedin_url: resume?.linkedin_url ?? null,
+    resume_portfolio_url: resume?.portfolio_url ?? null,
+    resume_summary: resume?.summary ?? null,
     skills: topSkills.length ? topSkills.join(", ") : null,
     top_skills: topSkills,
     work_experience: workExperience,

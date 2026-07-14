@@ -133,6 +133,8 @@
     "db:export-careers-url-review": "npx tsx scripts/export-low-confidence-careers-review.ts",
     "verify:no-junk-in-descriptions": "npx tsx scripts/verify-no-junk-in-descriptions.ts",
     "verify:custom-ats-have-targets": "npx tsx scripts/verify-custom-ats-have-targets.ts",
+    "blog:backfill-images": "npx tsx scripts/backfill-blog-images.ts",
+    "blog:backfill-images:execute": "npx tsx scripts/backfill-blog-images.ts --execute",
     "db:repair-jobvite-urls": "npx tsx scripts/repair-jobvite-company-urls.ts",
     "db:repair-jobvite-urls:execute": "npx tsx scripts/repair-jobvite-company-urls.ts --execute"
   },

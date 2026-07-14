@@ -1,8 +1,8 @@
 #!/bin/bash
-# Hireoven scheduled tasks — register each block in Coolify → Scheduled Tasks.
-# All tasks require CRON_SECRET and APP_URL to be set as env vars in Coolify.
+# Hireoven scheduled tasks — run from the harvester box against the private
+# app-worker. Do not point this script at the public web app.
 #
-# Usage (manual trigger): APP_URL=https://... CRON_SECRET=... bash scripts/crons.sh <name>
+# Usage (manual trigger): APP_URL=http://localhost:3100 CRON_SECRET=... bash scripts/crons.sh <name>
 # Example: bash scripts/crons.sh ghost-scan
 
 set -euo pipefail
@@ -10,6 +10,18 @@ set -euo pipefail
 APP_URL="${APP_URL:?APP_URL is required}"
 APP_URL="${APP_URL%/}"
 CRON_SECRET="${CRON_SECRET:?CRON_SECRET is required}"
+
+case "$APP_URL" in
+  http://localhost|http://localhost:*|http://127.0.0.1|http://127.0.0.1:*|http://app-worker|http://app-worker:*|http://hireoven-app-worker|http://hireoven-app-worker:*)
+    ;;
+  *)
+    if [ "${ALLOW_NONLOCAL_CRON_URLS:-false}" != "true" ]; then
+      echo "Refusing to run scheduled task against non-local APP_URL=$APP_URL" >&2
+      echo "Use APP_URL=http://localhost:3100 on the harvester box, or set ALLOW_NONLOCAL_CRON_URLS=true for a one-off manual override." >&2
+      exit 2
+    fi
+    ;;
+esac
 
 run() {
   local method="${2:-GET}"
@@ -50,9 +62,9 @@ run_many() {
   echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Done group $group"
 }
 
-# ── Coolify Scheduled Tasks ────────────────────────────────────────────────────
+# ── Harvester-box Scheduled Tasks ──────────────────────────────────────────────
 #
-# Name               Schedule          Command (paste into Coolify)
+# Name               Schedule          Command
 # ──────────────────────────────────────────────────────────────────────────────
 # instant-notify     */5 * * * *       run api/cron/instant-notify
 # crawl              0 * * * *         run api/crawl
@@ -84,9 +96,9 @@ run_many() {
 # company-logos       40 6 * * *       run api/cron/company-logos  # logos for companies with a real/guessed domain but no logo
 # signal-api-webhooks * * * * *        run api/cron/signal-api-webhooks
 #
-# NOTE: the two off-box discovery jobs (commoncrawl-mine, drain-workday) are NOT
-# Coolify tasks — they run on the harvester box via Hetzner crontab. See
-# scripts/hetzner-crontab-worker.example.
+# The public web box should have no crontab. See scripts/hetzner-crontab.example.
+# Host-side discovery jobs (commoncrawl-mine, drain-workday, etc.) also run on
+# the harvester box via scripts/hetzner-crontab-worker.example.
 # ──────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in

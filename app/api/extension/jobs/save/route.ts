@@ -142,7 +142,14 @@ export async function POST(request: Request) {
   const parsedApplyUrl = normalizeExtensionJobUrl(body.applyUrl?.trim() || null)
   const rawTitle = body.title?.trim() || "Unknown Role"
   const rawDescription = body.descriptionText?.trim().slice(0, 12000) || null
-  const rawCompany = body.company?.trim() || null
+  const rawCompany = (() => {
+    const cleaned = body.company?.trim() || null
+    if (!cleaned) return null
+    if (/^(unknown company|unknown|company|greenhouse|lever|ashby|ashbyhq|smartrecruiters|workday|workdayjobs|myworkdayjobs|icims|bamboohr|applytojob|jazzhr|—|-)$/i.test(cleaned)) {
+      return null
+    }
+    return cleaned
+  })()
   const ats = body.detectedAts ?? body.source
 
   const fingerprint = buildExtensionJobFingerprint({
@@ -238,7 +245,8 @@ export async function POST(request: Request) {
       // Path-segment ATSes
       if (host === "greenhouse.io" || host.endsWith(".greenhouse.io") ||
           host.endsWith(".lever.co") || host.endsWith(".ashbyhq.com") ||
-          host === "lever.co" || host === "ashbyhq.com") {
+          host.endsWith(".smartrecruiters.com") ||
+          host === "lever.co" || host === "ashbyhq.com" || host === "smartrecruiters.com") {
         const seg = path.split("/").filter(Boolean)[0]
         return seg ? titleCase(decodeURIComponent(seg)) : null
       }
@@ -246,6 +254,16 @@ export async function POST(request: Request) {
       // Subdomain ATSes (Workday)
       if (host.endsWith(".myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
         const sub = host.split(".")[0]
+        return sub ? titleCase(sub) : null
+      }
+
+      if (host.endsWith(".bamboohr.com") || host.endsWith(".applytojob.com") || host.endsWith(".jazzhr.com")) {
+        const sub = host.split(".")[0]
+        return sub ? titleCase(sub) : null
+      }
+
+      if (host.endsWith(".icims.com")) {
+        const sub = host.split(".")[0]?.replace(/^careers?-?/i, "")
         return sub ? titleCase(sub) : null
       }
 
@@ -289,7 +307,12 @@ export async function POST(request: Request) {
         host === "greenhouse.io" || host.endsWith(".greenhouse.io") ||
         host === "lever.co" || host.endsWith(".lever.co") ||
         host === "ashbyhq.com" || host.endsWith(".ashbyhq.com") ||
-        host.endsWith(".myworkdayjobs.com") || host.endsWith(".workdayjobs.com")
+        host === "smartrecruiters.com" || host.endsWith(".smartrecruiters.com") ||
+        host.endsWith(".myworkdayjobs.com") || host.endsWith(".workdayjobs.com") ||
+        host.endsWith(".icims.com") ||
+        host.endsWith(".bamboohr.com") ||
+        host.endsWith(".applytojob.com") ||
+        host.endsWith(".jazzhr.com")
 
       if (isJobBoard || isAtsHost) {
         // Synthetic per-company placeholder so the unique constraint holds
@@ -554,7 +577,7 @@ export async function POST(request: Request) {
              job_title = COALESCE(NULLIF(trim(job_title), ''), $3, job_title),
              updated_at = NOW()
          WHERE id = $1::uuid
-           AND (company_name IS NULL OR company_name = '' OR company_name = 'Unknown Company')`,
+           AND (company_name IS NULL OR company_name = '' OR company_name IN ('Unknown Company', '—'))`,
         [existingApp.rows[0].id, companyName, title],
       )
       .catch((err: unknown) => {

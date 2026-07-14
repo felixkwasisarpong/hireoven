@@ -69,13 +69,12 @@ psql "$DATABASE_URL" -c "
 
 ---
 
-## Phase 2 — Smoke-test the new harvest path via the existing cron route
+## Phase 2 — Smoke-test the new harvest path via the worker cron route
 
-Don't deploy the worker yet. Flip the feature flag on the existing `/api/crawl`
-cron route so it routes Greenhouse-detected companies through the new path
-while everything else stays on the legacy crawler.
+Use the private `app-worker` on the harvester box for smoke tests. Do not point
+`scripts/crons.sh` at the public web origin.
 
-In Coolify env for the web service:
+In the harvester/app-worker environment:
 
 ```
 HARVESTER_USE_NEW_ADAPTERS=true
@@ -84,7 +83,7 @@ HARVESTER_USE_NEW_ADAPTERS=true
 Trigger one cron run:
 
 ```bash
-APP_URL=https://… CRON_SECRET=… bash scripts/crons.sh crawl
+APP_URL=http://localhost:3100 CRON_SECRET=… bash scripts/crons.sh crawl
 ```
 
 **Verify after 1 run:**
@@ -108,8 +107,8 @@ SELECT status, COUNT(*) FROM crawl_logs
  WHERE crawled_at > now() - interval '2 hours' GROUP BY status;
 ```
 
-If anything looks wrong, drop the flag in Coolify and the next cron returns
-to legacy behavior. No code changes needed.
+If anything looks wrong, drop the flag in the worker-side environment and the
+next cron returns to legacy behavior. No code changes needed.
 
 ---
 
@@ -154,7 +153,7 @@ running discovery.
 **Verify via `/api/admin/freshness`:**
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/admin/freshness | jq .tiers
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3100/api/admin/freshness | jq .tiers
 # expect non-zero counts per tier, backlog dropping over successive polls
 ```
 
@@ -219,7 +218,11 @@ npm run maintain:companies:execute -- --only=fuzzy-dedup
 
 ## Phase 4 — Schedule the recurring crons
 
-Add to Coolify Scheduled Tasks (or extend `scripts/crons.sh`):
+Run recurring jobs on the harvester box, either through
+[`../scripts/hetzner-crontab-worker.example`](../scripts/hetzner-crontab-worker.example)
+or a scheduler that targets the private `app-worker`
+(`APP_URL=http://localhost:3100`). Do not schedule these against the public web
+app.
 
 | Cron | Schedule | Purpose |
 |---|---|---|
@@ -248,7 +251,7 @@ file.
 **Verify after 24h:**
 
 ```bash
-curl -H "Authorization: Bearer $CRON_SECRET" $APP_URL/api/admin/freshness | jq .
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3100/api/admin/freshness | jq .
 # detection.samples should be > 100
 # detection.p50Sec should be < 900 for tier_1
 # recentRuns.runs > 0, jobsInserted > 0
@@ -267,7 +270,7 @@ duplicate work for Greenhouse-routed companies. Two options:
 - No conflict because `(company_id, external_id)` UPSERT is idempotent
 
 **Option B — deprecate legacy crawl:**
-- Disable the `crawl` entry in Coolify Scheduled Tasks
+- Disable the `crawl` entry in the harvester-box crontab
 - Keep `/api/crawl` route alive for one-off manual triggers
 - Legacy code stays in repo — useful as Playwright/HTML fallback path
 
@@ -318,11 +321,11 @@ production company set.
 
 **Rollback the worker:**
 - Stop the Coolify harvester service
-- The legacy `/api/crawl` cron continues running
+- Disable or pause the harvester-box crontab before stopping `app-worker`
 - No data loss; all writes are idempotent
 
 **Rollback the new harvest path on cron route:**
-- Remove `HARVESTER_USE_NEW_ADAPTERS=true` from the web service env
+- Remove `HARVESTER_USE_NEW_ADAPTERS=true` from the worker-side env
 - Next cron run goes back to legacy crawler for everything
 
 **Rollback a migration:**
@@ -333,8 +336,8 @@ production company set.
     `add-companies-duplicate-of.sql` was applied, etc.
 
 **Emergency stop everything:**
-- Disable all Coolify scheduled tasks in the project
-- Stop the harvester service
+- Disable the harvester-box crontab
+- Stop the harvester-side services
 - The web service keeps serving from existing DB data
 
 ---

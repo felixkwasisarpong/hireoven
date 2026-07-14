@@ -28,25 +28,51 @@ Repo includes [`../Dockerfile`](../Dockerfile) and Next [`output: "standalone"`]
 | `SUPABASE_SERVICE_ROLE_KEY` | Server-only; never expose to browser |
 | `NEXT_PUBLIC_APP_URL` | Public site URL, e.g. `https://hireoven.com` |
 | `NEXT_PUBLIC_SITE_URL` | Same as app URL if you use it for OG/links |
+| `HIREOVEN_RUNTIME_ROLE` | `web` for the public app |
+| `WEB_IMAGE_TAG` | Optional; pin to `sha-<commit>` for maintenance-window releases |
 | `RESEND_API_KEY` / `MAIL_FROM_DOMAIN` | Email identities |
 | `ANTHROPIC_API_KEY` | If you use AI routes in prod |
 | `STRIPE_*` | If billing enabled |
-| `CRON_SECRET`, `SUPABASE_WEBHOOK_SECRET` | As in example |
+| `SUPABASE_WEBHOOK_SECRET` | As in example |
 | Web Push `VAPID_*` | If push enabled |
 
 7. Attach **domain** in Coolify → enable **HTTPS**.
-8. **Deploy** / enable **auto deploy on push**.
+8. **Deploy**. For the public web app, keep **auto deploy on push disabled** so
+   merging a PR cannot restart the user-facing box during the day.
 
-### Scheduled tasks (crawl + alerts)
+### Deployment lanes
 
-Vercel Cron is not used. In Coolify, add **scheduled tasks** (or any cron) that `GET` your public origin with `Authorization: Bearer <CRON_SECRET>` (same secret as in `.env.production.example`).
+Image publication and container deployment are separate concerns:
 
-> **Production note:** on a small web box, point these at the private `app-worker`
-> on the harvester box (`http://localhost:3100`) instead of the public origin, so
-> the crawl/enrichment load never touches the user-facing box. See
-> [Production two-box topology](#production-two-box-topology-offload-crons-off-the-web-box) below.
+- GitHub Actions builds/pushes images on `main`: `hireoven` and
+  `hireoven-harvester`, each tagged `latest` and `sha-<commit>`.
+- Coolify decides which running boxes restart. A pushed image does not restart a
+  box unless that Coolify resource is configured to auto-deploy or you manually
+  redeploy it.
 
-The production **Dockerfile** installs **`curl`** in the final image so scheduled task commands like the example below work. Redeploy after pulling this change; without `curl`, the job fails with `curl: not found`.
+Recommended production lanes:
+
+| Lane | Coolify resource | Auto deploy | Image tag env | When it restarts |
+|------|------------------|-------------|---------------|------------------|
+| **Webbox** | `docker-compose.prod.yml` / public app | **Off** | `WEB_IMAGE_TAG=sha-<known-good>` or `latest` | Manual overnight maintenance only |
+| **Harvester box** | `docker-compose.harvester.yml` | **On** | `WORKER_APP_IMAGE_TAG=latest`, `HARVESTER_IMAGE_TAG=latest` | On merge, or whenever you repair worker-side code |
+
+With this setup, merging a PR can update the registry and restart the harvester
+box, but it will not restart the webbox. To deploy the webbox, choose the exact
+commit image you want, set `WEB_IMAGE_TAG=sha-<commit>` if you want a pinned
+release, show the maintenance message, then manually redeploy the web resource.
+
+### Scheduled tasks (worker box only)
+
+Vercel Cron is not used. Do **not** add scheduled tasks to the public web app in
+Coolify. Production scheduled work runs from the harvester box against the
+private `app-worker` at `http://localhost:3100`, with
+`Authorization: Bearer <CRON_SECRET>`.
+
+The public web runtime is tagged `HIREOVEN_RUNTIME_ROLE=web`; scheduler routes
+under `/api/cron`, `/api/crawl`, and cron-authenticated alert routes are blocked
+there. The worker runtime is tagged `HIREOVEN_RUNTIME_ROLE=worker` and receives
+`CRON_SECRET`.
 
 | Path | Suggested schedule | Purpose |
 |------|--------------------|---------|
@@ -58,25 +84,24 @@ The production **Dockerfile** installs **`curl`** in the final image so schedule
 | `/api/alerts/weekly` | `0 9 * * 1` (UTC) | Weekly digest emails |
 | `/api/cron/refresh-title-suggestions` | `30 3 * * *` (UTC) | Rebuild title_suggestions lookup that backs the feed Job-title typeahead |
 
-Example (replace host and secret):
+Manual worker-box example:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $CRON_SECRET" "https://hireoven.com/api/crawl"
+APP_URL=http://localhost:3100 CRON_SECRET=... bash scripts/crons.sh crawl
 ```
 
-If the task fails with **`curl: not found`**, the container image was built **without** `curl` (older deploy). The repo’s **Dockerfile** installs `curl` in the final stage - **rebuild and redeploy** the app in Coolify so the new image is used.
-
-**Workaround before redeploy** (Node is always in the image; set `APP_URL` to your public origin, no trailing slash):
-
-```bash
-node -e "const b=process.env.CRON_SECRET,u=(process.env.APP_URL||'').replace(/\/$/,'');if(!b||!u){console.error('Set CRON_SECRET and APP_URL');process.exit(1)}fetch(u+'/api/crawl',{headers:{Authorization:'Bearer '+b}}).then(r=>r.ok?r.text():Promise.reject(new Error('HTTP '+r.status))).then(console.log).catch(e=>{console.error(e);process.exit(1)})"
-```
-
-In Coolify, add **`APP_URL`** (e.g. `https://hireoven.com`) and **`CRON_SECRET`** to the application’s environment so the scheduled task inherits them (or inline the URL and use a Coolify secret for the bearer token).
+`scripts/crons.sh` refuses non-local `APP_URL` values by default. Use
+`ALLOW_NONLOCAL_CRON_URLS=true` only for a deliberate one-off manual run.
 
 ### Harvester worker
 
-The production compose file includes a separate **`harvester`** service. This is required when `CRAWLER_SCOPE=non_ats`: the scheduled `/api/crawl` route handles non-ATS/company careers pages, while the harvester worker continuously claims ATS companies such as Workday, Greenhouse, Lever, Ashby, SmartRecruiters, iCIMS, Oracle, and USAJobs.
+The worker-side compose file [`../docker-compose.harvester.yml`](../docker-compose.harvester.yml)
+includes two private services:
+
+- **`harvester`**: long-running ATS worker for Workday, Greenhouse, Lever, Ashby,
+  SmartRecruiters, iCIMS, Oracle, USAJobs, Workable, and similar adapters.
+- **`app-worker`**: the same Next.js app image as production, bound only to
+  `127.0.0.1:${WORKER_PORT:-3100}` so host crons can call `/api/...` locally.
 
 GitHub Actions publishes two images on pushes to `main`:
 
@@ -86,6 +111,10 @@ GitHub Actions publishes two images on pushes to `main`:
 Keep these production env vars set in Coolify for the compose application:
 
 ```bash
+HIREOVEN_RUNTIME_ROLE=worker
+CRON_SECRET=...
+WORKER_APP_IMAGE_TAG=latest
+HARVESTER_IMAGE_TAG=latest
 HARVESTER_USE_NEW_ADAPTERS=true
 HARVESTER_INSTANCES=3
 HARVESTER_TOTAL_CLAIM_BUDGET=36
@@ -94,7 +123,9 @@ USAJOBS_API_KEY=...
 USAJOBS_USER_AGENT=...
 ```
 
-Do not leave the harvester as a manually started `docker run` container long-term; it should be managed by the Coolify compose deployment so it is recreated with app deploys and receives the same production environment.
+Do not leave the harvester as a manually started `docker run` container
+long-term. Manage the worker-side stack with `docker-compose.harvester.yml` so it
+can be repaired or redeployed independently from the public web stack.
 
 ### Production two-box topology (offload crons off the web box)
 
@@ -109,10 +140,11 @@ all batch crons on the bigger box that already runs the harvester.
 | **Web** | CPX21 · 3 vCPU · 4 GB · us-east | Next.js app (public) + Postgres + MinIO. **No crons.** |
 | **Harvester** | CPX31 · 4 vCPU · 8 GB · us-west | Harvester worker **+ `app-worker` (private)** + **all crons** |
 
-**`app-worker`** is the same app image, defined in [`../docker-compose.prod.yml`](../docker-compose.prod.yml)
-under `profiles: ["worker"]`, bound to `127.0.0.1:${WORKER_PORT:-3100}` (never
-public). The harvester box's crontab hits `http://localhost:3100/api/...` instead
-of the public origin, so crawl/enrichment/ingest CPU+RAM stay on the 8 GB box.
+**`app-worker`** is the same app image, defined in
+[`../docker-compose.harvester.yml`](../docker-compose.harvester.yml), bound to
+`127.0.0.1:${WORKER_PORT:-3100}` (never public). The harvester box's crontab hits
+`http://localhost:3100/api/...` instead of the public origin, so
+crawl/enrichment/ingest CPU+RAM stay on the 8 GB box.
 
 Deploy (order matters — crons never stop, web box drained last):
 
@@ -122,7 +154,7 @@ Deploy (order matters — crons never stop, web box drained last):
    `MINIO_ENDPOINT=http://<WEB_BOX_IP>:9000`. (Optional `WORKER_PORT` if `3100`
    clashes with the harvester health port.)
 2. Start the worker on the harvester box:
-   `docker compose --profile worker up -d app-worker`
+   `docker compose -f docker-compose.harvester.yml up -d app-worker harvester`
 3. Verify: `curl -s -o /dev/null -w '%{http_code}' http://localhost:3100/` and
    `APP_URL=http://localhost:3100 CRON_SECRET=… bash scripts/crons.sh ghost-scan`.
 4. Install the worker crontab on the harvester box: `crontab -e`, paste

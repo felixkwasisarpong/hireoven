@@ -7,7 +7,7 @@
 
 services:
   harvester:
-    image: ghcr.io/felixkwasisarpong/hireoven-harvester:latest
+    image: ghcr.io/felixkwasisarpong/hireoven-harvester:${HARVESTER_IMAGE_TAG:-latest}
     pull_policy: always
     container_name: hireoven-harvester
     restart: unless-stopped
@@ -16,6 +16,7 @@ services:
     command: ["npm", "run", "harvester:worker"]
     environment:
       NODE_ENV: production
+      HIREOVEN_RUNTIME_ROLE: harvester
       DATABASE_URL: ${DATABASE_URL}
       PGSSLMODE: ${PGSSLMODE:-disable}
       PG_POOL_MAX: ${PG_POOL_MAX:-25}
@@ -93,12 +94,13 @@ services:
       USAJOBS_USER_AGENT: ${USAJOBS_USER_AGENT}
 
   app-worker:
-    image: ghcr.io/felixkwasisarpong/hireoven:latest
+    image: ghcr.io/felixkwasisarpong/hireoven:${WORKER_APP_IMAGE_TAG:-latest}
     pull_policy: always
     container_name: hireoven-app-worker
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      HIREOVEN_RUNTIME_ROLE: worker
       DATABASE_URL: ${DATABASE_URL}
       PGSSLMODE: ${PGSSLMODE:-disable}
       # MinIO lives on the MAIN box:

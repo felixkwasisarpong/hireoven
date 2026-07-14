@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { deliverPendingCheckins } from "@/lib/checkins/delivery-engine"
+import { requireCronAuth } from "@/lib/env"
 
 export const dynamic = "force-dynamic"
 export const maxDuration = 60
@@ -8,8 +9,7 @@ export const maxDuration = 60
 // { "path": "/api/cron/deliver-checkins", "schedule": "0 9 * * *" }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
   await deliverPendingCheckins()

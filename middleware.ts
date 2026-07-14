@@ -28,6 +28,11 @@ const CRON_ALERTS_PATHS = [
   "/api/alerts/recent-jobs",
 ]
 
+const SCHEDULER_API_PREFIXES = [
+  "/api/cron",
+  "/api/crawl",
+]
+
 function isProtected(pathname: string): boolean {
   return PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))
 }
@@ -42,8 +47,30 @@ function isCronAlertsPath(pathname: string): boolean {
   )
 }
 
+function isSchedulerApiPath(pathname: string): boolean {
+  return (
+    SCHEDULER_API_PREFIXES.some(
+      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+    ) || isCronAlertsPath(pathname)
+  )
+}
+
+function isWebRuntime(): boolean {
+  return (process.env.HIREOVEN_RUNTIME_ROLE ?? "").toLowerCase() === "web"
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (isWebRuntime() && isSchedulerApiPath(pathname)) {
+    return NextResponse.json(
+      {
+        error: "scheduler_not_available_on_web_runtime",
+        message: "Scheduled jobs run on the private app-worker, not the public web app.",
+      },
+      { status: 409 },
+    )
+  }
 
   // Embeddable widget routes (Spec 07) are public, framed cross-origin, and must
   // not carry app chrome (providers, service worker) or read session cookies. Mark
@@ -142,6 +169,8 @@ export const config = {
     "/embed/v1/:path*",
     "/login",
     "/signup",
+    "/api/cron/:path*",
+    "/api/crawl/:path*",
     "/api/resume/:path*",
     "/api/cover-letter/:path*",
     "/api/autofill/:path*",
