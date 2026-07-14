@@ -500,6 +500,7 @@ export function ApplyAgentFlow({
     () => extensionConnected ? "connected" : "disconnected"
   )
   const [extMidFlowDisconnected, setExtMidFlowDisconnected] = useState(false)
+  const salaryInterceptBypassRef = useRef<Set<string>>(new Set())
   const extensionInstallHref = useMemo(() => {
     if (typeof window === "undefined") return "/extension"
     return isLocalApexHost(window.location.hostname)
@@ -622,7 +623,23 @@ export function ApplyAgentFlow({
       .map(({ idx }) => idx)
 
     if (order.length === 0) {
-      finishFlow("No eligible application URLs remained after review. You can retry with new jobs.")
+      const skippedReasons = sourceJobs
+        .filter((job) => job.skipped)
+        .map((job) => job.prepResult?.failReason)
+      const unsupportedCount = skippedReasons.filter((reason) => reason === "unsupported_ats").length
+      const missingUrlCount = skippedReasons.filter((reason) => reason === "missing_apply_url").length
+      const sponsorshipBlockedCount = skippedReasons.filter((reason) => reason === "no_sponsorship_blocker").length
+      const skippedCount = sourceJobs.filter((job) => job.skipped).length
+
+      if (unsupportedCount > 0 && unsupportedCount === skippedCount) {
+        finishFlow("All matched jobs were on application systems Apex cannot autofill yet. Try again with Workday, Greenhouse, Lever, Ashby, iCIMS, SmartRecruiters, or BambooHR jobs.")
+      } else if (missingUrlCount > 0 && missingUrlCount === skippedCount) {
+        finishFlow("All matched jobs were missing application URLs. You can retry with new jobs.")
+      } else if (sponsorshipBlockedCount > 0 && sponsorshipBlockedCount === skippedCount) {
+        finishFlow("All matched jobs were skipped because they explicitly blocked sponsorship.")
+      } else {
+        finishFlow("No eligible application URLs remained after review. You can retry with new jobs.")
+      }
       return
     }
 
@@ -870,7 +887,7 @@ export function ApplyAgentFlow({
     }
 
     // ── Salary intercept check ──────────────────────────────────────────────
-    if (job.jobId) {
+    if (job.jobId && !salaryInterceptBypassRef.current.has(job.jobId)) {
       try {
         const interceptRes = await fetch(`/api/apex/salary-intercept?jobId=${encodeURIComponent(job.jobId)}`)
         if (interceptRes.ok) {
@@ -1046,19 +1063,33 @@ export function ApplyAgentFlow({
         source?: unknown
         type?: unknown
         context?: { detectedJobId?: unknown; url?: unknown } | null
+        jobId?: unknown
+        applyUrl?: unknown
+        url?: unknown
       }
-      if (msg.source !== FROM_EXT) return
-      if (msg.type !== "AGENT_APPLICATION_SUBMITTED") return
+      const isAgentSubmitted = msg.source === FROM_EXT && msg.type === "AGENT_APPLICATION_SUBMITTED"
+      const isReviewSubmitted =
+        msg.type === "hireoven:review-submitted" &&
+        (msg.source === undefined || msg.source === FROM_EXT)
+      if (!isAgentSubmitted && !isReviewSubmitted) return
 
       const idx = applyOrder[applyPointer]
       if (idx === undefined) return
       const current = jobs[idx]
       if (!current || current.applied || current.skipped) return
 
-      const submittedJobId =
-        typeof msg.context?.detectedJobId === "string" ? msg.context.detectedJobId : null
-      const submittedUrl =
-        typeof msg.context?.url === "string" ? msg.context.url : null
+      const submittedJobId = isAgentSubmitted
+        ? (typeof msg.context?.detectedJobId === "string" ? msg.context.detectedJobId : null)
+        : (typeof msg.jobId === "string" ? msg.jobId : null)
+      const submittedUrl = isAgentSubmitted
+        ? (typeof msg.context?.url === "string" ? msg.context.url : null)
+        : (
+            typeof msg.applyUrl === "string"
+              ? msg.applyUrl
+              : typeof msg.url === "string"
+                ? msg.url
+                : null
+          )
 
       const jobIdMatches = Boolean(submittedJobId && current.jobId && submittedJobId === current.jobId)
       const currentUrl = normalizeUrlForMatch(current.applyUrl ?? null)
@@ -1076,7 +1107,7 @@ export function ApplyAgentFlow({
           jobTitle: current.jobTitle,
           companyName: current.company ?? "Unknown Company",
           applyUrl: current.applyUrl,
-          notes: "Marked submitted automatically from extension agent mode",
+          notes: "Marked submitted from extension agent mode",
         }),
       }).catch(() => {
         // Non-blocking: local queue still advances.
@@ -1103,13 +1134,6 @@ export function ApplyAgentFlow({
   }, [primaryResumeSnapshot, reviewJob])
   const reviewCoverLetterUrl = reviewJob?.prepResult?.coverLetterId
     ? `/dashboard/cover-letters?highlight=${encodeURIComponent(reviewJob.prepResult.coverLetterId)}`
-    : null
-  const applyResumePreview = useMemo(() => {
-    if (!primaryResumeSnapshot || !currentApplyJob) return null
-    return applyTailoredSignalsToResume(primaryResumeSnapshot, currentApplyJob)
-  }, [primaryResumeSnapshot, currentApplyJob])
-  const applyCoverLetterUrl = currentApplyJob?.prepResult?.coverLetterId
-    ? `/dashboard/cover-letters?highlight=${encodeURIComponent(currentApplyJob.prepResult.coverLetterId)}`
     : null
   const tailoredN   = jobs.filter(j => j.tailored).length
   const reviewedN   = jobs.filter(j => j.resumeQaApproved).length
@@ -1142,8 +1166,11 @@ export function ApplyAgentFlow({
       }),
     })
     setSalaryIntercept(null)
+    if (salaryIntercept.jobId) {
+      salaryInterceptBypassRef.current.add(salaryIntercept.jobId)
+    }
     // Re-trigger the apply open
-    openCurrentApplication()
+    await openCurrentApplication()
   }, [salaryIntercept, openCurrentApplication])
 
   const dismissInterceptFindBetter = useCallback(() => {
@@ -1535,20 +1562,6 @@ export function ApplyAgentFlow({
               ATS target: {currentApplyJob?.prepResult?.atsProvider ?? "Generic ATS"}
             </p>
           </div>
-          {(applyResumePreview || applyCoverLetterUrl) && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {applyResumePreview && (
-                <button
-                  type="button"
-                  onClick={() => openResumeSidePreview(applyResumePreview, `Tailored resume · ${currentApplyJob?.jobTitle ?? "Job"}`)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
-                >
-                  Review resume on side
-                  <ExternalLink className="h-3.5 w-3.5 text-slate-400" />
-                </button>
-              )}
-            </div>
-          )}
           {extensionStatus === "disconnected" && (
             <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2">
               <p className="text-[11px] font-semibold text-red-800">Chrome extension not connected</p>

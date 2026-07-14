@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { drainSignalApiWebhookDeliveryQueue } from "@/lib/signal-api/webhooks"
+import { requireCronAuth } from "@/lib/env"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -12,8 +13,7 @@ function clampInt(value: string | null, fallback: number, min: number, max: numb
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!requireCronAuth(request.headers.get("authorization"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 

@@ -21,6 +21,8 @@
     "https://*.icims.com/*",
     "https://*.smartrecruiters.com/*",
     "https://*.bamboohr.com/*",
+    "https://*.applytojob.com/*",
+    "https://*.jazzhr.com/*",
     "https://www.linkedin.com/*",
     "https://*.linkedin.com/*",
     "https://www.glassdoor.com/*",
@@ -58,6 +60,8 @@
         "https://*.icims.com/*",
         "https://*.smartrecruiters.com/*",
         "https://*.bamboohr.com/*",
+        "https://*.applytojob.com/*",
+        "https://*.jazzhr.com/*",
         "https://*/*",
         "http://*/*"
       ],

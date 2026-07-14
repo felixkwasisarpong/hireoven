@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getPostBySlug } from "@/lib/blog/queries"
@@ -51,7 +52,7 @@ export default async function PostPage({ params }: { params: { category: string;
       {/* Color accent bar at the very top of content */}
       <div className={`h-1 w-full ${c.bar}`} />
 
-      <main className="mx-auto max-w-2xl px-5 py-12 lg:px-8">
+      <main className="mx-auto max-w-4xl px-5 py-12 lg:px-8">
         {/* Breadcrumb */}
         <nav className="mb-8 flex items-center gap-1.5 text-sm text-gray-400">
           <Link href="/blog" className="hover:text-gray-700 transition-colors">Blog</Link>
@@ -80,6 +81,21 @@ export default async function PostPage({ params }: { params: { category: string;
               <span>Hireoven Blog</span>
             </div>
           </header>
+
+          {post.hero_image_url && (
+            <div className="mb-10 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-[0_20px_54px_-32px_rgba(15,23,42,0.45)]">
+              <div className="relative aspect-[3/2] w-full sm:aspect-[16/9]">
+                <Image
+                  src={post.hero_image_url}
+                  alt={post.hero_image_alt ?? post.title}
+                  fill
+                  priority
+                  sizes="(min-width: 768px) 42rem, 100vw"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Body */}
           <div

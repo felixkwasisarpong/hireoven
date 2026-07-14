@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
-import { getCategoryForToday, insertDraftPost } from "@/lib/blog/queries"
+import { generateAndStoreBlogImage } from "@/lib/blog/image-generator"
+import { getCategoryForToday, insertDraftPost, updateBlogPostImage } from "@/lib/blog/queries"
 import type { BlogCategory } from "@/types/blog"
 
 let anthropic: Anthropic | null = null
@@ -23,7 +24,9 @@ JSON keys required:
 - excerpt: 1–2 sentence teaser shown in post cards
 - seo_description: meta description under 155 characters
 - body: full HTML content, ~600 words, with h2 sections
-- reading_time: integer minutes (estimate from word count)`
+- reading_time: integer minutes (estimate from word count)
+- image_prompt: one sentence describing a text-free editorial hero image for this post
+- hero_image_alt: concise alt text for the hero image`
 
 interface GeneratedPost {
   title: string
@@ -32,6 +35,8 @@ interface GeneratedPost {
   seo_description: string
   body: string
   reading_time: number
+  image_prompt?: string
+  hero_image_alt?: string
 }
 
 async function generateForCategory(category: BlogCategory): Promise<GeneratedPost> {
@@ -90,6 +95,7 @@ export interface BlogGenerateResult {
   categorySlug: string
   postId: string
   title: string
+  imageGenerated: boolean
   durationMs: number
 }
 
@@ -111,13 +117,44 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
     excerpt: generated.excerpt,
     body: generated.body,
     seo_description: generated.seo_description ?? null,
+    image_prompt: generated.image_prompt ?? null,
+    hero_image_alt: generated.hero_image_alt ?? null,
     reading_time: generated.reading_time ?? null,
   })
+
+  let imageGenerated = false
+  try {
+    const image = await generateAndStoreBlogImage({
+      postId,
+      category,
+      title: generated.title,
+      excerpt: generated.excerpt,
+      imagePrompt: generated.image_prompt,
+      alt: generated.hero_image_alt,
+    })
+
+    if (image) {
+      await updateBlogPostImage({
+        id: postId,
+        hero_image_url: image.url,
+        hero_image_key: image.key,
+        hero_image_alt: image.alt,
+        image_prompt: image.prompt,
+      })
+      imageGenerated = true
+    }
+  } catch (error) {
+    console.warn("[blog/generate] hero image generation skipped", {
+      postId,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
 
   return {
     categorySlug: category.slug,
     postId,
     title: generated.title,
+    imageGenerated,
     durationMs: Date.now() - start,
   }
 }

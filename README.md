@@ -105,7 +105,16 @@ scripts/            # Seed scripts, migrations
 
 ## Deployment
 
-Production is intended to run as a **Docker** image (Next.js `standalone` output). See **[docs/coolify.md](docs/coolify.md)** for Coolify: repo root, Dockerfile build, port `3000`, env vars, and **scheduled HTTP jobs** for crawl and alert routes (replace Vercel Cron).
+Production is intended to run as **Docker** images (Next.js `standalone` output).
+The public web stack is separate from the harvester/worker stack: the web box
+runs the public app, Postgres, and MinIO; the harvester box runs ATS harvesting,
+crawls, enrichment, and cron delivery through a private `app-worker`. See
+**[docs/coolify.md](docs/coolify.md)**.
+
+Keep public web auto-deploy disabled in production. Merging to `main` may publish
+new images and redeploy the harvester box, but the webbox should only be
+manually redeployed during a maintenance window. Use `WEB_IMAGE_TAG=sha-<commit>`
+to pin an exact web release when needed.
 
 ### Environment variables for production
 
@@ -116,13 +125,16 @@ See `.env.production.example` for the full list with comments. Key vars:
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API |
 | `ANTHROPIC_API_KEY` | console.anthropic.com |
 | `RESEND_API_KEY` | resend.com → API Keys |
-| `CRON_SECRET` | Generate with `openssl rand -hex 32` |
+| `HIREOVEN_RUNTIME_ROLE` | `web` on public app, `worker` on private app-worker |
+| `CRON_SECRET` | Worker/app-worker only; generate with `openssl rand -hex 32` |
 | `SUPABASE_WEBHOOK_SECRET` | Supabase → Database → Webhooks |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Generate with `npx web-push generate-vapid-keys` |
 
 ### Cron jobs
 
-Not bundled in-repo: call these URLs on a schedule (Coolify scheduled tasks, systemd timer, external cron, etc.):
+Not bundled in-repo: call these URLs on a schedule from the harvester box only
+against `APP_URL=http://localhost:3100` (the private `app-worker`). Do not point
+these schedules at the public web app.
 
 | Route | Suggested schedule | Purpose |
 |---|---|---|
@@ -133,7 +145,9 @@ Not bundled in-repo: call these URLs on a schedule (Coolify scheduled tasks, sys
 | `/api/alerts/weekly` | 9am UTC Monday | Send weekly digest emails |
 | `/api/cron/interview-reminders` | Every 5 min | Push reminders for upcoming scheduled live interviews |
 
-All cron routes verify `Authorization: Bearer {CRON_SECRET}` (see [docs/coolify.md](docs/coolify.md)).
+All cron routes verify `Authorization: Bearer {CRON_SECRET}`. The public web
+runtime does not receive `CRON_SECRET` and blocks scheduler paths; the private
+worker runtime receives it (see [docs/coolify.md](docs/coolify.md)).
 
 ### Health check
 

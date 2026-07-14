@@ -77,14 +77,62 @@ export async function insertDraftPost(post: {
   excerpt: string
   body: string
   seo_description: string | null
+  hero_image_url?: string | null
+  hero_image_key?: string | null
+  hero_image_alt?: string | null
+  image_prompt?: string | null
   reading_time: number | null
 }): Promise<string> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<{ id: string }>(
-    `INSERT INTO blog_posts (category_id, slug, title, excerpt, body, seo_description, reading_time, status)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, 'draft')
+    `INSERT INTO blog_posts (
+       category_id,
+       slug,
+       title,
+       excerpt,
+       body,
+       seo_description,
+       hero_image_url,
+       hero_image_key,
+       hero_image_alt,
+       image_prompt,
+       reading_time,
+       status
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'draft')
      RETURNING id`,
-    [post.category_id, post.slug, post.title, post.excerpt, post.body, post.seo_description, post.reading_time]
+    [
+      post.category_id,
+      post.slug,
+      post.title,
+      post.excerpt,
+      post.body,
+      post.seo_description,
+      post.hero_image_url ?? null,
+      post.hero_image_key ?? null,
+      post.hero_image_alt ?? null,
+      post.image_prompt ?? null,
+      post.reading_time,
+    ]
   )
   return rows[0].id
+}
+
+export async function updateBlogPostImage(post: {
+  id: string
+  hero_image_url: string | null
+  hero_image_key: string | null
+  hero_image_alt: string | null
+  image_prompt: string | null
+}): Promise<void> {
+  const pool = getPostgresPool()
+  await pool.query(
+    `UPDATE blog_posts
+     SET hero_image_url = $1,
+         hero_image_key = $2,
+         hero_image_alt = $3,
+         image_prompt = $4
+     WHERE id = $5`,
+    [post.hero_image_url, post.hero_image_key, post.hero_image_alt, post.image_prompt, post.id]
+  )
 }

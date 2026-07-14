@@ -148,6 +148,62 @@ function normalizeCaptureUrl(raw: string | null): string | null {
   }
 }
 
+function titleCaseSlug(value: string | null | undefined): string | null {
+  const cleaned = decodeURIComponent(value ?? "")
+    .replace(/[-_+]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned || cleaned.length < 2) return null
+  return cleaned.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function normalizeCompanyCandidate(value: string | null | undefined): string | null {
+  const cleaned = value?.trim()
+  if (!cleaned) return null
+  if (/^(unknown company|unknown|company|greenhouse|lever|ashby|ashbyhq|smartrecruiters|workday|workdayjobs|myworkdayjobs|icims|bamboohr|applytojob|jazzhr|—|-)$/i.test(cleaned)) {
+    return null
+  }
+  return cleaned.slice(0, 220)
+}
+
+function companyFromKnownJobUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  try {
+    const parsed = new URL(raw)
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "")
+    const segments = parsed.pathname.split("/").filter(Boolean)
+
+    if (
+      host === "greenhouse.io" ||
+      host.endsWith(".greenhouse.io") ||
+      host === "lever.co" ||
+      host.endsWith(".lever.co") ||
+      host === "ashbyhq.com" ||
+      host.endsWith(".ashbyhq.com") ||
+      host === "smartrecruiters.com" ||
+      host.endsWith(".smartrecruiters.com")
+    ) {
+      return titleCaseSlug(segments[0])
+    }
+
+    if (host.endsWith(".myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
+      const sub = host.split(".")[0]
+      return titleCaseSlug(sub?.replace(/^wd\d+$/i, ""))
+    }
+
+    if (host.endsWith(".bamboohr.com") || host.endsWith(".applytojob.com") || host.endsWith(".jazzhr.com")) {
+      return titleCaseSlug(host.split(".")[0])
+    }
+
+    if (host.endsWith(".icims.com")) {
+      return titleCaseSlug(host.split(".")[0]?.replace(/^careers?-?/i, ""))
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+  return null
+}
+
 const US_STATE_RE = new RegExp(
   ",\\s*(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC)\\s*$",
   "i"
@@ -252,7 +308,10 @@ export async function POST(request: Request) {
   }
 
   const pool = getPostgresPool()
-  const companyName = toOptionalString(body.company, 220) ?? embeddedDetails?.company ?? null
+  const companyName =
+    normalizeCompanyCandidate(toOptionalString(body.company, 220)) ??
+    normalizeCompanyCandidate(embeddedDetails?.company) ??
+    companyFromKnownJobUrl(jobUrl)
   const jobTitle =
     isPlaceholderJobTitle(body.title) && embeddedDetails?.title?.trim()
       ? embeddedDetails.title.trim()
@@ -466,6 +525,7 @@ export async function POST(request: Request) {
       .query(
         `UPDATE jobs
          SET raw_data = COALESCE(raw_data, '{}'::jsonb) || $2::jsonb,
+             company_id = COALESCE(company_id, $12::uuid),
              title = CASE
                WHEN lower(coalesce(title, '')) IN ('', 'unknown role', 'no job found', 'open role')
                THEN COALESCE(NULLIF(trim($10), ''), title)
@@ -501,6 +561,7 @@ export async function POST(request: Request) {
           externalJobId,
           jobTitle,
           publicationStatusForJob({ description: descriptionText, skills: [] }),
+          companyId,
         ]
       )
       .catch(() => null)
@@ -519,6 +580,23 @@ export async function POST(request: Request) {
       .catch(() => null)
 
     if (alreadySaved?.rows[0]) {
+      if (companyName) {
+        await pool
+          .query(
+            `UPDATE job_applications
+             SET company_name = $2,
+                 job_title = COALESCE(NULLIF(trim(job_title), ''), $3, job_title),
+                 updated_at = NOW()
+             WHERE id = $1::uuid
+               AND (
+                 company_name IS NULL
+                 OR trim(company_name) = ''
+                 OR company_name IN ('Unknown Company', '—')
+               )`,
+            [alreadySaved.rows[0].id, companyName, jobTitle]
+          )
+          .catch(() => null)
+      }
       return NextResponse.json(
         { saved: true, alreadySaved: true, jobId, applicationId: alreadySaved.rows[0].id },
         { headers }

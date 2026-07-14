@@ -85,6 +85,10 @@ const ATS_FORM_SELECTORS: ReadonlyArray<string> = [
   "#bamboohr-apply",
   "form[action*='icims']",
   "form[action*='bamboohr']",
+  // JazzHR / ApplyToJob
+  "form#form_submit_new_resume",
+  "form[data-test='form_submit_new_resume']",
+  "form[action*='applytojob.com/apply']",
   // Generic ATS hints
   "form[action*='greenhouse']",
   "form[action*='lever']",
@@ -123,6 +127,7 @@ function findEmbeddedApplicationIframe(doc: Document, ats: SupportedSite): HTMLI
     icims: ['iframe[src*="icims.com"]'],
     smartrecruiters: ['iframe[src*="smartrecruiters.com"]'],
     bamboohr: ['iframe[src*="bamboohr.com"]'],
+    jazzhr: ['iframe[src*="applytojob.com"]', 'iframe[src*="jazzhr.com"]'],
   }
 
   for (const selector of iframeSelectors[ats] ?? []) {

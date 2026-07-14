@@ -24,6 +24,8 @@ export type SafeProfile = {
   github_url?: string | null
   portfolio_url?: string | null
   website_url?: string | null
+  address_line1?: string | null
+  address_line2?: string | null
   city?: string | null
   state?: string | null
   zip_code?: string | null
@@ -51,6 +53,7 @@ export type SafeProfile = {
   // Resume-derived
   current_title?: string | null
   current_company?: string | null
+  resume_location?: string | null
   resume_summary?: string | null
   skills?: string | null
   top_skills?: string[] | null
@@ -108,6 +111,7 @@ export type AutofillSource =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jazzhr"
   | "generic"
 
 // ── Sensitive field detection (always skip) ──────────────────────────────────
@@ -156,6 +160,7 @@ type SafeKey =
   | "full_name"
   | "email"
   | "phone"
+  | "address_line1"
   | "location"
   | "city"
   | "state"
@@ -226,12 +231,18 @@ const SAFE_KEY_RULES: SafeKeyRule[] = [
   // "state" the NOUN, never the VERB — "Please state your full legal name"
   // was matching this rule and pouring the profile state ("TX") into the
   // legal-name box. Reject when followed by your/the/a/if/why/how/what.
+  // Street address only. The negative lookahead MUST exclude the HTML
+  // autocomplete tokens `address-level1` (State) and `address-level2` (City) —
+  // otherwise this rule (evaluated before state/city) steals those fields and
+  // pours the street address (or nothing) into them. Also excludes "address
+  // line 2". Matches bare "address", "street address", "address line 1".
+  { key: "address_line1", patterns: [/\baddress\b(?![\s_-]*(?:level|line[\s_-]*2))/i, /\bstreet[\s_-]?address\b|\baddress[\s_-]?line[\s_-]?1\b/i] },
   { key: "state",     patterns: [/\bstate\b(?![\s:]*\b(your|the|a|an|if|why|how|what|where|which|below))|\bprovince\b|\baddress[\s_-]?level[\s_-]?1\b/i] },
   { key: "city",      patterns: [/\bcity\b|\btown\b|\bmunicipalit/i, /\baddress[\s_-]?level[\s_-]?2\b/i] },
-  { key: "zip_code",  patterns: [/\bzip\b|\bzip[\s_-]?code\b|\bpostal[\s_-]?code\b|\bpost[\s_-]?code\b|\bpostcode\b/i] },
+  { key: "zip_code",  patterns: [/\bzip\b|\bzip[\s_-]?code\b|\bpostal\b|\bpostal[\s_-]?code\b|\bpost[\s_-]?code\b|\bpostcode\b/i] },
 
   // Location (single-line city/region)
-  { key: "location", patterns: [/\blocation\b|\bcity\b|\baddress\b(?!\s*line\s*2)/i] },
+  { key: "location", patterns: [/\blocation\b|\bcity\b/i] },
 
   // Resume-derived fields
   { key: "work_exp_current", patterns: [/\bi[\s_-]*currently[\s_-]*work[\s_-]*here\b|currently[\s_-]*(?:employed|work(?:ing)?)\b/i], inputTypes: ["checkbox"], labelOnly: true },
@@ -363,6 +374,13 @@ function findApplicationFormRoot(
       ".BambooHR-ATS form",
       "#apply-form-card form",
       "form[action*='bamboohr']",
+      "form",
+    ],
+    jazzhr: [
+      "form#form_submit_new_resume",
+      "form[data-test='form_submit_new_resume']",
+      "#resumator-application-form form",
+      "form[action*='applytojob.com/apply']",
       "form",
     ],
     generic: [
@@ -887,13 +905,14 @@ function profileValueFor(profile: SafeProfile, key: SafeKey, state: ValueResolut
     }
     case "email":        return profile.email ?? null
     case "phone":        return profile.phone ?? null
+    case "address_line1": return toTrimmed(profile.address_line1 ?? null)
     case "linkedin_url": return profile.linkedin_url ?? null
     case "github_url":   return profile.github_url ?? null
     case "portfolio_url":return profile.portfolio_url ?? null
     case "website_url":  return profile.website_url ?? profile.portfolio_url ?? null
     case "location": {
       const parts = [profile.city, profile.state].filter(Boolean)
-      return parts.length > 0 ? parts.join(", ") : null
+      return parts.length > 0 ? parts.join(", ") : toTrimmed(profile.resume_location ?? null)
     }
     case "city":     return toTrimmed(profile.city ?? null)
     case "state":    return toTrimmed(profile.state ?? null)
@@ -1201,6 +1220,9 @@ export async function applySafeFills(
       continue
     }
     const el = resolveFramePrefixedSelector(p.item.selector!, doc)
+    if (el instanceof HTMLInputElement) {
+      prepareResumeInputForSource(source, el, doc)
+    }
     const ok = el ? injectResumeFile(el as HTMLInputElement, resumeBytes) : false
     if (ok) attached = true
     out[p.index] = ok
@@ -1446,6 +1468,23 @@ function findDropzoneFor(input: HTMLInputElement): HTMLElement {
   // bubbles up and away and never reaches the handler.
   const presentation = input.closest<HTMLElement>('[role="presentation"]')
   return presentation ?? input.parentElement ?? input
+}
+
+function prepareResumeInputForSource(source: AutofillSource, target: HTMLInputElement, doc: Document): void {
+  if (source !== "jazzhr") return
+  try {
+    const wrapper = target.closest<HTMLElement>("#resumator-resume-upload-wrapper")
+    const isHidden = wrapper?.classList.contains("none") || target.offsetParent === null
+    if (isHidden) {
+      doc.querySelector<HTMLElement>("#resumator-choose-upload")?.click()
+      wrapper?.classList.remove("none")
+      wrapper?.removeAttribute("hidden")
+      wrapper?.removeAttribute("aria-hidden")
+    }
+    target.removeAttribute("disabled")
+  } catch {
+    // Best-effort only; direct file injection may still work.
+  }
 }
 
 /**

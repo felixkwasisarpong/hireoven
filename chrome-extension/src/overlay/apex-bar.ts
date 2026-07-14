@@ -106,6 +106,7 @@ const TAILORING_ATS_SITES = new Set([
   "icims",
   "smartrecruiters",
   "bamboohr",
+  "jazzhr",
 ])
 
 const STATUS_TEXT: Record<ApexBarState, string> = {
@@ -1901,6 +1902,12 @@ export class ApexBar {
     const det = this.formDetection
     if (!det) return ""
     if (!det.hasForm) {
+      if (this.isWorkdayStartOrApplicationSurface()) {
+        return `<span class="af-pill af-pill-supported" title="Workday start screen detected. Apex will click Apply Manually before filling.">Workday start detected</span>`
+      }
+      if (this.site === "workday" && this.findApplyCta()) {
+        return `<span class="af-pill af-pill-partial" title="Workday job page detected. Apex will click Apply first, then start the Workday flow.">Workday apply ready</span>`
+      }
       return `<span class="af-pill af-pill-none" title="No application form detected on this page.">Autofill not detected</span>`
     }
     if (det.supportsAutofill) {
@@ -1924,17 +1931,18 @@ export class ApexBar {
     }
     const det = this.formDetection
     const hasForm = det?.hasForm === true
-    const supports = det?.supportsAutofill === true
+    const siteSupported = this.autofillSiteSupported()
+    const supports = det?.supportsAutofill === true || this.isWorkdayStartOrApplicationSurface()
 
     // If this page isn't currently fill-capable (or detection says only
     // partial coverage), keep a read-only detected-fields entrypoint.
-    if (this.autofillSiteSupported() === false || !supports) {
+    if (siteSupported === false || !supports) {
       if (!hasForm) {
         return `<button class="action" data-action="autofill" disabled title="No application form detected on this page.">Autofill</button>`
       }
       const open = this.detectionPanelOpen
       const label = open ? "Hide detected fields" : "View detected fields"
-      const tooltip = !this.autofillSiteSupported()
+      const tooltip = !siteSupported
         ? "Autofill is not available on this form yet."
         : "Form detected but profile-fillable fields are limited."
       return `<button class="action" data-action="toggle-detection" title="${escapeHtml(tooltip)}">${label}</button>`
@@ -2653,6 +2661,7 @@ export class ApexBar {
       case "icims":
       case "smartrecruiters":
       case "bamboohr":
+      case "jazzhr":
         return this.site
       default:
         return "generic"
@@ -2693,6 +2702,18 @@ export class ApexBar {
       return this.tailoredResumeVersionId
     }
     return undefined
+  }
+
+  private currentAutofillResumeContext(): {
+    jobId?: string
+    resumeId?: string
+    versionId?: string
+  } {
+    return {
+      jobId: this.currentAutofillJobId(),
+      resumeId: this.currentTailoredResumeId(),
+      versionId: this.currentTailoredVersionId(),
+    }
   }
 
   private summarizeAutofillRows(rows: AutofillFieldResult[] | null): {
@@ -3072,11 +3093,11 @@ export class ApexBar {
    * "Apply", "Apply now" — to navigate to the actual application form. Returns
    * true if it clicked something.
    */
-  private tryClickApplyCta(): boolean {
-    const CTA_RE = /^(i'?m interested|apply now|apply for this job|apply online|apply|start application|continue|get started)$/
+  private findApplyCta(): HTMLElement | null {
+    const CTA_RE = /^(i'?m interested|apply(?:\s+(?:now|today|online|manually|for\s+(?:this\s+)?(?:job|role|position|opening)))?|start(?:\s+your)?\s+application|begin\s+application|continue(?:\s+application)?|get started)$/
     const candidates = Array.from(
       document.querySelectorAll<HTMLElement>(
-        'a[href], button, [role="button"], [data-test*="apply" i], [data-ui*="apply" i]',
+        'a[href], button, [role="button"], [data-test*="apply" i], [data-ui*="apply" i], [data-automation-id*="apply" i], [data-automation-id*="adventure" i]',
       ),
     ).filter((el) => {
       if (!isActionableButton(el)) return false
@@ -3084,12 +3105,14 @@ export class ApexBar {
         .replace(/\s+/g, " ")
         .trim()
         .toLowerCase()
-      if (!text) return false
+      const automationId = (el.getAttribute("data-automation-id") ?? "").toLowerCase()
+      const testId = `${el.getAttribute("data-test") ?? ""} ${el.getAttribute("data-testid") ?? ""}`.toLowerCase()
+      if (!text && !automationId && !testId) return false
       // Avoid "apply filters" / "apply to saved" style false positives.
-      if (/filter|search|sign in|log ?in|save|share/.test(text)) return false
-      return CTA_RE.test(text)
+      if (/filter|search|sign in|log ?in|save|share/.test(`${text} ${automationId} ${testId}`)) return false
+      return CTA_RE.test(text) || /(apply|adventure)/.test(`${automationId} ${testId}`)
     })
-    if (candidates.length === 0) return false
+    if (candidates.length === 0) return null
     // Prefer an explicit "I'm interested"/"Apply" over generic "Continue".
     const score = (el: HTMLElement): number => {
       const t = (el.textContent ?? "").toLowerCase()
@@ -3100,7 +3123,12 @@ export class ApexBar {
       return 10
     }
     candidates.sort((a, b) => score(b) - score(a))
-    const cta = candidates[0]
+    return candidates[0] ?? null
+  }
+
+  private tryClickApplyCta(): boolean {
+    const cta = this.findApplyCta()
+    if (!cta) return false
     try {
       cta.scrollIntoView({ block: "center" })
     } catch {
@@ -3308,6 +3336,17 @@ export class ApexBar {
         return { submitted: false, reason: this.autofillError ?? "Autofill failed." }
       }
 
+      // Single-page ATSes (JazzHR/applytojob and similar) PARSE the uploaded
+      // résumé and re-render the form AFTER our fill — wiping already-filled
+      // text fields (Address, LinkedIn URL) and sometimes detaching the résumé
+      // file input. A manual fill survives this because the 30s background
+      // repair watchdog + the user's own review pause restore the values; the
+      // hands-off loop, however, would evaluate required fields and click
+      // Submit before that watchdog's first pass runs — submitting or handing
+      // off a form the parse just emptied. Settle + repair synchronously here
+      // so the form is genuinely complete before we decide.
+      await this.repairFillsForAutonomousRun()
+
       if (this.coverLetterSelector && this.coverLetterId) {
         await this.onAttachCoverLetter()
       }
@@ -3335,40 +3374,7 @@ export class ApexBar {
 
       const submitButton = this.findBestActionButton("submit")
       if (submitButton) {
-        const progressed = await this.clickAndWaitForProgress(submitButton)
-        if (this.isConfirmationPage()) return { submitted: true }
-        // Some ATSes prompt for sign-in / account creation AFTER submit. Pause
-        // for login rather than looping; the post-login re-trigger records it.
-        if (this.isLoginOrAccountPage()) {
-          return {
-            submitted: false,
-            needsLogin: true,
-            reason: "Sign in to finish submitting your application.",
-          }
-        }
-        if (progressed) continue
-        const cleanup = await this.runRequiredQuestionCleanup()
-        if (cleanup.filledCount > 0) {
-          const retrySubmit = this.findBestActionButton("submit")
-          if (retrySubmit) {
-            const retryProgressed = await this.clickAndWaitForProgress(retrySubmit)
-            if (this.isConfirmationPage()) return { submitted: true }
-            if (retryProgressed) continue
-          }
-        }
-        // Submit didn't progress and the form is showing validation errors for
-        // required fields we won't/can't auto-answer (citizenship, EEO, etc.).
-        // Hand off cleanly with the exact list instead of re-clicking Submit or
-        // returning a misleading "no submit button" — this is the "fill safe +
-        // stop" terminal state.
-        const blocking = this.ashbyValidationErrors()
-        if (blocking.length > 0) {
-          const shown = blocking.slice(0, 4).join(", ")
-          return {
-            submitted: false,
-            reason: `Filled what I safely can. ${blocking.length} required field${blocking.length === 1 ? "" : "s"} still need you: ${shown}${blocking.length > 4 ? ", …" : ""}. Review and submit.`,
-          }
-        }
+        return { submitted: false, reachedReview: true }
       }
 
       const nextButton = this.findBestActionButton("next")
@@ -3385,6 +3391,57 @@ export class ApexBar {
       }
     }
     return { submitted: false, reason: "Agent mode reached max step transitions before confirmation." }
+  }
+
+  /**
+   * Autonomous-run safety net for single-page ATSes that parse the uploaded
+   * résumé and re-render the form after our fill (JazzHR/applytojob, etc.).
+   * The re-render wipes already-filled text fields and can detach the résumé
+   * file; manual fills survive via the 30s background watchdog, but the
+   * hands-off loop moves on immediately. Do a short SYNCHRONOUS settle + repair
+   * so Address / LinkedIn / résumé are restored before the loop evaluates
+   * required fields. repairEmptyFills only rewrites EMPTY controls, so anything
+   * already correct is untouched.
+   */
+  private async repairFillsForAutonomousRun(): Promise<void> {
+    if (!this.autonomousRun) return
+    const rows = this.autofillResults ?? []
+    if (rows.length === 0) return
+    for (let pass = 0; pass < 3; pass += 1) {
+      await sleep(700)
+      let changed = 0
+      try {
+        changed += await repairEmptyFills(rows, document)
+      } catch {
+        // best-effort — never let repair surface an error mid-run
+      }
+      try {
+        if (this.reattachResumeIfDetached()) changed += 1
+      } catch {
+        // best-effort
+      }
+      // Once a settled pass changes nothing, the ATS parse has finished
+      // re-rendering — stop early instead of burning the full budget.
+      if (changed === 0 && pass >= 1) break
+    }
+    this.autofillResults = reconcileRowsWithDom(this.autofillResults ?? [], document)
+    this.render()
+  }
+
+  /**
+   * Re-attach the résumé when a post-fill re-render (the ATS's own résumé
+   * parse) cleared the file input. Returns true when a re-attach happened.
+   */
+  private reattachResumeIfDetached(): boolean {
+    if (!this.lastResumeBytes) return false
+    const resumeRow = (this.autofillResults ?? []).find(
+      (r) => r.source === "resume" && r.selector,
+    )
+    if (!resumeRow?.selector) return false
+    const el = document.querySelector<HTMLInputElement>(resumeRow.selector)
+    if (!el || el.type !== "file") return false
+    if (el.files && el.files.length > 0) return false // still attached
+    return injectDocxFile(el, this.lastResumeBytes)
   }
 
   private async runWorkdayAgentLoop(maxTransitions = 10): Promise<AgentLoopResult> {
@@ -3504,6 +3561,14 @@ export class ApexBar {
       if (typeof payload?.coverLetterId === "string" && payload.coverLetterId) {
         this.coverLetterId = payload.coverLetterId
       }
+      if (typeof payload?.resumeId === "string" && payload.resumeId) {
+        this.tailoredResumeId = payload.resumeId
+        this.tailoredResumeForJobId = this.knownJobId
+      }
+      if (typeof payload?.resumeVersionId === "string" && payload.resumeVersionId) {
+        this.tailoredResumeVersionId = payload.resumeVersionId
+        this.tailoredResumeForJobId = this.knownJobId
+      }
 
       // Always refresh form/context before automation kicks in.
       this.runDetection()
@@ -3520,10 +3585,10 @@ export class ApexBar {
         return { handled: false, waiting: true }
       }
 
-      // A CAPTCHA is blocking the page — pause and let the user solve it. We do
-      // NOT solve it. Keep the pending agent context so we re-trigger and resume
-      // (fill + submit) automatically once the challenge clears.
-      if (this.isCaptchaPresent()) {
+      // If a CAPTCHA is blocking before we can even find a supported form, pause
+      // and let the user solve it. On supported forms, continue filling safe
+      // fields first; the runner stops before final submit/human-check anyway.
+      if (this.isCaptchaPresent() && !this.autofillSiteSupported()) {
         this.agentWaitingForCaptcha = true
         this.autofillStatus = "idle"
         this.autofillError = null
@@ -3586,13 +3651,8 @@ export class ApexBar {
         return { handled: false, waiting: false }
       }
 
-      // Ensure a tracker record exists for later proof persistence.
-      if (!this.knownJobId && this.job) {
-        await this.onSave()
-      }
-
       // Load profile once up front so both generic and Workday flows can reuse it.
-      const { profile } = await getAutofillProfile()
+      const { profile } = await getAutofillProfile(this.currentAutofillResumeContext())
       this.autofillProfile = profile
       if (profile) await withLearnedAnswers(profile) // reuse remembered manual picks
       if (!profile) {
@@ -3894,10 +3954,50 @@ export class ApexBar {
 
   /** True when this page currently has an autofill-capable application form. */
   private autofillSiteSupported(): boolean {
+    if (this.isWorkdayStartOrApplicationSurface()) return true
     const det = this.formDetection
     if (!det || !det.hasForm) return false
     if (this.site === "workday") return true
     return det.supportsAutofill
+  }
+
+  private isWorkdayStartOrApplicationSurface(): boolean {
+    if (this.site !== "workday" || !isWorkdayApplicationPage()) return false
+    const marker = document.querySelector(
+      '[data-automation-id="applicationPage"], ' +
+      '[data-automation-id="applyFlow"], ' +
+      '[data-automation-id="applyFlowPage"], ' +
+      '[data-automation-id="applyFlowMyInfoPage"], ' +
+      '[data-automation-id="applyFlowMyExpPage"], ' +
+      '[data-automation-id="applyFlowApplicationQuestionsPage"], ' +
+      '[data-automation-id="applyFlowReviewPage"], ' +
+      '[data-automation-id="myInformationPage"], ' +
+      '[data-automation-id="myExperiencePage"], ' +
+      '[data-automation-id="questionnairePage"], ' +
+      '[data-automation-id="reviewPage"], ' +
+      '[data-automation-id="legalNameSection_firstName"], ' +
+      '[data-automation-id="formField-legalName--firstName"], ' +
+      '[data-automation-id="legalName--firstName"], ' +
+      '[data-automation-id="applyManually" i], ' +
+      '[data-automation-id="applyManuallyButton" i], ' +
+      '[data-automation-id="fileUploadDropZone"], ' +
+      '[data-automation-id="file-upload-drop-zone"], ' +
+      '[data-automation-id="resume-upload"], ' +
+      '[data-automation-id="createAccountPage"], ' +
+      '[data-automation-id="signInPage"]',
+    )
+    if (marker) return true
+
+    return Array.from(
+      document.querySelectorAll<HTMLElement>('a[role="button"], a[href], button, [role="button"]'),
+    ).some((el) => {
+      if (!isActionableButton(el)) return false
+      const text = (el.textContent ?? el.getAttribute("aria-label") ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .toLowerCase()
+      return text === "apply manually" || text === "apply manual" || text === "autofill with resume"
+    })
   }
 
   /**
@@ -3933,7 +4033,7 @@ export class ApexBar {
     this.render()
 
     try {
-      const { profile, profileMissing } = await getAutofillProfile()
+      const { profile, profileMissing } = await getAutofillProfile(this.currentAutofillResumeContext())
       this.autofillProfile = profile
       if (profile) await withLearnedAnswers(profile) // reuse remembered manual picks
 
@@ -4366,7 +4466,12 @@ export class ApexBar {
       if (coverRow?.selector) {
         this.coverLetterSelector = coverRow.selector
         if (this.coverLetterStatus === "idle" && !this.coverLetterBody) {
-          void this.onGenerateCoverLetter()
+          const generation = this.onGenerateCoverLetter()
+          if (this.autonomousRun) {
+            await generation
+          } else {
+            void generation
+          }
         }
       }
     } catch (err) {

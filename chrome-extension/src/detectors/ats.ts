@@ -17,6 +17,8 @@ const ATS_URL_PATTERNS: Array<{ pattern: RegExp; provider: ATSProvider }> = [
   { pattern: /jobs\.smartrecruiters\.com/i, provider: "smartrecruiters" },
   { pattern: /smartrecruiters\.com\/[^/]+\/job\//i, provider: "smartrecruiters" },
   { pattern: /\.bamboohr\.com/i, provider: "bamboohr" },
+  { pattern: /\.applytojob\.com/i, provider: "jazzhr" },
+  { pattern: /\.jazzhr\.com/i, provider: "jazzhr" },
 ]
 
 // ── DOM-based ATS fingerprints ────────────────────────────────────────────────
@@ -46,6 +48,10 @@ const ATS_DOM_FINGERPRINTS: Array<{ selector: string; provider: ATSProvider }> =
   // BambooHR
   { selector: "#bamboohr-apply", provider: "bamboohr" },
   { selector: ".BambooHR-ATS-board", provider: "bamboohr" },
+  // JazzHR / ApplyToJob
+  { selector: "form#form_submit_new_resume", provider: "jazzhr" },
+  { selector: "[data-test='form_submit_new_resume']", provider: "jazzhr" },
+  { selector: "#resumator-submit-resume", provider: "jazzhr" },
 ]
 
 // ── Page type detection ───────────────────────────────────────────────────────
@@ -71,6 +77,8 @@ const APPLICATION_FORM_INDICATORS = [
   "._ashby-application-form",
   ".sr-apply-step",
   "#icims_content form",
+  "form#form_submit_new_resume",
+  "form[data-test='form_submit_new_resume']",
 ]
 
 const JOB_LISTING_INDICATORS = [

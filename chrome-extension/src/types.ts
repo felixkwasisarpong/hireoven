@@ -12,6 +12,7 @@ export type ATSProvider =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jazzhr"
   | "generic"
 
 export type PageType = "job_listing" | "application_form" | "unknown"
@@ -370,7 +371,7 @@ export interface GetTailorPreviewMessage {
   type: "GET_TAILOR_PREVIEW"
   jobId: string
   resumeId?: string
-  /** Detected ATS system (workday | greenhouse | lever | ashby | icims | smartrecruiters | bamboohr | generic) */
+  /** Detected ATS system (workday | greenhouse | lever | ashby | icims | smartrecruiters | bamboohr | jazzhr | generic) */
   ats?: string
 }
 
@@ -640,6 +641,8 @@ export interface OperatorOpenTabMessage {
   jobTitle?:      string
   company?:       string
   coverLetterId?: string
+  resumeId?:      string
+  resumeVersionId?: string
   agentMode?:     boolean
 }
 
@@ -708,6 +711,8 @@ export interface AgentPendingResult {
     jobTitle?: string
     company?: string
     coverLetterId?: string
+    resumeId?: string
+    resumeVersionId?: string
   }
 }
 

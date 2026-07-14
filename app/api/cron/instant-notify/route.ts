@@ -11,9 +11,9 @@
  * Idempotent (alert_notifications dedup), so re-processing a job the event path
  * already handled can't double-notify. Bounded (window + LIMIT) so it can't storm.
  *
- * Schedule (crontab on the box), e.g. every 5 minutes:
- *   *\/5 * * * * curl -fsS -H "authorization: Bearer $CRON_SECRET" \
- *     https://hireoven.com/api/cron/instant-notify >/dev/null 2>&1
+ * Schedule from the harvester box against the private app-worker, e.g.:
+ *   *\/5 * * * * APP_URL=http://localhost:3100 CRON_SECRET=... \
+ *     bash scripts/crons.sh instant-notify >/dev/null 2>&1
  */
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"

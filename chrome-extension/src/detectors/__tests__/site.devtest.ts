@@ -45,6 +45,7 @@ expect("lever",                 detectSite("https://jobs.lever.co/stripe/abc-def
 expect("ashby",                 detectSite("https://jobs.ashbyhq.com/Vercel/open-roles"), "ashby")
 expect("workday myworkday",     detectSite("https://amazon.myworkdayjobs.com/en-US/Amazon_Jobs"), "workday")
 expect("workday workdayjobs",   detectSite("https://uber.workdayjobs.com/Uber/job/NY/Eng/123"), "workday")
+expect("jazzhr applytojob",      detectSite("https://brightvisiontechnologies.applytojob.com/apply/VENIPxCF6Y/Golang-Developer"), "jazzhr")
 expect("indeed",                detectSite("https://www.indeed.com/viewjob?jk=abc123"),  "indeed")
 expect("glassdoor",             detectSite("https://www.glassdoor.com/job-listing/..."), "glassdoor")
 expect("unknown random site",   detectSite("https://example.com/about"),                "unknown")
@@ -80,6 +81,9 @@ expect("ashby two-segment path",
 
 expect("workday /job/ in path",
   isProbablyJobPage("https://amazon.myworkdayjobs.com/en-US/Amazon_Jobs/job/Seattle/SWE/R-12345"), true)
+
+expect("jazzhr /apply/<code>",
+  isProbablyJobPage("https://brightvisiontechnologies.applytojob.com/apply/VENIPxCF6Y/Golang-Developer"), true)
 
 expect("indeed /viewjob",
   isProbablyJobPage("https://www.indeed.com/viewjob?jk=abc123def456"), true)

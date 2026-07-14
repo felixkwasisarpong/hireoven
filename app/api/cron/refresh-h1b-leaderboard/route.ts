@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic"
 
 // Schedule: nightly at 3am UTC (harvester-box crontab):
 //   0 3 * * * curl -fsS -H "Authorization: Bearer $CRON_SECRET" \
-//     https://hireoven.com/api/cron/refresh-h1b-leaderboard >> /var/log/hireoven-cron.log 2>&1
+//     http://localhost:3100/api/cron/refresh-h1b-leaderboard >> /var/log/hireoven-cron.log 2>&1
 //
 // Refreshes the leaderboard materialized view created in
 // scripts/migrations/add-h1b-leaderboard-mv.sql. CONCURRENTLY keeps public reads

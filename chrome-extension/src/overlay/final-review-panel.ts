@@ -319,11 +319,27 @@ export class FinalReviewPanel {
       const btn = document.getElementById("ho-mark-submitted") as HTMLButtonElement | null
       if (btn) { btn.disabled = true; btn.textContent = "Saving…" }
       await this.onMarkSubmitted(this.state.jobId)
-      // Notify dashboard via postMessage
+      const applyUrl = this.state.applyUrl || window.location.href
+      if (chrome.runtime?.id) {
+        chrome.runtime.sendMessage(
+          {
+            type: "AGENT_APPLICATION_SUBMITTED",
+            jobId: this.state.jobId,
+            applyUrl,
+          },
+          () => {
+            void chrome.runtime.lastError
+          },
+        )
+      }
+      // Notify same-tab dashboard listeners; tracked agent runs are advanced by
+      // the background signal above.
       window.postMessage({
+        source: "hireoven-ext",
         type: "hireoven:review-submitted",
         jobId: this.state.jobId,
         queueItemId: undefined,
+        applyUrl,
       }, "*")
       this.onClose()
     })

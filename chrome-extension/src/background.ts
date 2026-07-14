@@ -95,7 +95,7 @@ function mapPageType(
     return "search_results"
   }
   // ATS job boards are always job_detail or application_form
-  if (["greenhouse", "lever", "ashby", "workday", "icims", "smartrecruiters", "bamboohr"].includes(ats)) {
+  if (["greenhouse", "lever", "ashby", "workday", "icims", "smartrecruiters", "bamboohr", "jazzhr"].includes(ats)) {
     return "job_detail"
   }
   return "unknown"
@@ -466,6 +466,9 @@ async function resolveBestAutofillFrameId(tabId: number): Promise<number | undef
           ".BambooHR-ATS form",
           "#apply-form-card form",
           "form[action*='bamboohr']",
+          "form#form_submit_new_resume",
+          "form[data-test='form_submit_new_resume']",
+          "form[action*='applytojob.com/apply']",
           "form[action*='apply']",
           "form[id*='apply']",
           "form[class*='apply']",
@@ -654,6 +657,8 @@ async function handleMessage(
         message.jobTitle as string | undefined,
         message.company as string | undefined,
         message.coverLetterId as string | undefined,
+        message.resumeId as string | undefined,
+        message.resumeVersionId as string | undefined,
         Boolean(message.agentMode),
       )
       return { type: "OPERATOR_OPEN_TAB_ACK" }
@@ -840,6 +845,74 @@ async function handleSaveJob(job: ExtractedJob): Promise<SaveResult> {
 
   const hireovanUrl = data.jobId ? `${origin}/dashboard/jobs/${data.jobId}` : undefined
   return { type: "SAVE_RESULT", saved: true, jobId: data.jobId, hireovanUrl }
+}
+
+function inferAtsFromUrl(url: string): ExtractedJob["ats"] {
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    if (host.endsWith("greenhouse.io")) return "greenhouse"
+    if (host.endsWith("lever.co")) return "lever"
+    if (host.endsWith("ashbyhq.com")) return "ashby"
+    if (host.endsWith("myworkdayjobs.com") || host.endsWith("workdayjobs.com")) return "workday"
+    if (host.endsWith("icims.com")) return "icims"
+    if (host.endsWith("smartrecruiters.com")) return "smartrecruiters"
+    if (host.endsWith("bamboohr.com")) return "bamboohr"
+    if (host.endsWith("applytojob.com") || host.endsWith("jazzhr.com")) return "jazzhr"
+  } catch {
+    // fall through
+  }
+  return "generic"
+}
+
+function externalJobIdFromApplyUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url)
+    const path = parsed.pathname.replace(/\/+$/, "")
+    const segments = path.split("/").filter(Boolean)
+    if (segments[0]?.toLowerCase() === "apply" && segments[1]) return segments[1]
+    return segments.length > 0 ? segments[segments.length - 1] ?? null : null
+  } catch {
+    return null
+  }
+}
+
+function queuedJobToExtractedJob(job: QueueJobEntry): ExtractedJob {
+  return {
+    title: job.jobTitle,
+    company: job.company ?? null,
+    companyLogo: null,
+    location: null,
+    description: null,
+    salary: null,
+    sponsorshipSignal: job.sponsorshipSignal ?? null,
+    matchScore: job.matchScore ?? null,
+    sourceUrl: job.applyUrl,
+    applyUrl: job.applyUrl,
+    externalJobId: externalJobIdFromApplyUrl(job.applyUrl),
+    url: job.applyUrl,
+    ats: inferAtsFromUrl(job.applyUrl),
+  }
+}
+
+async function ensureQueueJobSavedBeforeOpen(queueItemId: string): Promise<string | null> {
+  const queue = await readQueue()
+  if (!queue) return null
+  const i = queue.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (i < 0) return null
+  const job = queue.jobs[i]
+  if (job.jobId) return job.jobId
+
+  const saved = await handleSaveJob(queuedJobToExtractedJob(job))
+  if (!saved.saved || !saved.jobId) return null
+
+  const latest = await readQueue()
+  if (!latest) return saved.jobId
+  const latestIdx = latest.jobs.findIndex((j) => j.queueId === queueItemId)
+  if (latestIdx >= 0) {
+    latest.jobs[latestIdx] = { ...latest.jobs[latestIdx], jobId: saved.jobId }
+    await writeQueue(latest)
+  }
+  return saved.jobId
 }
 
 async function handleResolveJob(fingerprint: ExtensionJobFingerprint): Promise<ResolveJobResult> {
@@ -1267,6 +1340,8 @@ interface AgentTabCtx {
   jobTitle?:      string
   company?:       string
   coverLetterId?: string
+  resumeId?:      string
+  resumeVersionId?: string
   createdAt:      number
   attempts:       number
   inFlight:       boolean
@@ -1324,6 +1399,8 @@ async function handleOperatorOpenTab(
   jobTitle?:      string,
   company?:       string,
   coverLetterId?: string,
+  resumeId?:      string,
+  resumeVersionId?: string,
   agentMode = false,
 ): Promise<number | null> {
   if (!url) return null
@@ -1336,6 +1413,8 @@ async function handleOperatorOpenTab(
       jobTitle,
       company,
       coverLetterId,
+      resumeId,
+      resumeVersionId,
       createdAt: Date.now(),
       attempts: 0,
       inFlight: false,
@@ -1376,6 +1455,8 @@ async function tryDispatchAgentAutofill(tabId: number): Promise<void> {
         jobTitle: ctx.jobTitle,
         company: ctx.company,
         coverLetterId: ctx.coverLetterId,
+        resumeId: ctx.resumeId,
+        resumeVersionId: ctx.resumeVersionId,
       },
     }) as { type?: string; accepted?: boolean; waiting?: boolean } | undefined
 
@@ -1445,6 +1526,8 @@ async function handleAgentPendingCheck(tabId?: number): Promise<import("./types"
       jobTitle: ctx.jobTitle,
       company: ctx.company,
       coverLetterId: ctx.coverLetterId,
+      resumeId: ctx.resumeId,
+      resumeVersionId: ctx.resumeVersionId,
     },
   }
 }
@@ -1897,12 +1980,16 @@ async function advanceRun(): Promise<void> {
   queue.currentQueueId = next.queueId
   await writeQueue(queue)
 
+  const savedJobId = await ensureQueueJobSavedBeforeOpen(next.queueId)
+
   const tabId = await handleOperatorOpenTab(
     next.applyUrl,
-    next.jobId ?? undefined,
+    savedJobId ?? next.jobId ?? undefined,
     next.jobTitle,
     next.company ?? undefined,
     next.coverLetterId ?? undefined, // attach the cover letter prepared by bulk-prepare
+    next.resumeId ?? undefined,
+    next.resumeVersionId ?? undefined,
     true, // agentMode → background drives AGENT_AUTOFILL page-after-page
   )
   currentRunTabId = tabId
@@ -1966,13 +2053,16 @@ async function handleQueueOpenJob(queueId: string): Promise<QueueActionResult> {
   if (!job?.applyUrl) return { type: "QUEUE_ACTION_RESULT", ok: false }
 
   await setQueueItemStatus(queueId, "applying", { failReason: null })
+  const savedJobId = await ensureQueueJobSavedBeforeOpen(queueId)
 
   const tabId = await handleOperatorOpenTab(
     job.applyUrl,
-    job.jobId ?? undefined,
+    savedJobId ?? job.jobId ?? undefined,
     job.jobTitle,
     job.company ?? undefined,
     job.coverLetterId ?? undefined,
+    job.resumeId ?? undefined,
+    job.resumeVersionId ?? undefined,
     true, // agentMode
   )
   if (tabId === null) {
@@ -2087,6 +2177,14 @@ const MVP_ROUTES: Record<string, MvpRoute> = {
   EXT_MVP_GET_AUTOFILL_PROFILE: {
     method: "GET",
     path: "/api/extension/autofill-profile",
+    buildQuery: (msg) => {
+      const params = new URLSearchParams()
+      if (typeof msg.jobId === "string") params.set("jobId", msg.jobId)
+      if (typeof msg.resumeId === "string") params.set("resumeId", msg.resumeId)
+      if (typeof msg.versionId === "string") params.set("versionId", msg.versionId)
+      const qs = params.toString()
+      return qs ? `?${qs}` : ""
+    },
   },
   // Sentinel: handled separately below (binary response, not JSON).
   EXT_MVP_FETCH_PRIMARY_RESUME: {

@@ -76,15 +76,28 @@ export async function POST(request: Request) {
     application = r.rows[0] ?? null
   }
 
-  if (!application && body.jobUrl) {
+  const urlCandidates = Array.from(
+    new Set(
+      [body.jobUrl, body.applyUrl]
+        .map((value) => value?.trim())
+        .filter((value): value is string => Boolean(value)),
+    ),
+  )
+
+  if (!application && urlCandidates.length > 0) {
     const r = await pool.query<JobApplication>(
       `SELECT a.*
          FROM job_applications a
          JOIN jobs j ON j.id = a.job_id
         WHERE a.user_id = $1
-          AND (j.url = $2 OR j.canonical_url = $2 OR j.apply_url = $2)
+          AND (
+            j.url = ANY($2::text[])
+            OR j.canonical_url = ANY($2::text[])
+            OR j.apply_url = ANY($2::text[])
+            OR a.apply_url = ANY($2::text[])
+          )
         LIMIT 1`,
-      [user.sub, body.jobUrl],
+      [user.sub, urlCandidates],
     )
     application = r.rows[0] ?? null
   }

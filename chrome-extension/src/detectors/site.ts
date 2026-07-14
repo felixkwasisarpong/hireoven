@@ -26,6 +26,7 @@ export type SupportedSite =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jazzhr"
   | "unknown"
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
@@ -107,6 +108,11 @@ const SITE_HOST_RULES: SiteHostRule[] = [
     // [tenant].bamboohr.com/careers, /jobs
     match: h => h === "bamboohr.com" || h.endsWith(".bamboohr.com"),
     site: "bamboohr",
+  },
+  {
+    // JazzHR / The Resumator serves tenant boards on <tenant>.applytojob.com.
+    match: h => h === "applytojob.com" || h.endsWith(".applytojob.com") || h === "jazzhr.com" || h.endsWith(".jazzhr.com"),
+    site: "jazzhr",
   },
 ]
 
@@ -204,6 +210,10 @@ const JOB_DETAIL_TESTS: Partial<Record<SupportedSite, (path: string, params: URL
   bamboohr: (path, params) =>
     // *.bamboohr.com/careers/<id> or /jobs/view.php?id=<id>
     /\/careers\//.test(path) || /\/jobs\//.test(path) || params.has("id"),
+
+  jazzhr: (path) =>
+    // <tenant>.applytojob.com/apply/<jobCode>/<job-title>
+    /^\/apply\/[^/?#]+/.test(path),
 }
 
 /**

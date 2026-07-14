@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { getCategoryBySlug, getPublishedPostsByCategory, getAllCategories } from "@/lib/blog/queries"
@@ -38,10 +39,24 @@ function PostCard({ post }: { post: BlogPost }) {
   return (
     <Link
       href={`/blog/${category.slug}/${post.slug}`}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
+      className="group flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white/90 shadow-[0_12px_34px_-26px_rgba(15,23,42,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_52px_-30px_rgba(15,23,42,0.65)]"
     >
       <div className={`h-1 w-full ${c.bar}`} />
       <div className="flex flex-1 flex-col gap-3 p-5">
+        <div className="relative mb-1 h-36 overflow-hidden rounded-lg border border-gray-100 bg-gray-100">
+          {post.hero_image_url ? (
+            <Image
+              src={post.hero_image_url}
+              alt={post.hero_image_alt ?? post.title}
+              fill
+              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              className="object-cover transition duration-300 group-hover:scale-[1.03]"
+            />
+          ) : (
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-white to-orange-50" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/10 via-transparent to-white/10" />
+        </div>
         <div className="flex items-center justify-between">
           {post.reading_time && (
             <span className="text-xs text-gray-400">{post.reading_time} min read</span>

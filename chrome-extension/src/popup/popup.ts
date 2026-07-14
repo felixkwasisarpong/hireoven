@@ -109,6 +109,7 @@ const ATS_LABELS: Record<string, string> = {
   icims: "iCIMS",
   smartrecruiters: "SmartRecruiters",
   bamboohr: "BambooHR",
+  jazzhr: "JazzHR",
   generic: "Generic",
 }
 

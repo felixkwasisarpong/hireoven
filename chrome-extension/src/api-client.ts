@@ -27,7 +27,7 @@ type CheckRequest   = {
   canonicalUrl?: string
   applyUrl?: string
 }
-type ProfileRequest = { type: "EXT_MVP_GET_AUTOFILL_PROFILE" }
+type ProfileRequest = { type: "EXT_MVP_GET_AUTOFILL_PROFILE"; jobId?: string; resumeId?: string; versionId?: string }
 type ResumeRequest  = { type: "EXT_MVP_FETCH_PRIMARY_RESUME"; jobId?: string; resumeId?: string; versionId?: string }
 type CoverGenRequest    = { type: "EXT_MVP_GENERATE_COVER_LETTER"; jobId: string; resumeId?: string; ats?: string; regenerate?: boolean }
 type CoverUpdateRequest = { type: "EXT_MVP_UPDATE_COVER_LETTER"; id: string; body?: string; was_used?: boolean }
@@ -158,14 +158,23 @@ export function checkExtractedJob(args: {
  * Fetch the user's saved autofill profile (safe fields only — no demographics
  * unless the user explicitly opted in). Returns null when no profile exists.
  */
-export function getAutofillProfile(): Promise<{
+export function getAutofillProfile(args?: {
+  jobId?: string
+  resumeId?: string
+  versionId?: string
+}): Promise<{
   profile: import("./autofill/safe-fields").SafeProfile | null
   profileMissing: boolean
 }> {
   return send<{
     profile: import("./autofill/safe-fields").SafeProfile | null
     profileMissing: boolean
-  }>({ type: "EXT_MVP_GET_AUTOFILL_PROFILE" })
+  }>({
+    type: "EXT_MVP_GET_AUTOFILL_PROFILE",
+    jobId: args?.jobId,
+    resumeId: args?.resumeId,
+    versionId: args?.versionId,
+  })
 }
 
 /**

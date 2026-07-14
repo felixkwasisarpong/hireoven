@@ -65,6 +65,8 @@ const OVERLAY_HOST_ALLOWLIST: readonly RegExp[] = [
   /(?:^|\.)icims\.com$/i,
   /(?:^|\.)smartrecruiters\.com$/i,
   /(?:^|\.)bamboohr\.com$/i,
+  /(?:^|\.)applytojob\.com$/i,
+  /(?:^|\.)jazzhr\.com$/i,
   /(?:^|\.)welcometothejungle\.com$/i,
   /(?:^|\.)wellfound\.com$/i,
   /(?:^|\.)builtin\.com$/i,
