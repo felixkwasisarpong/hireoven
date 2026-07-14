@@ -162,14 +162,67 @@ function companyFromTitle(titleStr: string | null): string | null {
   return null
 }
 
+function titleCaseSlug(value: string | null | undefined): string | null {
+  const cleaned = decodeURIComponent(value ?? "")
+    .replace(/[-_+]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+  if (!cleaned || cleaned.length < 2) return null
+  return cleaned.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+function companyFromKnownAtsUrl(url: string = window.location.href): string | null {
+  try {
+    const parsed = new URL(url)
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "")
+    const segments = parsed.pathname.split("/").filter(Boolean)
+
+    if (
+      host === "greenhouse.io" ||
+      host.endsWith(".greenhouse.io") ||
+      host === "lever.co" ||
+      host.endsWith(".lever.co") ||
+      host === "ashbyhq.com" ||
+      host.endsWith(".ashbyhq.com") ||
+      host === "smartrecruiters.com" ||
+      host.endsWith(".smartrecruiters.com")
+    ) {
+      return titleCaseSlug(segments[0])
+    }
+
+    if (host.endsWith(".myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
+      const sub = host.split(".")[0]
+      return titleCaseSlug(sub?.replace(/^wd\d+$/i, ""))
+    }
+
+    if (host.endsWith(".bamboohr.com") || host.endsWith(".applytojob.com") || host.endsWith(".jazzhr.com")) {
+      return titleCaseSlug(host.split(".")[0])
+    }
+
+    if (host.endsWith(".icims.com")) {
+      const sub = host.split(".")[0]?.replace(/^careers?-?/i, "")
+      return titleCaseSlug(sub)
+    }
+  } catch {
+    // ignore malformed URLs
+  }
+  return null
+}
+
 /** Convert a hostname to a human-readable company name fallback. */
 function companyFromHostname(): string | null {
+  const knownAtsCompany = companyFromKnownAtsUrl()
+  if (knownAtsCompany) return knownAtsCompany
+
   const host = window.location.hostname
     .replace(/^www\./, "")
     .replace(/\.(com|io|co|net|org|ai|careers?)(\..+)?$/, "")
     .replace(/[-_]/g, " ")
     .trim()
   if (!host || host.length < 2) return null
+  if (/^(greenhouse|lever|ashbyhq|smartrecruiters|workdayjobs|myworkdayjobs|icims|bamboohr|applytojob|jazzhr)$/i.test(host)) {
+    return null
+  }
   // Capitalise first letter of each word
   return host.replace(/\b\w/g, (c) => c.toUpperCase())
 }
@@ -608,6 +661,7 @@ const ATS_EXTRACTORS: Record<ATSProvider, () => Partial<ExtractedJob>> = {
   icims: extractICIMS,
   smartrecruiters: extractSmartRecruiters,
   bamboohr: extractBambooHR,
+  jazzhr: extractGeneric,
   generic: extractGeneric,
 }
 
@@ -618,8 +672,7 @@ function merge(...sources: Array<Partial<ExtractedJob>>): Partial<ExtractedJob> 
     for (const [key, value] of Object.entries(source)) {
       const k = key as keyof ExtractedJob
       if (!result[k] && value) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(result as any)[k] = value
+        Object.assign(result, { [k]: value })
       }
     }
   }

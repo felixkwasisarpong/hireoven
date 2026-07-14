@@ -1,5 +1,7 @@
 import { sendToBackground } from "../bridge"
+import { saveApplicationProof } from "../api-client"
 import { detectATS, detectExtensionPageMode, detectPage } from "../detectors/ats"
+import { detectConfirmation, type ConfirmationDetection } from "../detectors/confirmation"
 import { extractJobWithMeta } from "../extractors/job"
 import type {
   ApplyQueueState,
@@ -92,6 +94,13 @@ interface CardMemory {
   insights:   CardInsights | null
 }
 
+type ApplicationProofContext = {
+  jobId?: string
+  jobUrl?: string
+  applyUrl?: string
+  ats?: string
+}
+
 interface BadgeViewModel {
   matchPercent: number | null
   hasH1B: boolean
@@ -130,6 +139,7 @@ const TAILORING_ATS_PROVIDERS = new Set<ATSProvider>([
   "icims",
   "smartrecruiters",
   "bamboohr",
+  "jazzhr",
 ])
 
 function isTailoringAtsProvider(value: ATSProvider | null | undefined): value is ATSProvider {
@@ -1535,6 +1545,10 @@ export class PageAwareControlSystem {
 
   private readonly busy = new Set<BusyAction>()
 
+  private proofStatus: "idle" | "saving" | "saved" | "error" = "idle"
+  private proofContext: ApplicationProofContext | null = null
+  private autoProofFired = false
+
   // ── Apply Queue ──────────────────────────────────────────────────────────────
   private queueState: ApplyQueueState | null = null
   private queuePanel: ApplyQueuePanel | null = null
@@ -1568,6 +1582,7 @@ export class PageAwareControlSystem {
     if (this.scanTimer) window.clearTimeout(this.scanTimer)
     if (this.urlTimer) window.clearInterval(this.urlTimer)
     if (this.autoMatchTimer) window.clearTimeout(this.autoMatchTimer)
+    this.autoMatchTimer = null
 
     this.observer?.disconnect()
     this.observer = null
@@ -1660,6 +1675,8 @@ export class PageAwareControlSystem {
     const modeDetected = detectExtensionPageMode()
     const siteContext = extractSiteContext()
 
+    this.checkForSubmissionConfirmation()
+
     const cards = siteContext.cards.filter((card) => card.host.isConnected)
     const resultCards = cards.filter((card) => card.role === "result")
     const detailCard = cards.find((card) => card.role === "detail") ?? null
@@ -1732,7 +1749,99 @@ export class PageAwareControlSystem {
       }
     }
 
+    if (this.mode === "application_form") {
+      this.rememberApplicationProofContext()
+    }
+
     this.render()
+  }
+
+  private currentApplicationProofContext(jobIdOverride?: string | null): ApplicationProofContext | null {
+    const job = this.activeJob
+    const canonicalId = this.activeCanonicalId()
+    const savedJobId = jobIdOverride ?? (canonicalId ? this.memoryByCanonical.get(canonicalId)?.savedJobId ?? null : null)
+    const applyUrl = this.activeApplyUrl() ?? (this.mode === "application_form" ? window.location.href : null)
+    const jobUrl = job?.url?.startsWith("http") ? job.url : applyUrl
+
+    if (!savedJobId && !jobUrl && !applyUrl) return null
+
+    return {
+      jobId: savedJobId ?? undefined,
+      jobUrl: jobUrl ?? undefined,
+      applyUrl: applyUrl ?? undefined,
+      ats: job?.ats ?? detectATS(window.location.href),
+    }
+  }
+
+  private rememberApplicationProofContext(jobIdOverride?: string | null): void {
+    const next = this.currentApplicationProofContext(jobIdOverride)
+    if (!next) return
+
+    const previousKey = this.proofContext?.applyUrl ?? this.proofContext?.jobUrl ?? this.proofContext?.jobId ?? null
+    const nextKey = next.applyUrl ?? next.jobUrl ?? next.jobId ?? null
+    if (nextKey && previousKey && nextKey !== previousKey) {
+      this.autoProofFired = false
+      this.proofStatus = "idle"
+    }
+
+    this.proofContext = {
+      ...this.proofContext,
+      ...next,
+      jobId: next.jobId ?? this.proofContext?.jobId,
+    }
+  }
+
+  private checkForSubmissionConfirmation(): void {
+    let confirmation: ConfirmationDetection | null = null
+    try {
+      confirmation = detectConfirmation(document)
+    } catch {
+      confirmation = null
+    }
+    if (!confirmation?.isConfirmation || confirmation.confidence === "low") return
+    if (this.autoProofFired) return
+
+    this.autoProofFired = true
+    void this.recordSubmittedApplication(confirmation)
+  }
+
+  private async recordSubmittedApplication(confirmation?: ConfirmationDetection | null): Promise<void> {
+    if (!this.authenticated) return
+    if (this.proofStatus === "saving" || this.proofStatus === "saved") return
+
+    let context = this.proofContext ?? this.currentApplicationProofContext()
+    if (!context?.jobId && this.activeJob) {
+      const savedJobId = await this.ensureActiveJobId().catch(() => null)
+      if (savedJobId) {
+        this.rememberApplicationProofContext(savedJobId)
+        context = this.proofContext
+      }
+    }
+
+    if (!context?.jobId && !context?.jobUrl && !context?.applyUrl) {
+      this.proofStatus = "error"
+      this.setStatus("Application submitted, but no saved job context was found.")
+      return
+    }
+
+    this.proofStatus = "saving"
+    try {
+      await saveApplicationProof({
+        jobId: context.jobId,
+        jobUrl: context.jobUrl,
+        applyUrl: context.applyUrl,
+        ats: confirmation?.ats !== "unknown" ? confirmation?.ats : context.ats,
+        submittedAt: new Date().toISOString(),
+        confirmationText:
+          confirmation?.confirmationText ||
+          "Marked submitted manually from the Hireoven extension.",
+      })
+      this.proofStatus = "saved"
+      this.setStatus("Application moved to Applied in Hireoven.")
+    } catch {
+      this.proofStatus = "error"
+      this.setStatus("Submitted, but Hireoven could not update the pipeline. Save the job first, then mark it submitted.")
+    }
   }
 
   private cardScreenerSignals(card: JobCardSnapshot): ScreenerCardSignals {
@@ -2126,7 +2235,11 @@ export class PageAwareControlSystem {
     const canonicalId = this.activeCanonicalId()
     const job = this.activeJob
     if (!canonicalId || !job) return null
-    return this.resolveOrSaveJob(canonicalId, job)
+    const jobId = await this.resolveOrSaveJob(canonicalId, job)
+    if (jobId && this.mode === "application_form") {
+      this.rememberApplicationProofContext(jobId)
+    }
+    return jobId
   }
 
   private async saveFromBadge(key: string): Promise<void> {
@@ -2369,8 +2482,11 @@ export class PageAwareControlSystem {
     if (!this.authenticated) { this.openPath("/login"); return }
 
     this.finalReviewPanel?.unmount()
+    const canonicalId = this.activeCanonicalId()
+    const savedJobId = canonicalId ? this.memoryByCanonical.get(canonicalId)?.savedJobId ?? undefined : undefined
     this.finalReviewPanel = new FinalReviewPanel({
       initialState: {
+        jobId:                 savedJobId,
         jobTitle:              this.activeJob?.title ?? null,
         company:               this.activeJob?.company ?? null,
         applyUrl:              window.location.href,
@@ -2386,19 +2502,8 @@ export class PageAwareControlSystem {
         void this.openAutofillDrawer()
       },
       onMarkSubmitted: async (jobId?: string) => {
-        try {
-          await fetch(`${this.appOrigin}/api/apex/mark-submitted`, {
-            method:       "POST",
-            credentials:  "include",
-            headers:      { "Content-Type": "application/json" },
-            body:         JSON.stringify({
-              jobId:       jobId,
-              jobTitle:    this.activeJob?.title,
-              companyName: this.activeJob?.company,
-              applyUrl:    window.location.href,
-            }),
-          })
-        } catch {}
+        this.rememberApplicationProofContext(jobId)
+        await this.recordSubmittedApplication(null)
       },
       onClose: () => {
         this.finalReviewPanel?.unmount()
@@ -2416,6 +2521,8 @@ export class PageAwareControlSystem {
   private async fillSafeFields(): Promise<void> {
     const preview = this.autofillPreview
     if (!preview) return
+
+    await this.ensureActiveJobId().catch(() => null)
 
     const safe         = safeFieldsToFill(preview.fields)
     const canFillCover = this.autofillUseCover && Boolean(this.coverLetterText.trim()) && Boolean(this.coverLetterFieldRef)

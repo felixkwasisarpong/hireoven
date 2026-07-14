@@ -12,7 +12,7 @@
  *      backend analysis. Autofill is hidden.
  *
  *   2. ATS / application mode  — Greenhouse / Lever / Ashby / Workday /
- *      iCIMS / SmartRecruiters / BambooHR. These host the real application form, so
+ *      iCIMS / SmartRecruiters / BambooHR / JazzHR. These host the real application form, so
  *      autofill is the relevant primitive. Apex panel still works on
  *      ATS job-detail pages even before the user reaches the form.
  *
@@ -49,6 +49,7 @@ const ATS_SITES: ReadonlySet<SupportedSite> = new Set<SupportedSite>([
   "icims",
   "smartrecruiters",
   "bamboohr",
+  "jazzhr",
 ])
 
 export function isJobBoardSite(site: SupportedSite): boolean {
@@ -133,6 +134,11 @@ const APPLICATION_FORM_SELECTORS: ReadonlyArray<string> = [
   "#bamboohr-apply",
   ".BambooHR-ATS form",
   "form[action*='bamboohr']",
+  // JazzHR / ApplyToJob
+  "form#form_submit_new_resume",
+  "form[data-test='form_submit_new_resume']",
+  "form[action*='applytojob.com/apply']",
+  "#resumator-submit-resume",
   // Generic ATS-action hints
   "form[action*='greenhouse']",
   "form[action*='lever']",
@@ -148,6 +154,7 @@ function pageHasApplicationForm(doc: Document, site: SupportedSite): boolean {
     icims: ['iframe[src*="icims.com"]'],
     smartrecruiters: ['iframe[src*="smartrecruiters.com"]'],
     bamboohr: ['iframe[src*="bamboohr.com"]'],
+    jazzhr: ['iframe[src*="applytojob.com"]', 'iframe[src*="jazzhr.com"]'],
   }
 
   for (const selector of embeddedIframeSelectors[site] ?? []) {

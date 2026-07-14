@@ -236,6 +236,7 @@ function guessAtsFromUrl(url: string): string | null {
     if (host.endsWith("icims.com")) return "icims"
     if (host.endsWith("smartrecruiters.com")) return "smartrecruiters"
     if (host.endsWith("bamboohr.com")) return "bamboohr"
+    if (host.endsWith("applytojob.com") || host.endsWith("jazzhr.com")) return "jazzhr"
     return null
   } catch {
     return null

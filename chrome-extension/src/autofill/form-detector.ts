@@ -551,6 +551,11 @@ const ATS_FORM_SELECTORS: Record<string, string[]> = {
     ".BambooHR-ATS form",
     "#apply-form-card form",
   ],
+  jazzhr: [
+    "form#form_submit_new_resume",
+    "form[data-test='form_submit_new_resume']",
+    "form[action*='applytojob.com/apply']",
+  ],
   generic: [
     "form[action*='apply']",
     "form[id*='apply']",
