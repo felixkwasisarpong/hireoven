@@ -44,6 +44,14 @@ const PLAN_STYLES: Record<string, string> = {
   pro_international: "bg-violet-100 text-violet-700",
 }
 
+function ActivityDot({ lastActiveAt, now }: { lastActiveAt: string | null; now: number }) {
+  if (!lastActiveAt) return <span className="inline-block h-2 w-2 rounded-full bg-gray-200" title="Never seen" />
+  const diffMin = (now - new Date(lastActiveAt).getTime()) / 60_000
+  if (diffMin < 15) return <span className="inline-block h-2 w-2 rounded-full bg-green-500 shadow-[0_0_0_2px_rgba(34,197,94,0.25)]" title="Online now" />
+  if (diffMin < 60) return <span className="inline-block h-2 w-2 rounded-full bg-yellow-400" title="Active in last hour" />
+  return <span className="inline-block h-2 w-2 rounded-full bg-gray-200" title="Inactive" />
+}
+
 function PlanBadge({ plan }: { plan: string }) {
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-bold ${PLAN_STYLES[plan] ?? PLAN_STYLES.free}`}>
@@ -307,8 +315,13 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-3 py-3 text-xs text-gray-600">{formatNumber(user.watchlistCount)}</td>
                   <td className="px-3 py-3">
-                    <p className="text-xs text-gray-600">{formatDateTime(user.lastActiveAt)}</p>
-                    <p className="mt-0.5 text-[10px] text-gray-400">{formatRelativeTime(user.lastActiveAt, now)}</p>
+                    <div className="flex items-center gap-2">
+                      <ActivityDot lastActiveAt={user.lastActiveAt} now={now} />
+                      <div>
+                        <p className="text-xs text-gray-600">{formatDateTime(user.lastActiveAt) ?? "Never"}</p>
+                        <p className="mt-0.5 text-[10px] text-gray-400">{formatRelativeTime(user.lastActiveAt, now)}</p>
+                      </div>
+                    </div>
                   </td>
 
                   {/* Admin toggle */}

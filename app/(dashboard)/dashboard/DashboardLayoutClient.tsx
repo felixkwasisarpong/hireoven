@@ -13,6 +13,7 @@ import PurchaseVerifier from "@/components/billing/PurchaseVerifier"
 import LaunchPromoPopup from "@/components/apex/LaunchPromoPopup"
 import { ResumeProvider } from "@/components/resume/ResumeProvider"
 import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useActivityPing } from "@/lib/hooks/useActivityPing"
 import { cn } from "@/lib/utils"
 
 const BILLING_BANNER_DISMISS_KEY = "billing_banner_dismissed_at"
@@ -115,6 +116,11 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
   )
 }
 
+function ActivityPinger() {
+  useActivityPing()
+  return null
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -124,6 +130,7 @@ export default function DashboardLayout({
     <ResumeProvider>
       <DashboardMobileNavProvider>
         <div className="product-skin">
+          <ActivityPinger />
           <DashboardLayoutInner>{children}</DashboardLayoutInner>
           <DashboardProductTour />
           <SavedJobReminderPopup />

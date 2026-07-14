@@ -69,7 +69,7 @@ async function listUsers() {
       email: p.email ?? null,
       name: p.full_name ?? null,
       joinedAt: p.created_at ?? null,
-      lastActiveAt: p.updated_at ?? null,
+      lastActiveAt: p.last_active_at ?? null,
       isAdmin: p.is_admin ?? false,
       visaStatus: p.visa_status ?? null,
       isInternational: p.is_international ?? false,
