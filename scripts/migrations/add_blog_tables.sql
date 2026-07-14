@@ -17,6 +17,10 @@ CREATE TABLE IF NOT EXISTS blog_posts (
   excerpt         text        NOT NULL,
   body            text        NOT NULL, -- HTML, AI-generated
   seo_description text,
+  hero_image_url  text,
+  hero_image_key  text,
+  hero_image_alt  text,
+  image_prompt    text,
   reading_time    integer,              -- estimated minutes
   status          text        NOT NULL DEFAULT 'draft'
                               CHECK (status IN ('draft', 'published')),

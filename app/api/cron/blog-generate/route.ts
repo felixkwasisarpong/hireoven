@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
       postId: result.postId,
       category: result.categorySlug,
       title: result.title,
+      imageGenerated: result.imageGenerated,
       durationMs: result.durationMs,
       message: `Draft created: "${result.title}" in ${result.categorySlug} (${result.durationMs}ms)`,
     })

@@ -14,6 +14,10 @@ export interface BlogPost {
   excerpt: string
   body: string
   seo_description: string | null
+  hero_image_url: string | null
+  hero_image_key: string | null
+  hero_image_alt: string | null
+  image_prompt: string | null
   reading_time: number | null
   status: "draft" | "published"
   published_at: string | null

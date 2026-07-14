@@ -8,6 +8,7 @@ export async function GET() {
   const pool = getPostgresPool()
   const { rows } = await pool.query(
     `SELECT p.id, p.slug, p.title, p.excerpt, p.status, p.reading_time,
+            p.hero_image_url, p.hero_image_key, p.hero_image_alt, p.image_prompt,
             p.published_at, p.created_at,
             c.name AS category_name, c.slug AS category_slug
      FROM blog_posts p

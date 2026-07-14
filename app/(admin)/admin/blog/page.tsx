@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import { useCallback, useEffect, useState } from "react"
 import { BookOpen, Loader2, RefreshCw, Zap } from "lucide-react"
 import {
@@ -16,6 +17,10 @@ type PostRow = {
   excerpt: string
   status: "draft" | "published"
   reading_time: number | null
+  hero_image_url: string | null
+  hero_image_key: string | null
+  hero_image_alt: string | null
+  image_prompt: string | null
   published_at: string | null
   created_at: string
   category_name: string
@@ -128,6 +133,7 @@ export default function AdminBlogPage() {
           <table className="w-full min-w-[860px] text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
               <tr>
+                <th className="px-4 py-3">Image</th>
                 <th className="px-4 py-3">Title</th>
                 <th className="px-4 py-3">Category</th>
                 <th className="px-4 py-3">Status</th>
@@ -140,7 +146,7 @@ export default function AdminBlogPage() {
             <tbody className="divide-y divide-gray-100">
               {rows.length === 0 && !loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
                     <BookOpen className="mx-auto mb-2 h-5 w-5 opacity-40" />
                     No posts yet. Hit &quot;Generate today&apos;s post&quot; to create the first one.
                   </td>
@@ -148,6 +154,21 @@ export default function AdminBlogPage() {
               ) : (
                 rows.map((post) => (
                   <tr key={post.id} className="hover:bg-gray-50/60 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="relative h-12 w-20 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                        {post.hero_image_url ? (
+                          <Image
+                            src={post.hero_image_url}
+                            alt={post.hero_image_alt ?? post.title}
+                            fill
+                            sizes="80px"
+                            className="object-cover"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-white to-orange-50" />
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 max-w-xs">
                       <p className="font-semibold text-gray-900 line-clamp-1">{post.title}</p>
                       <p className="mt-0.5 text-xs text-gray-400 line-clamp-1">{post.excerpt}</p>
