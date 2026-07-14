@@ -66,7 +66,6 @@ export default function SetupForm({
   const [questionSet, setQuestionSet] = useState<QuestionSet>("recruiter_screen")
   const [duration, setDuration] = useState<Duration>(30)
   const [useResume, setUseResume] = useState(true)
-  const [when, setWhen] = useState<"now" | "later">("now")
   const [scheduledAt, setScheduledAt] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [jobs, setJobs] = useState<SavedJob[]>(initialJobs)
@@ -137,7 +136,8 @@ export default function SetupForm({
     }
   }, [persona, questionSet])
 
-  const isScheduling = type === "live" && when === "later"
+  // Live interviews are always scheduled into a slot — no immediate start.
+  const isScheduling = type === "live"
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -147,7 +147,7 @@ export default function SetupForm({
     }
     setIsSubmitting(true)
     // A scheduled session redirects to its confirmation page in this tab.
-    const opensInNewTab = !isScheduling && (type === "live" || type === "coding")
+    const opensInNewTab = type === "coding"
     const preOpenedTab = opensInNewTab && typeof window !== "undefined"
       ? window.open("", "_blank")
       : null
@@ -222,7 +222,7 @@ export default function SetupForm({
     : type === "coding"
       ? "Set up your live coding test"
       : type === "live"
-        ? "Set up your live interview"
+        ? "Schedule your live interview"
         : "Set up your text interview"
 
   // ── Plan + credit gates ──────────────────────────────────────────────────
@@ -396,39 +396,17 @@ export default function SetupForm({
         <PersonaPicker value={persona} onChange={setPersona} interviewType={type} />
       </fieldset>
 
-      {/* When — live sessions can be booked for a quiet future slot */}
+      {/* When — live sessions are booked into a slot (quietest suggested first) */}
       {type === "live" && (
         <fieldset>
-          <legend className="mb-2 text-[13px] font-semibold text-slate-700">When</legend>
-          <div className="flex gap-2">
-            {([
-              { id: "now", label: "Start now" },
-              { id: "later", label: "Schedule for later" },
-            ] as const).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => setWhen(opt.id)}
-                className={cn(
-                  "rounded-lg border px-4 py-2 text-[13px] font-medium transition",
-                  when === opt.id
-                    ? "border-orange-300 bg-orange-50 text-orange-700 ring-1 ring-orange-300"
-                    : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          {isScheduling && (
-            <div className="mt-3">
-              <SchedulePicker
-                durationMin={duration}
-                value={scheduledAt}
-                onChange={setScheduledAt}
-              />
-            </div>
-          )}
+          <legend className="mb-2 text-[13px] font-semibold text-slate-700">
+            Pick a date &amp; time
+          </legend>
+          <SchedulePicker
+            durationMin={duration}
+            value={scheduledAt}
+            onChange={setScheduledAt}
+          />
         </fieldset>
       )}
 
