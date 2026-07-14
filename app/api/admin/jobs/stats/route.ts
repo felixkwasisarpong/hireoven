@@ -17,7 +17,7 @@ export async function GET() {
       COUNT(*) FILTER (WHERE is_active = true)                                        AS total_active,
       COUNT(*) FILTER (WHERE is_active = false)                                       AS total_inactive,
       COUNT(*) FILTER (WHERE is_active = true AND is_remote = true)                   AS total_remote,
-      COUNT(*) FILTER (WHERE is_active = true AND (normalized_title IS NULL OR skills IS NULL OR skills = '[]'::jsonb OR jsonb_array_length(skills) = 0)) AS failed_normalization
+      COUNT(*) FILTER (WHERE is_active = true AND (normalized_title IS NULL OR COALESCE(array_length(skills, 1), 0) = 0)) AS failed_normalization
     FROM jobs
   `)
 
