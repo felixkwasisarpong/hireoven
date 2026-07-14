@@ -14,7 +14,12 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import type { ApplyAgentJob } from "@/lib/apex/apply-agent/types"
-import { buildAtsApplyUrlFilter, canonicalizeAts, type AtsSlug } from "@/lib/apex/apply-agent/ats"
+import {
+  APEX_APPLY_SUPPORTED_ATS,
+  buildAtsApplyUrlFilter,
+  canonicalizeAts,
+  type AtsSlug,
+} from "@/lib/apex/apply-agent/ats"
 import { canAccess, requiredPlanFor } from "@/lib/gates"
 import { gateResponse, getPlanForUserId } from "@/lib/gates/server-gate"
 
@@ -102,9 +107,10 @@ export async function GET(request: NextRequest) {
   const rawQuery           = (searchParams.get("q") ?? "").trim()
   const strictQuery        = searchParams.get("strictQuery") === "true"
   const strictScoreOnly    = searchParams.get("strictScoreOnly") === "true"
-  // ats=greenhouse or ats=greenhouse,lever — filters the pool to jobs whose
-  // apply_url is on the given ATS(es), i.e. jobs that ATS driver can autofill.
-  const atsSlugs = Array.from(
+  // ats=greenhouse or ats=greenhouse,lever narrows the pool. Without an
+  // explicit filter, default to every ATS the Apex extension can actually drive
+  // so the queue does not fill with jobs bulk-prepare will immediately skip.
+  const requestedAtsSlugs = Array.from(
     new Set(
       (searchParams.get("ats") ?? "")
         .split(",")
@@ -112,6 +118,9 @@ export async function GET(request: NextRequest) {
         .filter((s): s is AtsSlug => s !== null),
     ),
   )
+  const atsSlugs = requestedAtsSlugs.length > 0
+    ? requestedAtsSlugs
+    : [...APEX_APPLY_SUPPORTED_ATS]
 
   const pool = getPostgresPool()
 

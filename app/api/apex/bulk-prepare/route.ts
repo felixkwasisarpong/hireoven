@@ -2,9 +2,7 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { generateCoverLetter } from "@/lib/resume/cover-letter-generator"
 import { compareResumeToJob } from "@/lib/resume/hub"
-import { logApiUsage } from "@/lib/admin/usage"
 import type { BulkFailReason } from "@/lib/apex/bulk-application/types"
 import type { Resume, Job, Company } from "@/types"
 import type { TailoredBulletSuggestion } from "@/types/resume-hub"
@@ -31,6 +29,7 @@ type DetectedAts =
   | "iCIMS"
   | "SmartRecruiters"
   | "BambooHR"
+  | "JazzHR"
   | "Generic ATS"
 
 function detectAtsFromApplyUrl(applyUrl: string | null | undefined): DetectedAts {
@@ -44,6 +43,8 @@ function detectAtsFromApplyUrl(applyUrl: string | null | undefined): DetectedAts
     if (host.includes("icims.com")) return "iCIMS"
     if (host.includes("smartrecruiters.com")) return "SmartRecruiters"
     if (host.includes("bamboohr.com")) return "BambooHR"
+    // JazzHR serves applications on <tenant>.applytojob.com (single-page form).
+    if (host.includes("applytojob.com") || host.includes("jazzhr.com")) return "JazzHR"
   } catch {
     // Ignore malformed URLs and fall back to Generic ATS.
   }
@@ -123,7 +124,7 @@ export async function POST(request: Request) {
     })
   }
 
-  // ── Fetch job from DB (needed for cover letter + tailor) ─────────────────────
+  // ── Fetch job from DB (needed for tailor analysis) ───────────────────────────
   let job: (Job & { company: Company }) | null = null
   if (jobId) {
     const jobResult = await pool.query<Job & { company: Company }>(
@@ -207,6 +208,10 @@ export async function POST(request: Request) {
   }
 
   // ── Cover letter generation ──────────────────────────────────────────────────
+  // Deferred intentionally: generating here spends cover-letter quota even when
+  // the destination ATS never asks for one. The extension now generates and
+  // attaches a cover letter only after it detects a cover-letter field in the
+  // live application form.
   let coverLetterStatus: string = "skipped"
   let coverLetterId: string | undefined
 
@@ -214,34 +219,6 @@ export async function POST(request: Request) {
   const resolvedCompany = company ?? job?.company?.name ?? "Unknown Company"
   // Generic ATS was hard-gated above, so atsProvider is always a real ATS here.
   const tailoredResumeName = `Tailored for ${resolvedJobTitle} at ${resolvedCompany} · ${atsProvider}`
-
-  if (job) {
-    try {
-      const coverLetter = await generateCoverLetter(
-        resume,
-        job,
-        { tone: "professional", style: "achievement_focused", length: "medium" },
-        userId
-      )
-      if (coverLetter?.id) {
-        coverLetterStatus = "ready"
-        coverLetterId     = coverLetter.id
-      }
-    } catch {
-      coverLetterStatus = "failed"
-      warnings.push({
-        code:     "cover_letter_failed",
-        message:  "Cover letter draft could not be generated — you can generate one from the review panel.",
-        severity: "warning",
-      })
-    }
-  } else {
-    warnings.push({
-      code:     "no_job_data_for_cover",
-      message:  "Job not in our database — cover letter skipped. You can generate one after opening the application.",
-      severity: "info",
-    })
-  }
 
   console.log("[bulk-prepare]", {
     userId: userId,
@@ -254,9 +231,6 @@ export async function POST(request: Request) {
     suggestedSkills: suggestedSkills.length,
     warnings: warnings.length,
   })
-  if (coverLetterStatus === "ready") {
-    await logApiUsage({ service: "anthropic", operation: "bulk-prepare/cover-letter", tokens_used: null, cost_usd: null }).catch(() => {})
-  }
 
   return NextResponse.json({
     resumeTailorStatus,

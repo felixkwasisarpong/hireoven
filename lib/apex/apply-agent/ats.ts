@@ -17,6 +17,7 @@ export type AtsSlug =
   | "icims"
   | "smartrecruiters"
   | "bamboohr"
+  | "jazzhr"
 
 /** Human label for chat/answer text. */
 export const ATS_LABELS: Record<AtsSlug, string> = {
@@ -27,7 +28,19 @@ export const ATS_LABELS: Record<AtsSlug, string> = {
   icims:           "iCIMS",
   smartrecruiters: "SmartRecruiters",
   bamboohr:        "BambooHR",
+  jazzhr:          "JazzHR",
 }
+
+export const APEX_APPLY_SUPPORTED_ATS: readonly AtsSlug[] = [
+  "workday",
+  "greenhouse",
+  "lever",
+  "ashby",
+  "icims",
+  "smartrecruiters",
+  "bamboohr",
+  "jazzhr",
+]
 
 /**
  * SQL ILIKE patterns matched against `jobs.apply_url`. Mirrors the host checks
@@ -41,6 +54,9 @@ export const ATS_APPLY_URL_PATTERNS: Record<AtsSlug, string[]> = {
   icims:           ["%icims.com%"],
   smartrecruiters: ["%smartrecruiters.com%"],
   bamboohr:        ["%bamboohr.com%"],
+  // JazzHR serves applications on <tenant>.applytojob.com — a single-page form
+  // the extension's generic loop drives like Greenhouse/Lever.
+  jazzhr:          ["%applytojob.com%", "%jazzhr.com%"],
 }
 
 /**
@@ -57,6 +73,7 @@ export function canonicalizeAts(input: string | null | undefined): AtsSlug | nul
   if (k.includes("icims")) return "icims"
   if (k.includes("smartrecruiter")) return "smartrecruiters"
   if (k.includes("bamboo")) return "bamboohr"
+  if (k.includes("jazzhr") || k.includes("applytojob")) return "jazzhr"
   // "lever" last — it is a common English word, so only match the standalone
   // token to avoid false positives on words like "leverage".
   if (/(^|[^a-z])lever([^a-z]|$)/.test(input.toLowerCase())) return "lever"
@@ -78,6 +95,7 @@ export function extractAtsSlugs(message: string): AtsSlug[] {
     [/icims/, "icims"],
     [/smart\s*recruiters?/, "smartrecruiters"],
     [/bamboo(?:hr)?/, "bamboohr"],
+    [/jazz\s*hr|applytojob/, "jazzhr"],
     [/(^|[^a-z])lever([^a-z]|$)/, "lever"],
   ]
   for (const [re, slug] of probes) {
