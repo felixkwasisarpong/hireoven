@@ -1026,6 +1026,8 @@ export type Profile = {
   product_tour_seen_at?: string | null;
   /** When set, account is suspended (Postgres-backed; enforced in middleware). */
   suspended_at?: string | null;
+  /** Stamped by POST /api/user/activity on dashboard load (throttled to once per 5 min). */
+  last_active_at?: string | null;
   created_at: string;
   updated_at: string;
 };
