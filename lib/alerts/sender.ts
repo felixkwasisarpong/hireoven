@@ -486,6 +486,64 @@ export async function sendBatchPushNotification(
   await logApiUsage({ service: "webpush", operation: `${type}_batch`, tokens_used: null, cost_usd: 0 })
 }
 
+export async function sendWatchlistEmail(
+  userId: string,
+  jobs: Job[],
+): Promise<void> {
+  if (!resend) throw new Error("Missing RESEND_API_KEY")
+
+  const [profile, hydratedJobs] = await Promise.all([
+    getProfileForNotifications(userId),
+    hydrateJobs(jobs),
+  ])
+  if (!profile.email) throw new Error(`User ${userId} has no email address`)
+
+  const total = hydratedJobs.length
+  const visible = hydratedJobs.slice(0, 5)
+  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i, null)).join("")
+
+  const companies = [...new Set(hydratedJobs.map((j) => j.company?.name).filter(Boolean))]
+  const companyStr =
+    companies.length === 1
+      ? (companies[0] as string)
+      : companies.length === 2
+        ? `${companies[0]} and ${companies[1]}`
+        : `${companies[0]}, ${companies[1]}, and ${companies.length - 2} more`
+
+  const subject =
+    total === 1
+      ? `New role at ${companyStr}`
+      : `${total} new roles at ${companies.length === 1 ? companyStr : "companies you follow"}`
+
+  const headerSub =
+    companies.length === 1
+      ? `${companies[0]} just posted ${total === 1 ? "a new role" : `${total} new roles`}.`
+      : `${companies.length} companies you follow posted ${total} new role${total === 1 ? "" : "s"}.`
+
+  const html = renderEmailShell({
+    preheader: subject,
+    headerTitle: "Companies you follow are hiring",
+    headerSub,
+    jobRowsHtml,
+    viewAllUrl: `${getBaseUrl()}/dashboard`,
+    viewAllLabel: total > 5 ? `See all ${total} new roles` : "View new roles",
+    recipientName: profile.full_name ?? null,
+    recipientEmail: profile.email,
+    alertNote: "You're receiving this because you're following these companies on Hireoven.",
+    manageUrl: `${getBaseUrl()}/dashboard/alerts`,
+  })
+
+  const { error } = await resend.emails.send({
+    from: getAlertsFromEmail(),
+    to: [profile.email],
+    subject,
+    html,
+  })
+  if (error) throw new Error(error.message)
+
+  await logApiUsage({ service: "resend", operation: "email", tokens_used: null, cost_usd: 0 })
+}
+
 export function combineChannels({ emailSent, pushSent }: { emailSent: boolean; pushSent: boolean }): NotificationChannel | null {
   if (emailSent && pushSent) return "both"
   if (emailSent) return "email"

@@ -21,7 +21,7 @@ export default function CompanyProfilePageClient({ companyId }: { companyId: str
   const [company, setCompany] = useState<Company | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const feedFilters: JobFilters = { sort: "freshest", company_ids: [id] }
+  const feedFilters: JobFilters = { sort: "freshest", company_ids: [id], location_scope: "global" }
 
   useEffect(() => {
     fetch(`/api/companies/${encodeURIComponent(id)}`)

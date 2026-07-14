@@ -1780,6 +1780,10 @@ export type JobFilters = {
   has_salary?: boolean;
   /** Only show jobs with a known ATS link (not generic/custom) */
   direct_ats_only?: boolean;
+  /** Skip the US/CA location gate — used on company profile pages where all
+   *  roles (including international postings) should be visible. Only honoured
+   *  by the API when a specific company_ids filter is also present. */
+  location_scope?: "global";
 };
 
 // ---------------------------------------------------------------------------
