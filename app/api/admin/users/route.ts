@@ -15,6 +15,7 @@ type UserRow = {
   watchlistCount: number
   alertCount: number
   pushEnabled: boolean
+  hasResume: boolean
   plan: string          // "free" | "pro" | "pro_max" (normalized for UI/API)
   planStatus: string    // "active" | "trialing" | "canceled" | "free"
 }
@@ -36,7 +37,7 @@ function normalizePlanForStorage(plan: AdminPlan): "free" | "pro" | "pro_interna
 
 async function listUsers() {
   const pool = getPostgresPool()
-  const [profilesResult, watchlistResult, alertsResult, pushResult, subsResult] = await Promise.all([
+  const [profilesResult, watchlistResult, alertsResult, pushResult, subsResult, resumesResult] = await Promise.all([
     pool.query<Profile>(`SELECT * FROM profiles ORDER BY created_at DESC NULLS LAST LIMIT 1000`),
     pool.query<UserIdRow>("SELECT user_id FROM watchlist"),
     pool.query<UserIdRow>("SELECT user_id FROM job_alerts"),
@@ -47,6 +48,7 @@ async function listUsers() {
        WHERE status IN ('active', 'trialing')
        ORDER BY user_id, created_at DESC`
     ),
+    pool.query<UserIdRow>("SELECT DISTINCT user_id FROM resumes"),
   ])
 
   const watchlistCount = new Map<string, number>()
@@ -56,6 +58,7 @@ async function listUsers() {
   for (const r of alertsResult.rows) alertCount.set(r.user_id, (alertCount.get(r.user_id) ?? 0) + 1)
 
   const pushUsers = new Set(pushResult.rows.map((r) => r.user_id))
+  const resumeUsers = new Set(resumesResult.rows.map((r) => r.user_id))
   const planMap = new Map<string, { plan: string; status: string }>()
   for (const r of subsResult.rows) planMap.set(r.user_id, { plan: r.plan, status: r.status })
 
@@ -73,6 +76,7 @@ async function listUsers() {
       watchlistCount: watchlistCount.get(p.id) ?? 0,
       alertCount: alertCount.get(p.id) ?? 0,
       pushEnabled: pushUsers.has(p.id),
+      hasResume: resumeUsers.has(p.id),
       plan: normalizePlanForResponse(sub?.plan),
       planStatus: sub?.status ?? "free",
     } satisfies UserRow
