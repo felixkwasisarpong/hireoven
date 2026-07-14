@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { JobAlert, JobAlertInsert } from "@/types"
+import { getPlanForUserId } from "@/lib/gates/server-gate"
+import { SOFT_LIMITS } from "@/lib/gates/index"
 
 export async function GET() {
   const supabase = await createClient()
@@ -32,6 +34,23 @@ export async function POST(request: NextRequest) {
   }
 
   const pool = getPostgresPool()
+
+  const plan = await getPlanForUserId(user.id)
+  if (plan === "free") {
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM job_alerts WHERE user_id = $1`,
+      [user.id]
+    )
+    const current = parseInt(countResult.rows[0]?.count ?? "0", 10)
+    const limit = SOFT_LIMITS.basic_alerts ?? 3
+    if (current >= limit) {
+      return NextResponse.json(
+        { error: `Free plan is limited to ${limit} job alerts. Upgrade to Pro for unlimited.`, code: "QUOTA_EXCEEDED", limit },
+        { status: 429 }
+      )
+    }
+  }
+
   const result = await pool.query<JobAlert>(
     `INSERT INTO job_alerts (
       user_id, name, keywords, locations, seniority_levels, employment_types,

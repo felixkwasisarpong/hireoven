@@ -191,10 +191,18 @@ export async function POST(request: Request) {
     `SELECT id, is_primary
      FROM resumes
      WHERE user_id = $1
+       AND (archived_at IS NULL)
      ORDER BY created_at DESC`,
     [user.id]
   )
   const existingResumes = existingResumesResult.rows
+
+  if (plan === "free" && existingResumes.length >= 3) {
+    return NextResponse.json(
+      { error: "Free plan is limited to 3 resumes. Upgrade to Pro for unlimited.", code: "QUOTA_EXCEEDED", limit: 3 },
+      { status: 429 }
+    )
+  }
 
   let uploadedPath = ""
 

@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { WatchlistWithCompany } from "@/types"
 import { listWatchlistWithCompany } from "@/lib/watchlist/store"
+import { getPlanForUserId } from "@/lib/gates/server-gate"
+import { SOFT_LIMITS } from "@/lib/gates/index"
 
 export const runtime = "nodejs"
 
@@ -30,6 +32,22 @@ export async function POST(request: NextRequest) {
   }
 
   const pool = getPostgresPool()
+
+  const plan = await getPlanForUserId(user.id)
+  if (plan === "free") {
+    const countResult = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) AS count FROM watchlist WHERE user_id = $1`,
+      [user.id]
+    )
+    const current = parseInt(countResult.rows[0]?.count ?? "0", 10)
+    const limit = SOFT_LIMITS.watchlist ?? 5
+    if (current >= limit) {
+      return NextResponse.json(
+        { error: `Free plan is limited to ${limit} watched companies. Upgrade to Pro for unlimited.`, code: "QUOTA_EXCEEDED", limit },
+        { status: 429 }
+      )
+    }
+  }
 
   const companyResult = await pool.query<{ id: string }>(
     `SELECT id FROM companies WHERE id = $1 LIMIT 1`,
