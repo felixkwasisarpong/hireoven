@@ -16,6 +16,7 @@ import {
   Plane,
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
+import NotificationClickPing from "@/components/notifications/NotificationClickPing"
 import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
@@ -51,7 +52,10 @@ import ApplyButton from "@/components/jobs/ApplyButton"
 import ReferralDraftButton from "@/components/jobs/ReferralDraftButton"
 import type { Company, Job, JobMatchScore, Skills } from "@/types"
 
-type Props = { params: Promise<{ id: string }> }
+type Props = {
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ ntf?: string }>
+}
 
 type SimilarJob = {
   id: string
@@ -242,8 +246,9 @@ const div = "border-t border-slate-100 first:border-t-0"
 
 // ─── Page ───────────────────────────────────────────────────────────────────
 
-export default async function DashboardJobDetailPage({ params }: Props) {
+export default async function DashboardJobDetailPage({ params, searchParams }: Props) {
   const { id } = await params
+  const { ntf } = await searchParams
   const pool = getPostgresPool()
 
   const [session, jobResult] = await Promise.all([
@@ -538,6 +543,7 @@ export default async function DashboardJobDetailPage({ params }: Props) {
 
   return (
     <main className="min-h-full bg-slate-50 pb-20">
+      {ntf === "1" && session?.sub && <NotificationClickPing jobId={id} />}
 
       {/* ── Hero ──────────────────────────────────────────────────── */}
       <div className="relative overflow-hidden bg-[#0C1222]">
