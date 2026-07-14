@@ -383,54 +383,6 @@ export async function sendEmailAlert(
   await logApiUsage({ service: "resend", operation: "email", tokens_used: null, cost_usd: 0 })
 }
 
-export async function sendWatchlistAlert(userId: string, jobs: Job[], companyName: string): Promise<void> {
-  if (!resend) throw new Error("Missing RESEND_API_KEY")
-
-  const [profile, hydratedJobs] = await Promise.all([
-    getProfileForNotifications(userId),
-    hydrateJobs(jobs),
-  ])
-  if (!profile.email) throw new Error(`User ${userId} has no email address`)
-
-  const total = jobs.length
-  const visible = hydratedJobs.slice(0, 5)
-  const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i)).join("")
-
-  const topTitles = visible.slice(0, 2).map(j => j.title).filter(Boolean)
-  const rolesStr = topTitles.length > 0
-    ? `: ${topTitles[0]}${topTitles.length > 1 ? `, ${topTitles[1]}` : ""}${total > 2 ? ` +${total - 2} more` : ""}`
-    : ""
-
-  const subject = total === 1
-    ? `${companyName} is hiring${rolesStr}`
-    : `${companyName} posted ${total} new roles${rolesStr}`
-
-  const html = renderEmailShell({
-    preheader: subject,
-    headerTitle: `${companyName} is hiring`,
-    headerSub: total === 1
-      ? `A new role just landed from a company on your watchlist.`
-      : `${total} new roles just landed from a company on your watchlist.`,
-    jobRowsHtml,
-    viewAllUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
-    viewAllLabel: "View all watchlist jobs",
-    recipientName: profile.full_name ?? null,
-    recipientEmail: profile.email,
-    alertNote: `You're receiving this because ${companyName} is on your watchlist.`,
-    manageUrl: new URL("/dashboard/watchlist", getBaseUrl()).toString(),
-  })
-
-  const { error } = await resend.emails.send({
-    from: getAlertsFromEmail(),
-    to: [profile.email],
-    subject,
-    html,
-  })
-  if (error) throw new Error(error.message)
-
-  await logApiUsage({ service: "resend", operation: "watchlist-email", tokens_used: null, cost_usd: 0 })
-}
-
 // ── Push notification ─────────────────────────────────────────────────────────
 
 export async function sendPushNotification(userId: string, job: Job, type: "alert" | "watchlist" | "sponsor_match"): Promise<void> {

@@ -1,10 +1,10 @@
 /**
  * Instant-notification pipeline (shared, batch-aware).
  *
- * Runs a *batch* of newly-detected jobs through alert + watchlist matching and
- * the sponsor-match push, for users on "instant" frequency. Notifications come
- * together: when a harvest/crawl lands many matching jobs at once, each user
- * gets ONE email (multi-job digest) and ONE summary push — not a ping per job.
+ * Runs a *batch* of newly-detected jobs through alert matching, watchlist push,
+ * and sponsor-match push for users on "instant" frequency. Saved alerts are the
+ * only email path; watchlist updates stay out of email to avoid a second mail
+ * type for the same harvest window.
  *
  * Extracted from the Supabase webhook so the harvester + crawler event triggers
  * and the cron fallback all share it. Idempotent: each (user, job, type) is
@@ -16,7 +16,6 @@ import {
   combineChannels,
   sendBatchPushNotification,
   sendEmailAlert,
-  sendWatchlistAlert,
 } from "@/lib/alerts/sender"
 import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { matchJobToAlerts, matchJobToWatchlists } from "@/lib/alerts/matcher"
@@ -322,8 +321,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     for (const [userId, byCompany] of watchByUser) {
       const profile = await fetchProfileChannels(userId)
       if (!profile || profile.alert_frequency !== "instant") continue
-      const channel = combineChannels({ emailSent: Boolean(profile.email_alerts), pushSent: Boolean(profile.push_alerts) })
-      if (!channel) continue
+      if (!profile.push_alerts) continue
 
       for (const [companyId, list] of byCompany) {
         const fresh: Job[] = []
@@ -334,28 +332,11 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
         if (fresh.length === 0) continue
         const companyName = companyNames.get(companyId) ?? "Tracked company"
 
-        let emailSent = false
         let pushSent = false
 
         try {
-          if (channel === "email" || channel === "both") {
-            await sendWatchlistAlert(userId, fresh, companyName)
-            emailSent = true
-          }
-        } catch (error) {
-          console.warn("[instant-notify] watchlist email failed", {
-            userId,
-            companyId,
-            jobCount: fresh.length,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
-
-        try {
-          if (channel === "push" || channel === "both") {
-            await sendBatchPushNotification(userId, fresh, "watchlist")
-            pushSent = true
-          }
+          await sendBatchPushNotification(userId, fresh, "watchlist")
+          pushSent = true
         } catch (error) {
           console.warn("[instant-notify] watchlist push failed", {
             userId,
@@ -365,7 +346,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
           })
         }
 
-        const deliveredChannel = combineChannels({ emailSent, pushSent })
+        const deliveredChannel = combineChannels({ emailSent: false, pushSent })
         if (!deliveredChannel) continue
 
         try {
