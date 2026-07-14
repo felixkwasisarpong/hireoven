@@ -23,9 +23,21 @@ type AlertLogRow = AlertNotification & {
     | null
 }
 
+type AlertLogStats = {
+  sentToday: number
+  openedToday: number
+  clickedToday: number
+  openRate: number
+  clickRate: number
+}
+
+type MostTriggeredEntry = { name: string; sends: number }
+
 export default function AdminAlertsPage() {
   const { pushToast } = useToast()
   const [logs, setLogs] = useState<AlertLogRow[]>([])
+  const [stats, setStats] = useState<AlertLogStats | null>(null)
+  const [mostTriggered, setMostTriggered] = useState<MostTriggeredEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [channelFilter, setChannelFilter] = useState("all")
@@ -39,8 +51,14 @@ export default function AdminAlertsPage() {
       setLoading(false)
       return
     }
-    const { notifications } = (await res.json()) as { notifications: AlertLogRow[] }
-    setLogs(notifications ?? [])
+    const payload = (await res.json()) as {
+      notifications: AlertLogRow[]
+      stats?: AlertLogStats
+      mostTriggered?: MostTriggeredEntry[]
+    }
+    setLogs(payload.notifications ?? [])
+    setStats(payload.stats ?? null)
+    setMostTriggered(payload.mostTriggered ?? [])
     setLoading(false)
   }
 
@@ -67,28 +85,11 @@ export default function AdminAlertsPage() {
     })
   }, [channelFilter, logs, search])
 
-  const todayLogs = logs.filter(
-    (log) => Date.now() - new Date(log.sent_at).getTime() <= 86_400_000
-  )
-  const openedToday = todayLogs.filter((log) => log.opened_at).length
-  const clickedToday = todayLogs.filter((log) => log.clicked_at).length
-  const openRate = todayLogs.length ? Math.round((openedToday / todayLogs.length) * 100) : 0
-  const clickRate = todayLogs.length ? Math.round((clickedToday / todayLogs.length) * 100) : 0
-
-  const mostTriggered = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const log of logs) {
-      const key =
-        log.notification_type === "watchlist"
-          ? "Watchlist"
-          : log.alert?.name ?? "Unnamed alert"
-      counts.set(key, (counts.get(key) ?? 0) + 1)
-    }
-
-    return Array.from(counts.entries())
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 5)
-  }, [logs])
+  // Server-computed over the whole table (the log below is a 500-row page —
+  // deriving rates from it undercounts as soon as daily volume passes the cap).
+  const sentToday = stats?.sentToday ?? 0
+  const openRate = stats?.openRate ?? 0
+  const clickRate = stats?.clickRate ?? 0
 
   return (
     <div className="space-y-6">
@@ -111,12 +112,12 @@ export default function AdminAlertsPage() {
         />
         <AdminStatCard
           label="Notifications sent today"
-          value={formatNumber(todayLogs.length)}
+          value={formatNumber(sentToday)}
         />
         <AdminStatCard
           label="Most triggered"
-          value={mostTriggered[0]?.[0] ?? "None yet"}
-          hint={mostTriggered[0] ? `${formatNumber(mostTriggered[0][1])} sends` : undefined}
+          value={mostTriggered[0]?.name ?? "None yet"}
+          hint={mostTriggered[0] ? `${formatNumber(mostTriggered[0].sends)} sends (30d)` : undefined}
         />
       </div>
 
@@ -220,13 +221,13 @@ export default function AdminAlertsPage() {
             {mostTriggered.length === 0 ? (
               <p className="text-sm text-gray-500">No alert activity yet.</p>
             ) : (
-              mostTriggered.map(([name, count]) => (
+              mostTriggered.map(({ name, sends }) => (
                 <div
                   key={name}
                   className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3"
                 >
                   <p className="font-medium text-gray-900">{name}</p>
-                  <AdminBadge tone="info">{formatNumber(count)} sends</AdminBadge>
+                  <AdminBadge tone="info">{formatNumber(sends)} sends</AdminBadge>
                 </div>
               ))
             )}
