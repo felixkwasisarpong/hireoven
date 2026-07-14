@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
+import { getPlanForUserId } from "@/lib/gates/server-gate"
 import type { Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -160,6 +161,21 @@ export async function POST(request: Request) {
 
   try {
     await ensureResumeColumns(pool)
+
+    const plan = await getPlanForUserId(user.id)
+    if (plan === "free") {
+      const countResult = await pool.query<{ count: string }>(
+        `SELECT COUNT(*) AS count FROM resumes WHERE user_id = $1 AND archived_at IS NULL`,
+        [user.id]
+      )
+      const current = parseInt(countResult.rows[0]?.count ?? "0", 10)
+      if (current >= 3) {
+        return NextResponse.json(
+          { error: "Free plan is limited to 3 resumes. Upgrade to Pro for unlimited.", code: "QUOTA_EXCEEDED", limit: 3 },
+          { status: 429 }
+        )
+      }
+    }
 
     const requestedPrimary = body.is_primary === true
     const existingPrimary = await pool.query<{ has_primary: boolean }>(
