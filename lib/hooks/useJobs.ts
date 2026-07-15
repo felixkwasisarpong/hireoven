@@ -31,12 +31,7 @@ function chunkSizeForFetch(filters: JobFilters, searchQuery: string): number {
 }
 
 function effectiveWithinForSort(filters: JobFilters): JobFilters["within"] {
-  // Match/relevant are "fresh fit" surfaces scoped to the last 24h — the same
-  // window the toolbar shows as locked. Scroll/"load more" now paginates the
-  // ENTIRE 24h window (the server candidate pool grows with offset), so the feed
-  // surfaces every fresh job in the day instead of a thin capped slice. Narrow
-  // filter combinations may show few jobs in a given day — that's the intended
-  // 24h-strict behaviour.
+  // Ranked fit surfaces are intentionally limited to fresh jobs.
   if (filters.sort === "match" || filters.sort === "relevant") return "24h"
   return filters.within
 }
@@ -394,8 +389,8 @@ export function useJobs(
         if (filters.location_scope === "global" && filters.company_ids?.length) params.set("global", "1")
         if (effectiveWithin && effectiveWithin !== "all") params.set("within", effectiveWithin)
         // Tell the server which ranked surface we're on. Best Match drops the
-        // saved-jobs UNION (fresh fit only) and orders by score; Most Relevant
-        // orders by the score+text+freshness blend. Both need the sort on the
+        // saved-jobs UNION and orders the 24h pool by score; Most Relevant
+        // orders the 24h pool by the score+text+freshness blend. Both need the sort on the
         // server so the first paint is correctly ranked before the client
         // re-sorts with the same comparator.
         if (filters.sort === "match" || filters.sort === "relevant") {

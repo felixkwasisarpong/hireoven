@@ -29,10 +29,10 @@ import {
   EMPLOYMENT_OPTIONS,
   SENIORITY_OPTIONS,
   SORT_OPTIONS,
-  WITHIN_OPTIONS,
   buildFilterPills,
   clearedJobFilters,
   filtersToSearchParams,
+  isRankedFreshSort,
   pillToneClasses,
   type FilterPill,
 } from "@/components/jobs/JobFilters"
@@ -161,6 +161,7 @@ export default function DashboardFeedToolbar({
   const { pushToast } = useToast()
   const { isPro, isLoading: subLoading } = useSubscription()
   const pills = useMemo(() => buildFilterPills(filters), [filters])
+  const hasClearablePills = useMemo(() => pills.some((pill) => !pill.locked), [pills])
 
   const [savedDefault, setSavedDefault] = useState<string | null>(null)
   const [savingDefault, setSavingDefault] = useState(false)
@@ -337,10 +338,7 @@ export default function DashboardFeedToolbar({
     : "Job title"
 
   const sortValue = filters.sort ?? "freshest"
-  const withinLockedBySort = sortValue === "match" || sortValue === "relevant"
-  const effectiveWithin = withinLockedBySort ? "24h" : (filters.within ?? "all")
-  const postedLabel = withinLockedBySort || effectiveWithin === "all" ? "Posted" :
-    WITHIN_OPTIONS.find((o) => o.value === effectiveWithin)?.label ?? "Posted"
+  const withinLockedBySort = isRankedFreshSort(sortValue)
 
   // Title suggest: debounced fetch whenever the dropdown is open and the
   // query changes. Returns the top frequency-ranked cleaned titles ILIKE the
@@ -411,6 +409,7 @@ export default function DashboardFeedToolbar({
     if (pill.tone === "sponsorship") return <Plane className="h-3 w-3 shrink-0" />
     if (pill.tone === "location") return <MapPin className="h-3 w-3 shrink-0" />
     if (pill.tone === "employment") return <Briefcase className="h-3 w-3 shrink-0" />
+    if (pill.tone === "posted") return <Clock className="h-3 w-3 shrink-0" />
     return null
   }
 
@@ -1032,18 +1031,22 @@ export default function DashboardFeedToolbar({
           <button
             key={pill.id}
             type="button"
-            onClick={() => replaceFilters(pill.nextFilters)}
+            disabled={pill.locked}
+            onClick={() => {
+              if (!pill.locked) replaceFilters(pill.nextFilters)
+            }}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition",
-              pillToneClasses(pill.tone)
+              "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-medium transition disabled:cursor-default",
+              pillToneClasses(pill.tone),
+              pill.locked && "shadow-none"
             )}
           >
             {pillIcon(pill)}
             {pill.label}
-            <X className="h-3 w-3 opacity-70" />
+            {!pill.locked && <X className="h-3 w-3 opacity-70" />}
           </button>
         ))}
-        {pills.length > 0 && (
+        {hasClearablePills && (
           <button
             type="button"
             onClick={clearAll}
