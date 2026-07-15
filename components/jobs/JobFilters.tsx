@@ -90,6 +90,7 @@ export type FilterPill = {
   label: string
   nextFilters: JobFilters
   tone: FilterPillTone
+  locked?: boolean
 }
 
 /** Full filter reset for “clear all” (booleans explicit; sort preserved by caller if desired). */
@@ -120,6 +121,15 @@ export function clearedJobFilters(): JobFilters {
     has_salary: undefined,
     direct_ats_only: undefined,
   }
+}
+
+export function isRankedFreshSort(sort: JobFilters["sort"]) {
+  return sort === "match" || sort === "relevant"
+}
+
+export function effectiveWithinWindow(filters: Pick<JobFilters, "sort" | "within">): JobWithinWindow {
+  if (isRankedFreshSort(filters.sort)) return "24h"
+  return filters.within ?? "all"
 }
 
 export function pillToneClasses(tone: FilterPillTone): string {
@@ -314,6 +324,8 @@ export function filtersToSearchParams(
 
 export function buildFilterPills(filters: JobFilters): FilterPill[] {
   const pills: FilterPill[] = []
+  const withinLockedBySort = isRankedFreshSort(filters.sort)
+  const effectiveWithin = effectiveWithinWindow(filters)
 
   if (filters.remote) {
     pills.push({
@@ -375,14 +387,15 @@ export function buildFilterPills(filters: JobFilters): FilterPill[] {
     })
   }
 
-  if (filters.within && filters.within !== "all") {
-    const option = WITHIN_OPTIONS.find((item) => item.value === filters.within)
+  if (effectiveWithin !== "all") {
+    const option = WITHIN_OPTIONS.find((item) => item.value === effectiveWithin)
     if (option) {
       pills.push({
-        id: "within",
+        id: withinLockedBySort ? "within-locked" : "within",
         label: option.label,
-        nextFilters: { ...filters, within: "all" },
+        nextFilters: withinLockedBySort ? filters : { ...filters, within: "all" },
         tone: "posted",
+        locked: withinLockedBySort,
       })
     }
   }
@@ -606,6 +619,8 @@ export default function JobFilters({
   const router = useRouter()
   const searchParams = useSearchParams()
   const filters = useMemo(() => parseJobFilters(searchParams), [searchParams])
+  const withinLockedBySort = isRankedFreshSort(filters.sort)
+  const selectedWithin = effectiveWithinWindow(filters)
 
   function replaceFilters(nextFilters: JobFilters) {
     const next = filtersToSearchParams(searchParams, nextFilters)
@@ -630,6 +645,7 @@ export default function JobFilters({
   }
 
   const pills = buildFilterPills(filters)
+  const hasClearablePills = pills.some((pill) => !pill.locked)
 
   return (
     <div className="space-y-5">
@@ -637,7 +653,7 @@ export default function JobFilters({
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#98A2B3]">
           Filter jobs
         </p>
-        {pills.length > 0 && (
+        {hasClearablePills && (
           <button
             type="button"
             onClick={() =>
@@ -725,14 +741,15 @@ export default function JobFilters({
       <div>
         <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.16em] text-[#98A2B3]">Posted within</p>
         <select
-          value={filters.within ?? "all"}
+          value={selectedWithin}
+          disabled={withinLockedBySort}
           onChange={(event) =>
             replaceFilters({
               ...filters,
               within: event.target.value as JobWithinWindow,
             })
           }
-          className="w-full rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#344054] outline-none transition-colors focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FDBA74]/40"
+          className="w-full rounded-xl border border-[#E4E7EC] bg-white px-3 py-2.5 text-[13px] font-medium text-[#344054] outline-none transition-colors focus:border-[#FF5C18] focus:ring-2 focus:ring-[#FDBA74]/40 disabled:cursor-not-allowed disabled:bg-[#F9FAFB] disabled:text-[#667085]"
         >
           {WITHIN_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>

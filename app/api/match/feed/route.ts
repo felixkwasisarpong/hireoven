@@ -139,14 +139,15 @@ export async function GET(request: NextRequest) {
   const hideBlockers = sp.get("hideBlockers") === "true"
   const hasSalary = sp.get("hasSalary") === "true"
   const directAtsOnly = sp.get("directAtsOnly") === "true"
-  const within = sp.get("within") ?? "all"
-  // Best Match is a "fresh fit" view — saved jobs (which live on the
-  // Applications board) are excluded from it. Any other sort or the default
-  // feed surfaces saved jobs via the UNION so a job saved via the chrome
-  // extension shows up immediately.
   const sortMode = sp.get("sort") ?? ""
   const isBestMatch = sortMode === "match"
   const isRelevant = sortMode === "relevant"
+  const requestedWithin = sp.get("within") ?? "all"
+  const within = isBestMatch || isRelevant ? "24h" : requestedWithin
+  // Best Match is a fresh, score-ranked fit view — saved jobs (which live on the
+  // Applications board) are excluded from it. Any other sort or the default
+  // feed surfaces saved jobs via the UNION so a job saved via the chrome
+  // extension shows up immediately.
   const computeScores =
     sp.get("computeScores") === "1" || sp.get("compute_scores") === "1"
   // Match/Relevant rank by score/blend rather than fetch order, so they serve a
@@ -251,11 +252,11 @@ export async function GET(request: NextRequest) {
   const limitParam = addParam(fetchLimit)
   let data: (JobWithMatchScore & { is_user_saved?: boolean })[] = []
 
-  // Best Match is fresh+fit only — no saved-jobs UNION. Saved jobs live on
-  // the Applications board (and in the regular feed below). For everything
-  // else, the UNION pulls in jobs the user has explicitly saved even if
-  // they fall outside the within window, so a chrome-extension save shows
-  // up in the main feed regardless of the JD's age.
+  // Best Match is fresh, score-ranked fit only — no saved-jobs UNION. Saved jobs live
+  // on the Applications board (and in the regular feed below). For everything
+  // else, the UNION pulls in jobs the user has explicitly saved even if they
+  // fall outside the within window, so a chrome-extension save shows up in the
+  // main feed regardless of the JD's age.
   // Explicit column list excludes raw_data — a ~47 GB TOAST blob the feed never
   // renders. `jobs.*` was de-toasting it for every card on every load.
   const sql = isBestMatch

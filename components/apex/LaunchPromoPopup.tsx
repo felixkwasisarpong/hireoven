@@ -2,10 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { ArrowRight, Loader2, Megaphone, X } from "lucide-react"
+import { usePathname } from "next/navigation"
 import { useSubscription } from "@/lib/hooks/useSubscription"
+import { useAuth } from "@/lib/hooks/useAuth"
 
 const SNOOZE_KEY = "launch-promo-snooze-until-v2"
 const DAY_MS = 24 * 60 * 60 * 1000
+const NEW_ACCOUNT_SUPPRESS_MS = DAY_MS
+const SHOW_DELAY_MS = 4000
 
 // Mirrors the LAUNCH promotion in Stripe (20% off Pro Max monthly) and the
 // promos-table row — extended to 2026-08-13 for the Product Hunt launch. After
@@ -41,9 +45,12 @@ function BlueOrb({ className }: { className: string }) {
 
 export default function LaunchPromoPopup() {
   const { isPro, isLoading } = useSubscription()
+  const { user, profile, isLoading: authLoading } = useAuth()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const [checkingOut, setCheckingOut] = useState(false)
+  const isOnboardingPath = pathname?.startsWith("/dashboard/onboarding")
 
   useEffect(() => {
     if (typeof window === "undefined") return
@@ -54,15 +61,26 @@ export default function LaunchPromoPopup() {
       return
     }
 
-    if (isLoading || isPro) return
+    if (isOnboardingPath) {
+      setOpen(false)
+      return
+    }
+
+    if (authLoading || isLoading || isPro || !user || !profile) return
     if (Date.now() >= OFFER_ENDS_AT) return
+
+    // Do not interrupt the first-run experience. New users should finish
+    // onboarding/product orientation before seeing a paid-plan promo.
+    const createdAt = Date.parse(profile.created_at)
+    if (Number.isFinite(createdAt) && Date.now() - createdAt < NEW_ACCOUNT_SUPPRESS_MS) return
+    if (!profile.product_tour_seen_at) return
 
     const snoozeUntil = Number(window.localStorage.getItem(SNOOZE_KEY) || 0)
     if (snoozeUntil && Date.now() < snoozeUntil) return
 
-    const t = window.setTimeout(() => setOpen(true), 2000)
+    const t = window.setTimeout(() => setOpen(true), SHOW_DELAY_MS)
     return () => window.clearTimeout(t)
-  }, [isPro, isLoading])
+  }, [authLoading, isOnboardingPath, isPro, isLoading, profile, user])
 
   function close() {
     setLeaving(true)
