@@ -6,8 +6,6 @@ import { grantRefereeReward } from "@/lib/referral/rewards"
 
 export const runtime = "nodejs"
 
-export const REFERRAL_COOKIE = "hireoven_ref"
-
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
