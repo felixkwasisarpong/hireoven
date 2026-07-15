@@ -96,6 +96,7 @@ export interface BlogGenerateResult {
   postId: string
   title: string
   imageGenerated: boolean
+  imageError: string | null
   durationMs: number
 }
 
@@ -123,6 +124,7 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
   })
 
   let imageGenerated = false
+  let imageError: string | null = null
   try {
     const image = await generateAndStoreBlogImage({
       postId,
@@ -144,9 +146,10 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
       imageGenerated = true
     }
   } catch (error) {
+    imageError = error instanceof Error ? error.message : String(error)
     console.warn("[blog/generate] hero image generation skipped", {
       postId,
-      message: error instanceof Error ? error.message : String(error),
+      message: imageError,
     })
   }
 
@@ -155,6 +158,7 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
     postId,
     title: generated.title,
     imageGenerated,
+    imageError,
     durationMs: Date.now() - start,
   }
 }

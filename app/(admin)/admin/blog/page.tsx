@@ -87,9 +87,23 @@ export default function AdminBlogPage() {
     setError(null)
     try {
       const res = await fetch("/api/admin/blog/generate", { method: "POST" })
-      const data = (await res.json()) as { ok: boolean; message?: string; error?: string; skipped?: boolean }
+      const data = (await res.json()) as {
+        ok: boolean
+        message?: string
+        error?: string
+        skipped?: boolean
+        imageGenerated?: boolean
+        imageError?: string | null
+      }
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Generation failed")
-      setActionResult(data.skipped ? "No post scheduled today (weekend)." : (data.message ?? "Draft created."))
+      if (data.skipped) {
+        setActionResult("No post scheduled today (weekend).")
+      } else if (data.imageGenerated === false) {
+        setError(`Draft created, but hero image generation failed${data.imageError ? `: ${data.imageError}` : "."}`)
+        setActionResult(data.message ?? "Draft created.")
+      } else {
+        setActionResult(data.message ?? "Draft created.")
+      }
       await load()
     } catch (err) {
       setError((err as Error).message)
