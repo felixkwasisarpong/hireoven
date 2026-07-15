@@ -6,7 +6,7 @@ import {
 import type { BlogCategory } from "@/types/blog"
 
 const OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/generations"
-const DEFAULT_IMAGE_MODEL = "gpt-image-2"
+const DEFAULT_IMAGE_MODEL = "gpt-image-1.5"
 const DEFAULT_IMAGE_SIZE = "1536x1024"
 const DEFAULT_IMAGE_QUALITY = "low"
 const DEFAULT_IMAGE_FORMAT = "webp"

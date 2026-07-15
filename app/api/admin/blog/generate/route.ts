@@ -19,6 +19,7 @@ export async function POST() {
     postId: result.postId,
     title: result.title,
     imageGenerated: result.imageGenerated,
+    imageError: result.imageError,
     message: `Draft created: "${result.title}" in ${result.categorySlug}`,
   })
 }
