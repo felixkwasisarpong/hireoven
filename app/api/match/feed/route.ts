@@ -11,6 +11,7 @@ import {
 import { dedupeFeedJobsBySignature } from "@/lib/jobs/feed-dedupe"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getCachedScoresForUser, scoreJobsForUser } from "@/lib/matching/batch-scorer"
+import { FAST_SCORE_CACHE_EPOCH_ISO } from "@/lib/matching/score-freshness"
 import { hasUsableMatchScore } from "@/lib/jobs/match-score-display"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -177,10 +178,12 @@ export async function GET(request: NextRequest) {
   const candidateFloor = isBestMatch && computeScores ? 80 : 60
   // Match/Relevant rank by score/blend, NOT by fetch order, so a growing pool
   // would let an older high-score job enter only after the scroll offset has
-  // passed where it ranks — it would never surface. They need a STABLE pool:
-  // fetch a fixed candidate set (the freshest CANDIDATE_CEILING in the window),
-  // rank it once, and serve every page as a consistent slice of that ranking —
-  // so "load more" walks the complete ranked set top to bottom.
+  // passed where it ranks — it would never surface. They need a STABLE pool.
+  // Best Match orders that pool by fresh cached score in SQL before applying
+  // the safety ceiling; otherwise a text search with >1,500 matching jobs in
+  // the last 24h can drop older 95%+ matches simply because newer weaker jobs
+  // filled the freshness slice first. The JS sort below remains the final
+  // source of truth after score sanitization.
   //
   // Freshest's sort order IS its fetch order, so a cheap growing prefix is both
   // stable and complete there — no need to pull the full pool on first paint.
@@ -249,6 +252,7 @@ export async function GET(request: NextRequest) {
   }
 
   const userIdParam = addParam(user.id)
+  const scoreEpochParam = isBestMatch ? addParam(FAST_SCORE_CACHE_EPOCH_ISO) : null
   const limitParam = addParam(fetchLimit)
   let data: (JobWithMatchScore & { is_user_saved?: boolean })[] = []
 
@@ -273,8 +277,26 @@ export async function GET(request: NextRequest) {
        FROM jobs
        LEFT JOIN companies ON companies.id = jobs.company_id
        LEFT JOIN ghost_job_scores gjs ON gjs.job_id = jobs.id
+       LEFT JOIN LATERAL (
+         SELECT id, updated_at
+         FROM resumes
+         WHERE user_id = ${userIdParam}::uuid
+           AND is_primary = true
+           AND parse_status = 'complete'
+         ORDER BY updated_at DESC
+         LIMIT 1
+       ) score_resume ON true
+       LEFT JOIN job_match_scores score_sort
+         ON score_sort.job_id = jobs.id
+        AND score_sort.user_id = ${userIdParam}::uuid
+        AND score_sort.resume_id = score_resume.id
+        AND score_sort.computed_at >= ${scoreEpochParam}::timestamptz
+        AND score_sort.computed_at >= score_resume.updated_at
+        AND score_sort.resume_version = FLOOR(EXTRACT(EPOCH FROM score_resume.updated_at))::integer
        WHERE ${where.join(" AND ")}
-       ORDER BY jobs.first_detected_at DESC NULLS LAST, jobs.id DESC
+       ORDER BY score_sort.overall_score DESC NULLS LAST,
+                jobs.first_detected_at DESC NULLS LAST,
+                jobs.id DESC
        LIMIT ${limitParam}`
     : `WITH base AS (
          SELECT ${JOB_FEED_COLUMNS}, to_jsonb(companies.*) AS company,

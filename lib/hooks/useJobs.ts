@@ -14,6 +14,7 @@ const GHOST_RISK_ORDER: Record<string, number> = { low: 0, medium: 1, high: 2, u
 
 const PAGE_SIZE = 20
 const SEARCH_CHUNK_SIZE = 80
+const JOBS_API_MAX_LIMIT = 250
 /** Avoid unbounded Supabase round-trips when client-side filters discard most rows. */
 const MAX_FETCH_CHUNKS = 14
 /**
@@ -25,8 +26,10 @@ const MAX_FETCH_CHUNKS = 14
  */
 const MATCH_POOL_SIZE = 1500
 
-function chunkSizeForFetch(filters: JobFilters, searchQuery: string): number {
-  if (filters.sort === "match" || filters.sort === "relevant") return MATCH_POOL_SIZE
+function chunkSizeForFetch(filters: JobFilters, searchQuery: string, personalized: boolean): number {
+  if (filters.sort === "match" || filters.sort === "relevant") {
+    return personalized ? MATCH_POOL_SIZE : JOBS_API_MAX_LIMIT
+  }
   return searchQuery.trim() ? SEARCH_CHUNK_SIZE : PAGE_SIZE
 }
 
@@ -370,7 +373,7 @@ export function useJobs(
 
   const fetchChunk = useCallback(
     async (offset: number) => {
-      const chunkSize = chunkSizeForFetch(filters, searchQuery)
+      const chunkSize = chunkSizeForFetch(filters, searchQuery, personalized)
       const requiresClientOnlyFiltering = hasClientOnlyPersonalizedFilters(filters)
       const effectiveWithin = effectiveWithinForSort(filters)
 
@@ -493,7 +496,7 @@ export function useJobs(
         let nextRows = reset ? [] : allJobsRef.current
         let nextOffset = reset ? 0 : offsetRef.current
         let exhausted = reset ? false : exhaustedRef.current
-        const chunkSize = chunkSizeForFetch(filters, searchQuery)
+        const chunkSize = chunkSizeForFetch(filters, searchQuery, personalized)
 
         let chunksFetched = 0
         while (
