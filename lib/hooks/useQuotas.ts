@@ -8,11 +8,13 @@ type QuotasResponse = {
   plan: Plan
   quotas: Record<MeteredFeature, QuotaState>
   config: Record<MeteredFeature, QuotaConfig>
+  packBalances?: Record<MeteredFeature, number>
 }
 
 export type UseQuotasResult = {
   quotas: Record<MeteredFeature, QuotaState> | null
   config: Record<MeteredFeature, QuotaConfig> | null
+  packBalances: Record<MeteredFeature, number> | null
   plan: Plan | null
   isLoading: boolean
   refresh: () => void
@@ -45,6 +47,7 @@ export function useQuotas(): UseQuotasResult {
   return {
     quotas: data?.quotas ?? null,
     config: data?.config ?? null,
+    packBalances: data?.packBalances ?? null,
     plan: data?.plan ?? null,
     isLoading,
     refresh,

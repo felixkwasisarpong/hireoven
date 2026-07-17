@@ -13,25 +13,48 @@ import {
 import { cn } from "@/lib/utils"
 
 // ── Quota helpers ─────────────────────────────────────────────────────────────
+// Pack credits extend the effective pool: bumpUsage() consumes them once the
+// base quota is exhausted, so every display treats limit as base + pack and
+// remaining as base-remaining + pack. Ignoring packs here made purchased (or
+// granted) credits look like 0 remaining.
 
-function pct(state: QuotaState) {
-  if (state.limit <= 0) return 100
-  return Math.min(100, Math.round((state.used / state.limit) * 100))
+type PackBalances = Record<MeteredFeature, number> | null
+
+function packFor(packs: PackBalances, feature: MeteredFeature): number {
+  return packs?.[feature] ?? 0
 }
 
-function barColor(state: QuotaState) {
-  if (state.exceeded) return "bg-rose-500"
-  if (pct(state) >= 80) return "bg-amber-500"
+function pct(state: QuotaState, pack = 0) {
+  const limit = state.limit + pack
+  if (limit <= 0) return 100
+  return Math.min(100, Math.round((state.used / limit) * 100))
+}
+
+function effectiveRemaining(state: QuotaState, pack = 0) {
+  return state.remaining + pack
+}
+
+function isExhausted(state: QuotaState, pack = 0) {
+  return state.exceeded && pack <= 0
+}
+
+function barColor(state: QuotaState, pack = 0) {
+  if (isExhausted(state, pack)) return "bg-rose-500"
+  if (pct(state, pack) >= 80) return "bg-amber-500"
   return "bg-emerald-500"
 }
 
-function mostConstrained(quotas: Record<MeteredFeature, QuotaState> | null) {
+function mostConstrained(
+  quotas: Record<MeteredFeature, QuotaState> | null,
+  packs: PackBalances
+) {
   if (!quotas) return null
-  let worst: QuotaState | null = null
+  let worst: { state: QuotaState; pack: number } | null = null
   for (const key of METERED_FEATURE_KEYS) {
     const s = quotas[key]
     if (!s) continue
-    if (!worst || pct(s) > pct(worst)) worst = s
+    const pack = packFor(packs, key)
+    if (!worst || pct(s, pack) > pct(worst.state, worst.pack)) worst = { state: s, pack }
   }
   return worst
 }
@@ -128,7 +151,7 @@ function BuyPackButton({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function CreditsDropdown() {
-  const { quotas, config, isLoading } = useQuotas()
+  const { quotas, config, packBalances, isLoading } = useQuotas()
   const { isProMax } = useSubscription()
   const { credits, loading: liveLoading, refresh: refreshLive } = useLiveCredits(true)
 
@@ -149,13 +172,13 @@ export default function CreditsDropdown() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isProMax])
 
-  const worst = mostConstrained(quotas ?? null)
-  const worstPct = worst ? pct(worst) : 0
+  const worst = mostConstrained(quotas ?? null, packBalances)
+  const worstPct = worst ? pct(worst.state, worst.pack) : 0
   const liveEmpty = credits !== null && credits.balance === 0
 
   // Trigger colour: rose if any quota exceeded or live credits empty, amber at 80%
   const triggerColor =
-    (worst?.exceeded || liveEmpty)
+    ((worst && isExhausted(worst.state, worst.pack)) || liveEmpty)
       ? "text-rose-700 border-rose-200 bg-rose-100 hover:bg-rose-200"
       : worstPct >= 80
         ? "text-amber-800 border-amber-200 bg-amber-100 hover:bg-amber-200"
@@ -179,7 +202,7 @@ export default function CreditsDropdown() {
         {/* Most-constrained quota counter */}
         {!isLoading && worst && (
           <span className="ml-0.5 tabular-nums opacity-70">
-            {worst.remaining}/{worst.limit}
+            {effectiveRemaining(worst.state, worst.pack)}/{worst.state.limit + worst.pack}
           </span>
         )}
 
@@ -188,7 +211,7 @@ export default function CreditsDropdown() {
           <span
             className={cn(
               "block h-full rounded-full transition-[width] duration-300",
-              worst ? barColor(worst) : "bg-transparent"
+              worst ? barColor(worst.state, worst.pack) : "bg-transparent"
             )}
             style={{ width: worst ? `${worstPct}%` : "0%" }}
           />
@@ -222,7 +245,13 @@ export default function CreditsDropdown() {
               const cfg = config?.[feature]
               return (
                 <li key={feature}>
-                  <QuotaRow feature={feature} state={state} config={cfg} loading={isLoading} />
+                  <QuotaRow
+                    feature={feature}
+                    state={state}
+                    config={cfg}
+                    pack={packFor(packBalances, feature)}
+                    loading={isLoading}
+                  />
                 </li>
               )
             })}
@@ -289,33 +318,44 @@ function QuotaRow({
   feature,
   state,
   config,
+  pack,
   loading,
 }: {
   feature: MeteredFeature
   state: QuotaState | undefined
   config: QuotaConfig | undefined
+  pack: number
   loading: boolean
 }) {
   const label = config?.shortLabel ?? feature
   const limit = state?.limit ?? config?.limits.free ?? 0
-  const remaining = state ? state.remaining : limit
+  const remaining = (state ? state.remaining : limit) + pack
   const used = state?.used ?? 0
 
+  const title = state
+    ? `${config?.label ?? label}: ${used} of ${limit} used this period${pack > 0 ? ` · ${pack} top-up credits available` : ""}`
+    : `${config?.label ?? label}: what this credit buys`
+
   return (
-    <div title={state ? `${config?.label ?? label}: ${used} of ${limit} used this period` : `${config?.label ?? label}: what this credit buys`}>
+    <div title={title}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="truncate text-[12.5px] font-medium text-slate-700">{label}</span>
         <span className="shrink-0 text-[11px] font-semibold tabular-nums text-slate-400">
           {loading || !state ? "—" : `${remaining} left`}
+          {!loading && state && pack > 0 && (
+            <span className="ml-1 rounded bg-orange-50 px-1 py-px text-[10px] font-bold text-orange-600">
+              pack
+            </span>
+          )}
         </span>
       </div>
       <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
         <div
           className={cn(
             "h-full rounded-full transition-[width] duration-300",
-            state ? barColor(state) : "bg-transparent"
+            state ? barColor(state, pack) : "bg-transparent"
           )}
-          style={{ width: state ? `${pct(state)}%` : "0%" }}
+          style={{ width: state ? `${pct(state, pack)}%` : "0%" }}
         />
       </div>
     </div>
