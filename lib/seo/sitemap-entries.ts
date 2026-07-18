@@ -3,6 +3,7 @@ import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
+import { allCollectionSlugs } from "@/lib/jobs/collections"
 import { industrySlug } from "@/lib/h1b/leaderboard"
 import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
 import { siteBaseUrl } from "@/lib/seo/site-url"
@@ -42,6 +43,13 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/extension`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/companies`, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
     { url: `${base}/report`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
+    { url: `${base}/jobs/browse`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
+    ...allCollectionSlugs().map((slug) => ({
+      url: `${base}/jobs/browse/${slug}`,
+      lastModified: new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.75,
+    })),
     { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/h1b-sponsors/leaderboard`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/h1b-sponsors/leaderboard/no-recent-layoffs`, lastModified: new Date(), changeFrequency: "daily", priority: 0.7 },

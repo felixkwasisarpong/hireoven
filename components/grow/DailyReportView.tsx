@@ -168,6 +168,12 @@ export default function DailyReportView({
         >
           Start tracking free
         </Link>
+        <p className="mt-4 text-[13px] text-slate-500">
+          or{" "}
+          <Link href="/jobs/browse" className="font-medium text-emerald-700 underline-offset-2 hover:underline">
+            browse jobs by role, location &amp; visa
+          </Link>
+        </p>
       </section>
 
       {/* Date nav */}
