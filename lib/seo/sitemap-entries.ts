@@ -41,6 +41,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/features`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.85 },
     { url: `${base}/extension`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.8 },
     { url: `${base}/companies`, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
+    { url: `${base}/report`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/h1b-sponsors/leaderboard`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/h1b-sponsors/leaderboard/no-recent-layoffs`, lastModified: new Date(), changeFrequency: "daily", priority: 0.7 },

@@ -1,0 +1,66 @@
+import type { Metadata } from "next"
+import Link from "next/link"
+import Navbar from "@/components/layout/Navbar"
+import DailyReportView from "@/components/grow/DailyReportView"
+import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { getLatestReport, listReportDates, type DailyReport } from "@/lib/grow/daily-report"
+
+// The "latest" view changes daily — revalidate hourly so a fresh snapshot shows
+// up promptly after the nightly cron without rebuilding on every request.
+export const revalidate = 3600
+
+const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+
+export const metadata: Metadata = {
+  title: "Fresh Jobs Report — jobs posted today | Hireoven",
+  description:
+    "A daily snapshot of the jobs Hireoven discovered straight from company career pages — AI roles, remote roles, new-grad roles, and companies with H-1B sponsorship history.",
+  alternates: { canonical: `${BASE}/report` },
+  openGraph: {
+    title: "Fresh Jobs Report — jobs posted today",
+    description: "The jobs discovered straight from company career pages, updated every day.",
+    type: "website",
+    images: [{ url: `${BASE}/api/og/daily-report`, width: 1200, height: 630 }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Fresh Jobs Report — jobs posted today",
+    description: "The jobs discovered straight from company career pages, updated every day.",
+    images: [`${BASE}/api/og/daily-report`],
+  },
+}
+
+async function load(): Promise<{ report: DailyReport | null; prevDate: string | null }> {
+  if (!hasPostgresEnv()) return { report: null, prevDate: null }
+  const pool = getPostgresPool()
+  const [report, dates] = await Promise.all([getLatestReport(pool), listReportDates(pool, 2)])
+  // dates[0] is the latest (this report); dates[1] is the previous day.
+  const prevDate = dates.length > 1 ? dates[1] : null
+  return { report, prevDate }
+}
+
+export default async function DailyReportLatestPage() {
+  const { report, prevDate } = await load()
+
+  return (
+    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+      <Navbar />
+      {report ? (
+        <DailyReportView report={report} prevDate={prevDate} nextDate={null} />
+      ) : (
+        <main className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
+          <h1 className="text-2xl font-bold text-slate-900">The first report is on its way</h1>
+          <p className="mt-3 text-[15px] text-slate-600">
+            Hireoven publishes a Fresh Jobs Report every day. Check back after the next overnight run.
+          </p>
+          <Link
+            href="/jobs"
+            className="mt-6 inline-flex items-center rounded-full bg-emerald-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-emerald-700"
+          >
+            Browse fresh jobs now
+          </Link>
+        </main>
+      )}
+    </div>
+  )
+}
