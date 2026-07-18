@@ -113,3 +113,27 @@ export function buildMarketingUnsubscribeUrl(token: string) {
   url.searchParams.set("token", token)
   return url.toString()
 }
+
+export interface ActiveMarketingSubscriber {
+  email: string
+  unsubscribeToken: string
+}
+
+/**
+ * Active marketing recipients for a broadcast — opted-in, not unsubscribed, with
+ * a usable unsubscribe token. sendManaged() re-checks suppression per address at
+ * send time, so this list is the opt-in gate, not the final say.
+ */
+export async function listActiveMarketingSubscribers(): Promise<ActiveMarketingSubscriber[]> {
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{ email: string; unsubscribe_token: string }>(
+    `SELECT email, unsubscribe_token
+       FROM marketing_subscribers
+      WHERE subscribed_to_marketing = true
+        AND unsubscribed_at IS NULL
+        AND email IS NOT NULL
+        AND unsubscribe_token IS NOT NULL
+      ORDER BY created_at ASC`,
+  )
+  return rows.map((r) => ({ email: r.email, unsubscribeToken: r.unsubscribe_token }))
+}

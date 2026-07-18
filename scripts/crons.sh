@@ -86,6 +86,7 @@ run_many() {
 # purge-dead-crawled-companies 45 8 * * * run api/cron/purge-dead-crawled-companies  # mark dead boards status='dead' so the harvester stops crawling them
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # daily-report       55 23 * * *       run api/cron/daily-report  # captures the full UTC day for the public /report snapshot
+# daily-jobs-email    0 12 * * *        run api/cron/daily-jobs-email  # morning "fresh jobs overnight" broadcast to marketing subscribers
 # fresh-job-ingest   15 */6 * * *      run waas -> dice -> adzuna
 # jsearch-ingest     45 5 * * *        run api/cron/jsearch-ingest
 # aggregator-job-ingest 0 */12 * * *   run remotive -> themuse -> remoteok -> arbeitnow -> careerjet -> jooble
@@ -134,6 +135,7 @@ case "${1:-}" in
   deliver-checkins)  run api/cron/deliver-checkins ;;
   blog-generate)     run api/cron/blog-generate ;;
   daily-report)      run api/cron/daily-report ;;
+  daily-jobs-email)  run api/cron/daily-jobs-email ;;
   fresh-job-ingest)
     run_many "fresh-job-ingest" \
       api/cron/waas-ingest \
@@ -196,6 +198,7 @@ case "${1:-}" in
     run api/cron/deliver-checkins
     run api/cron/blog-generate
     run api/cron/daily-report
+    run api/cron/daily-jobs-email
     run_many "fresh-job-ingest" api/cron/waas-ingest api/cron/dice-ingest api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run_many "aggregator-job-ingest" api/cron/remotive-ingest api/cron/themuse-ingest api/cron/remoteok-ingest api/cron/arbeitnow-ingest api/cron/careerjet-ingest api/cron/jooble-ingest
@@ -214,7 +217,7 @@ case "${1:-}" in
     echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
-    echo "  deliver-checkins  blog-generate  daily-report  pipeline-cleanup  job-retention  refresh-title-suggestions  nightly-maintenance"
+    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  pipeline-cleanup  job-retention  refresh-title-suggestions  nightly-maintenance"
     echo "  fresh-job-ingest  dice-ingest  adzuna-ingest  jsearch-ingest  waas-ingest"
     echo "  aggregator-job-ingest  remotive-ingest  themuse-ingest  remoteok-ingest  arbeitnow-ingest  careerjet-ingest  jooble-ingest"
     echo "  discover-companies  discover-tenants  discover-from-domains  careers-url-discovery  ats-discovery-sweep  glassdoor-discovery  signal-api-webhooks"
