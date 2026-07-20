@@ -50,6 +50,7 @@ import type {
   InjectResumeFileInTabResult,
 } from "./types"
 import type { LinkedInProfileData } from "./extractors/linkedin-profile"
+import { hasDataConsent } from "./utils/consent"
 
 // ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -2390,11 +2391,14 @@ chrome.runtime.onMessage.addListener(
 // ── Extension install / update lifecycle ──────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(({ reason }) => {
-  if (reason === "install") {
-    void resolveOrigin().then((origin) => {
-      chrome.tabs.create({ url: `${origin}/dashboard` })
-    })
-  }
+  if (reason !== "install" && reason !== "update") return
+  // Consent gate first — the onboarding page explains data collection and
+  // hands off to /dashboard itself once the user agrees. Already-consented
+  // users (an "update" event) skip straight past this, no-op.
+  void hasDataConsent().then((consented) => {
+    if (consented) return
+    chrome.tabs.create({ url: chrome.runtime.getURL("onboarding/onboarding.html") })
+  })
 })
 
 // ── Shadow Network: scan LinkedIn connections at a company ────────────────────

@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-16">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-400 mb-10">Last updated: April 2025</p>
+        <p className="text-sm text-gray-400 mb-10">Last updated: July 2026</p>
 
         <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-8">
 
@@ -82,8 +82,36 @@ export default function PrivacyPage() {
             </p>
           </section>
 
+          <section id="extension">
+            <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Hireoven Apex Bridge (browser extension)</h2>
+            <p>
+              The Apex Bridge browser extension detects job listings and autofills applications on ATS and
+              careers sites. Because it needs to recognize a job listing or application form on any site you
+              visit, its content script can technically run on any page — but it only reads or acts on a page
+              when that page is a recognized job listing or application form. Nothing is collected until you
+              explicitly agree in the extension&apos;s own onboarding screen; you can decline and the
+              extension stays inactive everywhere until you come back and agree.
+            </p>
+            <p className="mt-3">Once you agree, the extension may access:</p>
+            <ul className="list-disc pl-5 space-y-1.5 mt-2">
+              <li>The content of the page you&apos;re on, to detect a job listing or application form</li>
+              <li>
+                Your Hireoven profile - name, contact info, work authorization, education, résumé, and any
+                voluntary EEOC/demographic answers you&apos;ve saved - to autofill matching fields on an
+                application you open
+              </li>
+              <li>Values you type or correct in a form, so a manual correction is remembered and reused next time</li>
+            </ul>
+            <p className="mt-3">
+              This data is sent only to Hireoven&apos;s own servers - never to a third party, never sold, never
+              used for advertising. Nothing is ever submitted automatically; you review every autofilled field
+              before you submit. Uninstalling the extension removes everything stored locally by it; deleting
+              your Hireoven account (see section 6) removes anything stored on our servers.
+            </p>
+          </section>
+
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Changes to this policy</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Changes to this policy</h2>
             <p>
               We may update this policy as the product evolves. We will notify registered users by email
               for any material changes at least 14 days before they take effect.

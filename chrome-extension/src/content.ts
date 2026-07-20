@@ -32,6 +32,7 @@ import {
 } from "./detectors/page-mode"
 import { detectSite } from "./detectors/site"
 import { isFillableApplicationForm } from "./detectors/application-form"
+import { hasDataConsent } from "./utils/consent"
 import type {
   ContentMessage,
   ContentResponse,
@@ -1098,10 +1099,16 @@ function maybeRunLinkedInProfileSync(): void {
   }, 3000)  // 3s — give LinkedIn more time to fully render
 }
 
-function bootstrap(): void {
+async function bootstrap(): Promise<void> {
   const w = window as HireovenContentWindow
   if (w.__hoContentBootstrapped) return
   w.__hoContentBootstrapped = true
+
+  // Chrome Web Store gate: this content script runs on every page (broad by
+  // design — universal autofill needs to recognize a form on ANY host), so no
+  // page content, form field, or profile data may be touched until the user
+  // has explicitly agreed via the onboarding page or popup consent gate.
+  if (!(await hasDataConsent())) return
 
   registerMessageBridge()
   registerPageBridge()
@@ -1223,11 +1230,15 @@ function stopAgentPull(): void {
 }
 
 // Kick the pull loop shortly after load (gives the page a moment to hydrate).
+// Gated on consent — see the poller above for why.
 if (!isHireovenPage()) {
-  setTimeout(() => {
-    startAgentPull()
-    void checkPendingAgentJob()
-  }, 1200)
+  void hasDataConsent().then((consented) => {
+    if (!consented) return
+    setTimeout(() => {
+      startAgentPull()
+      void checkPendingAgentJob()
+    }, 1200)
+  })
 }
 
 // URL-change poller — covers both LinkedIn SPA navigation and ATS pages where
@@ -1235,23 +1246,28 @@ if (!isHireovenPage()) {
 // When on an ATS page, signal the background to retry any pending agent context
 // so autofill fires automatically after the user completes login.
 let lastHref = window.location.href
-setInterval(() => {
-  const href = window.location.href
-  if (href === lastHref) return
-  lastHref = href
+// Gated on consent — this poller drives LinkedIn profile sync + agent autofill,
+// the same data collection bootstrap() gates, so it must not run before then.
+void hasDataConsent().then((consented) => {
+  if (!consented) return
+  setInterval(() => {
+    const href = window.location.href
+    if (href === lastHref) return
+    lastHref = href
 
-  maybeRunLinkedInProfileSync()
+    maybeRunLinkedInProfileSync()
 
-  // Notify background of the SPA navigation so it can retry pending agent tabs.
-  if (chrome.runtime?.id) {
-    chrome.runtime.sendMessage({ type: "SPA_NAVIGATION_COMPLETE", url: href }).catch(() => {})
-  }
+    // Notify background of the SPA navigation so it can retry pending agent tabs.
+    if (chrome.runtime?.id) {
+      chrome.runtime.sendMessage({ type: "SPA_NAVIGATION_COMPLETE", url: href }).catch(() => {})
+    }
 
-  // A navigation (incl. returning from login) is the best moment to re-check for
-  // a pending agent job — revive the pull loop and probe immediately.
-  agentPullMisses = 0
-  startAgentPull()
-  void checkPendingAgentJob()
-}, 800)
+    // A navigation (incl. returning from login) is the best moment to re-check for
+    // a pending agent job — revive the pull loop and probe immediately.
+    agentPullMisses = 0
+    startAgentPull()
+    void checkPendingAgentJob()
+  }, 800)
+})
 
-bootstrap()
+void bootstrap()
