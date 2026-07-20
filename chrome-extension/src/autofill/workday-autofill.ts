@@ -2,7 +2,7 @@ import { fetchPrimaryResume, getAutofillProfile, matchQuestions } from "../api-c
 import type { MatchQuestion } from "../api-client"
 import type { SafeProfile } from "./safe-fields"
 import type { AutofillFieldResult } from "./safe-fields"
-import { isCurrentlyAuthorizedVisa } from "./work-auth"
+import { workAuthAnswer } from "./work-auth"
 
 /**
  * A required application question the deterministic matcher couldn't answer.
@@ -122,7 +122,9 @@ type WorkdayCv = {
   skills: string[]
   skillYears: Record<string, number>
   visa: {
+    authorizedToWork: boolean | null
     requiresSponsorship: boolean
+    requiresSponsorshipKnown: boolean
     authorizedCountries: string[]
     status: string
   }
@@ -218,6 +220,10 @@ const GLOBAL_DEBUG_KEY = "__hoWorkdayAutofillDebug"
 const GLOBAL_LAST_RESULT_KEY = "__hoWorkdayAutofillLastResult"
 const GLOBAL_LAST_ERROR_KEY = "__hoWorkdayAutofillLastError"
 const DEBUG_LOG_LIMIT = 900
+const DISCLOSURE_DECLINE_RE =
+  /don'?t wish to answer|do not wish to answer|prefer not to (?:answer|say|disclose|identify)|decline to (?:answer|self.?identify|disclose|state)|choose not to|do not want to answer|don'?t want to answer|not to disclose|i decline|i don'?t wish to|wish not to|do not wish to self.?identify|don'?t wish to self.?identify/i
+const CONSENT_CHECKBOX_RE =
+  /terms? and conditions?|privacy statement|have read|read and consent|consent to the terms|acknowledge|certify|\bagree\b|confirm|reviewed/i
 
 const MONTHS = [
   "January",
@@ -705,7 +711,10 @@ function mapProfileToWorkdayCv(profile: ExtendedSafeProfile): WorkdayCv {
     skills,
     skillYears,
     visa: {
+      authorizedToWork:
+        profile.authorized_to_work === true ? true : profile.authorized_to_work === false ? false : null,
       requiresSponsorship: profile.requires_sponsorship === true,
+      requiresSponsorshipKnown: profile.requires_sponsorship === true || profile.requires_sponsorship === false,
       authorizedCountries: [nonEmpty(profile.country)].filter(Boolean),
       status: nonEmpty(profile.work_authorization) || (profile.requires_sponsorship ? "H-1B required" : ""),
     },
@@ -3070,9 +3079,10 @@ class WorkdayAutofillRunner {
   }
 
   // ── Self-Identify / Voluntary Disclosures ────────────────────────────────────
-  // Workday's EEO + disability (CC-305) step. We NEVER assert a demographic
-  // identity. We only satisfy the *required* mechanics so the run can finish:
-  //   • demographic dropdowns/radios → pick the "decline / do not wish to answer"
+  // Workday's EEO + disability (CC-305) step. We only use saved demographic
+  // answers when the user explicitly opted in; otherwise we decline disclosure.
+  // This satisfies the *required* mechanics so the run can finish:
+  //   • demographic dropdowns/radios → saved opt-in answer, else decline
   //   • required acknowledgement checkboxes → check
   //   • CC-305 signature Name → user's name; Date → today
   /**
@@ -3086,7 +3096,7 @@ class WorkdayAutofillRunner {
     const l = normText(label)
     const d = this.cv.diversity
     const isDecline = (v: string): boolean =>
-      /wish not|not wish|prefer not|decline|do not wish|don t wish/.test(normText(v))
+      DISCLOSURE_DECLINE_RE.test(v)
     const use = (saved: string): { values: string[]; decline: boolean } | null => {
       if (!saved) return null
       if (isDecline(saved)) return { values: [], decline: true }
@@ -3108,6 +3118,26 @@ class WorkdayAutofillRunner {
     return null
   }
 
+  private isDiversityQuestionLabel(label: string): boolean {
+    const l = normText(label)
+    return /\bhispanic\b|\blatino\b|\bethnic|\brace\b|racial|\bgender\b|\bsex\b|veteran|disab/.test(l)
+  }
+
+  private pickDiversityChoice<T>(
+    label: string,
+    choices: T[],
+    labelFor: (choice: T) => string,
+  ): { choice: T | null; source: "saved" | "decline" | "none" } {
+    const pref = this.diversityPreference(label)
+    if (pref && !pref.decline && pref.values.length) {
+      const saved = choices.find((choice) => this.optionMatchesSaved(labelFor(choice), pref.values))
+      if (saved) return { choice: saved, source: "saved" }
+    }
+    const decline = choices.find((choice) => DISCLOSURE_DECLINE_RE.test(labelFor(choice)))
+    if (decline) return { choice: decline, source: "decline" }
+    return { choice: null, source: "none" }
+  }
+
   /** Word-boundary match between an option's text and any saved EEO value. */
   private optionMatchesSaved(optionText: string, values: string[]): boolean {
     const opt = normText(optionText)
@@ -3124,10 +3154,135 @@ class WorkdayAutofillRunner {
     return false
   }
 
+  private getCheckboxLabel(input: HTMLInputElement): string {
+    if (input.id) {
+      const label = document.querySelector(`label[for="${CSS.escape(input.id)}"]`)
+      if (label?.textContent?.trim()) return label.textContent.trim()
+    }
+    const wrapped = input.closest("label")
+    if (wrapped?.textContent?.trim()) return wrapped.textContent.trim()
+    return nonEmpty(input.getAttribute("aria-label")) || nonEmpty(input.value)
+  }
+
+  private getCheckboxGroupContainer(input: HTMLInputElement): HTMLElement {
+    return (
+      input.closest<HTMLElement>(
+        "fieldset, [role='group'], [data-automation-id*='formField'], [data-automation-id*='question']",
+      ) ??
+      input.closest<HTMLElement>("section, div") ??
+      input
+    )
+  }
+
+  private getCheckboxGroupQuestionLabel(container: HTMLElement, group: HTMLInputElement[]): string {
+    const fromContainer =
+      this.extractApplicationQuestionLabel(container, group[0] ?? container) ||
+      parseQuestionLabel(container) ||
+      ""
+    const options = group.map((input) => this.getCheckboxLabel(input)).filter(Boolean).join(" ")
+    return `${fromContainer} ${options}`.trim()
+  }
+
+  private setCheckboxChecked(input: HTMLInputElement, checked: boolean, fieldName: string): boolean {
+    if (input.checked === checked) return true
+    this.setToolbarField(fieldName)
+    try {
+      input.scrollIntoView({ block: "center" })
+    } catch {
+      // best-effort
+    }
+    input.click()
+    if (input.checked !== checked) {
+      const clickTarget =
+        (input.closest("label") as HTMLElement | null) ??
+        (input.closest('[role="checkbox"]') as HTMLElement | null) ??
+        this.getCheckboxGroupContainer(input)
+      clickTarget.click()
+    }
+    if (input.checked !== checked) {
+      input.checked = checked
+      input.dispatchEvent(new Event("input", { bubbles: true }))
+      input.dispatchEvent(new Event("change", { bubbles: true }))
+    }
+    return input.checked === checked
+  }
+
+  private fillDiversityCheckboxGroups(): void {
+    const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).filter(isControlReachable)
+    const seenGroups = new Set<string>()
+
+    for (const cb of checkboxes) {
+      if (this.stopped || this.paused) return
+      const container = this.getCheckboxGroupContainer(cb)
+      const group = cb.name
+        ? Array.from(document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][name="${safeEscapeSelector(cb.name)}"]`))
+        : Array.from(container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'))
+      const key =
+        cb.name ||
+        container.getAttribute("data-automation-id") ||
+        container.id ||
+        `checkbox-group-${checkboxes.indexOf(cb)}`
+      if (seenGroups.has(key)) continue
+      seenGroups.add(key)
+      if (group.length <= 1 || group.some((input) => input.checked)) continue
+
+      const label = this.getCheckboxGroupQuestionLabel(container, group)
+      const optionText = group.map((input) => this.getCheckboxLabel(input)).join(" ")
+      if (!this.isDiversityQuestionLabel(`${label} ${optionText}`)) continue
+
+      const { choice, source } = this.pickDiversityChoice(label, group, (input) => this.getCheckboxLabel(input))
+      if (!choice) {
+        this.debug("warn", "self_identify.checkbox_group_unanswered", { label })
+        this.markManualReview(container, label)
+        this.requiredFieldMissesThisStep += 1
+        continue
+      }
+
+      if (this.setCheckboxChecked(choice, true, label || "Voluntary disclosure")) {
+        this.bumpFilledCount()
+        this.debug("info", "self_identify.checkbox_group_set", { label, source })
+      }
+    }
+  }
+
+  private fillConsentCheckboxes(): void {
+    const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).filter(isControlReachable)
+    for (const cb of checkboxes) {
+      if (this.stopped || this.paused) return
+      if (cb.checked) continue
+      const container = this.getCheckboxGroupContainer(cb)
+      const label = this.getCheckboxLabel(cb)
+      const context = `${this.extractApplicationQuestionLabel(container, cb)} ${label} ${container.textContent ?? ""}`
+      if (this.isDiversityQuestionLabel(context)) continue
+      if (!CONSENT_CHECKBOX_RE.test(context)) continue
+      if (this.setCheckboxChecked(cb, true, label || "Required consent")) {
+        this.bumpFilledCount()
+        this.debug("info", "questions.checkbox_consent_checked", { label: (label || context).slice(0, 120) })
+      }
+    }
+  }
+
+  private fillNativeDiversitySelect(select: HTMLSelectElement, label: string): boolean {
+    const selectedText = nonEmpty(select.options[select.selectedIndex]?.textContent)
+    if (selectedText && !this.isUnansweredSelectPlaceholder(selectedText)) return true
+
+    const options = Array.from(select.options).filter((opt) => {
+      const text = nonEmpty(opt.textContent)
+      return text && !this.isUnansweredSelectPlaceholder(text)
+    })
+    const { choice, source } = this.pickDiversityChoice(label, options, (opt) => nonEmpty(opt.textContent))
+    if (!choice) return false
+
+    select.value = choice.value
+    select.dispatchEvent(new Event("input", { bubbles: true }))
+    select.dispatchEvent(new Event("change", { bubbles: true }))
+    this.bumpFilledCount()
+    this.debug("info", "questions.select.diversity_answered", { label, source })
+    return true
+  }
+
   private async fillSelfIdentifyStep(): Promise<void> {
     this.debug("info", "step.self_identify.start")
-    const DECLINE_RE =
-      /don'?t wish to answer|do not wish to answer|prefer not to (?:answer|say|disclose|identify)|decline to (?:answer|self.?identify|disclose|state)|choose not to|do not want to answer|don'?t want to answer|not to disclose|i decline|i don'?t wish to|wish not to/i
 
     // 1. Demographic comboboxes → decline option only.
     const containers = Array.from(
@@ -3153,7 +3308,7 @@ class WorkdayAutofillRunner {
         }
       }
       if (!ok) {
-        ok = await this.selectOptionMatching(combo, label, (t) => DECLINE_RE.test(t))
+        ok = await this.selectOptionMatching(combo, label, (t) => DISCLOSURE_DECLINE_RE.test(t))
         this.debug("info", "self_identify.combo_declined", { label, declined: ok })
       }
       // Let the dropdown fully close before touching the next field, so its
@@ -3163,7 +3318,7 @@ class WorkdayAutofillRunner {
 
     // 2. Radio groups (e.g. disability CC-305) → decline radio.
     const radios = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="radio"]')).filter((r) =>
-      isVisible(r),
+      isControlReachable(r),
     )
     const seenGroups = new Set<string>()
     for (const radio of radios) {
@@ -3186,7 +3341,7 @@ class WorkdayAutofillRunner {
       if (pref && !pref.decline && pref.values.length) {
         target = group.find((r) => this.optionMatchesSaved(this.getRadioLabel(r), pref.values))
       }
-      if (!target) target = group.find((r) => DECLINE_RE.test(this.getRadioLabel(r)))
+      if (!target) target = group.find((r) => DISCLOSURE_DECLINE_RE.test(this.getRadioLabel(r)))
       if (target) {
         target.click()
         this.bumpFilledCount()
@@ -3197,23 +3352,9 @@ class WorkdayAutofillRunner {
       }
     }
 
-    // 3. Required acknowledgement checkboxes → check.
-    const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')).filter((c) =>
-      isVisible(c),
-    )
-    for (const cb of checkboxes) {
-      if (cb.checked) continue
-      const ctx = (
-        cb.closest("[data-automation-id*='formField'], label, fieldset")?.textContent ??
-        cb.getAttribute("aria-label") ??
-        ""
-      ).toLowerCase()
-      if (/acknowledge|understand|have read|consent|certify|\bagree\b|confirm|reviewed/.test(ctx)) {
-        cb.click()
-        this.bumpFilledCount()
-        this.debug("info", "self_identify.ack_checked")
-      }
-    }
+    // 3. Checkbox disclosure groups (e.g. CC-305 disability) + required consent.
+    this.fillDiversityCheckboxGroups()
+    this.fillConsentCheckboxes()
 
     // 4. CC-305 signature: Name (full name) + Date (today).
     if (this.cv) {
@@ -4045,16 +4186,18 @@ class WorkdayAutofillRunner {
       // Skip groups that already have a selection (e.g. user pre-answered).
       if (group.some((choice) => choice.checked)) continue
       const label = this.getRadioGroupQuestionLabel(radio, group)
-      // Never auto-answer sensitive work-authorization / immigration / conflict
-      // questions — leave them for the user (a wrong value can auto-reject).
-      if (isSensitiveWorkAuthQuestion(label)) {
+      const sensitiveAnswer = isSensitiveWorkAuthQuestion(label) ? this.getProfileWorkAuthYesNoAnswer(label) : null
+      // Only clear saved-profile work authorization / sponsorship yes-no
+      // questions are filled. Citizenship, immigration status, conflict, and
+      // ambiguous auth questions stay manual because a wrong value can reject.
+      if (isSensitiveWorkAuthQuestion(label) && sensitiveAnswer === null) {
         this.debug("info", "questions.radio.sensitive_manual_review", { label })
         const container = radio.closest<HTMLElement>("[data-automation-id*='formField'], fieldset") ?? radio
         this.markManualReview(container, label)
         this.requiredFieldMissesThisStep += 1
         continue
       }
-      const answer = this.getYesNoAnswer(label)
+      const answer = sensitiveAnswer ?? this.getYesNoAnswer(label)
       if (answer === null) {
         this.debug("warn", "questions.radio.unanswered", { label: label || "(missing label)" })
         // Defer to the semantic tier. >2 choices → treat as a select over the
@@ -4116,6 +4259,8 @@ class WorkdayAutofillRunner {
     if (!this.cv) return
     this.debug("info", "step.application_questions.start")
     this.fillScreeningRadios()
+    this.fillDiversityCheckboxGroups()
+    this.fillConsentCheckboxes()
 
     const textFields = Array.from(
       document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
@@ -4149,10 +4294,27 @@ class WorkdayAutofillRunner {
     for (const select of selects) {
       const label = parseQuestionLabel(select)
       if (!label) continue
-      if (/\b(ethnicity|race|gender|veteran|disability)\b/i.test(label)) {
-        this.debug("info", "questions.select.skipped_sensitive", { label })
-        this.markManualReview(select, label)
+      if (this.isDiversityQuestionLabel(label)) {
+        const ok = this.fillNativeDiversitySelect(select, label)
+        if (!ok) {
+          this.debug("warn", "questions.select.diversity_unanswered", { label })
+          this.markManualReview(select, label)
+          this.requiredFieldMissesThisStep += 1
+        }
         continue
+      }
+      if (isSensitiveWorkAuthQuestion(label)) {
+        const selectedText = nonEmpty(select.options[select.selectedIndex]?.textContent)
+        if (selectedText && !this.isUnansweredSelectPlaceholder(selectedText)) {
+          this.debug("info", "questions.select.sensitive_kept_existing", { label, current: selectedText.slice(0, 60) })
+          continue
+        }
+        if (this.getProfileWorkAuthYesNoAnswer(label) === null) {
+          this.debug("info", "questions.select.sensitive_manual_review", { label })
+          this.markManualReview(select, label)
+          this.requiredFieldMissesThisStep += 1
+          continue
+        }
       }
 
       const selectOptions = Array.from(select.options)
@@ -4318,9 +4480,22 @@ class WorkdayAutofillRunner {
 
       const label = this.extractApplicationQuestionLabel(container, comboboxTarget)
       if (!label) continue
-      if (/\b(ethnicity|race|gender|veteran|disability)\b/i.test(label)) {
-        this.debug("info", "questions.combobox.skipped_sensitive", { label })
-        this.markManualReview(container, label)
+      if (this.isDiversityQuestionLabel(label)) {
+        const pref = this.diversityPreference(label)
+        let ok = false
+        if (pref && !pref.decline && pref.values.length) {
+          ok = await this.selectOptionMatching(comboboxTarget, label, (t) => this.optionMatchesSaved(t, pref.values))
+          if (ok) this.debug("info", "questions.combobox.diversity_saved", { label, values: pref.values.join(" | ") })
+        }
+        if (!ok) {
+          ok = await this.selectOptionMatching(comboboxTarget, label, (t) => DISCLOSURE_DECLINE_RE.test(t))
+          this.debug("info", "questions.combobox.diversity_declined", { label, declined: ok })
+        }
+        if (!ok) {
+          this.markManualReview(container, label)
+          this.requiredFieldMissesThisStep += 1
+        }
+        await sleep(250)
         continue
       }
       // Work-authorization / eligibility / sponsorship / immigration / conflict:
@@ -4335,10 +4510,12 @@ class WorkdayAutofillRunner {
           this.debug("info", "questions.combobox.sensitive_kept_existing", { label, existing: existingVal.slice(0, 40) })
           continue
         }
-        this.debug("info", "questions.combobox.sensitive_manual_review", { label })
-        this.markManualReview(container, label)
-        this.requiredFieldMissesThisStep += 1
-        continue
+        if (this.getProfileWorkAuthYesNoAnswer(label) === null) {
+          this.debug("info", "questions.combobox.sensitive_manual_review", { label })
+          this.markManualReview(container, label)
+          this.requiredFieldMissesThisStep += 1
+          continue
+        }
       }
 
       // Candidate answers in priority order. Agreement dropdowns render
@@ -4547,10 +4724,38 @@ class WorkdayAutofillRunner {
     )
   }
 
+  private getProfileWorkAuthYesNoAnswer(question: string): boolean | null {
+    if (!this.cv) return null
+    const q = normText(question)
+    if (!q) return null
+    // Free-text/status questions need the user's exact status, not a yes/no.
+    if (/\b(status|type|category|classification)\b/.test(q) && !/\byes\s*\/\s*no\b|\byes or no\b/.test(q)) return null
+
+    const authWorkContext =
+      /\bsponsor/.test(q) ||
+      /\bwork authoriz|\bwork authoris/.test(q) ||
+      /\bauthoriz\w*\s+to\s+work\b|\bauthoris\w*\s+to\s+work\b/.test(q) ||
+      /\bauthoriz\w*\s+for\s+employment\b|\bauthoris\w*\s+for\s+employment\b/.test(q) ||
+      /\beligible (?:to work|for employment)\b|\bemployment eligibility\b|\bright to work\b|\bwork permit\b/.test(q) ||
+      /\blegally\s+(authoriz|authoris|able|entitled|permitted)/.test(q)
+    if (!authWorkContext) return null
+
+    const answer = workAuthAnswer(question, {
+      workAuthorization: this.cv.visa.status,
+      requiresSponsorship: this.cv.visa.requiresSponsorshipKnown ? this.cv.visa.requiresSponsorship : null,
+      authorizedToWork: this.cv.visa.authorizedToWork,
+    })
+    if (answer === "yes") return true
+    if (answer === "no") return false
+    return null
+  }
+
   private getYesNoAnswer(question: string): boolean | null {
     if (!this.cv) return null
     const q = normText(question)
     if (!q) return null
+    const profileWorkAuthAnswer = this.getProfileWorkAuthYesNoAnswer(question)
+    if (profileWorkAuthAnswer !== null) return profileWorkAuthAnswer
 
     // Age eligibility — "Are you at least 18 years of age?" and variants.
     if (
@@ -4569,39 +4774,6 @@ class WorkdayAutofillRunner {
       return true
     }
 
-    // Visa/immigration sponsorship — matches many phrasings, e.g. "require
-    // immigration or visa sponsorship", "need sponsorship now or in the
-    // future". Answered from the profile (No when the user needs no sponsor).
-    if (
-      q.includes("sponsorship") &&
-      (q.includes("require") || q.includes("need") || q.includes("visa") || q.includes("immigration"))
-    ) {
-      // OPT / STEM OPT / CPT / H-1B / F-1 holders are currently authorized, so
-      // answer "No" to requiring sponsorship regardless of the raw flag.
-      if (isCurrentlyAuthorizedVisa(this.cv.visa.status)) return false
-      return this.cv.visa.requiresSponsorship
-    }
-    if (
-      q.includes("legally authorized to work") ||
-      q.includes("authorized for employment in the u s") ||
-      q.includes("authorized to work in the u s") ||
-      // "Are you eligible to work in the country in which this position is
-      // located?" and variants. Without this the question fell through to the
-      // AI/heuristic fallback, which guessed "No" — contradicting the
-      // sponsorship answer and effectively self-rejecting the application.
-      (q.includes("eligible") && (q.includes("work") || q.includes("employment"))) ||
-      q.includes("authorized to work in the country") ||
-      q.includes("eligible to work in the country")
-    ) {
-      // Conservative mapping:
-      // - if profile says sponsorship required -> answer NO for unrestricted
-      //   authorization wording.
-      // - otherwise answer YES.
-      if (q.includes("without any restrictions") || q.includes("without restriction")) {
-        return !this.cv.visa.requiresSponsorship
-      }
-      return true
-    }
     // Conflict-of-interest disclosures ("are you involved in any activity /
     // outside business / board position that could conflict…"). Default No —
     // the honest answer for most candidates, and a false "Yes" wrongly triggers
@@ -6149,10 +6321,9 @@ export function isWorkdayApplicationPage(): boolean {
 /**
  * High-stakes work-authorization / immigration / conflict questions whose
  * answer depends on the candidate's true legal status and where a wrong value
- * can auto-reject the application. These are NEVER auto-answered — the runner
- * leaves them blank and flags them so the user selects the correct answer.
- * (Also: Workday's button-listbox widgets on some tenants revert an
- * auto-selected value, so a silently-wrong answer could otherwise ship.)
+ * can auto-reject the application. The runner only auto-answers clear yes/no
+ * work authorization or sponsorship questions from saved profile values;
+ * citizenship, immigration-status, and conflict questions stay manual.
  */
 export function isSensitiveWorkAuthQuestion(question: string): boolean {
   const q = normText(question)
