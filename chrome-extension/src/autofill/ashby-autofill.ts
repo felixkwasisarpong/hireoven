@@ -1767,6 +1767,9 @@ function deterministicAnswerFor(target: AshbyQuestionTarget, profile: SafeProfil
     const min = profile.salary_expectation_min
     const wantsRange = /\brange\b|minimum and maximum|min.*max|from.*to/.test(key)
     if (wantsRange && typeof min === "number" && typeof max === "number") return `${min}-${max}`
+    if ((target.kind === "combobox" || target.kind === "select" || target.kind === "radio" || target.kind === "button") && typeof max === "number") {
+      return salaryRangeCandidates(max, min)
+    }
     if (typeof max === "number") return String(max)
     if (typeof min === "number") return String(min)
     return null
@@ -2474,6 +2477,51 @@ function normalizeCountryAnswer(raw: string): string {
   return raw
 }
 
+function salaryRangeCandidates(value: number, min?: number | null): string {
+  const candidates = new Set<string>([String(value), currency(value)])
+  if (typeof min === "number" && Number.isFinite(min) && min !== value) {
+    candidates.add(`${currency(min)}-${currency(value)}`)
+    candidates.add(`${min}-${value}`)
+  }
+  return SOURCE_CANDIDATES_PREFIX + Array.from(candidates).join("|")
+}
+
+function currency(value: number): string {
+  return `$${Math.round(value).toLocaleString("en-US")}`
+}
+
+function salaryNumber(value: string): number | null {
+  const cleaned = normalizeText(value).toLowerCase()
+  const match = cleaned.match(/(\d[\d,]*(?:\.\d+)?)\s*(k)?/)
+  if (!match?.[1]) return null
+  const parsed = Number.parseFloat(match[1].replace(/,/g, ""))
+  if (!Number.isFinite(parsed)) return null
+  return match[2] ? parsed * 1000 : parsed
+}
+
+function salaryRangeMatch(optionText: string, desired: string): boolean {
+  const desiredValue = salaryNumber(desired)
+  if (desiredValue === null) return false
+  const option = normalizeText(optionText).toLowerCase()
+  if (!/[$€£]|\bk\b|\bunder\b|\bless than\b|\bover\b|\bmore than\b|\babove\b/.test(option)) return false
+  const numbers = Array.from(option.matchAll(/(\d[\d,]*(?:\.\d+)?)\s*(k)?/g))
+    .map((match) => {
+      const parsed = Number.parseFloat((match[1] ?? "").replace(/,/g, ""))
+      if (!Number.isFinite(parsed)) return null
+      return match[2] ? parsed * 1000 : parsed
+    })
+    .filter((value): value is number => value !== null)
+  if (numbers.length === 0) return false
+  if (/\bunder\b|\bless than\b|^</.test(option)) return desiredValue <= numbers[0]
+  if (/\bover\b|\bmore than\b|\babove\b|\+$/.test(option)) return desiredValue >= numbers[numbers.length - 1]
+  if (numbers.length >= 2) {
+    const lower = Math.min(numbers[0], numbers[1])
+    const upper = Math.max(numbers[0], numbers[1])
+    return desiredValue >= lower && desiredValue <= upper
+  }
+  return desiredValue === numbers[0]
+}
+
 function findMatchingOption<T extends { value: string; label: string }>(
   options: T[],
   desired: string,
@@ -2499,6 +2547,10 @@ function findMatchingOption<T extends { value: string; label: string }>(
     if (startsWith) return startsWith
     return null
   }
+  const salaryMatch = candidates.find(
+    (option) => salaryRangeMatch(option.label, desired) || salaryRangeMatch(option.value, desired),
+  )
+  if (salaryMatch) return salaryMatch
   return (
     candidates.find((option) => normalizeKey(option.label) === key || normalizeKey(option.value) === key) ??
     candidates.find((option) => normalizeKey(option.label).includes(key) || key.includes(normalizeKey(option.label))) ??

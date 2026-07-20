@@ -1,10 +1,9 @@
 import { describe, it, expect } from "vitest"
 import { isSensitiveWorkAuthQuestion } from "../../src/autofill/workday-autofill"
 
-// These high-stakes work-authorization / immigration / conflict questions are
-// NEVER auto-answered — the runner leaves them blank for the user, because a
-// wrong value can auto-reject and Workday's button-dropdowns can silently
-// revert an auto-selected answer. Lock in exactly which phrasings are caught.
+// These high-stakes work-authorization / immigration / conflict questions need
+// special handling. Workday only auto-answers clear saved-profile work auth /
+// sponsorship yes-no questions; citizenship/status/conflict remain manual.
 describe("isSensitiveWorkAuthQuestion", () => {
   const sensitive = [
     // The exact CrowdStrike Workday questions from the live session.

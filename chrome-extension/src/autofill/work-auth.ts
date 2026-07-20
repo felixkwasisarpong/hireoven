@@ -57,7 +57,7 @@ export function workAuthAnswer(question: string, p: WorkAuthInputs): "yes" | "no
   }
 
   const isAuthorization =
-    /authoriz|authoris|eligible to work|right to work|legally (able|entitled|permitted)/.test(q)
+    /authoriz|authoris|eligible (?:to work|for employment)|employment eligibility|right to work|legally (able|entitled|permitted)/.test(q)
   if (isAuthorization) {
     if (authorized) return "yes"
     if (p.authorizedToWork === true) return "yes"
