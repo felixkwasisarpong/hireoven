@@ -15,6 +15,7 @@
  */
 
 import "./cta-prefs-panel"
+import { hasDataConsent, grantDataConsent } from "../utils/consent"
 import type {
   AutofillExecuteResult,
   AutofillPreviewResult,
@@ -881,6 +882,11 @@ function handleProfileLink(e: Event) {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
 async function boot() {
+  if (!(await hasDataConsent())) {
+    void bootConsentGate()
+    return
+  }
+
   const stored = await chrome.storage.local.get(["devMode", "lastJobId"])
   if (stored.devMode === true) {
     appOrigin = "http://localhost:3000"
@@ -906,6 +912,29 @@ async function boot() {
   profileLink.addEventListener("click", handleProfileLink)
 
   renderIdle()
+}
+
+// ── Consent gate ────────────────────────────────────────────────────────────
+// Shown instead of the normal popup until the user agrees to data collection
+// (Chrome Web Store requirement — see src/utils/consent.ts). Bottom bar stays
+// hidden so no scan/autofill action is reachable before consent.
+async function bootConsentGate(): Promise<void> {
+  const gate = document.getElementById("consent-gate")!
+  const learnMore = document.getElementById("consent-learn-more") as HTMLAnchorElement
+  const agreeBtn = document.getElementById("consent-agree-btn")!
+  const bottomBar = document.getElementById("bottom-bar")!
+
+  bottomBar.classList.add("hidden")
+  gate.classList.remove("hidden")
+  learnMore.href = chrome.runtime.getURL("onboarding/onboarding.html")
+
+  agreeBtn.addEventListener("click", () => {
+    void grantDataConsent().then(() => {
+      gate.classList.add("hidden")
+      bottomBar.classList.remove("hidden")
+      void boot()
+    })
+  })
 }
 
 document.addEventListener("DOMContentLoaded", () => void boot())

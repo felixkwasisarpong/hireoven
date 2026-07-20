@@ -11,6 +11,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest"
 import { buildAutofillPreview, applySafeFills } from "../../src/autofill/safe-fields"
+import { fillRequiredAtsFields } from "../../src/autofill/ashby-autofill"
 
 // Mirrors the real SpaceX markup: plain text inputs + a react-select combobox
 // (#country) whose container also holds an aria-hidden requiredInput plumbing
@@ -42,7 +43,56 @@ const profile = {
   phone: "555-123-4567",
   city: "Accra",
   location: "Accra, Ghana",
+  salary_expectation_min: 100000,
+  salary_expectation_max: 110000,
 } as Parameters<typeof buildAutofillPreview>[1]
+
+function attachReactSelect(rowId: string, options: string[]) {
+  const row = document.getElementById(rowId)!
+  const input = row.querySelector<HTMLInputElement>("input.select__input")!
+  const control = row.querySelector<HTMLElement>(".select__control")!
+  const open = () => {
+    if (row.querySelector(".select__menu")) return
+    const menu = document.createElement("div")
+    menu.className = "select__menu"
+    options.forEach((option) => {
+      const item = document.createElement("div")
+      item.className = "select__option"
+      item.setAttribute("role", "option")
+      item.innerHTML = `<span>${option}</span>`
+      item.addEventListener("mousedown", () => {
+        row.querySelector(".select__single-value")?.remove()
+        const chip = document.createElement("div")
+        chip.className = "select__single-value"
+        chip.textContent = option
+        control.insertBefore(chip, input)
+        input.value = ""
+        menu.remove()
+      })
+      item.addEventListener("click", () => {
+        row.querySelector(".select__single-value")?.remove()
+        const chip = document.createElement("div")
+        chip.className = "select__single-value"
+        chip.textContent = option
+        control.insertBefore(chip, input)
+        input.value = ""
+        menu.remove()
+      })
+      menu.appendChild(item)
+    })
+    row.appendChild(menu)
+  }
+  control.addEventListener("pointerdown", open)
+  control.addEventListener("mousedown", open)
+  control.addEventListener("click", open)
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") open()
+  })
+}
+
+function chipText(rowId: string) {
+  return document.getElementById(rowId)!.querySelector(".select__single-value")?.textContent ?? ""
+}
 
 describe("Greenhouse React/Remix autofill", () => {
   beforeEach(() => {
@@ -81,5 +131,58 @@ describe("Greenhouse React/Remix autofill", () => {
     const filled = results.filter((r) => r.filled)
     expect(fillable.length).toBeGreaterThan(0)
     expect(filled.length).toBe(fillable.length)
+  })
+
+  it("fills Greenhouse salary expectation ranges from the saved salary profile", async () => {
+    document.body.innerHTML = `
+      <form id="application-form" class="application--form">
+        <div id="salary-row" class="field-wrapper">
+          <label>What are your base salary expectations? <span>*</span></label>
+          <div class="select__control">
+            <input class="select__input" id="salary" role="combobox" aria-autocomplete="list" type="text" value="" />
+          </div>
+        </div>
+      </form>
+    `
+    attachReactSelect("salary-row", [
+      "Under $50,000",
+      "$50,000-60,000",
+      "$60,000-70,000",
+      "$70,000-80,000",
+      "$80,000-90,000",
+      "$90,000-100,000",
+      "$100,000-110,000",
+      "$110,000-120,000",
+    ])
+
+    const summary = await fillRequiredAtsFields({ profile, doc: document })
+
+    expect(chipText("salary-row")).toBe("$100,000-110,000")
+    expect(summary.manualReviewCount).toBe(0)
+  })
+
+  it("declines Greenhouse race self-identification when diversity autofill is off", async () => {
+    document.body.innerHTML = `
+      <form id="application-form" class="application--form">
+        <div id="race-row" class="field-wrapper">
+          <label>Please identify your race</label>
+          <div class="select__control">
+            <input class="select__input" id="race" role="combobox" aria-autocomplete="list" type="text" value="" />
+          </div>
+        </div>
+      </form>
+    `
+    attachReactSelect("race-row", [
+      "Black or African American",
+      "Asian",
+      "White",
+      "Hispanic or Latino",
+      "I don't wish to answer",
+    ])
+
+    const summary = await fillRequiredAtsFields({ profile: { ...profile, auto_fill_diversity: false }, doc: document })
+
+    expect(chipText("race-row")).toBe("I don't wish to answer")
+    expect(summary.manualReviewCount).toBe(0)
   })
 })
