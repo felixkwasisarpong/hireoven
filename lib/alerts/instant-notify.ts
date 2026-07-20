@@ -7,10 +7,16 @@
  * all followed companies in the window, gated by the same accumulation cooldown.
  *
  * Extracted from the Supabase webhook so the harvester + crawler event triggers
- * and the cron fallback all share it. Idempotent: each (user, job, type) is
- * recorded in alert_notifications and re-checked before sending, so reprocessing
- * an overlapping batch/window can't double-notify. (Single-threaded callers ⇒ no
- * TOCTOU race.)
+ * and the cron fallback all share it — which means the SAME fresh job can reach
+ * processNotifications() from three independent processes within milliseconds of
+ * each other (webhook fires on every `jobs` INSERT; the harvester also POSTs the
+ * same job IDs it just inserted; the cron sweep picks up anything still in its
+ * lookback window). The per-user check→send→record sequence below is wrapped in
+ * a Postgres advisory lock keyed by (user, notificationType) so those concurrent
+ * callers serialize instead of racing — without it, all three can see "not yet
+ * notified" before any of them records it, and all three send a real email
+ * (observed live: same watchlist email delivered 3x simultaneously, 2026-07-20).
+ * The DB record itself was always idempotent (ON CONFLICT); the SEND wasn't.
  */
 import {
   combineChannels,
@@ -27,10 +33,10 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
 
 // Minimum resume-match score for a job to be included in an instant alert email
-// (env-tunable). Raised 75 -> 85 for higher-quality, fewer emails.
+// (env-tunable). Lowered back 85 -> 75.
 const INSTANT_EMAIL_MIN_MATCH_SCORE = (() => {
-  const n = Number(process.env.INSTANT_EMAIL_MIN_MATCH_SCORE ?? "85")
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 85
+  const n = Number(process.env.INSTANT_EMAIL_MIN_MATCH_SCORE ?? "75")
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 75
 })()
 
 // Accumulation window: after an alert notifies a user, hold further matches for
@@ -129,8 +135,40 @@ async function recordNotification(
 }
 
 /**
+ * Serializes the check→send→record sequence for one (user, notificationType)
+ * pair across concurrent processNotifications() callers, via a session-scoped
+ * Postgres advisory lock on a dedicated connection. Other business queries
+ * inside `fn` still use the shared pool (different connections) — that's fine,
+ * advisory locks are a global numeric lock independent of which connection
+ * touches which rows; only the CODE PATH needs serializing, not the queries.
+ * Whichever caller acquires the lock first runs `fn` to completion (send +
+ * record); the next caller blocks until then, so by the time it runs, it
+ * correctly sees the job as already notified and sends nothing.
+ */
+async function withUserNotificationLock<T>(
+  userId: string,
+  notificationType: NotificationType,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const pool = getPostgresPool()
+  const client = await pool.connect()
+  const lockKey = `${userId}:${notificationType}`
+  try {
+    await client.query(`SELECT pg_advisory_lock(hashtextextended($1, 0))`, [lockKey])
+    return await fn()
+  } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtextextended($1, 0))`, [lockKey])
+    } finally {
+      client.release()
+    }
+  }
+}
+
+/**
  * Match a batch of jobs and fire instant notifications for instant-frequency
- * users, grouped per user. Safe to call repeatedly for the same jobs.
+ * users, grouped per user. Safe to call repeatedly for the same jobs, INCLUDING
+ * concurrently — see withUserNotificationLock above.
  */
 export async function processNotifications(jobs: Job[]): Promise<void> {
   const windowMinutes = instantNotifyWindowMinutes()
@@ -181,116 +219,118 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     }
 
     for (const [userId, entry] of alertsByUser) {
-      const profile = await fetchProfileChannels(userId)
-      if (!profile || profile.alert_frequency !== "instant") continue
-      if (!profile.email_alerts && !profile.push_alerts) continue
+      await withUserNotificationLock(userId, "alert", async () => {
+        const profile = await fetchProfileChannels(userId)
+        if (!profile || profile.alert_frequency !== "instant") return
+        if (!profile.email_alerts && !profile.push_alerts) return
 
-      // Accumulation cooldown: if any of this user's matched alerts fired within
-      // the window, skip now — the fresh jobs stay un-recorded and roll into the
-      // next send once the window elapses (batching, not per-sweep spam).
-      if (ALERT_ACCUMULATE_MS > 0 && entry.alertIds.size > 0) {
-        const { rows } = await getPostgresPool().query<{ last: string | null }>(
-          `SELECT max(last_triggered_at) AS last FROM job_alerts WHERE id = ANY($1::uuid[])`,
-          [[...entry.alertIds]],
-        )
-        const lastMs = rows[0]?.last ? new Date(rows[0].last).getTime() : 0
-        if (lastMs && Date.now() - lastMs < ALERT_ACCUMULATE_MS) continue
-      }
+        // Accumulation cooldown: if any of this user's matched alerts fired within
+        // the window, skip now — the fresh jobs stay un-recorded and roll into the
+        // next send once the window elapses (batching, not per-sweep spam).
+        if (ALERT_ACCUMULATE_MS > 0 && entry.alertIds.size > 0) {
+          const { rows } = await getPostgresPool().query<{ last: string | null }>(
+            `SELECT max(last_triggered_at) AS last FROM job_alerts WHERE id = ANY($1::uuid[])`,
+            [[...entry.alertIds]],
+          )
+          const lastMs = rows[0]?.last ? new Date(rows[0].last).getTime() : 0
+          if (lastMs && Date.now() - lastMs < ALERT_ACCUMULATE_MS) return
+        }
 
-      const emailCandidates: Job[] = []
-      const pushCandidates: Job[] = []
-      for (const job of entry.jobs.values()) {
-        const existingChannel = await existingNotificationChannel(userId, job.id, "alert")
-        if (!channelHasEmail(existingChannel)) emailCandidates.push(job)
-        if (!channelHasPush(existingChannel)) pushCandidates.push(job)
-      }
-      if (emailCandidates.length === 0 && pushCandidates.length === 0) continue
+        const emailCandidates: Job[] = []
+        const pushCandidates: Job[] = []
+        for (const job of entry.jobs.values()) {
+          const existingChannel = await existingNotificationChannel(userId, job.id, "alert")
+          if (!channelHasEmail(existingChannel)) emailCandidates.push(job)
+          if (!channelHasPush(existingChannel)) pushCandidates.push(job)
+        }
+        if (emailCandidates.length === 0 && pushCandidates.length === 0) return
 
-      // Email is score-gated; push is not. Missing scores do not qualify for
-      // email: an empty/low-score accumulation window should send nothing.
-      let emailJobs: Job[] = []
-      let scores: Awaited<ReturnType<typeof scoreJobsForUser>> | undefined
-      if (profile.email_alerts && emailCandidates.length > 0) {
+        // Email is score-gated; push is not. Missing scores do not qualify for
+        // email: an empty/low-score accumulation window should send nothing.
+        let emailJobs: Job[] = []
+        let scores: Awaited<ReturnType<typeof scoreJobsForUser>> | undefined
+        if (profile.email_alerts && emailCandidates.length > 0) {
+          try {
+            scores = await scoreJobsForUser(userId, emailCandidates.map((j) => j.id))
+            const scored = scores
+            emailJobs = emailCandidates.filter((j) => {
+              const s = scored.get(j.id)
+              return Boolean(s && s.overall_score >= INSTANT_EMAIL_MIN_MATCH_SCORE)
+            })
+          } catch (error) {
+            console.warn("[instant-notify] alert email scoring failed", {
+              userId,
+              jobCount: emailCandidates.length,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+
+        const emailJobIds = new Set(emailJobs.map((job) => job.id))
+        const pushJobs = profile.push_alerts ? pushCandidates : []
+        const pushJobIds = new Set(pushJobs.map((job) => job.id))
+        let emailSent = false
+        let pushSent = false
+
         try {
-          scores = await scoreJobsForUser(userId, emailCandidates.map((j) => j.id))
-          const scored = scores
-          emailJobs = emailCandidates.filter((j) => {
-            const s = scored.get(j.id)
-            return Boolean(s && s.overall_score >= INSTANT_EMAIL_MIN_MATCH_SCORE)
-          })
+          if (profile.email_alerts && emailJobs.length > 0) {
+            await sendEmailAlert(userId, emailJobs, entry.name, scores)
+            emailSent = true
+          }
         } catch (error) {
-          console.warn("[instant-notify] alert email scoring failed", {
+          console.warn("[instant-notify] alert email failed", {
             userId,
-            jobCount: emailCandidates.length,
+            jobCount: emailJobs.length,
             error: error instanceof Error ? error.message : String(error),
           })
         }
-      }
 
-      const emailJobIds = new Set(emailJobs.map((job) => job.id))
-      const pushJobs = profile.push_alerts ? pushCandidates : []
-      const pushJobIds = new Set(pushJobs.map((job) => job.id))
-      let emailSent = false
-      let pushSent = false
-
-      try {
-        if (profile.email_alerts && emailJobs.length > 0) {
-          await sendEmailAlert(userId, emailJobs, entry.name, scores)
-          emailSent = true
-        }
-      } catch (error) {
-        console.warn("[instant-notify] alert email failed", {
-          userId,
-          jobCount: emailJobs.length,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-
-      try {
-        if (pushJobs.length > 0) {
-          await sendBatchPushNotification(userId, pushJobs, "alert")
-          pushSent = true
-        }
-      } catch (error) {
-        console.warn("[instant-notify] alert push failed", {
-          userId,
-          jobCount: pushJobs.length,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
-
-      let recordedAny = false
-      try {
-        const deliveredJobs = new Map<string, Job>()
-        if (emailSent) for (const job of emailJobs) deliveredJobs.set(job.id, job)
-        if (pushSent) for (const job of pushJobs) deliveredJobs.set(job.id, job)
-
-        for (const job of deliveredJobs.values()) {
-          const channel = combineChannels({
-            emailSent: emailSent && emailJobIds.has(job.id),
-            pushSent: pushSent && pushJobIds.has(job.id),
+        try {
+          if (pushJobs.length > 0) {
+            await sendBatchPushNotification(userId, pushJobs, "alert")
+            pushSent = true
+          }
+        } catch (error) {
+          console.warn("[instant-notify] alert push failed", {
+            userId,
+            jobCount: pushJobs.length,
+            error: error instanceof Error ? error.message : String(error),
           })
-          if (!channel) continue
-          await recordNotification(userId, job.id, channel, "alert", entry.jobAlertIds.get(job.id) ?? null)
-          markNotified(userId, job.id)
-          recordedAny = true
         }
 
-        // Stamp last_triggered_at only after an email batch was delivered. Push
-        // can be immediate without starting the hourly email cooldown.
-        if (emailSent && recordedAny && entry.alertIds.size > 0) {
-          const pool = getPostgresPool()
-          await pool.query(
-            `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
-            [[...entry.alertIds]],
-          )
+        let recordedAny = false
+        try {
+          const deliveredJobs = new Map<string, Job>()
+          if (emailSent) for (const job of emailJobs) deliveredJobs.set(job.id, job)
+          if (pushSent) for (const job of pushJobs) deliveredJobs.set(job.id, job)
+
+          for (const job of deliveredJobs.values()) {
+            const channel = combineChannels({
+              emailSent: emailSent && emailJobIds.has(job.id),
+              pushSent: pushSent && pushJobIds.has(job.id),
+            })
+            if (!channel) continue
+            await recordNotification(userId, job.id, channel, "alert", entry.jobAlertIds.get(job.id) ?? null)
+            markNotified(userId, job.id)
+            recordedAny = true
+          }
+
+          // Stamp last_triggered_at only after an email batch was delivered. Push
+          // can be immediate without starting the hourly email cooldown.
+          if (emailSent && recordedAny && entry.alertIds.size > 0) {
+            const pool = getPostgresPool()
+            await pool.query(
+              `UPDATE job_alerts SET last_triggered_at = now() WHERE id = ANY($1::uuid[])`,
+              [[...entry.alertIds]],
+            )
+          }
+        } catch (error) {
+          console.warn("[instant-notify] alert notification record failed", {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          })
         }
-      } catch (error) {
-        console.warn("[instant-notify] alert notification record failed", {
-          userId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+      })
     }
 
     // ── 2. Watchlist matches, grouped per user ────────────────────────────────
@@ -311,85 +351,87 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
     }
 
     for (const [userId, candidates] of watchByUser) {
-      const profile = await fetchProfileChannels(userId)
-      if (!profile || profile.alert_frequency !== "instant") continue
-      if (!profile.email_alerts && !profile.push_alerts) continue
+      await withUserNotificationLock(userId, "watchlist", async () => {
+        const profile = await fetchProfileChannels(userId)
+        if (!profile || profile.alert_frequency !== "instant") return
+        if (!profile.email_alerts && !profile.push_alerts) return
 
-      const emailCandidates: Job[] = []
-      const pushCandidates: Job[] = []
-      for (const job of candidates) {
-        if (wasNotified(userId, job.id)) continue
-        const existingChannel = await existingNotificationChannel(userId, job.id, "watchlist")
-        if (!channelHasEmail(existingChannel)) emailCandidates.push(job)
-        if (!channelHasPush(existingChannel)) pushCandidates.push(job)
-      }
-      if (emailCandidates.length === 0 && pushCandidates.length === 0) continue
-
-      // Email cooldown: skip this pass if a watchlist email went out recently.
-      // Jobs remain un-recorded and roll into the next send once the window elapses.
-      let sendEmail = profile.email_alerts && emailCandidates.length > 0
-      if (sendEmail && ALERT_ACCUMULATE_MS > 0) {
-        const { rows } = await getPostgresPool().query<{ last: string | null }>(
-          `SELECT max(sent_at) AS last FROM alert_notifications
-            WHERE user_id = $1 AND notification_type = 'watchlist' AND channel IN ('email','both')`,
-          [userId],
-        )
-        const lastMs = rows[0]?.last ? new Date(rows[0].last).getTime() : 0
-        if (lastMs && Date.now() - lastMs < ALERT_ACCUMULATE_MS) sendEmail = false
-      }
-
-      const pushJobs = profile.push_alerts ? pushCandidates : []
-      let emailSent = false
-      let pushSent = false
-
-      try {
-        if (sendEmail) {
-          await sendWatchlistEmail(userId, emailCandidates)
-          emailSent = true
+        const emailCandidates: Job[] = []
+        const pushCandidates: Job[] = []
+        for (const job of candidates) {
+          if (wasNotified(userId, job.id)) continue
+          const existingChannel = await existingNotificationChannel(userId, job.id, "watchlist")
+          if (!channelHasEmail(existingChannel)) emailCandidates.push(job)
+          if (!channelHasPush(existingChannel)) pushCandidates.push(job)
         }
-      } catch (error) {
-        console.warn("[instant-notify] watchlist email failed", {
-          userId,
-          jobCount: emailCandidates.length,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+        if (emailCandidates.length === 0 && pushCandidates.length === 0) return
 
-      try {
-        if (pushJobs.length > 0) {
-          await sendBatchPushNotification(userId, pushJobs, "watchlist")
-          pushSent = true
+        // Email cooldown: skip this pass if a watchlist email went out recently.
+        // Jobs remain un-recorded and roll into the next send once the window elapses.
+        let sendEmail = profile.email_alerts && emailCandidates.length > 0
+        if (sendEmail && ALERT_ACCUMULATE_MS > 0) {
+          const { rows } = await getPostgresPool().query<{ last: string | null }>(
+            `SELECT max(sent_at) AS last FROM alert_notifications
+              WHERE user_id = $1 AND notification_type = 'watchlist' AND channel IN ('email','both')`,
+            [userId],
+          )
+          const lastMs = rows[0]?.last ? new Date(rows[0].last).getTime() : 0
+          if (lastMs && Date.now() - lastMs < ALERT_ACCUMULATE_MS) sendEmail = false
         }
-      } catch (error) {
-        console.warn("[instant-notify] watchlist push failed", {
-          userId,
-          jobCount: pushJobs.length,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
 
-      try {
-        const emailCandidateIds = new Set(emailCandidates.map((j) => j.id))
-        const pushJobIds = new Set(pushJobs.map((j) => j.id))
-        const deliveredJobs = new Map<string, Job>()
-        if (emailSent) for (const job of emailCandidates) deliveredJobs.set(job.id, job)
-        if (pushSent) for (const job of pushJobs) deliveredJobs.set(job.id, job)
+        const pushJobs = profile.push_alerts ? pushCandidates : []
+        let emailSent = false
+        let pushSent = false
 
-        for (const job of deliveredJobs.values()) {
-          const channel = combineChannels({
-            emailSent: emailSent && emailCandidateIds.has(job.id),
-            pushSent: pushSent && pushJobIds.has(job.id),
+        try {
+          if (sendEmail) {
+            await sendWatchlistEmail(userId, emailCandidates)
+            emailSent = true
+          }
+        } catch (error) {
+          console.warn("[instant-notify] watchlist email failed", {
+            userId,
+            jobCount: emailCandidates.length,
+            error: error instanceof Error ? error.message : String(error),
           })
-          if (!channel) continue
-          await recordNotification(userId, job.id, channel, "watchlist")
-          markNotified(userId, job.id)
         }
-      } catch (error) {
-        console.warn("[instant-notify] watchlist notification record failed", {
-          userId,
-          error: error instanceof Error ? error.message : String(error),
-        })
-      }
+
+        try {
+          if (pushJobs.length > 0) {
+            await sendBatchPushNotification(userId, pushJobs, "watchlist")
+            pushSent = true
+          }
+        } catch (error) {
+          console.warn("[instant-notify] watchlist push failed", {
+            userId,
+            jobCount: pushJobs.length,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+
+        try {
+          const emailCandidateIds = new Set(emailCandidates.map((j) => j.id))
+          const pushJobIds = new Set(pushJobs.map((j) => j.id))
+          const deliveredJobs = new Map<string, Job>()
+          if (emailSent) for (const job of emailCandidates) deliveredJobs.set(job.id, job)
+          if (pushSent) for (const job of pushJobs) deliveredJobs.set(job.id, job)
+
+          for (const job of deliveredJobs.values()) {
+            const channel = combineChannels({
+              emailSent: emailSent && emailCandidateIds.has(job.id),
+              pushSent: pushSent && pushJobIds.has(job.id),
+            })
+            if (!channel) continue
+            await recordNotification(userId, job.id, channel, "watchlist")
+            markNotified(userId, job.id)
+          }
+        } catch (error) {
+          console.warn("[instant-notify] watchlist notification record failed", {
+            userId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      })
     }
 
     // ── 3. Sponsor-match push, grouped per seeker ─────────────────────────────
@@ -403,46 +445,51 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
       )
 
       for (const seeker of seekers) {
-        const fresh: Job[] = []
-        for (const job of sponsorJobs) {
-          if (wasNotified(seeker.id, job.id)) continue
-          if (await alreadyNotified(seeker.id, job.id, "alert")) continue
-          fresh.push(job)
-        }
-        if (fresh.length === 0) continue
-
-        let scores: Map<string, { overall_score: number }> | null = null
-        try {
-          scores = await scoreJobsForUser(seeker.id, fresh.map((j) => j.id))
-        } catch {
-          // no scores → shouldSponsorPush still sends (highest-intent users)
-        }
-
-        const qualifying = fresh.filter((job) =>
-          shouldSponsorPush({
-            jobSponsorsH1b: job.sponsors_h1b,
-            needsSponsorship: true,
-            pushAlerts: true,
-            frequency: "instant",
-            matchScore: scores?.get(job.id)?.overall_score ?? null,
-            alreadyNotified: false,
-          }).send,
-        )
-        if (qualifying.length === 0) continue
-
-        try {
-          await sendBatchPushNotification(seeker.id, qualifying, "sponsor_match")
-          for (const job of qualifying) {
-            await recordNotification(seeker.id, job.id, "push", "alert")
-            markNotified(seeker.id, job.id)
+        // Same notification_type ("alert") as the alert-email pass above, so
+        // share its lock key — a sponsor-match push and an alert email for the
+        // same user must not race each other's alert_notifications writes either.
+        await withUserNotificationLock(seeker.id, "alert", async () => {
+          const fresh: Job[] = []
+          for (const job of sponsorJobs) {
+            if (wasNotified(seeker.id, job.id)) continue
+            if (await alreadyNotified(seeker.id, job.id, "alert")) continue
+            fresh.push(job)
           }
-        } catch (error) {
-          console.warn("[instant-notify] sponsor-match push failed", {
-            userId: seeker.id,
-            jobCount: qualifying.length,
-            error: error instanceof Error ? error.message : String(error),
-          })
-        }
+          if (fresh.length === 0) return
+
+          let scores: Map<string, { overall_score: number }> | null = null
+          try {
+            scores = await scoreJobsForUser(seeker.id, fresh.map((j) => j.id))
+          } catch {
+            // no scores → shouldSponsorPush still sends (highest-intent users)
+          }
+
+          const qualifying = fresh.filter((job) =>
+            shouldSponsorPush({
+              jobSponsorsH1b: job.sponsors_h1b,
+              needsSponsorship: true,
+              pushAlerts: true,
+              frequency: "instant",
+              matchScore: scores?.get(job.id)?.overall_score ?? null,
+              alreadyNotified: false,
+            }).send,
+          )
+          if (qualifying.length === 0) return
+
+          try {
+            await sendBatchPushNotification(seeker.id, qualifying, "sponsor_match")
+            for (const job of qualifying) {
+              await recordNotification(seeker.id, job.id, "push", "alert")
+              markNotified(seeker.id, job.id)
+            }
+          } catch (error) {
+            console.warn("[instant-notify] sponsor-match push failed", {
+              userId: seeker.id,
+              jobCount: qualifying.length,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        })
       }
     }
   } catch (error) {
