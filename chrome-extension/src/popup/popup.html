@@ -518,11 +518,73 @@
       }
       .bar-btn-ghost:hover:not(:disabled) { color: #e2e8f0; }
 
+      /* ── Consent gate ───────────────────────────────────────── */
+      .consent-gate {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .consent-title { font-size: 13.5px; font-weight: 700; color: #0f172a; }
+      .consent-body { font-size: 12px; line-height: 1.55; color: #475569; }
+      .consent-list {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin: 2px 0;
+      }
+      .consent-list li {
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: #475569;
+        list-style: none;
+        padding-left: 14px;
+        position: relative;
+      }
+      .consent-list li::before { content: "•"; position: absolute; left: 0; color: #f97316; }
+      .consent-link {
+        font-size: 11.5px;
+        color: #0369a1;
+        text-decoration: none;
+      }
+      .consent-link:hover { text-decoration: underline; }
+      .consent-actions { display: flex; gap: 6px; margin-top: 2px; }
+      .consent-btn {
+        flex: 1;
+        font-size: 12px;
+        font-weight: 700;
+        padding: 8px 10px;
+        border-radius: 7px;
+        cursor: pointer;
+        border: none;
+        text-align: center;
+      }
+      .consent-btn-agree { background: #f97316; color: #fff; }
+      .consent-btn-agree:hover { background: #ea6c0a; }
+
       /* ── Utility ────────────────────────────────────────────── */
       .hidden { display: none !important; }
     </style>
   </head>
   <body>
+
+    <!-- Consent gate — shown until the user agrees to data collection (CWS requirement) -->
+    <div id="consent-gate" class="consent-gate hidden">
+      <div class="consent-title">Before you start</div>
+      <p class="consent-body">
+        Apex Bridge reads the page you're on to detect jobs and applications, and
+        uses your Hireoven profile to autofill forms. Nothing is read or sent
+        anywhere until you agree.
+      </p>
+      <ul class="consent-list">
+        <li>Sent only to Hireoven's own servers — never to a third party</li>
+        <li>Nothing is ever submitted automatically without your review</li>
+      </ul>
+      <a id="consent-learn-more" class="consent-link" href="#" target="_blank" rel="noopener">See exactly what's collected and why ↗</a>
+      <div class="consent-actions">
+        <button id="consent-agree-btn" class="consent-btn consent-btn-agree">I understand and agree</button>
+      </div>
+    </div>
 
     <!-- Content area (hidden until scan runs) -->
     <div id="content" class="content hidden">
@@ -628,7 +690,7 @@
     </div>
 
     <!-- Bottom bar — always visible -->
-    <div class="bottom-bar">
+    <div id="bottom-bar" class="bottom-bar">
       <div class="bar-logo">
         <svg viewBox="0 0 16 16"><path d="M8 1L2 5v9l6 1 6-1V5L8 1zm0 2.5L12 6v6.5L8 13.5 4 12.5V6l4-2.5z"/></svg>
       </div>

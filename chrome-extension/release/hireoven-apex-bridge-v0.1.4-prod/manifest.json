@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Hireoven Apex Bridge",
   "version": "0.1.4",
-  "description": "Detect and save job listings to Hireoven from any ATS.",
+  "description": "Detect job listings and autofill applications on any ATS using your Hireoven profile, with your consent.",
   "permissions": [
     "activeTab",
     "alarms",

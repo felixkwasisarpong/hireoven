@@ -8,14 +8,20 @@ const extensionDefaultOrigin =
     ? "https://hireoven.com"
     : "http://localhost:3000")
 
-/** Minimal plugin to copy the popup HTML to the output popup/ directory. */
-class CopyPopupHtmlPlugin {
+/** Minimal plugin to copy static HTML entry points next to their bundles. */
+class CopyStaticHtmlPlugin {
   apply(compiler) {
-    compiler.hooks.afterEmit.tap("CopyPopupHtmlPlugin", () => {
-      const src = path.resolve(__dirname, "src/popup/popup.html")
-      const dest = path.resolve(__dirname, "popup/popup.html")
-      fs.mkdirSync(path.dirname(dest), { recursive: true })
-      fs.copyFileSync(src, dest)
+    compiler.hooks.afterEmit.tap("CopyStaticHtmlPlugin", () => {
+      const pairs = [
+        ["src/popup/popup.html", "popup/popup.html"],
+        ["src/onboarding/onboarding.html", "onboarding/onboarding.html"],
+      ]
+      for (const [srcRel, destRel] of pairs) {
+        const src = path.resolve(__dirname, srcRel)
+        const dest = path.resolve(__dirname, destRel)
+        fs.mkdirSync(path.dirname(dest), { recursive: true })
+        fs.copyFileSync(src, dest)
+      }
     })
   }
 }
@@ -26,6 +32,7 @@ module.exports = {
     background: "./src/background.ts",
     content: "./src/content.ts",
     popup: "./src/popup/popup.ts",
+    onboarding: "./src/onboarding/onboarding.ts",
     "content/aggregators/linkedin/handler": "./src/content/aggregators/linkedin/handler.ts",
     "content/aggregators/glassdoor/handler": "./src/content/aggregators/glassdoor/handler.ts",
     "content/aggregators/indeed/handler": "./src/content/aggregators/indeed/handler.ts",
@@ -58,6 +65,6 @@ module.exports = {
     new webpack.DefinePlugin({
       __HIREOVEN_EXTENSION_DEFAULT_ORIGIN__: JSON.stringify(extensionDefaultOrigin),
     }),
-    new CopyPopupHtmlPlugin(),
+    new CopyStaticHtmlPlugin(),
   ],
 }
