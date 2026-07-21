@@ -16,6 +16,27 @@ test("avature: detectFromUrl rejects www + bare + non-avature hosts + malformed"
   assert.equal(avatureAdapter.detectFromUrl("not a url"), null)
 })
 
+test("avature: detectFromUrl + buildSearchUrl resolve custom branded domains (Lenovo)", () => {
+  assert.deepEqual(
+    avatureAdapter.detectFromUrl("https://jobs.lenovo.com/en_US/careers/SearchJobs"),
+    { slug: "lenovo" }
+  )
+  // The internal recruiter-login subdomain is a plain avature.net host, so it
+  // still resolves to the same slug — the fix is routing fetches to the
+  // branded domain, not blocking the bare subdomain from matching.
+  const url = buildSearchUrl("lenovo")
+  assert.equal(url, "https://jobs.lenovo.com/en_US/careers/SearchJobs")
+})
+
+test("avature: extractJobs accepts links on a tenant's custom branded domain", () => {
+  const html = `
+    <h3 class="title"><a href="https://jobs.lenovo.com/en_US/careers/JobDetail/AI-Application-Development-Engineer/79473">AI Application Development Engineer</a></h3>
+  `
+  const jobs = extractJobs(html, "jobs.lenovo.com")
+  assert.equal(jobs.length, 1)
+  assert.equal(jobs[0].jobId, "79473")
+})
+
 test("avature: buildSearchUrl encodes subdomain + jobOffset", () => {
   const p0 = new URL(buildSearchUrl("acme-co"))
   assert.equal(p0.hostname, "acme-co.avature.net")

@@ -26,6 +26,12 @@ import { fetchHtmlConditional } from "@/lib/harvester/adapters/_json-ld"
  *   Paging    : jobOffset = number of jobs already collected (page size varies
  *               per tenant — 10/12/… — so tracking the running count matches
  *               each tenant's own pagination hrefs).
+ *
+ * Some tenants point their public career site at a branded custom domain
+ * instead of the default <slug>.avature.net (e.g. Lenovo serves from
+ * jobs.lenovo.com, not lenovo.avature.net — the latter is their internal
+ * recruiter login portal and returns no public postings). CUSTOM_TENANTS
+ * maps those domains to the tenant's slug + real listing path.
  */
 
 const AVATURE_HOST_RE = /(^|\.)avature\.net$/
@@ -40,6 +46,18 @@ const MAX_PAGES = Math.max(
   Number.parseInt(process.env.HARVESTER_AVATURE_MAX_PAGES ?? "40", 10)
 )
 
+const CUSTOM_TENANTS: Array<{ host: string; slug: string; listPath: string }> = [
+  { host: "jobs.lenovo.com", slug: "lenovo", listPath: "/en_US/careers/SearchJobs" },
+]
+
+function findCustomTenantByHost(host: string) {
+  return CUSTOM_TENANTS.find((t) => t.host === host)
+}
+
+function findCustomTenantBySlug(slug: string) {
+  return CUSTOM_TENANTS.find((t) => t.slug === slug)
+}
+
 function detectFromUrl(url: string): { slug: string } | null {
   let parsed: URL
   try {
@@ -48,6 +66,8 @@ function detectFromUrl(url: string): { slug: string } | null {
     return null
   }
   const host = parsed.hostname.toLowerCase()
+  const custom = findCustomTenantByHost(host)
+  if (custom) return { slug: custom.slug }
   if (!AVATURE_HOST_RE.test(host)) return null
   // <company>.avature.net — first subdomain label is the company token.
   const label = host.split(".")[0]
@@ -58,7 +78,10 @@ function detectFromUrl(url: string): { slug: string } | null {
 }
 
 function buildSearchUrl(slug: string, offset = 0): string {
-  const base = `https://${encodeURIComponent(slug)}.avature.net/careers/SearchJobs`
+  const custom = findCustomTenantBySlug(slug)
+  const base = custom
+    ? `https://${custom.host}${custom.listPath}`
+    : `https://${encodeURIComponent(slug)}.avature.net/careers/SearchJobs`
   return offset > 0 ? `${base}?jobOffset=${offset}` : base
 }
 
@@ -97,7 +120,8 @@ export function extractJobs(html: string, tenantHost: string): AvatureLink[] {
     } catch {
       continue
     }
-    if (!AVATURE_HOST_RE.test(absolute.hostname.toLowerCase())) continue
+    const linkHost = absolute.hostname.toLowerCase()
+    if (!AVATURE_HOST_RE.test(linkHost) && linkHost !== tenantHost.toLowerCase()) continue
     const pathMatch = absolute.pathname.match(JOB_PATH_RE)
     if (!pathMatch) continue
     const jobId = pathMatch[2]
@@ -129,7 +153,8 @@ export const avatureAdapter: AtsAdapter = {
     const startedAt = Date.now()
     if (!SLUG_RE.test(slug)) throw new Error(`avature malformed slug: ${slug}`)
 
-    const host = `${slug.toLowerCase()}.avature.net`
+    const custom = findCustomTenantBySlug(slug)
+    const host = custom ? custom.host : `${slug.toLowerCase()}.avature.net`
     const jobs = new Map<string, HarvestedJob>()
     let latencyMs = 0
     let pagesFetched = 0
