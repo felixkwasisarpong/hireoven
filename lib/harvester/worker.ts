@@ -181,10 +181,21 @@ const SUPPORTED_ATS_TYPES = [
   "apple",
   // Purpose-built big-firm adapters: registered + page-deep, but were absent from
   // the claim allowlist so eightfold/netflix companies were never picked up by the
-  // 15s harvester loop (only the hourly custom crawler, if at all). Amazon/Microsoft
-  // route via URL detection already; these two have no matching careers_url pattern.
+  // 15s harvester loop (only the hourly custom crawler, if at all).
   "eightfold",
   "netflix",
+  // Amazon (amazon.jobs API) and Microsoft (jobs.careers.microsoft.com) — single-
+  // company custom adapters. The claim-eligibility check runs in SQL against
+  // ats_type/CLAIM_URL_SQL only; adapter-level detectFromUrl (used once a company
+  // is already claimed) never gets a chance to run without these listed here, so
+  // both rows sat unreachable by the automated loop — any freshness they had came
+  // from someone manually running a one-off crawl script, not the fast loop.
+  "amazon",
+  "microsoft",
+  // Goldman Sachs (higher.gs.com private GraphQL gateway). Same trap: registered
+  // adapter, working, but never in the claim allowlist — so the one goldman-sachs
+  // row was never picked up by the fast loop either.
+  "goldman-sachs",
   // Avature scrapes {slug}.avature.net careers HTML. Same trap as above — it was
   // registered but not in the claim allowlist, so its ~80 tenants were never
   // claimed by the fast loop. ats_type='avature' has no careers_url pattern, so
@@ -336,6 +347,31 @@ export function enabledClaimAdapters(filter?: AdapterClaimFilter): AtsName[] {
   const excluded = new Set(normalized.exclude)
   return [...SUPPORTED_ATS_TYPES].filter((name) => !excluded.has(name))
 }
+
+// Single-company (or near-single-company) custom adapters. The shared claim
+// query orders purely by overdueness, and Workday/OracleCloud's chronic
+// backlogs (driven by frequent per-company timeouts — see company_hang logs)
+// always have a row more overdue than one of these singletons, so they can
+// be starved indefinitely: Apple's oldest next_harvest_at was 20 days stale
+// and Goldman Sachs hadn't been reclaimed in 11+ hours despite being due,
+// even though both adapters work fine when actually invoked. Every prior fix
+// for a "company X is never claimed" bug just added X to SUPPORTED_ATS_TYPES,
+// which doesn't help if it still loses the overdueness race forever. Reserve
+// a small guaranteed slice of each tick's claim budget for this list instead.
+const RESERVED_LOW_CARDINALITY_ADAPTERS: readonly AtsName[] = [
+  "goldman-sachs",
+  "walmart",
+  "amazon",
+  "apple",
+  "microsoft",
+  "netflix",
+  "ibm",
+  "adecco",
+  "kelly",
+  "google",
+  "infosys",
+  "tiktok",
+]
 
 function buildClaimQuery(enabledAdapters: readonly AtsName[]): string {
   const adapterClauses = [
@@ -492,6 +528,13 @@ async function insertTickCrawlLogsSafe(pool: Pool, outcomes: TickCompanyOutcome[
   }
 }
 
+// Reserved slice as a fraction of the tick's claim budget, floored at 1 so a
+// single-company adapter always has a shot even on a small batch. Capped at 3
+// so it can't crowd out the main pool on a large batch — there are only ever
+// a handful of due rows across this whole adapter list at once anyway.
+const RESERVED_CLAIM_MIN = 1
+const RESERVED_CLAIM_MAX = 3
+
 export async function claimEligibleCompanies(
   pool: Pool,
   batchSize: number,
@@ -501,11 +544,33 @@ export async function claimEligibleCompanies(
   const enabledAdapters = enabledClaimAdapters(adapterFilter)
   if (enabledAdapters.length === 0) return []
 
-  const { rows } = await pool.query<ClaimedRow>(buildClaimQuery(enabledAdapters), [
-    batchSize,
+  const reservedAdapters = enabledAdapters.filter((name) =>
+    RESERVED_LOW_CARDINALITY_ADAPTERS.includes(name)
+  )
+
+  let reservedRows: ClaimedRow[] = []
+  if (reservedAdapters.length > 0) {
+    const reservedLimit = Math.min(
+      RESERVED_CLAIM_MAX,
+      Math.max(RESERVED_CLAIM_MIN, batchSize - 1)
+    )
+    const reserved = await pool.query<ClaimedRow>(buildClaimQuery(reservedAdapters), [
+      reservedLimit,
+      leaseSeconds,
+      reservedAdapters,
+    ])
+    reservedRows = reserved.rows
+  }
+
+  const remainingBatchSize = Math.max(1, batchSize - reservedRows.length)
+  const { rows: mainRows } = await pool.query<ClaimedRow>(buildClaimQuery(enabledAdapters), [
+    remainingBatchSize,
     leaseSeconds,
     enabledAdapters,
   ])
+
+  const seen = new Set(reservedRows.map((r) => r.id))
+  const rows = [...reservedRows, ...mainRows.filter((r) => !seen.has(r.id))]
   return rows.map((row) => ({
     id: row.id,
     name: row.name,

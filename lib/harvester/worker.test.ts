@@ -117,8 +117,48 @@ test("scaleWorkerConfigForLoops: honors bounded total claim budget override", ()
   assert.equal(capped.claimBatchSize, 14)
 })
 
+const FULL_ADAPTER_LIST = [
+  "greenhouse",
+  "lever",
+  "ashby",
+  "smartrecruiters",
+  "workable",
+  "workday",
+  "recruitee",
+  "teamtailor",
+  "personio",
+  "bamboohr",
+  "jazzhr",
+  "jobvite",
+  "icims",
+  "successfactors",
+  "taleo",
+  "oraclecloud",
+  "usajobs",
+  "infosys",
+  "apple",
+  "eightfold",
+  "netflix",
+  "amazon",
+  "microsoft",
+  "goldman-sachs",
+  "avature",
+  "walmart",
+  "sitemapjsonld",
+  "ibm",
+  "adecco",
+  "kelly",
+  "radancy",
+  "gem",
+  "pinpoint",
+  "rippling",
+  "breezy",
+  "tiktok",
+  "google",
+]
+
 test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and shapes rows", async () => {
-  const captured: { text: string; values: unknown[] } = { text: "", values: [] }
+  const calls: Array<{ text: string; values: unknown[] }> = []
   const fakeRow = {
     id: "11111111-1111-1111-1111-111111111111",
     name: "Acme",
@@ -133,57 +173,51 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   }
   const pool = {
     query: async (text: string, values: unknown[]) => {
-      captured.text = text
-      captured.values = values
-      return { rows: [fakeRow], rowCount: 1 } as unknown as QueryResult
+      calls.push({ text, values })
+      // Only the main (second) call finds anything, so the reserved-lane
+      // query legitimately returns empty and doesn't fabricate a duplicate.
+      const isReservedCall = calls.length === 1
+      return { rows: isReservedCall ? [] : [fakeRow], rowCount: isReservedCall ? 0 : 1 } as unknown as QueryResult
     },
   } as unknown as Pool
 
   const result = await claimEligibleCompanies(pool, 25, 90)
 
-  assert.match(captured.text, /UPDATE companies/)
-  assert.match(captured.text, /FOR UPDATE SKIP LOCKED/)
-  assert.match(captured.text, /next_harvest_at = now\(\) \+ \(\$2 \|\| ' seconds'\)::interval/)
-  assert.match(captured.text, /ats_type = ANY\(\$3::text\[\]\)/)
-  assert.match(captured.text, /duplicate_of_company_id IS NULL/)
-  assert.match(captured.text, /jobs\.lever\.co/)
-  assert.match(captured.text, /jobs\.ashbyhq\.com/)
-  assert.equal(captured.values[0], 25)
-  assert.equal(captured.values[1], 90)
-  assert.deepEqual(captured.values[2], [
-    "greenhouse",
-    "lever",
-    "ashby",
-    "smartrecruiters",
-    "workable",
-    "workday",
-    "recruitee",
-    "teamtailor",
-    "personio",
-    "bamboohr",
-    "jazzhr",
-    "jobvite",
-    "icims",
-    "successfactors",
-    "taleo",
-    "oraclecloud",
-    "usajobs",
+  assert.equal(calls.length, 2, "reserved-lane claim + main claim")
+  const [reservedCall, mainCall] = calls
+
+  // Reserved-lane call: small fixed slice, scoped to low-cardinality adapters only.
+  assert.equal(reservedCall.values[0], 3)
+  assert.equal(reservedCall.values[1], 90)
+  // Order follows SUPPORTED_ATS_TYPES's own sequence (filter preserves the
+  // source array's order, not RESERVED_LOW_CARDINALITY_ADAPTERS's).
+  assert.deepEqual(reservedCall.values[2], [
     "infosys",
     "apple",
-    "eightfold",
     "netflix",
-    "avature",
+    "amazon",
+    "microsoft",
+    "goldman-sachs",
     "walmart",
-    "sitemapjsonld",
     "ibm",
     "adecco",
     "kelly",
-    "radancy",
-    "gem",
-    "pinpoint",
-    "rippling",
-    "breezy",
+    "tiktok",
+    "google",
   ])
+
+  // Main call: full adapter list, batch size reduced by whatever the reserved
+  // lane already claimed (0 here, so the full 25 remain).
+  assert.match(mainCall.text, /UPDATE companies/)
+  assert.match(mainCall.text, /FOR UPDATE SKIP LOCKED/)
+  assert.match(mainCall.text, /next_harvest_at = now\(\) \+ \(\$2 \|\| ' seconds'\)::interval/)
+  assert.match(mainCall.text, /ats_type = ANY\(\$3::text\[\]\)/)
+  assert.match(mainCall.text, /duplicate_of_company_id IS NULL/)
+  assert.match(mainCall.text, /jobs\.lever\.co/)
+  assert.match(mainCall.text, /jobs\.ashbyhq\.com/)
+  assert.equal(mainCall.values[0], 25)
+  assert.equal(mainCall.values[1], 90)
+  assert.deepEqual(mainCall.values[2], FULL_ADAPTER_LIST)
 
   assert.equal(result.length, 1)
   assert.equal(result[0].id, fakeRow.id)
@@ -191,6 +225,37 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   assert.equal(result[0].ats_identifier, fakeRow.ats_identifier)
   assert.equal(result[0].etag, fakeRow.etag)
   assert.equal(result[0].freshness_tier, "tier_2")
+})
+
+test("claimEligibleCompanies: reserved-lane claims are deduped against the main claim and reduce its batch size", async () => {
+  const calls: Array<{ text: string; values: unknown[] }> = []
+  const reservedRow = {
+    id: "22222222-2222-2222-2222-222222222222",
+    name: "Goldman Sachs",
+    careers_url: "https://higher.gs.com/results",
+    domain: "goldmansachs.com",
+    ats_type: "goldman-sachs",
+    ats_identifier: "goldman-sachs",
+    raw_ats_config: {},
+    etag: null,
+    last_modified: null,
+    freshness_tier: "tier_1",
+  }
+  const pool = {
+    query: async (text: string, values: unknown[]) => {
+      calls.push({ text, values })
+      if (calls.length === 1) return { rows: [reservedRow], rowCount: 1 } as unknown as QueryResult
+      return { rows: [], rowCount: 0 } as unknown as QueryResult
+    },
+  } as unknown as Pool
+
+  const result = await claimEligibleCompanies(pool, 10, 240)
+
+  assert.equal(calls.length, 2)
+  // Main call's batch shrinks by exactly how many the reserved lane claimed.
+  assert.equal(calls[1].values[0], 9)
+  assert.equal(result.length, 1)
+  assert.equal(result[0].id, reservedRow.id)
 })
 
 test("claimEligibleCompanies: orders strictly by next_harvest_at (no tier priority)", async () => {
