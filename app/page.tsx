@@ -705,6 +705,9 @@ export default async function HomePage() {
               </p>
             </div>
             <FooterColumn title="Product" links={[
+              { href: "/find", label: "Find jobs" },
+              { href: "/jobs/browse", label: "Browse jobs" },
+              { href: "/report", label: "Daily report" },
               { href: "/features", label: "Features" },
               { href: "/pricing", label: "Pricing" },
               { href: "/companies", label: "Companies" },
@@ -722,6 +725,7 @@ export default async function HomePage() {
               { href: "/signup", label: "Create account" },
             ]} />
             <FooterColumn title="Company" links={[
+              { href: "/partners", label: "Partners" },
               { href: "/contact", label: "Contact" },
               { href: "/support", label: "Support" },
               { href: "/privacy", label: "Privacy" },
