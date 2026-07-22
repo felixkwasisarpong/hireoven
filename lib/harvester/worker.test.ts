@@ -145,6 +145,7 @@ const FULL_ADAPTER_LIST = [
   "avature",
   "walmart",
   "sitemapjsonld",
+  "jsonld",
   "ibm",
   "adecco",
   "kelly",
@@ -174,17 +175,17 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   const pool = {
     query: async (text: string, values: unknown[]) => {
       calls.push({ text, values })
-      // Only the main (second) call finds anything, so the reserved-lane
-      // query legitimately returns empty and doesn't fabricate a duplicate.
-      const isReservedCall = calls.length === 1
-      return { rows: isReservedCall ? [] : [fakeRow], rowCount: isReservedCall ? 0 : 1 } as unknown as QueryResult
+      // Only the main (third) call finds anything, so both reserved-lane
+      // queries legitimately return empty and don't fabricate a duplicate.
+      const isMainCall = calls.length === 3
+      return { rows: isMainCall ? [fakeRow] : [], rowCount: isMainCall ? 1 : 0 } as unknown as QueryResult
     },
   } as unknown as Pool
 
   const result = await claimEligibleCompanies(pool, 25, 90)
 
-  assert.equal(calls.length, 2, "reserved-lane claim + main claim")
-  const [reservedCall, mainCall] = calls
+  assert.equal(calls.length, 3, "adapter reserved-lane + tier_dead reserved-lane + main claim")
+  const [reservedCall, tierDeadCall, mainCall] = calls
 
   // Reserved-lane call: small fixed slice, scoped to low-cardinality adapters only.
   assert.equal(reservedCall.values[0], 3)
@@ -206,8 +207,15 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
     "google",
   ])
 
-  // Main call: full adapter list, batch size reduced by whatever the reserved
-  // lane already claimed (0 here, so the full 25 remain).
+  // tier_dead reserved-lane call: small fixed slice, full adapter list, scoped
+  // to freshness_tier='tier_dead' in the query itself.
+  assert.match(tierDeadCall.text, /freshness_tier = 'tier_dead'/)
+  assert.equal(tierDeadCall.values[0], 2)
+  assert.equal(tierDeadCall.values[1], 90)
+  assert.deepEqual(tierDeadCall.values[2], FULL_ADAPTER_LIST)
+
+  // Main call: full adapter list, batch size reduced by whatever both reserved
+  // lanes already claimed (0 here, so the full 25 remain).
   assert.match(mainCall.text, /UPDATE companies/)
   assert.match(mainCall.text, /FOR UPDATE SKIP LOCKED/)
   assert.match(mainCall.text, /next_harvest_at = now\(\) \+ \(\$2 \|\| ' seconds'\)::interval/)
@@ -251,11 +259,36 @@ test("claimEligibleCompanies: reserved-lane claims are deduped against the main 
 
   const result = await claimEligibleCompanies(pool, 10, 240)
 
-  assert.equal(calls.length, 2)
-  // Main call's batch shrinks by exactly how many the reserved lane claimed.
-  assert.equal(calls[1].values[0], 9)
+  assert.equal(calls.length, 3, "adapter reserved-lane + tier_dead reserved-lane + main claim")
+  // tier_dead lane's own batch shrinks too (10 - 1 already claimed = 9, then
+  // capped at TIER_DEAD_RESERVED_CLAIM=2).
+  assert.equal(calls[1].values[0], 2)
+  // Main call's batch shrinks by exactly how many both reserved lanes claimed.
+  assert.equal(calls[2].values[0], 9)
   assert.equal(result.length, 1)
   assert.equal(result[0].id, reservedRow.id)
+})
+
+test("claimEligibleCompanies: tier_dead reserved lane fires even when no low-cardinality adapters are enabled", async () => {
+  // A dedicated Workable-only worker (include=["workable"]) has zero overlap
+  // with RESERVED_LOW_CARDINALITY_ADAPTERS, so the adapter-reservation lane
+  // is skipped entirely — but the tier_dead lane must still run, since
+  // tier_dead spans every ats_type, not just the singleton adapters.
+  const calls: Array<{ text: string; values: unknown[] }> = []
+  const pool = {
+    query: async (text: string, values: unknown[]) => {
+      calls.push({ text, values })
+      return { rows: [], rowCount: 0 } as unknown as QueryResult
+    },
+  } as unknown as Pool
+  const filter: AdapterClaimFilter = { include: ["workable"], exclude: [] }
+
+  await claimEligibleCompanies(pool, 10, 60, filter)
+
+  assert.equal(calls.length, 2, "tier_dead reserved-lane + main claim (no adapter reservation)")
+  assert.match(calls[0].text, /freshness_tier = 'tier_dead'/)
+  assert.deepEqual(calls[0].values[2], ["workable"])
+  assert.doesNotMatch(calls[1].text, /freshness_tier = 'tier_dead'/)
 })
 
 test("claimEligibleCompanies: orders strictly by next_harvest_at (no tier priority)", async () => {
