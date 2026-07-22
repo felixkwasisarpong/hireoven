@@ -11,11 +11,13 @@ import {
   AdminSelect,
 } from "@/components/admin/AdminPrimitives"
 
+type Segment = "all_users" | "marketing_subscribers" | "waitlist_confirmed"
+
 type CampaignRow = {
   id: string
   name: string
   subject: string
-  segment: "all" | "waitlist_confirmed" | string
+  segment: Segment | string
   status: "draft" | "sending" | "sent" | "failed" | string
   total_recipients: number
   total_sent: number
@@ -24,8 +26,9 @@ type CampaignRow = {
   sent_at: string | null
 }
 
-const SEGMENTS = [
-  { value: "all", label: "All subscribers" },
+const SEGMENTS: { value: Segment; label: string }[] = [
+  { value: "all_users", label: "All registered users (every account)" },
+  { value: "marketing_subscribers", label: "Marketing opt-ins only" },
   { value: "waitlist_confirmed", label: "Confirmed waitlist only" },
 ]
 
@@ -45,7 +48,7 @@ export default function AdminMarketingPage() {
 
   const [name, setName] = useState("Product update")
   const [subject, setSubject] = useState("What is new at Hireoven")
-  const [segment, setSegment] = useState<"all" | "waitlist_confirmed">("waitlist_confirmed")
+  const [segment, setSegment] = useState<Segment>("waitlist_confirmed")
   const [bodyText, setBodyText] = useState(
     "Hi there,\n\nWe just shipped new updates on Hireoven.\n\n- Better matching quality\n- Faster job freshness\n- Improved alerts\n\nThanks,\nHireoven Team"
   )
@@ -181,7 +184,7 @@ export default function AdminMarketingPage() {
             </label>
             <AdminSelect
               value={segment}
-              onChange={(event) => setSegment(event.target.value as "all" | "waitlist_confirmed")}
+              onChange={(event) => setSegment(event.target.value as Segment)}
             >
               {SEGMENTS.map((option) => (
                 <option key={option.value} value={option.value}>

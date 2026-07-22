@@ -2,12 +2,14 @@ import { NextResponse } from "next/server"
 import { Resend } from "resend"
 import { z } from "zod"
 import { assertAdminAccess } from "@/lib/admin/auth"
+import { generateUnsubscribeToken } from "@/lib/email/unsubscribe"
 import { getSupportFromEmail } from "@/lib/email/identity"
 import {
   buildMarketingUnsubscribeUrl,
   upsertMarketingSubscriber,
 } from "@/lib/marketing/subscribers"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { getPublicSiteUrl } from "@/lib/waitlist/site-url"
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -18,7 +20,11 @@ const createCampaignSchema = z.object({
   subject: z.string().min(1).max(220),
   bodyText: z.string().min(1).max(50000),
   bodyHtml: z.string().max(200000).optional(),
-  segment: z.enum(["all", "waitlist_confirmed"]).default("all"),
+  segment: z
+    .enum(["all_users", "selected_users", "marketing_subscribers", "waitlist_confirmed"])
+    .default("all_users"),
+  // Only used (and required) when segment === "selected_users" — picked from the admin Users page.
+  userIds: z.array(z.string().uuid()).max(5000).optional(),
   sendNow: z.boolean().default(true),
 })
 
@@ -37,33 +43,81 @@ function escapeHtml(input: string) {
     .replace(/"/g, "&quot;")
 }
 
-async function getSegmentRecipients(segment: "all" | "waitlist_confirmed") {
+type Segment = "all_users" | "selected_users" | "marketing_subscribers" | "waitlist_confirmed"
+
+interface Recipient {
+  email: string
+  // Present only for the all_users segment — lets us mint a real per-account
+  // unsubscribe token instead of enrolling the account in marketing_subscribers.
+  userId?: string
+}
+
+function buildAccountUnsubscribeUrl(token: string) {
+  const url = new URL("/api/email/unsubscribe", getPublicSiteUrl())
+  url.searchParams.set("token", token)
+  return url.toString()
+}
+
+async function getSegmentRecipients(
+  segment: Segment,
+  userIds?: string[]
+): Promise<Recipient[]> {
   const pool = getPostgresPool()
 
-  if (segment === "waitlist_confirmed") {
-    const result = await pool.query<{ email: string | null }>(
-      `SELECT email
-       FROM waitlist
-       WHERE confirmed = true
-         AND email IS NOT NULL`
-    )
-    const data = result.rows
-    const emails = Array.from(
-      new Set(data.map((x) => x.email).filter(Boolean))
-    ) as string[]
-    return emails
+  if (segment === "all_users" || segment === "selected_users") {
+    // profiles-backed sends. all_users = every account, minus suspended accounts;
+    // selected_users = only the hand-picked ids from the admin Users page (an
+    // explicit choice, so suspension doesn't exclude them). Both always honor the
+    // global suppression list (hard bounces / complaints / manual unsubscribe-all).
+    const result =
+      segment === "selected_users"
+        ? await pool.query<{ id: string; email: string }>(
+            `SELECT p.id::text, p.email
+             FROM profiles p
+             LEFT JOIN email_suppressions es ON lower(es.email) = lower(p.email)
+             WHERE p.email IS NOT NULL
+               AND es.email IS NULL
+               AND p.id = ANY($1::uuid[])`,
+            [userIds ?? []]
+          )
+        : await pool.query<{ id: string; email: string }>(
+            `SELECT p.id::text, p.email
+             FROM profiles p
+             LEFT JOIN email_suppressions es ON lower(es.email) = lower(p.email)
+             WHERE p.email IS NOT NULL
+               AND p.suspended_at IS NULL
+               AND es.email IS NULL`
+          )
+    const seen = new Set<string>()
+    const recipients: Recipient[] = []
+    for (const row of result.rows) {
+      const key = row.email.toLowerCase()
+      if (!row.email || seen.has(key)) continue
+      seen.add(key)
+      recipients.push({ email: row.email, userId: row.id })
+    }
+    return recipients
   }
 
-  const result = await pool.query<{ email: string | null }>(
-    `SELECT email
-     FROM marketing_subscribers
-     WHERE subscribed_to_marketing = true`
-  )
-  const data = result.rows
+  const query =
+    segment === "waitlist_confirmed"
+      ? `SELECT w.email
+         FROM waitlist w
+         LEFT JOIN email_suppressions es ON lower(es.email) = lower(w.email)
+         WHERE w.confirmed = true
+           AND w.email IS NOT NULL
+           AND es.email IS NULL`
+      : `SELECT ms.email
+         FROM marketing_subscribers ms
+         LEFT JOIN email_suppressions es ON lower(es.email) = lower(ms.email)
+         WHERE ms.subscribed_to_marketing = true
+           AND es.email IS NULL`
 
-  return Array.from(
-    new Set(data.map((x) => x.email).filter(Boolean))
+  const result = await pool.query<{ email: string | null }>(query)
+  const emails = Array.from(
+    new Set(result.rows.map((x) => x.email).filter(Boolean))
   ) as string[]
+  return emails.map((email) => ({ email }))
 }
 
 export async function GET() {
@@ -104,9 +158,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "RESEND_API_KEY is not configured" }, { status: 500 })
   }
 
-  const { name, subject, bodyText, bodyHtml, segment, sendNow } = parsed.data
+  const { name, subject, bodyText, bodyHtml, segment, userIds, sendNow } = parsed.data
+
+  if (segment === "selected_users" && (!userIds || userIds.length === 0)) {
+    return NextResponse.json(
+      { error: "userIds is required when segment is selected_users" },
+      { status: 400 }
+    )
+  }
+
   const pool = getPostgresPool()
-  const recipients = await getSegmentRecipients(segment)
+  const recipients = await getSegmentRecipients(segment, userIds)
 
   const campaignResult = await pool.query<{ id: string } & Record<string, unknown>>(
     `INSERT INTO marketing_campaigns (
@@ -145,14 +207,14 @@ export async function POST(request: Request) {
   let sent = 0
   let failed = 0
 
-  for (const email of recipients) {
+  for (const { email, userId } of recipients) {
     try {
-      const subscriber = await upsertMarketingSubscriber({
-        email,
-        source: "campaign",
-      })
+      const unsubscribeUrl = userId
+        ? buildAccountUnsubscribeUrl(await generateUnsubscribeToken(userId, null))
+        : buildMarketingUnsubscribeUrl(
+            (await upsertMarketingSubscriber({ email, source: "campaign" })).unsubscribeToken
+          )
 
-      const unsubscribeUrl = buildMarketingUnsubscribeUrl(subscriber.unsubscribeToken)
       const html = `
         <div style="font-family:system-ui,-apple-system,sans-serif;max-width:620px;margin:0 auto;padding:24px;color:#0f172a;">
           ${(bodyHtml ?? toHtml(bodyText))}
