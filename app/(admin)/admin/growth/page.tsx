@@ -134,8 +134,9 @@ export default function AdminGrowthPage() {
       ) : null}
 
       <p className="text-[12px] text-slate-400">
-        Signups, email subscribers, and referrals come from their tables; searches, application clicks, and returning
-        users come from session analytics. Website visitors live in Vercel Analytics and aren&apos;t mirrored here.
+        Website visitors are unique first-party visitors from our own pageview log. Signups, email subscribers, and
+        referrals come from their tables; searches, application clicks, and returning users come from session analytics.
+        All counts are UTC.
       </p>
     </div>
   )
