@@ -145,6 +145,7 @@ const FULL_ADAPTER_LIST = [
   "avature",
   "walmart",
   "sitemapjsonld",
+  "jsonld",
   "ibm",
   "adecco",
   "kelly",
