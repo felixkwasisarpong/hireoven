@@ -117,3 +117,94 @@ export async function purgeDeadCrawledCompanies(options?: {
 
   return { affected, batches, mode: mode === "delete" ? "delete" : "dead", minEmptyCrawls, inactiveDays }
 }
+
+/**
+ * Never-confirmed-live board self-cleaning.
+ *
+ * PREDICATE above deliberately never touches a board with `last_job_seen_at
+ * IS NULL` — a company we've never once seen a job for. That's the right
+ * call for a company added last week, but it means a board that was
+ * misconfigured from day one (wrong URL, migrated ATS, defunct board — the
+ * Lenovo SmartRecruiters case: 0 jobs, 84 empty crawls straight) sits in the
+ * fast harvester loop's claim rotation FOREVER, with no automatic cleanup.
+ *
+ * Age is the safety guard here instead of last-activity recency (there is no
+ * "last activity" to measure): a board old enough that a real employer would
+ * almost certainly have posted at least one req by now, combined with a long
+ * empty-crawl streak, is far more likely to be a dead/misconfigured source
+ * than a real employer we simply haven't caught yet. Same h1b/sponsor/active-
+ * jobs guards as PREDICATE; same reversible mode='dead' default.
+ */
+const DEFAULT_NEVER_LIVE_MIN_AGE_DAYS = Math.max(
+  7,
+  Number.parseInt(process.env.PURGE_NEVER_LIVE_MIN_AGE_DAYS ?? "14", 10),
+)
+
+// $1 = min empty-crawl streak, $2 = min age in days. (Batch SQL adds $3 = limit.)
+const NEVER_LIVE_PREDICATE = `
+  ats_type IS NOT NULL
+  AND status IS DISTINCT FROM 'dead'
+  AND COALESCE(sponsors_h1b, false) = false
+  AND last_job_seen_at IS NULL
+  AND COALESCE(consecutive_empty_crawls, 0) >= $1
+  AND created_at < now() - ($2 || ' days')::interval
+  AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.company_id = companies.id AND j.is_active = true)
+  AND NOT EXISTS (SELECT 1 FROM h1b_records hr WHERE hr.company_id = companies.id)
+`
+
+function neverLiveBatchSql(mode: PurgeDeadMode): string {
+  const select = `SELECT id FROM companies WHERE ${NEVER_LIVE_PREDICATE} LIMIT $3`
+  return mode === "dead"
+    ? `UPDATE companies SET status='dead', is_active=false, next_harvest_at=NULL, updated_at=now()
+        WHERE id IN (${select})`
+    : `DELETE FROM companies WHERE id IN (${select})`
+}
+
+export type PurgeNeverLiveResult = {
+  affected: number
+  batches: number
+  mode: PurgeDeadMode
+  minEmptyCrawls: number
+  minAgeDays: number
+}
+
+export async function countNeverLiveCompanies(
+  pool: Pool,
+  minEmptyCrawls = DEFAULT_MIN_EMPTY,
+  minAgeDays = DEFAULT_NEVER_LIVE_MIN_AGE_DAYS,
+): Promise<number> {
+  const { rows } = await pool.query<{ c: number }>(
+    `SELECT count(*)::int c FROM companies WHERE ${NEVER_LIVE_PREDICATE}`,
+    [minEmptyCrawls, minAgeDays],
+  )
+  return rows[0]?.c ?? 0
+}
+
+export async function purgeNeverLiveCompanies(options?: {
+  pool?: Pool
+  mode?: PurgeDeadMode
+  minEmptyCrawls?: number
+  minAgeDays?: number
+  batchSize?: number
+  maxBatches?: number
+}): Promise<PurgeNeverLiveResult> {
+  const pool = options?.pool ?? getPostgresPool()
+  const mode = options?.mode ?? ((process.env.PURGE_NEVER_LIVE_MODE as PurgeDeadMode) || "dead")
+  const minEmptyCrawls = Math.max(3, options?.minEmptyCrawls ?? DEFAULT_MIN_EMPTY)
+  const minAgeDays = Math.max(7, options?.minAgeDays ?? DEFAULT_NEVER_LIVE_MIN_AGE_DAYS)
+  const batchSize = Math.max(50, options?.batchSize ?? DEFAULT_BATCH)
+  const maxBatches = Math.max(1, options?.maxBatches ?? DEFAULT_MAX_BATCHES)
+
+  const sql = neverLiveBatchSql(mode === "delete" ? "delete" : "dead")
+  let affected = 0
+  let batches = 0
+  for (let i = 0; i < maxBatches; i += 1) {
+    const result = await pool.query(sql, [minEmptyCrawls, minAgeDays, batchSize])
+    const n = result.rowCount ?? 0
+    if (n === 0) break
+    affected += n
+    batches += 1
+  }
+
+  return { affected, batches, mode: mode === "delete" ? "delete" : "dead", minEmptyCrawls, minAgeDays }
+}
