@@ -413,6 +413,46 @@ RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifie
 `
 }
 
+// tier_dead's interval was shortened from 7 days to 23h (see run-harvest.ts)
+// so every board gets at least a daily check-in — but tier_dead is ~37% of
+// the whole active company base (20k+ boards), and the shared claim query
+// orders purely by overdueness. Without its own reservation, tier_dead's
+// sheer volume would compete with — and could crowd out — tier_1/2/3's
+// existing claim budget the same way the low-cardinality adapters above
+// were starved. These boards are typically fast to crawl (few/no postings
+// means pagination exits after page 1), so a small reserved slice per tick
+// comfortably cycles through all of them within 24h without taking capacity
+// away from higher-value tiers.
+function buildTierDeadClaimQuery(enabledAdapters: readonly AtsName[]): string {
+  const adapterClauses = [
+    "ats_type = ANY($3::text[])",
+    ...enabledAdapters.flatMap((name) => CLAIM_URL_SQL[name] ?? []),
+  ]
+    .map((clause) => `      ${clause}`)
+    .join("\n      OR ")
+
+  return `
+UPDATE companies
+SET next_harvest_at = now() + ($2 || ' seconds')::interval
+WHERE id IN (
+  SELECT id FROM companies
+  WHERE status = 'active'
+    AND is_active = true
+    AND duplicate_of_company_id IS NULL
+    AND careers_url IS NOT NULL
+    AND freshness_tier = 'tier_dead'
+    AND (
+${adapterClauses}
+    )
+    AND (next_harvest_at IS NULL OR next_harvest_at <= now())
+  ORDER BY next_harvest_at ASC NULLS FIRST
+  LIMIT $1
+  FOR UPDATE SKIP LOCKED
+)
+RETURNING id, name, careers_url, direct_ats_url, domain, ats_type, ats_identifier, raw_ats_config, etag, last_modified, freshness_tier, consecutive_empty_crawls
+`
+}
+
 type ClaimedRow = {
   id: string
   name: string
@@ -543,6 +583,13 @@ async function insertTickCrawlLogsSafe(pool: Pool, outcomes: TickCompanyOutcome[
 const RESERVED_CLAIM_MIN = 1
 const RESERVED_CLAIM_MAX = 3
 
+// tier_dead's reservation is sized off actual volume, not a fixed floor: at
+// ~1/tick/worker sustained, 6 workers ticking every 15s already clears
+// 34k+/day — comfortably more than the ~20k tier_dead boards that exist today
+// — so a small fixed reservation is enough without needing to scale with the
+// claim batch size the way the adapter reservation does.
+const TIER_DEAD_RESERVED_CLAIM = 2
+
 export async function claimEligibleCompanies(
   pool: Pool,
   batchSize: number,
@@ -569,6 +616,14 @@ export async function claimEligibleCompanies(
     ])
     reservedRows = reserved.rows
   }
+
+  const tierDeadLimit = Math.min(TIER_DEAD_RESERVED_CLAIM, Math.max(1, batchSize - reservedRows.length - 1))
+  const tierDeadReserved = await pool.query<ClaimedRow>(buildTierDeadClaimQuery(enabledAdapters), [
+    tierDeadLimit,
+    leaseSeconds,
+    enabledAdapters,
+  ])
+  reservedRows = [...reservedRows, ...tierDeadReserved.rows]
 
   const remainingBatchSize = Math.max(1, batchSize - reservedRows.length)
   const { rows: mainRows } = await pool.query<ClaimedRow>(buildClaimQuery(enabledAdapters), [

@@ -14,7 +14,15 @@ const TIER_INTERVAL_DEFAULTS: Record<string, number> = {
   // (HARVESTER_TIER_2_INTERVAL_SEC) if you need to tighten back temporarily.
   tier_2: 3_600,      // 1 hr
   tier_3: 21_600,     // 6 hr
-  tier_dead: 604_800, // 7 days
+  // Was 7 days — a board that kept coming back empty even at tier_3's 6h
+  // cadence got backed off hard to avoid wasting cycles on a likely-dead
+  // source. But that meant ~37% of the active company base (20k+ boards)
+  // structurally never got touched within 24h. Tightened to a once-daily
+  // cheap check-in instead: these boards are typically fast to crawl anyway
+  // (few/no postings means pagination exits after page 1), and worker.ts
+  // gives tier_dead its own small reserved claim lane so this daily check-in
+  // volume can't crowd out tier_1/2/3's existing claim budget.
+  tier_dead: 82_800,  // 23 hr — under the 24h SLA with headroom
 }
 
 const TIER_INTERVAL_ENV: Record<string, string> = {
