@@ -911,7 +911,24 @@ async function boot() {
   signinBtn.addEventListener("click", handleSignIn)
   profileLink.addEventListener("click", handleProfileLink)
 
-  renderIdle()
+  // Check auth up front so "Sign In" is immediately visible/reachable on a
+  // fresh popup open, instead of only surfacing after a Scan click (which
+  // requires an active job-page tab to even trigger) — a Chrome Web Store
+  // reviewer testing the described sign-in feature on a blank profile has no
+  // reason to click Scan first.
+  let authenticated = false
+  try {
+    const sessionRes = await sendToBackground({ type: "GET_SESSION" })
+    authenticated = (sessionRes as SessionResult).authenticated
+  } catch {
+    authenticated = false
+  }
+
+  if (authenticated) {
+    renderIdle()
+  } else {
+    renderUnauthenticated()
+  }
 }
 
 // ── Consent gate ────────────────────────────────────────────────────────────
