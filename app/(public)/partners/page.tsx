@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Sparkles, Compass, Users, BellRing, ShieldCheck, ArrowRight } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import PartnerInquiryForm from "@/components/marketing/PartnerInquiryForm"
-import { TESTIMONIALS, PARTNERS } from "@/lib/marketing/social-proof"
+import { getPublishedTestimonials, getPublishedPartners } from "@/lib/marketing/social-proof-store"
 
 export const revalidate = 3600
 
@@ -54,7 +54,9 @@ const BENEFITS = [
   },
 ]
 
-export default function PartnersPage() {
+export default async function PartnersPage() {
+  const [testimonials, partners] = await Promise.all([getPublishedTestimonials(), getPublishedPartners()])
+
   return (
     <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
       <Navbar />
@@ -108,12 +110,12 @@ export default function PartnersPage() {
         </div>
       </section>
 
-      {/* Testimonials — rendered only when real ones exist (see social-proof.ts). */}
-      {TESTIMONIALS.length > 0 && (
+      {/* Testimonials — rendered only when published rows exist (admin-managed). */}
+      {testimonials.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
           <h2 className="text-center text-[22px] font-bold text-slate-900">What partners say</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            {TESTIMONIALS.map((t, i) => (
+            {testimonials.map((t, i) => (
               <figure key={i} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <blockquote className="text-[15px] leading-relaxed text-slate-800">&ldquo;{t.quote}&rdquo;</blockquote>
                 <figcaption className="mt-4 flex items-center gap-3">
@@ -135,14 +137,14 @@ export default function PartnersPage() {
         </section>
       )}
 
-      {/* Partner logos — rendered only when real ones exist. */}
-      {PARTNERS.length > 0 && (
+      {/* Partner logos — rendered only when published rows exist. */}
+      {partners.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
           <h2 className="text-center text-[13px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             Trusted by
           </h2>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-6">
-            {PARTNERS.map((p) => {
+            {partners.map((p) => {
               const inner = p.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.logoUrl} alt={p.name} height={32} className="h-8 w-auto opacity-70 grayscale" />
