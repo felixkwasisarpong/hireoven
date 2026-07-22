@@ -17,6 +17,7 @@ import {
   Waves,
   ClipboardList,
   Megaphone,
+  Quote,
   Tag,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -33,6 +34,7 @@ const LINKS = [
   { href: "/admin/alerts", label: "Alerts log", icon: BellRing },
   { href: "/admin/marketing", label: "Marketing", icon: Megaphone },
   { href: "/admin/promos", label: "Promos", icon: Tag },
+  { href: "/admin/testimonials", label: "Social proof", icon: Quote },
   { href: "/admin/blog", label: "Blog", icon: BookOpen },
   { href: "/admin/signal-api", label: "Signal API", icon: KeyRound },
   { href: "/admin/settings", label: "Settings", icon: Settings },
