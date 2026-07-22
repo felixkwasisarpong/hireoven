@@ -207,6 +207,14 @@ const SUPPORTED_ATS_TYPES = [
   // Sitemap-driven JSON-LD (UPS and other Phenom-Canvas / custom sites). Enrolled
   // by ats_type with the sitemap URL — no careers_url pattern — so list it here.
   "sitemapjsonld",
+  // Generic single-page JSON-LD (schema.org/JobPosting embedded directly on a
+  // company's own careers page — no ATS platform at all). Same trap as every
+  // other ats_type-only adapter above: registered, working, but never in the
+  // claim allowlist. Found via audit: ~5,100 companies tagged ats_type='jsonld'
+  // were completely unreachable by the fast loop — some 7+ days overdue, most
+  // sitting on 20+ consecutive empty crawls that were never actually attempted
+  // by anything capable of running this adapter.
+  "jsonld",
   // IBM (www-api.ibm.com Elasticsearch). Single-company custom adapter.
   "ibm",
   // Adecco (adecco.com jobs API). Single-company custom adapter.
