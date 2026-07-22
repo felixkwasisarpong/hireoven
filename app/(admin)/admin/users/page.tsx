@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { ChevronDown, FileText, Loader2, Mail, Shield, UserRound, UserX } from "lucide-react"
+import { ChevronDown, FileText, Loader2, Mail, Send, Shield, UserRound, UserX, X } from "lucide-react"
 import {
   AdminBadge,
   AdminButton,
@@ -141,6 +141,14 @@ export default function AdminUsersPage() {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [now, setNow] = useState(Date.now())
 
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
+  const [composeOpen, setComposeOpen] = useState(false)
+  const [emailSubject, setEmailSubject] = useState("")
+  const [emailBody, setEmailBody] = useState("")
+  const [sendingEmail, setSendingEmail] = useState(false)
+  const [sendResult, setSendResult] = useState<string | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+
   async function loadUsers() {
     setLoading(true)
     const res = await fetch("/api/admin/users", { cache: "no-store" })
@@ -172,6 +180,78 @@ export default function AdminUsersPage() {
   }, [search, users])
 
   const selectedUser = visibleUsers.find((u) => u.id === selectedId) ?? null
+
+  const checkableVisibleIds = useMemo(
+    () => visibleUsers.filter((u) => u.email).map((u) => u.id),
+    [visibleUsers]
+  )
+  const allVisibleChecked =
+    checkableVisibleIds.length > 0 && checkableVisibleIds.every((id) => checkedIds.has(id))
+
+  function toggleChecked(userId: string) {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(userId)) next.delete(userId)
+      else next.add(userId)
+      return next
+    })
+  }
+
+  function toggleCheckAllVisible() {
+    setCheckedIds((prev) => {
+      if (allVisibleChecked) {
+        const next = new Set(prev)
+        checkableVisibleIds.forEach((id) => next.delete(id))
+        return next
+      }
+      return new Set([...prev, ...checkableVisibleIds])
+    })
+  }
+
+  function clearSelection() {
+    setCheckedIds(new Set())
+    setComposeOpen(false)
+  }
+
+  async function sendBulkEmail() {
+    if (checkedIds.size === 0 || !emailSubject.trim() || !emailBody.trim()) return
+    setSendingEmail(true)
+    setSendResult(null)
+    setSendError(null)
+    try {
+      const response = await fetch("/api/admin/marketing/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `Manual send to ${checkedIds.size} user${checkedIds.size === 1 ? "" : "s"}`,
+          subject: emailSubject,
+          bodyText: emailBody,
+          segment: "selected_users",
+          userIds: Array.from(checkedIds),
+          sendNow: true,
+        }),
+      })
+      const data = (await response.json()) as {
+        error?: string
+        sent?: number
+        failed?: number
+        totalRecipients?: number
+      }
+      if (!response.ok) throw new Error(data.error ?? "Could not send email")
+      setSendResult(
+        `Sent to ${data.sent ?? 0}/${data.totalRecipients ?? 0} recipients${
+          data.failed ? `, ${data.failed} failed` : ""
+        }.`
+      )
+      setEmailSubject("")
+      setEmailBody("")
+      setCheckedIds(new Set())
+    } catch (error) {
+      setSendError((error as Error).message)
+    } finally {
+      setSendingEmail(false)
+    }
+  }
 
   const stats = useMemo(() => ({
     total: users.length,
@@ -242,18 +322,104 @@ export default function AdminUsersPage() {
         title="Users"
         description="Click the plan badge dropdown to upgrade or downgrade any account instantly."
       >
-        <div className="mb-4">
-          <AdminInput
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by email, name, visa status, or plan"
-          />
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="min-w-[240px] flex-1">
+            <AdminInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by email, name, visa status, or plan"
+            />
+          </div>
+          {checkedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2">
+              <span className="text-xs font-semibold text-sky-800">
+                {checkedIds.size} selected
+              </span>
+              <AdminButton
+                tone="primary"
+                className="px-2.5 py-1.5 text-xs"
+                onClick={() => setComposeOpen(true)}
+              >
+                <Mail className="mr-1 h-3.5 w-3.5" /> Email selected
+              </AdminButton>
+              <AdminButton tone="ghost" className="px-2.5 py-1.5 text-xs" onClick={clearSelection}>
+                <X className="mr-1 h-3.5 w-3.5" /> Clear
+              </AdminButton>
+            </div>
+          )}
         </div>
+
+        {composeOpen && (
+          <div className="mb-4 rounded-2xl border border-sky-200 bg-sky-50/40 p-4">
+            <p className="mb-3 text-sm font-semibold text-gray-900">
+              Email {checkedIds.size} selected user{checkedIds.size === 1 ? "" : "s"}
+            </p>
+            <p className="mb-4 text-xs text-gray-500">
+              Sends from your configured support sender and includes a one-click unsubscribe link automatically.
+            </p>
+
+            <div>
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                Subject
+              </label>
+              <AdminInput
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="What's this about?"
+              />
+            </div>
+
+            <div className="mt-4">
+              <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                Message
+              </label>
+              <textarea
+                value={emailBody}
+                onChange={(e) => setEmailBody(e.target.value)}
+                placeholder={"Hi there,\n\n..."}
+                className="min-h-[160px] w-full rounded-2xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-gray-900 outline-none shadow-[0_8px_20px_rgba(15,23,42,0.03)] placeholder:text-gray-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
+              />
+            </div>
+
+            {sendError ? (
+              <p className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {sendError}
+              </p>
+            ) : null}
+            {sendResult ? (
+              <p className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                {sendResult}
+              </p>
+            ) : null}
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <AdminButton
+                disabled={sendingEmail || !emailSubject.trim() || !emailBody.trim()}
+                onClick={() => void sendBulkEmail()}
+              >
+                {sendingEmail ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                Send to {checkedIds.size} user{checkedIds.size === 1 ? "" : "s"}
+              </AdminButton>
+              <AdminButton tone="secondary" disabled={sendingEmail} onClick={() => setComposeOpen(false)}>
+                Cancel
+              </AdminButton>
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="text-xs uppercase tracking-[0.2em] text-gray-400">
               <tr>
+                <th className="px-3 py-3">
+                  <input
+                    type="checkbox"
+                    checked={allVisibleChecked}
+                    onChange={toggleCheckAllVisible}
+                    disabled={checkableVisibleIds.length === 0}
+                    aria-label="Select all visible users"
+                  />
+                </th>
                 <th className="px-3 py-3">Email</th>
                 <th className="px-3 py-3">Name</th>
                 <th className="px-3 py-3">Joined</th>
@@ -269,19 +435,28 @@ export default function AdminUsersPage() {
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-gray-400">
+                  <td colSpan={11} className="px-3 py-10 text-center text-gray-400">
                     <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
                     Loading users…
                   </td>
                 </tr>
               ) : visibleUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="px-3 py-10 text-center text-gray-400">
+                  <td colSpan={11} className="px-3 py-10 text-center text-gray-400">
                     No users match your search.
                   </td>
                 </tr>
               ) : visibleUsers.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50/60">
+                  <td className="px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={checkedIds.has(user.id)}
+                      onChange={() => toggleChecked(user.id)}
+                      disabled={!user.email}
+                      aria-label={`Select ${user.email ?? user.name ?? "user"}`}
+                    />
+                  </td>
                   <td className="px-3 py-3 font-medium text-gray-900">{user.email ?? "—"}</td>
                   <td className="px-3 py-3 text-gray-600">{user.name ?? "—"}</td>
                   <td className="px-3 py-3 text-xs text-gray-500">{formatDateTime(user.joinedAt)}</td>
