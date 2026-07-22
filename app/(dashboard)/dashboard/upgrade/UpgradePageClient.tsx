@@ -166,7 +166,7 @@ export default function UpgradePageClient({
           </div>
         )}
 
-        {usage && (
+        {usage && resolvedPlan !== "pro_max" && (
           <div className="mb-8 grid gap-3 md:grid-cols-2">
             <div className="rounded-[16px] border border-slate-200 bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Usage this month</p>
