@@ -111,7 +111,20 @@ export async function buildGrowthMetrics(pool: Pool, windowDays = 14): Promise<G
   // Each source query is independent — run them together. A missing table (e.g.
   // user_session_quality not yet migrated) shouldn't blank the whole board, so
   // each falls back to an empty series.
-  const [signups, emailSubs, referrals, searches, applyClicks, returningRows] = await Promise.all([
+  const [visitors, signups, emailSubs, referrals, searches, applyClicks, returningRows] = await Promise.all([
+    // Unique first-party visitors/day from our own pageview log (see
+    // add-page-views.sql) — no Vercel Analytics dependency.
+    pool
+      .query<{ day: string; n: string }>(
+        `SELECT to_char(date_trunc('day', created_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD') AS day,
+                COUNT(DISTINCT visitor_id)::text AS n
+           FROM page_views
+          WHERE created_at >= $1::timestamptz
+          GROUP BY 1`,
+        [startIso],
+      )
+      .then((r) => r.rows.map((row) => ({ day: row.day, n: Number(row.n) })))
+      .catch(emptyDayCounts),
     dailyCount(pool, "profiles", "created_at", startIso).catch(emptyDayCounts),
     dailyCount(pool, "marketing_subscribers", "created_at", startIso).catch(emptyDayCounts),
     dailyCount(pool, "referrals", "created_at", startIso).catch(emptyDayCounts),
@@ -134,6 +147,7 @@ export async function buildGrowthMetrics(pool: Pool, windowDays = 14): Promise<G
       .catch(() => [] as Array<{ day: string; returning: string; active: string }>),
   ])
 
+  const visitorSeries = toSeries(spine, visitors)
   const signupSeries = toSeries(spine, signups)
   const emailSeries = toSeries(spine, emailSubs)
   const referralSeries = toSeries(spine, referrals)
@@ -155,12 +169,11 @@ export async function buildGrowthMetrics(pool: Pool, windowDays = 14): Promise<G
       key: "visitors",
       label: "Website visitors",
       unit: "count",
-      today: null,
+      today: todayValue(visitorSeries),
       target: 1000,
-      series: [],
-      average: null,
-      tracked: false,
-      source: "Vercel Analytics",
+      series: visitorSeries,
+      average: avg(visitorSeries),
+      tracked: true,
     },
     {
       key: "signups",
