@@ -4,6 +4,7 @@ import { logApiUsage } from "@/lib/admin/usage"
 import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { isDeadSubscriptionError, removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
 import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
+import { extractDomainFromLogoDevUrl, resolveLogoDomainOverride } from "@/lib/companies/logo-url"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -93,10 +94,25 @@ function logoProxyUrl(domain: string | null | undefined): string | null {
   return `${base}/api/logo?domain=${encodeURIComponent(domain.trim().toLowerCase())}`
 }
 
+/**
+ * Prefer the domain embedded in an already-resolved logo.dev URL over
+ * `companies.domain` — a later discovery pass frequently overwrites `domain`
+ * with an internal placeholder (*-tenant, *.discovered, …) while `logo_url`
+ * still holds the correct value from an earlier backfill. Falls back to
+ * `domain` (through the same brand-override map the main feed uses, e.g.
+ * jj.com -> jnj.com) when `logo_url` isn't a usable logo.dev URL.
+ */
+export function resolveCompanyLogoDomain(co: Pick<Company, "logo_url" | "domain"> | null | undefined): string | null {
+  const fromLogoUrl = extractDomainFromLogoDevUrl(co?.logo_url)
+  if (fromLogoUrl) return fromLogoUrl
+  const real = realDomain(co?.domain)
+  return real ? resolveLogoDomainOverride(real) : null
+}
+
 function renderJobRow(job: JobWithCompanyContext, index: number, matchScore?: number | null) {
   const co = job.company
   const companyName = co?.name ?? "Tracked company"
-  const proxyUrl = logoProxyUrl(realDomain(co?.domain))
+  const proxyUrl = logoProxyUrl(resolveCompanyLogoDomain(co))
 
   const logoHtml = proxyUrl
     ? `<img src="${esc(proxyUrl)}" alt="${esc(companyName)}" width="56" height="56"
