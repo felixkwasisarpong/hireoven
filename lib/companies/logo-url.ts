@@ -119,6 +119,25 @@ function getLogoDevPublishableToken(): string {
   return ""
 }
 
+/**
+ * Extract the domain segment from a logo.dev image URL
+ * (`https://img.logo.dev/{domain}?token=...`) — recovers a company's real
+ * domain when `companies.domain` has since been overwritten by an internal
+ * discovery placeholder (`*-tenant`, `*.discovered`, …) but `logo_url` still
+ * holds a correctly-resolved logo.dev URL from an earlier backfill pass.
+ */
+export function extractDomainFromLogoDevUrl(logoUrl: string | null | undefined): string | null {
+  if (!logoUrl?.trim()) return null
+  try {
+    const u = new URL(logoUrl)
+    if (u.hostname !== "img.logo.dev") return null
+    const domain = u.pathname.replace(/^\/+/, "").split("?")[0]?.trim()
+    return domain ? normalizeCompanyDomain(domain) : null
+  } catch {
+    return null
+  }
+}
+
 export function normalizeCompanyDomain(domain: string) {
   return domain
     .trim()
