@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { BadgePercent, BookOpen, Building2, Puzzle, ShieldCheck, Sparkles } from "lucide-react"
+import { BadgePercent, BookOpen, Briefcase, Building2, Puzzle, ShieldCheck, Sparkles } from "lucide-react"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import NavbarAuthCluster from "./NavbarAuthCluster"
 
@@ -12,6 +12,13 @@ export default function Navbar() {
             <HireovenLogo variant="header" className="h-10 w-auto sm:h-12" priority />
           </Link>
           <div className="hidden items-center gap-6 md:flex">
+            <Link
+              href="/find"
+              className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
+            >
+              <Briefcase className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+              Find Jobs
+            </Link>
             <Link
               href="/features"
               className="inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-strong"
