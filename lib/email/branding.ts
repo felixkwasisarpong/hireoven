@@ -7,14 +7,23 @@
 import { companyLogoUrlFromDomain } from "@/lib/companies/logo-url"
 
 /** Absolute origin for any /public asset referenced in an email body. */
-function getEmailBaseUrl(): string {
+export function getEmailBaseUrl(): string {
   // `??` only catches undefined/null — if NEXT_PUBLIC_APP_URL is the
   // empty string or a relative path (misconfigured env), the previous
   // version returned that value and produced broken /brand/... links in
   // the email body. Validate that we have an absolute http(s) origin
-  // before using it; otherwise fall back to the public hostname.
+  // before using it. Localhost is also unusable once a real email leaves
+  // the machine, so fall back to the public hostname for local origins.
   const raw = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "").trim()
-  return raw && /^https?:\/\//i.test(raw) ? raw : "https://hireoven.com"
+  if (!raw || !/^https?:\/\//i.test(raw)) return "https://hireoven.com"
+
+  try {
+    const url = new URL(raw)
+    const localHosts = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"])
+    return localHosts.has(url.hostname) ? "https://hireoven.com" : raw
+  } catch {
+    return "https://hireoven.com"
+  }
 }
 
 /**

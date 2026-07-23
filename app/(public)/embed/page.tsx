@@ -35,10 +35,10 @@ function WidgetCard({
   docsAnchor: string
 }) {
   return (
-    <div className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
-      <h2 className="text-base font-semibold text-slate-900">{title}</h2>
-      <p className="mt-1 text-sm text-slate-500">{blurb}</p>
-      <div className="mt-4 flex flex-1 items-center justify-center rounded-xl bg-slate-50 p-4">
+    <div className="term-panel flex flex-col p-5">
+      <h2 className="text-[15px] font-semibold text-white">{title}</h2>
+      <p className="mt-1 text-[13px] leading-relaxed text-[#ccd6cf]/60">{blurb}</p>
+      <div className="mt-4 flex flex-1 items-center justify-center border border-[rgba(120,200,160,0.12)] bg-[#0a0e0c] p-4">
         <iframe
           src={src}
           width={420}
@@ -50,7 +50,7 @@ function WidgetCard({
       </div>
       <Link
         href={`/embed/docs#${docsAnchor}`}
-        className="mt-4 text-sm font-medium text-emerald-700 underline hover:text-emerald-900"
+        className="mt-4 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
       >
         Get the embed code →
       </Link>
@@ -62,29 +62,25 @@ export default async function EmbedGalleryPage() {
   const companyId = await previewCompanyId()
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="max-w-2xl">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            Embeddable H-1B widgets
+          <p className="term-label">{"// embed --h1b --widgets"}</p>
+          <h1 className="mt-3 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
+            Embeddable <span className="text-[#f5a623]">H-1B widgets</span>
+            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
-          <p className="mt-3 text-slate-600">
+          <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Add live H-1B data to any site with one line of HTML. Widgets render server-side,
             load fast, and need no JavaScript on your page. Free to use with a small attribution
             link.
           </p>
-          <div className="mt-5 flex gap-3">
-            <Link
-              href="/embed/docs"
-              className="rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-            >
+          <div className="mt-6 flex flex-wrap gap-3">
+            <Link href="/embed/docs" className="term-btn term-btn-amber">
               Read the docs
             </Link>
-            <Link
-              href="/dashboard/scorecard"
-              className="rounded-full border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
+            <Link href="/signup?next=%2Fdashboard%2Fscorecard" className="term-btn">
               Embed your own scorecard
             </Link>
           </div>
@@ -109,16 +105,16 @@ export default async function EmbedGalleryPage() {
           ) : null}
         </div>
 
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-6">
-          <h2 className="text-base font-semibold text-slate-900">Personal sponsorability scorecard</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-500">
+        <div className="term-panel mt-6 p-6">
+          <h2 className="text-[15px] font-semibold text-white">Personal sponsorability scorecard</h2>
+          <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-[#ccd6cf]/60">
             Show your own H-1B sponsorability grade on your portfolio or résumé site. Publish your
             scorecard from your dashboard, then copy the embed snippet — it stays in sync as you
             update your résumé, and you can revoke it any time.
           </p>
           <Link
-            href="/dashboard/scorecard"
-            className="mt-4 inline-block text-sm font-medium text-emerald-700 underline hover:text-emerald-900"
+            href="/signup?next=%2Fdashboard%2Fscorecard"
+            className="mt-4 inline-block text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
           >
             Publish &amp; embed your scorecard →
           </Link>

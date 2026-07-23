@@ -48,7 +48,7 @@ export default function LogoWall({ companies }: Props) {
             logoUrl={isGoogleFaviconUrl(company.logo_url) ? null : company.logo_url}
             className="h-12 w-12 transition"
           />
-          <span className="line-clamp-1 text-center text-[11px] font-medium text-gray-400 group-hover:text-gray-600">
+          <span className="line-clamp-1 text-center text-[11px] font-medium text-[#ccd6cf]/45 group-hover:text-[#38e08a]">
             {company.name}
           </span>
         </div>

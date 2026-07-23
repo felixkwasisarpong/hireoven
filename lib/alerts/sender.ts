@@ -3,7 +3,7 @@ import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { isDeadSubscriptionError, removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
-import { getHireovenEmailLogoUrl } from "@/lib/email/branding"
+import { getEmailBaseUrl, getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { extractDomainFromLogoDevUrl, resolveLogoDomainOverride } from "@/lib/companies/logo-url"
 import { getAlertsFromEmail } from "@/lib/email/identity"
 import { env } from "@/lib/env"
@@ -19,7 +19,7 @@ const resend = process.env.RESEND_API_KEY
   : null
 
 function getBaseUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  return getEmailBaseUrl()
 }
 
 export function configureWebPush() {
@@ -144,7 +144,8 @@ function renderJobRow(job: JobWithCompanyContext, index: number, matchScore?: nu
   // Deep-link straight to the job detail page (the old /dashboard?jobId= form
   // was never consumed by the feed — users landed on the generic feed). ntf=1
   // marks an email-notification referral so the page stamps clicked_at.
-  const jobUrl = `${getBaseUrl()}/dashboard/jobs/${esc(job.id)}?ntf=1`
+  const jobUrl = new URL(`/dashboard/jobs/${job.id}`, getBaseUrl())
+  jobUrl.searchParams.set("ntf", "1")
   const divider = index > 0 ? `<tr><td colspan="2" style="padding:0 0 18px;"><div style="height:1px;background:#f1f5f9;"></div></td></tr>` : ""
 
   return `
@@ -153,7 +154,7 @@ function renderJobRow(job: JobWithCompanyContext, index: number, matchScore?: nu
       <td width="72" style="vertical-align:top;padding-right:16px;width:72px;padding-bottom:20px;">${logoHtml}</td>
       <td width="100%" style="vertical-align:top;padding-bottom:20px;word-break:break-word;">
         <div style="font-size:16px;font-weight:700;color:#0f172a;line-height:1.3;margin-bottom:4px;">
-          <a href="${jobUrl}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
+          <a href="${esc(jobUrl.toString())}" style="color:#0f172a;text-decoration:none;">${esc(job.title)}</a>
         </div>
         <div style="font-size:13px;color:#475569;margin-bottom:2px;">${esc(companyName)}</div>
         <div style="font-size:12px;color:#94a3b8;margin-bottom:8px;">${esc(getLocationLabel(job))} &nbsp;·&nbsp; ${formatFreshness(String(notificationFreshnessDate(job) ?? job.first_detected_at))}</div>
@@ -322,8 +323,9 @@ function renderEmailShell({
 }
 
 function buildAlertDashboardUrl(alertName: string) {
-  const url = new URL("/dashboard", getBaseUrl())
+  const url = new URL("/dashboard/matches", getBaseUrl())
   url.searchParams.set("alert", alertName)
+  url.searchParams.set("source", "email-alert")
   return url.toString()
 }
 

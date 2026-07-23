@@ -139,42 +139,42 @@ export default async function SalariesPage({ params }: Props) {
   ]
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
         <header className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          <CompanyLogo companyName={company.name} domain={company.domain} logoUrl={company.logo_url} priority className="h-16 w-16 shrink-0 rounded-2xl border border-slate-200/70 bg-white" />
+          <CompanyLogo companyName={company.name} domain={company.domain} logoUrl={company.logo_url} priority className="h-16 w-16 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]" />
           <div className="min-w-0">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-              <Banknote className="h-3.5 w-3.5" /> {agg.n.toLocaleString()} posted US salaries
+            <span className="inline-flex items-center gap-1.5 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-semibold text-[#ccd6cf]/80">
+              <Banknote className="h-3.5 w-3.5 text-[#f5a623]" /> <span className="tabular-nums text-[#38e08a]">{agg.n.toLocaleString()}</span> posted US salaries
             </span>
-            <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight sm:text-[32px]">What does {company.name} pay?</h1>
-            <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
-              Median total pay is about <strong>{fmt(agg.median, cur)}</strong> per year, with most roles between {fmt(agg.p25, cur)} and {fmt(agg.p75, cur)} — based on salary ranges disclosed in {company.name}&apos;s own job postings.
+            <h1 className="mt-4 text-[1.9rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.2rem]">What does {company.name} pay?</h1>
+            <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
+              Median total pay is about <strong className="font-semibold text-[#38e08a]">{fmt(agg.median, cur)}</strong> per year, with most roles between {fmt(agg.p25, cur)} and {fmt(agg.p75, cur)} — based on salary ranges disclosed in {company.name}&apos;s own job postings.
             </p>
           </div>
         </header>
 
         <section className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {stats.map((s) => (
-            <div key={s.label} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-[20px] font-bold tabular-nums text-slate-900">{s.value}</p>
-              <p className="mt-0.5 text-[11.5px] leading-tight text-slate-500">{s.label}</p>
+            <div key={s.label} className="term-panel p-4">
+              <p className="text-[20px] font-semibold tabular-nums text-[#38e08a]">{s.value}</p>
+              <p className="term-label mt-1 leading-tight">{s.label}</p>
             </div>
           ))}
         </section>
 
         {roles.length > 0 && (
           <section className="mt-10">
-            <h2 className="text-lg font-bold text-slate-900">Highest-paying roles at {company.name}</h2>
-            <div className="mt-4 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <h2 className="text-lg font-semibold text-white">Highest-paying roles at {company.name}</h2>
+            <div className="mt-4 divide-y divide-[rgba(120,200,160,0.12)] overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[#0e1411]">
               {roles.map((r) => (
                 <div key={r.title} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <p className="truncate text-[14px] font-medium text-slate-800">{r.title}</p>
-                  <p className="shrink-0 text-[14px] font-semibold tabular-nums text-slate-900">
-                    {fmt(r.salary_min, cur)}<span className="text-slate-400">–</span>{fmt(r.salary_max, cur)}
+                  <p className="truncate text-[14px] font-medium text-[#ccd6cf]/80">{r.title}</p>
+                  <p className="shrink-0 text-[14px] font-semibold tabular-nums text-[#38e08a]">
+                    {fmt(r.salary_min, cur)}<span className="text-[#ccd6cf]/35">–</span>{fmt(r.salary_max, cur)}
                   </p>
                 </div>
               ))}
@@ -183,27 +183,27 @@ export default async function SalariesPage({ params }: Props) {
         )}
 
         <div className="mt-8 flex flex-wrap gap-3">
-          <Link href={`/jobs-at/${companyParam(company.id, company.name)}`} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800">
+          <Link href={`/jobs-at/${companyParam(company.id, company.name)}`} className="term-btn term-btn-amber">
             <Briefcase className="h-4 w-4" /> See {company.name} jobs hiring now
           </Link>
-          <Link href={`/signup?next=${encodeURIComponent(profilePath)}`} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:border-slate-300">
+          <Link href={`/signup?next=${encodeURIComponent(profilePath)}`} className="term-btn">
             Track offers &amp; negotiate <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
         <section className="mt-12">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><HelpCircle className="h-4.5 w-4.5 text-slate-400" /> {company.name} salary FAQ</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><HelpCircle className="h-4.5 w-4.5 text-[#ccd6cf]/45" /> {company.name} salary FAQ</h2>
           <div className="mt-4 space-y-3">
             {faqs.map((f) => (
-              <details key={f.q} className="group rounded-2xl border border-slate-200 bg-white p-4 open:shadow-sm">
-                <summary className="cursor-pointer list-none text-[15px] font-semibold text-slate-800 marker:hidden">{f.q}</summary>
-                <p className="mt-2 text-[14px] leading-relaxed text-slate-600">{f.a}</p>
+              <details key={f.q} className="term-panel group p-4">
+                <summary className="cursor-pointer list-none text-[15px] font-semibold text-[#ccd6cf]/90 marker:hidden">{f.q}</summary>
+                <p className="mt-2 text-[14px] leading-relaxed text-[#ccd6cf]/65">{f.a}</p>
               </details>
             ))}
           </div>
         </section>
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Salary figures are aggregated from disclosed ranges in {company.name}&apos;s active US job postings on Hireoven&apos;s live index. Annualized; hourly listings excluded. Actual compensation varies by level, location and negotiation. Last updated {YEAR}.
         </p>
       </main>

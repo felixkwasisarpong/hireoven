@@ -8,23 +8,21 @@ export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string
   const share = `${base}/launch?ref=${waitlistId}`
 
   return (
-    <div className="mt-10 rounded-2xl border border-border bg-surface-alt p-6 text-left">
-      <h2 className="text-lg font-bold text-strong">Move up the waitlist</h2>
-      <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+    <div className="term-panel mt-10 p-6 text-left">
+      <h2 className="text-lg font-semibold text-white">Move up the waitlist</h2>
+      <p className="mt-2 text-sm leading-relaxed text-[#ccd6cf]/60">
         Share Hireoven and move ahead of 10 people for each friend who joins.
       </p>
       {/* TODO: Referral tracking - award position bumps when ref signups are verified. */}
-      <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Your personal share link
-      </p>
+      <p className="term-label mt-4">your personal share link</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <code className="block flex-1 truncate rounded-lg border border-border bg-card px-3 py-2 text-xs">
+        <code className="block flex-1 truncate border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 py-2 text-xs text-[#ccd6cf]/70">
           {share}
         </code>
         <button
           type="button"
           onClick={() => void navigator.clipboard.writeText(share)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-strong hover:bg-surface-alt"
+          className="inline-flex items-center justify-center gap-2 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-2 text-sm font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
         >
           <Copy className="h-4 w-4" aria-hidden />
           Copy
@@ -37,7 +35,7 @@ export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string
           )}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-strong hover:bg-surface-alt"
+          className="border border-[rgba(120,200,160,0.2)] px-3 py-1.5 text-xs font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
         >
           Share on X
         </a>
@@ -45,7 +43,7 @@ export default function ConfirmedShareBlock({ waitlistId }: { waitlistId: string
           href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(share)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-strong hover:bg-surface-alt"
+          className="border border-[rgba(120,200,160,0.2)] px-3 py-1.5 text-xs font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
         >
           LinkedIn
         </a>

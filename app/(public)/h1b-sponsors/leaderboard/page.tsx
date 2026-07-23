@@ -41,7 +41,7 @@ export default function LeaderboardPage({
   searchParams: SearchParams
 }) {
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <LeaderboardView
         filters={parseFilters(searchParams)}

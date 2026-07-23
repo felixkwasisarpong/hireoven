@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 function H2({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="mt-8 scroll-mt-24 text-xl font-semibold text-slate-900">
+    <h2 id={id} className="mt-8 scroll-mt-24 text-xl font-semibold text-white">
       {children}
     </h2>
   )
@@ -21,14 +21,16 @@ function H2({ id, children }: { id: string; children: React.ReactNode }) {
 
 export default function LotteryRescuePage() {
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <article className="prose-sm text-[15px] leading-relaxed text-slate-700">
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-900">
-            If you lost the H-1B lottery
+      <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+        <article className="text-[15px] leading-relaxed text-[#ccd6cf]/80">
+          <p className="term-label">&gt; lottery_rescue --after-rejection</p>
+          <h1 className="mt-4 text-[2.1rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.6rem]">
+            If you <span className="text-[#f5a623]">lost</span> the H-1B lottery
+            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
-          <p className="mt-3">
+          <p className="mt-4">
             Each year the H-1B cap is far smaller than the number of registrations, so most
             applicants are not selected. A rejection is common and it is not the end of the road.
             This page explains the two legal routes most people in this position look into next.
@@ -44,7 +46,7 @@ export default function LotteryRescuePage() {
               href="https://www.uscis.gov/working-in-the-united-states/h-1b-specialty-occupations"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-900 underline"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
             >
               INA 214(g)(5)
             </a>
@@ -64,10 +66,7 @@ export default function LotteryRescuePage() {
             the specific employer before relying on it.
           </p>
           <p className="mt-3">
-            <Link
-              href="/h1b-sponsors/cap-exempt"
-              className="inline-flex rounded-full bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
-            >
+            <Link href="/h1b-sponsors/cap-exempt" className="term-btn term-btn-amber">
               Browse cap-exempt employers →
             </Link>
           </p>
@@ -81,7 +80,7 @@ export default function LotteryRescuePage() {
               href="https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-extension-for-stem-students-stem-opt"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-900 underline"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
             >
               E-Verify
             </a>
@@ -95,7 +94,7 @@ export default function LotteryRescuePage() {
               href="https://www.e-verify.gov/e-verify-employer-search"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-slate-900 underline"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
             >
               USCIS E-Verify employer search
             </a>
@@ -109,7 +108,7 @@ export default function LotteryRescuePage() {
             <li>Employers can re-register you for the cap in a future year while you hold another status.</li>
           </ul>
 
-          <p className="mt-8 text-xs text-slate-400">
+          <p className="mt-8 text-xs text-[#ccd6cf]/45">
             Sources: USCIS H-1B specialty occupations (INA 214(g)(5)); USCIS STEM OPT extension;
             USCIS E-Verify employer search. This page is informational and not a substitute for advice
             from a licensed immigration attorney.

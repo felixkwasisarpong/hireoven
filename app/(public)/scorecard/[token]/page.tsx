@@ -11,13 +11,14 @@ export const revalidate = 86400
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
 type Props = { params: Promise<{ token: string }> }
 
+// Semantic grade hues — kept DISTINCT (do not collapse). Brightened for the dark canvas.
 const HUE_TEXT: Record<ScoreHue, string> = {
-  emerald: "text-emerald-600",
-  green: "text-green-600",
-  blue: "text-blue-600",
-  amber: "text-amber-600",
-  orange: "text-orange-600",
-  red: "text-red-500",
+  emerald: "text-emerald-400",
+  green: "text-green-400",
+  blue: "text-blue-400",
+  amber: "text-amber-400",
+  orange: "text-orange-400",
+  red: "text-red-400",
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -41,11 +42,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 function Stat({ label, score }: { label: string; score: number }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <div className="mt-1 text-xl font-bold tabular-nums text-slate-900">{score}/25</div>
-      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-slate-400" style={{ width: `${(score / 25) * 100}%` }} />
+    <div className="term-panel p-4">
+      <div className="term-label">{label}</div>
+      <div className="mt-1 text-xl font-semibold tabular-nums text-[#38e08a]">{score}/25</div>
+      <div className="mt-2 h-1.5 w-full overflow-hidden bg-[#0a0e0c]">
+        <div className="h-full bg-[#38e08a]" style={{ width: `${(score / 25) * 100}%` }} />
       </div>
     </div>
   )
@@ -57,25 +58,25 @@ export default async function PublicScorecardPage({ params }: Props) {
   const hue = HUE_TEXT[card.bucket.hue]
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
-          <p className="text-sm text-slate-500">H-1B Sponsorability Scorecard</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-900">{card.display_name}</h1>
+        <div className="term-panel p-6 sm:p-8">
+          <p className="term-label">&gt; sponsorability_scorecard</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">{card.display_name}</h1>
           <div className="mt-5 flex items-end gap-4">
-            <div className={cn("text-7xl font-black leading-none tracking-tight", hue)}>{card.grade}</div>
+            <div className={cn("text-7xl font-semibold leading-none tracking-tight", hue)}>{card.grade}</div>
             <div className="pb-2">
-              <div className={cn("text-3xl font-bold", hue)}>
+              <div className={cn("text-3xl font-semibold tabular-nums", hue)}>
                 {card.total_score}
-                <span className="text-lg font-semibold text-slate-400">/100</span>
+                <span className="text-lg font-semibold text-[#ccd6cf]/45">/100</span>
               </div>
-              <div className="text-lg font-semibold text-slate-700">{card.bucket.label}</div>
+              <div className={cn("text-lg font-semibold", hue)}>{card.bucket.label}</div>
             </div>
           </div>
           {card.rarest_skill && (
-            <p className="mt-4 text-sm text-slate-500">
-              Standout in-demand skill: <span className="font-medium text-slate-700">{card.rarest_skill}</span>
+            <p className="mt-4 text-[13px] text-[#ccd6cf]/55">
+              Standout in-demand skill: <span className="font-medium text-[#ccd6cf]">{card.rarest_skill}</span>
             </p>
           )}
         </div>
@@ -88,22 +89,19 @@ export default async function PublicScorecardPage({ params }: Props) {
         </div>
 
         {/* Conversion CTA */}
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-gradient-to-br from-[#0b2a23] to-[#0a2440] p-6 text-center">
+        <div className="term-panel mt-6 p-6 text-center">
           <p className="text-lg font-semibold text-white">How sponsorable is your profile?</p>
-          <p className="mt-1 text-sm text-white/60">
+          <p className="mt-1 text-[13px] text-[#ccd6cf]/60">
             Get your own scorecard in 60 seconds — sourced from DOL LCA + USCIS public data.
           </p>
-          <Link
-            href="/dashboard/scorecard"
-            className="mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-bold text-slate-900 hover:bg-emerald-400 hover:text-white"
-          >
+          <Link href="/signup?next=%2Fdashboard%2Fscorecard" className="term-btn term-btn-amber mt-4">
             Get your scorecard
           </Link>
         </div>
 
-        <p className="mt-4 text-center text-xs text-slate-400">
+        <p className="mt-4 text-center text-[12px] text-[#ccd6cf]/45">
           A profile-vs-market fit signal, not a guarantee.{" "}
-          <Link href="/h1b-sponsors/leaderboard/methodology#personal-scorecard" className="underline">
+          <Link href="/h1b-sponsors/leaderboard/methodology#personal-scorecard" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
             Methodology
           </Link>
         </p>

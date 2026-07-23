@@ -17,17 +17,17 @@ function CompanyCell({ row, priority }: { row: LeaderboardRow; priority?: boolea
         companyName={row.company.name}
         domain={row.company.domain}
         logoUrl={row.company.logo_url}
-        className="h-9 w-9 shrink-0 rounded-lg ring-1 ring-slate-200"
+        className="h-9 w-9 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
         priority={priority}
       />
       <div className="min-w-0">
-        <div className="truncate font-medium text-slate-900 group-hover:text-orange-600">
+        <div className="truncate font-medium text-[#ccd6cf] group-hover:text-white">
           {row.company.name}
         </div>
-        <div className="truncate text-xs text-slate-500">
+        <div className="truncate text-xs text-[#ccd6cf]/45">
           {row.company.industry ?? ""}
           {row.flags.is_staffing_firm && (
-            <span className="ml-2 rounded border border-slate-200 px-1 py-0.5 text-[10px] uppercase tracking-wide text-slate-500">
+            <span className="ml-2 border border-[rgba(120,200,160,0.2)] px-1 py-0.5 text-[10px] uppercase tracking-wide text-[#ccd6cf]/55">
               Staffing
             </span>
           )}
@@ -50,7 +50,7 @@ export default function LeaderboardTable({
 }) {
   if (rows.length === 0) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-slate-500">
+      <div className="term-panel p-8 text-center text-[#ccd6cf]/60">
         No sponsors match these filters.
       </div>
     )
@@ -59,10 +59,10 @@ export default function LeaderboardTable({
   return (
     <>
       {/* Desktop table */}
-      <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden border border-[rgba(120,200,160,0.2)] md:block">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-[11px] uppercase tracking-wider text-slate-500">
-            <tr className="border-b border-slate-200">
+          <thead className="bg-[#0a0e0c] text-left text-[11px] uppercase tracking-wider text-[#ccd6cf]/45">
+            <tr className="border-b border-[rgba(120,200,160,0.26)]">
               <th className="w-16 px-5 py-3.5 text-right font-medium">Rank</th>
               <th className="px-4 py-3.5 font-medium">Company</th>
               <th className="px-4 py-3.5 font-medium">Grade</th>
@@ -73,10 +73,10 @@ export default function LeaderboardTable({
               <th className="w-10 px-4 py-3.5" />
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-[rgba(120,200,160,0.12)]">
             {rows.map((row, i) => (
-              <tr key={row.company.id} className="group transition-colors hover:bg-slate-50/60">
-                <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-slate-400">
+              <tr key={row.company.id} className="group bg-[#0e1411] transition-colors hover:bg-[#111a15]">
+                <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-[#ccd6cf]/35">
                   {startRank + i}
                 </td>
                 <td className="px-4 py-3.5">
@@ -84,13 +84,13 @@ export default function LeaderboardTable({
                 </td>
                 <td className="px-4 py-3.5">
                   <Link href={`${row.profile_url}/scorecard`}>
-                    <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
+                    <ScorecardBadge score={row.sponsorship_confidence ?? 0} tone="dark" />
                   </Link>
                 </td>
-                <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-slate-900">
+                <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-[#38e08a]">
                   {row.metrics.certified.toLocaleString()}
                 </td>
-                <td className="px-4 py-3.5 text-right tabular-nums text-emerald-600">
+                <td className="px-4 py-3.5 text-right tabular-nums text-[#f5a623]">
                   {fmtPct(row.metrics.cert_rate)}
                 </td>
                 <td className="px-4 py-3.5">
@@ -98,13 +98,13 @@ export default function LeaderboardTable({
                     <LayoffSignalBadge signal={layoffSignals.get(row.company.id)!} size="sm" />
                   )}
                 </td>
-                <td className="px-4 py-3.5 text-xs text-slate-500">
+                <td className="px-4 py-3.5 text-xs text-[#ccd6cf]/45">
                   {row.metrics.top_states.slice(0, 3).join(", ")}
                 </td>
                 <td className="px-4 py-3.5 text-right">
                   <Link
                     href={row.profile_url}
-                    className="inline-flex text-slate-300 transition-colors group-hover:text-slate-500"
+                    className="inline-flex text-[#ccd6cf]/25 transition-colors group-hover:text-[#38e08a]"
                     aria-label={`View ${row.company.name}`}
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -121,16 +121,16 @@ export default function LeaderboardTable({
         {rows.map((row, i) => (
           <li
             key={row.company.id}
-            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3"
+            className="flex items-center gap-3 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-3"
           >
-            <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-slate-400">
+            <span className="w-7 shrink-0 text-right font-semibold tabular-nums text-[#ccd6cf]/35">
               {startRank + i}
             </span>
             <div className="min-w-0 flex-1">
               <CompanyCell row={row} priority={i < 6} />
               <div className="mt-1 flex items-center gap-1.5">
                 <Link href={`${row.profile_url}/scorecard`} className="inline-block">
-                  <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
+                  <ScorecardBadge score={row.sponsorship_confidence ?? 0} tone="dark" />
                 </Link>
                 {layoffSignals?.get(row.company.id) &&
                   layoffSignals.get(row.company.id)!.level !== "stable" && (
@@ -139,10 +139,10 @@ export default function LeaderboardTable({
               </div>
             </div>
             <div className="shrink-0 text-right">
-              <div className="font-semibold tabular-nums text-slate-900">
+              <div className="font-semibold tabular-nums text-[#38e08a]">
                 {row.metrics.certified.toLocaleString()}
               </div>
-              <div className="text-xs text-emerald-600">{fmtPct(row.metrics.cert_rate)}</div>
+              <div className="text-xs text-[#f5a623]">{fmtPct(row.metrics.cert_rate)}</div>
             </div>
           </li>
         ))}

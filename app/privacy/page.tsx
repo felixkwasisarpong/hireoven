@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Navbar from "@/components/layout/Navbar"
+import MarketingFooter from "@/components/marketing/MarketingFooter"
 
 export const metadata: Metadata = {
   title: "Privacy Policy - Hireoven",
@@ -9,16 +10,17 @@ export const metadata: Metadata = {
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-400 mb-10">Last updated: July 2026</p>
+        <p className="term-label">&gt; privacy_policy</p>
+        <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-white">Privacy Policy</h1>
+        <p className="mt-2 text-[13px] text-[#ccd6cf]/45">Last updated: July 2026</p>
 
-        <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-8">
+        <div className="mt-10 space-y-8 text-[14px] leading-relaxed text-[#ccd6cf]">
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">1. What we collect</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">1. What we collect</h2>
             <p>
               When you create an account, we collect your email address and password (hashed). When you
               set up job alerts, we store your alert preferences (keywords, location, seniority, sponsorship
@@ -30,8 +32,8 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">2. How we use your data</h2>
-            <ul className="list-disc pl-5 space-y-1.5">
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">2. How we use your data</h2>
+            <ul className="list-disc space-y-1.5 pl-5">
               <li>Send you job alert emails matching your saved preferences</li>
               <li>Show you personalized job feeds inside the dashboard</li>
               <li>Calculate aggregate platform statistics (total jobs, companies monitored)</li>
@@ -41,7 +43,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">3. Emails and notifications</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">3. Emails and notifications</h2>
             <p>
               You control alert frequency (immediate, daily digest, weekly digest, or off) from your
               dashboard settings. You can unsubscribe from all emails at any time via the unsubscribe
@@ -51,7 +53,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">4. Data storage</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">4. Data storage</h2>
             <p>
               Your data is stored in Supabase (hosted on AWS us-east-1). Emails are sent via Resend.
               The app runs on infrastructure we operate (e.g. self-hosted Docker). We use Vercel
@@ -61,7 +63,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">5. Cookies</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">5. Cookies</h2>
             <p>
               We use a single session cookie to keep you logged in. We do not use advertising cookies
               or third-party tracking pixels.
@@ -69,21 +71,21 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">6. Your rights</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">6. Your rights</h2>
             <p>
               You can delete your account at any time from Dashboard → Settings → Delete account. This
               permanently removes your email, alert preferences, and activity logs within 30 days.
             </p>
             <p className="mt-3">
               To request a data export or ask questions, email us at{" "}
-              <a href="mailto:privacy@hireoven.com" className="text-[#0369A1] hover:underline">
+              <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
                 privacy@hireoven.com
               </a>.
             </p>
           </section>
 
           <section id="extension">
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">7. Hireoven Apex Bridge (browser extension)</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">7. Hireoven Apex Bridge (browser extension)</h2>
             <p>
               The Apex Bridge browser extension detects job listings and autofills applications on ATS and
               careers sites. Because it needs to recognize a job listing or application form on any site you
@@ -93,7 +95,7 @@ export default function PrivacyPage() {
               extension stays inactive everywhere until you come back and agree.
             </p>
             <p className="mt-3">Once you agree, the extension may access:</p>
-            <ul className="list-disc pl-5 space-y-1.5 mt-2">
+            <ul className="mt-2 list-disc space-y-1.5 pl-5">
               <li>The content of the page you&apos;re on, to detect a job listing or application form</li>
               <li>
                 Your Hireoven profile - name, contact info, work authorization, education, résumé, and any
@@ -111,7 +113,7 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-xl font-semibold text-gray-900 mb-3">8. Changes to this policy</h2>
+            <h2 className="mb-3 text-[1.05rem] font-semibold text-white">8. Changes to this policy</h2>
             <p>
               We may update this policy as the product evolves. We will notify registered users by email
               for any material changes at least 14 days before they take effect.
@@ -120,17 +122,18 @@ export default function PrivacyPage() {
 
         </div>
 
-        <div className="mt-12 border-t border-gray-100 pt-8 text-sm text-gray-500">
+        <div className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-8 text-[13px] text-[#ccd6cf]/55">
           Questions? Email{" "}
-          <a href="mailto:privacy@hireoven.com" className="text-[#0369A1] hover:underline">
+          <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
             privacy@hireoven.com
           </a>{" "}
           or return to{" "}
-          <Link href="/" className="text-[#0369A1] hover:underline">
+          <Link href="/" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
             Hireoven
           </Link>.
         </div>
       </main>
+      <MarketingFooter />
     </div>
   )
 }

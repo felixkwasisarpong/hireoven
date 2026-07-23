@@ -43,20 +43,18 @@ export default async function DailyReportLatestPage() {
   const { report, prevDate } = await load()
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       {report ? (
         <DailyReportView report={report} prevDate={prevDate} nextDate={null} />
       ) : (
         <main className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
-          <h1 className="text-2xl font-bold text-slate-900">The first report is on its way</h1>
-          <p className="mt-3 text-[15px] text-slate-600">
+          <p className="term-label">{"// fresh_jobs_report"}</p>
+          <h1 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white">The first report is on its way</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             Hireoven publishes a Fresh Jobs Report every day. Check back after the next overnight run.
           </p>
-          <Link
-            href="/jobs"
-            className="mt-6 inline-flex items-center rounded-full bg-emerald-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-emerald-700"
-          >
+          <Link href="/jobs" className="term-btn term-btn-amber mt-6">
             Browse fresh jobs now
           </Link>
         </main>

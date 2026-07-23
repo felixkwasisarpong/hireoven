@@ -1,4 +1,4 @@
-import { BadgePercent, BookOpen, Briefcase, Building2, Puzzle, ShieldCheck, Sparkles } from "lucide-react"
+import { BadgePercent, BookOpen, Briefcase, Building2, Compass, Puzzle, ShieldCheck } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
 export interface NavLink {
@@ -11,9 +11,9 @@ export interface NavLink {
  *  they can't drift out of sync. */
 export const NAV_LINKS: NavLink[] = [
   { href: "/find", label: "Find Jobs", icon: Briefcase },
-  { href: "/features", label: "Features", icon: Sparkles },
+  { href: "/stay", label: "Stay", icon: Compass },
   { href: "/companies", label: "Companies", icon: Building2 },
-  { href: "/h1b-sponsors/leaderboard", label: "H-1B Sponsors", icon: ShieldCheck },
+  { href: "/h1b-sponsors/leaderboard", label: "Sponsors", icon: ShieldCheck },
   { href: "/pricing", label: "Pricing", icon: BadgePercent },
   { href: "/extension", label: "Extension", icon: Puzzle },
   { href: "/blog", label: "Blog", icon: BookOpen },

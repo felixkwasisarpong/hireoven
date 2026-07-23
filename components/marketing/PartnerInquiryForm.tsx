@@ -64,12 +64,12 @@ export default function PartnerInquiryForm() {
 
   if (state === "done") {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-3xl border border-emerald-200 bg-emerald-50/60 px-6 py-10 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
-          <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+      <div className="term-panel flex flex-col items-center gap-3 px-6 py-10 text-center">
+        <div className="flex h-14 w-14 items-center justify-center border border-[#38e08a]/25 bg-[#38e08a]/12">
+          <CheckCircle2 className="h-7 w-7 text-[#38e08a]" />
         </div>
-        <p className="text-[17px] font-bold text-slate-900">Thanks — we&apos;ll be in touch.</p>
-        <p className="max-w-sm text-[14px] text-slate-600">
+        <p className="text-[17px] font-bold text-white">Thanks — we&apos;ll be in touch.</p>
+        <p className="max-w-sm text-[14px] text-[#ccd6cf]/65">
           We review every partnership request and reply personally, usually within one business day.
         </p>
       </div>
@@ -77,7 +77,7 @@ export default function PartnerInquiryForm() {
   }
 
   const inputClass =
-    "w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-[15px] text-slate-900 outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-100"
+    "w-full border border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] px-4 py-3 text-[15px] text-[#ccd6cf] outline-none transition placeholder:text-[#ccd6cf]/40 focus:border-[#38e08a]"
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -96,8 +96,8 @@ export default function PartnerInquiryForm() {
           required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="Work email"
-          aria-label="Work email"
+          placeholder="Email"
+          aria-label="Email"
           className={inputClass}
         />
       </div>
@@ -114,7 +114,7 @@ export default function PartnerInquiryForm() {
           value={partnerType}
           onChange={(e) => setPartnerType(e.target.value)}
           aria-label="Partner type"
-          className={inputClass}
+          className={`${inputClass} term-select`}
         >
           {PARTNER_TYPES.map((t) => (
             <option key={t} value={t}>
@@ -140,12 +140,12 @@ export default function PartnerInquiryForm() {
         className={`${inputClass} resize-y`}
       />
 
-      {state === "error" && <p className="text-[13px] font-medium text-red-600">{error}</p>}
+      {state === "error" && <p className="text-[13px] font-medium text-red-400">{error}</p>}
 
       <button
         type="submit"
         disabled={state === "loading"}
-        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 sm:w-auto"
+        className="term-btn term-btn-amber w-full justify-center px-6 py-3 disabled:opacity-60 sm:w-auto"
       >
         {state === "loading" ? (
           <>
@@ -157,7 +157,7 @@ export default function PartnerInquiryForm() {
           </>
         )}
       </button>
-      <p className="text-[12px] text-slate-400">
+      <p className="text-[12px] text-[#ccd6cf]/45">
         We&apos;ll only use this to reach out about a partnership. No spam.
       </p>
     </form>

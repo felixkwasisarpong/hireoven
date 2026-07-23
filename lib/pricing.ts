@@ -33,9 +33,9 @@ export const PLAN_DATA = {
     tagline: "Everything you need to land the job",
     cta: "Start Pro",
     ctaHref: "/signup?plan=pro&interval=monthly",
-    color: "teal",
+    color: "slate",
     badge: "Most popular",
-    badgeStyle: "teal",
+    badgeStyle: "slate",
     highlighted: true,
   },
   pro_max: {
@@ -46,9 +46,9 @@ export const PLAN_DATA = {
     tagline: "Apex strategy, unlimited everything, and live interview credits",
     cta: "Start Pro Max",
     ctaHref: "/signup?plan=pro_max&interval=monthly",
-    color: "blue",
+    color: "orange",
     badge: "Best for serious candidates",
-    badgeStyle: "blue",
+    badgeStyle: "orange",
     highlighted: false,
   },
 } as const

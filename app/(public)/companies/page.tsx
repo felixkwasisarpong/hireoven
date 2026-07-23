@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { ArrowRight, BellRing, Building2, ShieldCheck } from "lucide-react"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import Navbar from "@/components/layout/Navbar"
@@ -13,16 +14,22 @@ export const metadata: Metadata = {
 
 export const revalidate = 3600
 
+const COMPANY_STAT_ICONS = {
+  companies: Building2,
+  roles: BellRing,
+  sponsor: ShieldCheck,
+}
+
 function SponsorsH1BBadge({ confidence }: { confidence: number }) {
   if (confidence >= 80)
     return (
-      <span className="rounded-full bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] font-semibold text-sky-700">
+      <span className="border border-[#f5a623]/30 bg-[#f5a623]/12 px-2 py-0.5 text-[11px] font-semibold text-[#f5a623]">
         Strong H1B
       </span>
     )
   if (confidence >= 60)
     return (
-      <span className="rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+      <span className="border border-[#f5a623]/30 bg-[#f5a623]/12 px-2 py-0.5 text-[11px] font-semibold text-[#f5a623]">
         Likely H1B
       </span>
     )
@@ -55,31 +62,64 @@ export default async function PublicCompaniesPage() {
   }, {})
 
   const totalJobs = companies.reduce((sum, c) => sum + (c.job_count ?? 0), 0)
+  const groupedEntries = Object.entries(grouped)
+    .map(([industry, industryCompanies]) => ({
+      industry,
+      companies: industryCompanies,
+      jobTotal: industryCompanies.reduce((sum, company) => sum + (company.job_count ?? 0), 0),
+    }))
+    .sort((a, b) => b.jobTotal - a.jobTotal)
+    .slice(0, 8)
+    .map((group) => ({ ...group, companies: group.companies.slice(0, 9) }))
+  const visibleCompanyCount = groupedEntries.reduce((sum, group) => sum + group.companies.length, 0)
 
   return (
-    <div className="min-h-dvh">
+    <div className="term-page min-h-dvh">
       <Navbar />
 
-      <main className="mx-auto w-full max-w-[88rem] px-6 py-12">
-        <div className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900">
-            Companies hiring now
+      {/* Hero — terminal prompt + data status line. */}
+      <section className="mx-auto grid w-full max-w-[78rem] gap-6 px-4 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.62fr)] lg:items-end">
+        <div>
+          <p className="term-label">&gt; company_radar --live</p>
+          <h1 className="mt-4 max-w-[34rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
+            Companies <span className="text-[#f5a623]">hiring now</span>
+            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
-          <p className="mt-3 text-lg text-gray-500">
-            {companies.length.toLocaleString()} companies ·{" "}
-            {totalJobs.toLocaleString()} open roles
+          <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
+            Browse employers with live roles, sponsorship signals, and career-page freshness from the same market graph powering Hireoven alerts.
           </p>
+          <Link href="/signup?next=%2Fdashboard%2Fonboarding" className="term-btn term-btn-amber mt-7">
+            Get company alerts <ArrowRight className="h-4 w-4" />
+          </Link>
         </div>
+        <div className="grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)]">
+          {[
+            { value: companies.length.toLocaleString(), label: "active companies", Icon: COMPANY_STAT_ICONS.companies },
+            { value: totalJobs.toLocaleString(), label: "open roles", Icon: COMPANY_STAT_ICONS.roles },
+            { value: "H-1B", label: "sponsor proof", Icon: COMPANY_STAT_ICONS.sponsor },
+          ].map(({ value, label, Icon }) => (
+            <div key={label} className="flex items-center gap-4 bg-[#0e1411] p-4">
+              <Icon className="h-5 w-5 shrink-0 text-[#f5a623]" />
+              <div className="min-w-0">
+                <p className="text-2xl font-semibold leading-none tabular-nums text-[#38e08a]">{value}</p>
+                <p className="term-label mt-1">{label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <main className="mx-auto w-full max-w-[88rem] px-4 py-12 sm:px-6 lg:px-10">
 
         {/* Sign-up CTA */}
-        <div className="mb-10 rounded-2xl border border-[#BAE6FD] bg-[#F0F9FF] px-6 py-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="mb-10 flex flex-col items-start justify-between gap-4 term-panel px-6 py-5 sm:flex-row sm:items-center">
           <div>
-            <p className="font-semibold text-[#0C4A6E]">Get instant alerts when companies post</p>
-            <p className="text-sm text-[#0369A1] mt-0.5">Free to sign up. No spam.</p>
+            <p className="font-semibold text-white">Get instant alerts when companies post</p>
+            <p className="text-[13px] text-[#ccd6cf]/65 mt-0.5">Free to sign up. No spam.</p>
           </div>
           <Link
-            href="/signup"
-            className="rounded-xl bg-[#0369A1] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#075985] transition flex-shrink-0"
+            href="/signup?next=%2Fdashboard%2Fonboarding"
+            className="term-btn term-btn-amber shrink-0"
           >
             Sign up free →
           </Link>
@@ -87,31 +127,29 @@ export default async function PublicCompaniesPage() {
 
         {/* Company grid by industry */}
         <div className="space-y-12">
-          {Object.entries(grouped).map(([industry, industryCompanies]) => (
+          {groupedEntries.map(({ industry, companies: industryCompanies }) => (
             <section key={industry}>
-              <h2 className="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
-                {industry}
-              </h2>
+              <h2 className="term-label mb-4">{industry}</h2>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {industryCompanies.map((company) => (
                   <Link
                     key={company.id}
                     href={`/companies/${company.id}`}
-                    className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-[#BAE6FD] hover:shadow-md"
+                    className="group term-panel term-panel-hover flex items-start gap-4 p-4"
                   >
                     <div className="flex-shrink-0">
                       <CompanyLogo
                         companyName={company.name}
                         domain={company.domain}
                         logoUrl={company.logo_url}
-                        className="h-12 w-12 rounded-xl border border-gray-100"
+                        className="h-12 w-12 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
                       />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-gray-900 group-hover:text-[#0369A1] transition">
+                      <p className="font-semibold text-[#ccd6cf] transition group-hover:text-white">
                         {company.name}
                       </p>
-                      <p className="mt-0.5 text-sm text-gray-500">
+                      <p className="mt-0.5 text-[13px] text-[#ccd6cf]/55">
                         {company.job_count} open role{company.job_count === 1 ? "" : "s"}
                       </p>
                       {company.sponsorship_confidence >= 60 && (
@@ -126,6 +164,23 @@ export default async function PublicCompaniesPage() {
             </section>
           ))}
         </div>
+
+        {companies.length > visibleCompanyCount && (
+          <div className="mt-12 term-panel px-6 py-8 text-center">
+            <p className="text-[1.7rem] font-semibold leading-tight tracking-tight text-white">
+              Want the full company map?
+            </p>
+            <p className="mx-auto mt-2 max-w-xl text-[13.5px] leading-relaxed text-[#ccd6cf]/65">
+              Sign in to search all {companies.length.toLocaleString()} active companies with filters for role, sponsor signal, location, and freshness.
+            </p>
+            <Link
+              href="/signup?next=%2Fdashboard%2Fonboarding"
+              className="term-btn term-btn-amber mt-5"
+            >
+              Browse the full map <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        )}
       </main>
     </div>
   )

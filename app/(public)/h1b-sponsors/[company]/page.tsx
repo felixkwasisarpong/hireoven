@@ -145,10 +145,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
+// Verdict badges keep three distinct semantic hues (dark-adapted surfaces):
+// yes = green (positive), likely = amber, unknown = neutral slate.
 const VERDICT_UI: Record<Verdict, { label: string; tone: string; Icon: typeof CheckCircle2 }> = {
-  yes: { label: "Sponsors H-1B", tone: "border-emerald-200 bg-emerald-50 text-emerald-700", Icon: CheckCircle2 },
-  likely: { label: "Likely sponsors", tone: "border-amber-200 bg-amber-50 text-amber-700", Icon: ShieldCheck },
-  unknown: { label: "No public record", tone: "border-slate-200 bg-slate-50 text-slate-600", Icon: FileQuestion },
+  yes: { label: "Sponsors H-1B", tone: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300", Icon: CheckCircle2 },
+  likely: { label: "Likely sponsors", tone: "border-amber-500/30 bg-amber-500/12 text-amber-300", Icon: ShieldCheck },
+  unknown: { label: "No public record", tone: "border-slate-500/30 bg-slate-500/12 text-slate-300", Icon: FileQuestion },
 }
 
 export default async function H1bSponsorPage({ params }: Props) {
@@ -191,47 +193,44 @@ export default async function H1bSponsorPage({ params }: Props) {
       label: "Certified LCAs · 12 mo",
       value: certified1.toLocaleString(),
       Icon: FileCheck2,
-      chip: "bg-emerald-50 text-emerald-600",
     },
     {
       label: "Certified LCAs · 3 yr",
       value: certified3.toLocaleString(),
       Icon: CalendarRange,
-      chip: "bg-slate-100 text-slate-500",
     },
     {
       label: "Open US roles",
       value: c.openUsJobs.toLocaleString(),
       Icon: Briefcase,
-      chip: "bg-orange-50 text-orange-600",
     },
   ]
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <main className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
-        <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-[13px] text-slate-500">
-          <Link href="/h1b-sponsors/leaderboard" className="hover:text-slate-800">All sponsors</Link>
+        <nav className="mb-5 flex flex-wrap items-center gap-1.5 text-[13px] text-[#ccd6cf]/45">
+          <Link href="/h1b-sponsors/leaderboard" className="hover:text-[#38e08a]">All sponsors</Link>
           {c.industry && (
             <>
-              <span className="text-slate-300">/</span>
+              <span className="text-[#ccd6cf]/25">/</span>
               <Link
                 href={`/h1b-sponsors/leaderboard/by-industry/${industrySlug(c.industry)}`}
-                className="hover:text-slate-800"
+                className="hover:text-[#38e08a]"
               >
                 {c.industry}
               </Link>
             </>
           )}
-          <span className="text-slate-300">/</span>
-          <span className="text-slate-700">{c.name}</span>
+          <span className="text-[#ccd6cf]/25">/</span>
+          <span className="text-[#ccd6cf]/70">{c.name}</span>
         </nav>
 
         {/* Hero */}
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8">
+        <section className="term-panel p-6 sm:p-8">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-stretch lg:justify-between">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-4">
@@ -240,27 +239,27 @@ export default async function H1bSponsorPage({ params }: Props) {
                   domain={c.domain}
                   logoUrl={c.logo_url}
                   priority
-                  className="h-20 w-20 shrink-0 rounded-2xl border border-slate-200 bg-white p-1.5 sm:h-24 sm:w-24"
+                  className="h-20 w-20 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-1.5 sm:h-24 sm:w-24"
                 />
                 <div className="min-w-0">
-                  <p className="truncate text-2xl font-bold tracking-tight text-slate-900">{c.name}</p>
+                  <p className="truncate text-2xl font-semibold tracking-tight text-white">{c.name}</p>
                   {c.industry && (
-                    <span className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-slate-500">
-                      <Building2 className="h-3.5 w-3.5" /> {c.industry}
+                    <span className="mt-0.5 inline-flex items-center gap-1.5 text-[13px] text-[#ccd6cf]/55">
+                      <Building2 className="h-3.5 w-3.5 text-[#ccd6cf]/60" /> {c.industry}
                     </span>
                   )}
                 </div>
               </div>
 
-              <span className={`mt-5 inline-flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-semibold ${v.tone}`}>
+              <span className={`mt-5 inline-flex items-center gap-1.5 border px-3.5 py-1.5 text-sm font-semibold ${v.tone}`}>
                 <v.Icon className="h-4 w-4" />
                 {v.label}
               </span>
 
-              <h1 className="mt-3 text-2xl font-bold leading-tight tracking-tight text-slate-900 sm:text-[30px]">
-                Does {c.name} sponsor H-1B visas?
+              <h1 className="mt-4 text-2xl font-semibold leading-tight tracking-tight text-white sm:text-[30px]">
+                Does {c.name} sponsor <span className="text-[#f5a623]">H-1B visas</span>?
               </h1>
-              <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-slate-600">{verdictSentence(c)}</p>
+              <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-[#ccd6cf]/70">{verdictSentence(c)}</p>
 
               {(rank || c.is_cap_exempt || c.is_e_verify) && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -276,17 +275,11 @@ export default async function H1bSponsorPage({ params }: Props) {
               )}
 
               <div className="mt-6 flex flex-wrap gap-3">
-                <Link
-                  href={profilePath}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06),0_2px_8px_rgba(255,92,24,0.22)] transition-colors hover:bg-primary-hover"
-                >
+                <Link href={profilePath} className="term-btn term-btn-amber">
                   <Briefcase className="h-4 w-4" />
                   {c.openUsJobs > 0 ? `View ${c.openUsJobs.toLocaleString()} open roles` : "View company profile"}
                 </Link>
-                <Link
-                  href={`/signup?next=${encodeURIComponent(profilePath)}`}
-                  className="inline-flex h-11 items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-slate-50"
-                >
+                <Link href={`/signup?next=${encodeURIComponent(profilePath)}`} className="term-btn">
                   Get sponsor-role alerts
                   <ArrowRight className="h-4 w-4" />
                 </Link>
@@ -294,11 +287,11 @@ export default async function H1bSponsorPage({ params }: Props) {
             </div>
 
             {/* Confidence gauge */}
-            <aside className="flex shrink-0 flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-8 py-6 lg:w-72">
+            <aside className="flex shrink-0 flex-col items-center justify-center gap-4 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-8 py-6 lg:w-72">
               <ConfidenceRing score={c.sponsorship_confidence ?? 0} />
               <Link
                 href={`/h1b-sponsors/${companyParam(c.id, c.name)}/scorecard`}
-                className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 transition-colors hover:border-slate-300 hover:bg-white"
+                className="term-btn w-full justify-center"
               >
                 View full scorecard
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -307,21 +300,19 @@ export default async function H1bSponsorPage({ params }: Props) {
           </div>
 
           {/* Key stats — folded into the hero as a divided strip */}
-          <div className="mt-8 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-6">
+          <div className="mt-8 grid grid-cols-3 divide-x divide-[rgba(120,200,160,0.12)] border-t border-[rgba(120,200,160,0.12)] pt-6">
             {stats.map((s, i) => (
               <div
                 key={s.label}
                 className={i === 0 ? "pr-4 sm:pr-6" : i === stats.length - 1 ? "pl-4 sm:pl-6" : "px-4 sm:px-6"}
               >
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${s.chip}`}>
-                    <s.Icon className="h-3.5 w-3.5" />
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]">
+                    <s.Icon className="h-3.5 w-3.5 text-[#f5a623]" />
                   </span>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 sm:text-[11px]">
-                    {s.label}
-                  </span>
+                  <span className="term-label">{s.label}</span>
                 </div>
-                <p className="mt-2 text-2xl font-bold tabular-nums leading-none text-slate-900 sm:text-[28px]">
+                <p className="mt-2 text-2xl font-semibold tabular-nums leading-none text-[#38e08a] sm:text-[28px]">
                   {s.value}
                 </p>
               </div>
@@ -340,43 +331,43 @@ export default async function H1bSponsorPage({ params }: Props) {
           className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-sm"
           aria-label={`More about ${c.name}`}
         >
-          <span className="text-slate-400">More on {c.name}:</span>
+          <span className="text-[#ccd6cf]/45">More on {c.name}:</span>
           <Link
             href={salariesPath(c.id, c.name)}
-            className="group inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900"
+            className="group inline-flex items-center gap-1 font-medium text-[#ccd6cf]/80 hover:text-white"
           >
             What {c.name} pays
-            <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ArrowRight className="h-3.5 w-3.5 text-[#ccd6cf]/35 transition-colors group-hover:text-[#38e08a]" />
           </Link>
           <Link
             href={jobsAtPath(c.id, c.name)}
-            className="group inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900"
+            className="group inline-flex items-center gap-1 font-medium text-[#ccd6cf]/80 hover:text-white"
           >
             Open jobs at {c.name}
-            <ArrowRight className="h-3.5 w-3.5 text-slate-300 transition-colors group-hover:text-slate-500" />
+            <ArrowRight className="h-3.5 w-3.5 text-[#ccd6cf]/35 transition-colors group-hover:text-[#38e08a]" />
           </Link>
         </nav>
 
         {/* FAQ — one container, divided rows */}
         <section className="mt-10">
-          <h2 className="flex items-center gap-2 px-1 text-lg font-bold text-slate-900">
-            <HelpCircle className="h-5 w-5 text-slate-400" />
+          <h2 className="flex items-center gap-2 px-1 text-lg font-semibold text-white">
+            <HelpCircle className="h-5 w-5 text-[#f5a623]" />
             {c.name} H-1B sponsorship FAQ
           </h2>
-          <div className="mt-4 divide-y divide-slate-200 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="mt-4 divide-y divide-[rgba(120,200,160,0.12)] overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[#0e1411]">
             {faqs.map((f) => (
               <details key={f.q} className="group p-5">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-semibold text-slate-800 marker:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-[15px] font-semibold text-[#ccd6cf] marker:hidden">
                   {f.q}
-                  <Plus className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-45" />
+                  <Plus className="h-4 w-4 shrink-0 text-[#f5a623] transition-transform duration-200 group-open:rotate-45" />
                 </summary>
-                <p className="mt-3 text-[14px] leading-relaxed text-slate-600">{f.a}</p>
+                <p className="mt-3 text-[14px] leading-relaxed text-[#ccd6cf]/70">{f.a}</p>
               </details>
             ))}
           </div>
         </section>
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Based on U.S. Department of Labor LCA disclosure data and Hireoven&apos;s live job index. Sponsorship is
           decided per role and candidate; always confirm for the specific position. Last reviewed {YEAR}.
         </p>

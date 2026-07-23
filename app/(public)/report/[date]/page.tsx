@@ -77,20 +77,18 @@ export default async function DailyReportDatePage({ params }: { params: { date: 
   const { report, prevDate, nextDate } = await load(toReportDate(date))
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       {report ? (
         <DailyReportView report={report} prevDate={prevDate} nextDate={nextDate} />
       ) : (
         <main className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
-          <h1 className="text-2xl font-bold text-slate-900">No report for this day</h1>
-          <p className="mt-3 text-[15px] text-slate-600">
+          <p className="term-label">{"// fresh_jobs_report"}</p>
+          <h1 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white">No report for this day</h1>
+          <p className="mt-3 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             We don&apos;t have a Fresh Jobs Report captured for {date}.
           </p>
-          <Link
-            href="/report"
-            className="mt-6 inline-flex items-center rounded-full bg-emerald-600 px-5 py-2.5 text-[14px] font-semibold text-white transition hover:bg-emerald-700"
-          >
+          <Link href="/report" className="term-btn term-btn-amber mt-6">
             See the latest report
           </Link>
         </main>

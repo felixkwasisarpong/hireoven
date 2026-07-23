@@ -60,19 +60,19 @@ const FAQ_ITEMS = [
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="border-b border-slate-200/80 last:border-0">
+    <div className="border-b border-[rgba(120,200,160,0.12)] last:border-0">
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-4 py-5 text-left transition hover:text-[#0369A1]"
+        className="flex w-full items-center justify-between gap-4 py-5 text-left transition hover:text-[#f5a623]"
       >
-        <span className="text-[15px] font-semibold text-slate-900">{q}</span>
+        <span className="text-[15px] font-semibold text-white">{q}</span>
         <ChevronDown
-          className={`h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 flex-shrink-0 text-[#ccd6cf]/45 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
         />
       </button>
       <div className={`overflow-hidden transition-all duration-250 ${open ? "max-h-96 pb-5" : "max-h-0"}`}>
-        <p className="text-sm leading-relaxed text-slate-600">{a}</p>
+        <p className="text-sm leading-relaxed text-[#ccd6cf]/65">{a}</p>
       </div>
     </div>
   )
@@ -136,27 +136,28 @@ export default function PricingPage() {
   }
 
   return (
-    <div className="min-h-dvh">
+    <div className="term-page min-h-dvh">
       <Navbar />
 
       {/* ── Hero ──────────────────────────────────────────────── */}
-      <section className="px-6 pt-20 pb-14 text-center bg-[radial-gradient(ellipse_at_top,_rgba(3,105,161,0.07),_transparent_55%)]">
-        <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-[#0369A1] mb-4">Pricing</p>
-        <h1 className="text-[2.75rem] font-bold leading-[1.15] tracking-tight text-slate-950 mx-auto max-w-2xl">
-          Land your next job faster
+      <section className="mx-auto w-full max-w-3xl px-4 pt-12 text-center sm:px-6">
+        <p className="term-label">&gt; pricing --plans</p>
+        <h1 className="mx-auto mt-4 max-w-3xl text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
+          Land your next job <span className="text-[#f5a623]">faster</span>
+          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
-        <p className="mt-4 text-lg text-slate-500 mx-auto max-w-xl leading-relaxed">
+        <p className="mx-auto mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Real-time jobs, AI resume tools, and H1B sponsorship intel - everything you need in one place
         </p>
 
-        <div className="mt-10">
-          <BillingToggle value={interval} onChange={setInterval} />
+        <div className="mt-8">
+          <BillingToggle value={interval} onChange={setInterval} theme="terminal" />
         </div>
       </section>
 
       {/* ── Pricing cards ─────────────────────────────────────── */}
-      <section className="px-6 pb-20">
-        <div className="mx-auto max-w-5xl grid gap-6 md:grid-cols-3">
+      <section className="px-4 pb-20 pt-10 sm:px-6 lg:px-10">
+        <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-3">
           {(["free", "pro", "pro_max"] as PlanKey[]).map((plan) => (
             <PricingCard
               key={plan}
@@ -166,30 +167,31 @@ export default function PricingPage() {
               onUpgrade={handleUpgrade}
               isLoggedIn={Boolean(user)}
               userPlan={currentPlan}
+              theme="terminal"
             />
           ))}
         </div>
       </section>
 
       {/* ── Trust signals ─────────────────────────────────────── */}
-      <section className="border-y border-slate-100 bg-slate-50/60 px-6 py-10">
-        <div className="mx-auto max-w-5xl grid grid-cols-2 gap-6 md:grid-cols-4">
+      <section className="border-y border-[rgba(120,200,160,0.2)] px-4 py-10 sm:px-6 lg:px-10">
+        <div className="mx-auto grid max-w-5xl grid-cols-2 gap-6 md:grid-cols-4">
           {TRUST_SIGNALS.map(({ icon: Icon, text }) => (
             <div key={text} className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-[#0369A1]/10">
-                <Icon className="h-4 w-4 text-[#0369A1]" />
+              <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0e1411]">
+                <Icon className="h-4 w-4 text-[#f5a623]" />
               </div>
-              <p className="text-sm font-medium text-slate-700">{text}</p>
+              <p className="text-sm font-medium text-[#ccd6cf]/80">{text}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── Testimonials ──────────────────────────────────────── */}
-      <section className="px-6 py-20">
+      <section className="px-4 py-20 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-5xl">
-          <p className="section-kicker text-center mb-3">What people say</p>
-          <h2 className="text-center text-2xl font-bold text-slate-950 mb-10">
+          <p className="term-label mb-3 text-center">what people say</p>
+          <h2 className="mb-10 text-center text-[2rem] font-semibold leading-[1.05] tracking-tight text-white">
             Join thousands already applying first
           </h2>
           <div className="grid gap-6 md:grid-cols-3">
@@ -201,13 +203,13 @@ export default function PricingPage() {
       </section>
 
       {/* ── FAQ ───────────────────────────────────────────────── */}
-      <section className="border-t border-slate-100 px-6 py-20 bg-slate-50/40">
+      <section className="border-y border-[rgba(120,200,160,0.2)] px-4 py-20 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-2xl">
-          <p className="section-kicker text-center mb-3">FAQ</p>
-          <h2 className="text-center text-2xl font-bold text-slate-950 mb-10">
+          <p className="term-label mb-3 text-center">faq</p>
+          <h2 className="mb-10 text-center text-[2rem] font-semibold leading-[1.05] tracking-tight text-white">
             Common questions
           </h2>
-          <div className="rounded-[20px] border border-slate-200/80 bg-white px-6">
+          <div className="term-panel px-6">
             {FAQ_ITEMS.map((item) => (
               <FaqItem key={item.q} {...item} />
             ))}
@@ -216,25 +218,25 @@ export default function PricingPage() {
       </section>
 
       {/* ── Comparison table ──────────────────────────────────── */}
-      <section className="px-6 py-20">
+      <section className="px-4 py-20 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-5xl">
-          <p className="section-kicker text-center mb-3">Full comparison</p>
-          <h2 className="text-center text-2xl font-bold text-slate-950 mb-10">
+          <p className="term-label mb-3 text-center">full comparison</p>
+          <h2 className="mb-10 text-center text-[2rem] font-semibold leading-[1.05] tracking-tight text-white">
             Every feature, side by side
           </h2>
-          <div className="rounded-[20px] border border-slate-200/80 bg-white overflow-hidden shadow-sm">
+          <div className="overflow-hidden term-panel">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-200">
-                  <th className="px-4 py-4 text-left text-sm font-semibold text-slate-700 w-1/2">Feature</th>
-                  <th className="px-4 py-4 text-center text-sm font-semibold text-slate-700">Free</th>
-                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#0369A1] bg-[#F0FDFA]/60">Pro</th>
-                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#ea580c]">Pro Max</th>
+                <tr className="border-b border-[rgba(120,200,160,0.26)]">
+                  <th className="px-4 py-4 text-left text-sm font-semibold text-[#ccd6cf]/80 w-1/2">Feature</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#ccd6cf]/80">Free</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#f5a623] bg-[#f5a623]/8">Pro</th>
+                  <th className="px-4 py-4 text-center text-sm font-semibold text-[#f5a623]">Pro Max</th>
                 </tr>
               </thead>
               <tbody>
                 {PLAN_COMPARISON_ROWS.map((row, i) => (
-                  <FeatureRow key={i} {...row} />
+                  <FeatureRow key={i} {...row} theme="terminal" />
                 ))}
               </tbody>
             </table>
@@ -243,24 +245,25 @@ export default function PricingPage() {
       </section>
 
       {/* ── Footer CTA ────────────────────────────────────────── */}
-      <section className="px-6 py-24 bg-[radial-gradient(ellipse_at_center,_rgba(3,105,161,0.07),_transparent_65%)] border-t border-slate-100">
+      <section className="border-t border-[rgba(120,200,160,0.26)] px-4 py-24 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-[2rem] font-bold leading-tight tracking-tight text-slate-950">
-            Start finding jobs the moment they post
+          <p className="term-label">{"// apply first"}</p>
+          <h2 className="mt-2 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3rem]">
+            Start finding jobs the moment they <span className="text-[#f5a623]">post</span>
           </h2>
-          <p className="mt-3 text-lg text-slate-500">
+          <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/60">
             Join thousands of job seekers who apply before the crowd
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
             <Link
-              href="/signup"
-              className="rounded-xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+              href="/signup?next=%2Fdashboard%2Fonboarding"
+              className="term-btn term-btn-amber"
             >
               Get started free
             </Link>
             <Link
-              href="/signup?plan=pro&interval=monthly"
-              className="rounded-xl bg-[#0369A1] px-6 py-3 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(3,105,161,0.28)] transition hover:bg-[#075985]"
+              href="/signup?plan=pro&interval=monthly&next=%2Fdashboard%2Fonboarding"
+              className="term-btn"
             >
               Start Pro
             </Link>
@@ -268,15 +271,6 @@ export default function PricingPage() {
         </div>
       </section>
 
-      {/* Minimal footer */}
-      <footer className="border-t border-slate-200 bg-white px-6 py-8 text-center">
-        <p className="text-sm text-slate-400">
-          © {new Date().getFullYear()} Hireoven ·{" "}
-          <Link href="/terms" className="hover:text-slate-600">Terms</Link>
-          {" · "}
-          <Link href="/privacy" className="hover:text-slate-600">Privacy</Link>
-        </p>
-      </footer>
     </div>
   )
 }
