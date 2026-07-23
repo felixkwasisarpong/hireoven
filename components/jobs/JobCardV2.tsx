@@ -57,6 +57,7 @@ import {
   unsaveJobFromPipeline,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant, getApplyVariantLabel } from "@/lib/jobs/apply-cta"
+import { estimateWageLevel, WAGE_LEVEL_META } from "@/lib/stay/lottery-odds"
 import {
   readJobRepostCount,
   resolveGhostRepostSignals,
@@ -460,6 +461,20 @@ export default function JobCardV2({
   const sponsorConfidence = staffingIntermediary ? 0 : job.company?.sponsorship_confidence ?? 0
   const companySponsorsH1b = !staffingIntermediary && job.company?.sponsors_h1b === true
   const hasH1bData = companySponsorsH1b || h1bCount1yr > 0 || job.sponsors_h1b === true
+
+  // Stay: the role's estimated H-1B wage level → single-draw odds under the 2026
+  // weighted lottery. Salary-only estimate; the full Stay Score lives on /stay.
+  const lotteryChip = useMemo(() => {
+    const salary =
+      job.salary_min && job.salary_max
+        ? Math.round((job.salary_min + job.salary_max) / 2)
+        : job.salary_max ?? job.salary_min ?? null
+    const est = estimateWageLevel({ salary })
+    if (!est) return null
+    const oddsPct = Math.round(est.meta.singleDrawOdds * 100)
+    const tone = oddsPct < 20 ? "rose" : oddsPct < 40 ? "amber" : "emerald"
+    return { label: WAGE_LEVEL_META[est.level].label, oddsPct, tone }
+  }, [job.salary_min, job.salary_max])
 
   const easyApply = pickRawBoolean(raw, ["easyApply", "easy_apply"]) ?? false
   const repostCount = readJobRepostCount(job)
@@ -961,6 +976,23 @@ export default function JobCardV2({
                           ? `${sponsorshipDisplay?.label} · ${sponsorshipStrengthText}`
                           : sponsorshipDisplay?.label ?? "Historical signal"}
                     </span>
+
+                    {/* Stay: 2026 weighted-lottery odds from the role's wage level */}
+                    {!jdBlocksSponsorship && lotteryChip && (
+                      <span
+                        className={cn(
+                          "ml-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                          lotteryChip.tone === "rose"
+                            ? "bg-rose-500/15 text-rose-400"
+                            : lotteryChip.tone === "amber"
+                              ? "bg-amber-500/15 text-amber-400"
+                              : "bg-emerald-500/15 text-emerald-400"
+                        )}
+                        title="Estimated H-1B wage level and single-draw lottery odds under the 2026 weighted rule. Full Stay Score on /stay."
+                      >
+                        Lottery {lotteryChip.label} · {lotteryChip.oddsPct}%
+                      </span>
+                    )}
 
                     {/* Confidence bar */}
                     {!jdBlocksSponsorship && sponsorConfidence > 0 && (

@@ -22,11 +22,11 @@ const STAT_META: Array<{
   accent: string
 }> = [
   { key: "newJobs", label: "Fresh jobs", Icon: Flame, accent: "text-slate-900" },
-  { key: "aiJobs", label: "AI / ML roles", Icon: Sparkles, accent: "text-emerald-600" },
-  { key: "remoteJobs", label: "Remote roles", Icon: Globe2, accent: "text-teal-600" },
-  { key: "newGradJobs", label: "New-grad / entry", Icon: GraduationCap, accent: "text-indigo-600" },
+  { key: "aiJobs", label: "AI / ML roles", Icon: Sparkles, accent: "text-orange-600" },
+  { key: "remoteJobs", label: "Remote roles", Icon: Globe2, accent: "text-slate-600" },
+  { key: "newGradJobs", label: "New-grad / entry", Icon: GraduationCap, accent: "text-orange-600" },
   { key: "companiesHiring", label: "Companies hiring", Icon: Building2, accent: "text-slate-900" },
-  { key: "sponsorCompanies", label: "With sponsorship history", Icon: ShieldCheck, accent: "text-violet-600" },
+  { key: "sponsorCompanies", label: "With sponsorship history", Icon: ShieldCheck, accent: "text-orange-600" },
 ]
 
 export default function DailyReportView({
@@ -43,7 +43,7 @@ export default function DailyReportView({
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
       <header className="max-w-2xl">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700">
           <Flame className="h-3.5 w-3.5" /> Fresh Jobs Report
         </span>
         <h1 className="mt-3 text-[30px] font-bold leading-tight tracking-tight text-slate-950 sm:text-[36px]">
@@ -80,7 +80,7 @@ export default function DailyReportView({
               <li key={c.id}>
                 <Link
                   href={jobsAtPath(c.id, c.name)}
-                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 transition hover:border-emerald-200 hover:shadow-sm sm:px-4"
+                  className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 transition hover:border-orange-200 hover:shadow-sm sm:px-4"
                 >
                   <span className="w-6 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-400">
                     {i + 1}
@@ -96,7 +96,7 @@ export default function DailyReportView({
                     <div className="flex items-center gap-2">
                       {c.industry && <p className="truncate text-[12px] text-slate-500">{c.industry}</p>}
                       {c.sponsorsH1b && (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">
                           <ShieldCheck className="h-3 w-3" /> Sponsors H-1B
                         </span>
                       )}
@@ -157,20 +157,20 @@ export default function DailyReportView({
       </div>
 
       {/* CTA */}
-      <section className="mt-12 rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-6 py-8 text-center">
+      <section className="mt-12 rounded-3xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white px-6 py-8 text-center">
         <h2 className="text-xl font-bold text-slate-900">Get tomorrow&apos;s fresh jobs first</h2>
         <p className="mx-auto mt-2 max-w-md text-[14px] text-slate-600">
           Wake up to the roles posted overnight — filtered to your titles, with H-1B sponsorship intel built in.
         </p>
         <Link
           href="/signup"
-          className="mt-5 inline-flex items-center justify-center rounded-full bg-emerald-600 px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-emerald-700"
+          className="mt-5 inline-flex items-center justify-center rounded-full bg-slate-950 px-6 py-2.5 text-[14px] font-semibold text-white transition hover:bg-slate-800"
         >
           Start tracking free
         </Link>
         <p className="mt-4 text-[13px] text-slate-500">
           or{" "}
-          <Link href="/jobs/browse" className="font-medium text-emerald-700 underline-offset-2 hover:underline">
+          <Link href="/jobs/browse" className="font-medium text-orange-700 underline-offset-2 hover:underline">
             browse jobs by role, location &amp; visa
           </Link>
         </p>
@@ -179,14 +179,14 @@ export default function DailyReportView({
       {/* Date nav */}
       <nav className="mt-8 flex items-center justify-between text-[13px] font-medium">
         {prevDate ? (
-          <Link href={`/report/${prevDate}`} className="text-slate-600 hover:text-emerald-700">
+          <Link href={`/report/${prevDate}`} className="text-slate-600 hover:text-orange-700">
             ← {prettyDate(prevDate)}
           </Link>
         ) : (
           <span />
         )}
         {nextDate ? (
-          <Link href={`/report/${nextDate}`} className="text-slate-600 hover:text-emerald-700">
+          <Link href={`/report/${nextDate}`} className="text-slate-600 hover:text-orange-700">
             {prettyDate(nextDate)} →
           </Link>
         ) : (

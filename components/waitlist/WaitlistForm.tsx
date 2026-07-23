@@ -45,7 +45,7 @@ function fireConfetti() {
     particleCount: count,
     spread: 70,
     startVelocity: 35,
-    colors: ["#1D9E75", "#0f172a", "#E8F7F2"],
+    colors: ["#FF5C18", "#0f172a", "#FFF3EC"],
   })
 }
 
@@ -181,19 +181,19 @@ export default function WaitlistForm({
     return (
       <div
         className={cn(
-          "rounded-2xl border border-teal-200 bg-teal-50/80 p-6 text-left shadow-sm",
+          "term-panel border-[#38e08a]/30 bg-[#38e08a]/[0.06] p-6 text-left",
           className
         )}
       >
-        <p className="text-lg font-bold text-strong">You&apos;re on the waitlist!</p>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="text-lg font-semibold text-white">You&apos;re on the waitlist!</p>
+        <p className="mt-1 text-sm text-[#ccd6cf]/60">
           Check your email - we sent a confirmation.
         </p>
         {message ? (
-          <p className="mt-3 text-sm font-semibold text-teal-700">{message}</p>
+          <p className="mt-3 text-sm font-semibold text-[#38e08a]">{message}</p>
         ) : null}
 
-        <p className="mt-6 text-sm font-semibold text-strong">
+        <p className="mt-6 text-sm font-semibold text-white">
           Know other job seekers? Share Hireoven:
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
@@ -202,7 +202,7 @@ export default function WaitlistForm({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => void trackShare("twitter")}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-strong transition hover:bg-surface-alt"
+            className="inline-flex items-center gap-2 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-2 text-sm font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
           >
             <Twitter className="h-4 w-4" aria-hidden />
             Twitter / X
@@ -212,7 +212,7 @@ export default function WaitlistForm({
             target="_blank"
             rel="noopener noreferrer"
             onClick={() => void trackShare("linkedin")}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-strong transition hover:bg-surface-alt"
+            className="inline-flex items-center gap-2 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-2 text-sm font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
           >
             <Linkedin className="h-4 w-4" aria-hidden />
             LinkedIn
@@ -223,7 +223,7 @@ export default function WaitlistForm({
               void navigator.clipboard.writeText(shareUrl)
               void trackShare("copy")
             }}
-            className="inline-flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-semibold text-strong transition hover:bg-surface-alt"
+            className="inline-flex items-center gap-2 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-2 text-sm font-semibold text-[#ccd6cf]/80 transition-colors hover:border-[#38e08a] hover:text-[#38e08a]"
           >
             <Copy className="h-4 w-4" aria-hidden />
             Copy link
@@ -254,14 +254,14 @@ export default function WaitlistForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className={cn(
-            "min-h-[48px] w-full rounded-xl border border-input bg-card px-4 text-base text-strong shadow-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-teal-500/40",
+            "min-h-[48px] w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 text-base text-[#ccd6cf] outline-none ring-offset-background placeholder:text-[#ccd6cf]/35 focus-visible:border-[#38e08a] focus-visible:ring-2 focus-visible:ring-[#38e08a]/30",
             variant === "simple" && "sm:flex-1"
           )}
         />
         <Button
           type="submit"
           disabled={loading}
-          className="h-12 shrink-0 rounded-xl bg-teal-600 px-6 text-base font-semibold text-white hover:bg-teal-700"
+          className="h-12 shrink-0 bg-[#f5a623] px-6 text-base font-semibold text-[#0a0e0c] hover:bg-[#f5a623]/90"
         >
           {loading ? "Joining…" : "Join the waitlist →"}
         </Button>
@@ -272,21 +272,21 @@ export default function WaitlistForm({
           <button
             type="button"
             onClick={() => setExpandedOpen((v) => !v)}
-            className="text-sm font-semibold text-teal-700 underline-offset-4 hover:underline"
+            className="text-sm font-semibold text-[#f5a623] underline-offset-4 hover:underline"
           >
             {expandedOpen ? "Hide extra fields" : "Tell us more"}
           </button>
 
           {expandedOpen ? (
-            <div className="space-y-4 rounded-2xl border border-border bg-surface-alt/60 p-4">
+            <div className="space-y-4 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-4">
               <label className="flex items-start gap-3 text-sm">
                 <input
                   type="checkbox"
                   checked={isInternational}
                   onChange={(e) => setIsInternational(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-input"
+                  className="mt-1 h-4 w-4 accent-[#38e08a]"
                 />
-                <span className="text-strong">
+                <span className="text-[#ccd6cf]">
                   Are you an international student?
                 </span>
               </label>
@@ -294,13 +294,13 @@ export default function WaitlistForm({
               {isInternational ? (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                    <label className="mb-1 block text-xs font-semibold text-[#ccd6cf]/60">
                       Visa status
                     </label>
                     <select
                       value={visaStatus}
                       onChange={(e) => setVisaStatus(e.target.value)}
-                      className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                      className="term-select h-11 w-full px-3 text-sm"
                     >
                       <option value="">Select…</option>
                       {VISA_OPTIONS.map((o) => (
@@ -311,7 +311,7 @@ export default function WaitlistForm({
                     </select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                    <label className="mb-1 block text-xs font-semibold text-[#ccd6cf]/60">
                       University
                     </label>
                     <input
@@ -319,20 +319,20 @@ export default function WaitlistForm({
                       value={university}
                       onChange={(e) => setUniversity(e.target.value)}
                       placeholder="e.g. NYU"
-                      className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                      className="h-11 w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 text-sm text-[#ccd6cf] outline-none placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
                     />
                   </div>
                 </div>
               ) : null}
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-muted-foreground">
+                <label className="mb-1 block text-xs font-semibold text-[#ccd6cf]/60">
                   How did you hear about us?
                 </label>
                 <select
                   value={hearAbout}
                   onChange={(e) => setHearAbout(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                  className="term-select h-11 w-full px-3 text-sm"
                 >
                   <option value="">Optional</option>
                   {HEAR_OPTIONS.map((o) => (
@@ -348,13 +348,13 @@ export default function WaitlistForm({
       ) : null}
 
       {variant === "simple" ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-[#ccd6cf]/55">
           Free forever for early members. No spam. Unsubscribe anytime.
         </p>
       ) : null}
 
       {error ? (
-        <p className="text-sm font-medium text-red-600" role="alert">
+        <p className="text-sm font-medium text-red-300" role="alert">
           {error}
         </p>
       ) : null}
@@ -364,8 +364,8 @@ export default function WaitlistForm({
 
 export function WaitlistSuccessCheck() {
   return (
-    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-100">
-      <Check className="h-9 w-9 text-teal-700" strokeWidth={2.5} />
+    <div className="flex h-16 w-16 items-center justify-center rounded-full border border-[#38e08a]/30 bg-[#38e08a]/12">
+      <Check className="h-9 w-9 text-[#38e08a]" strokeWidth={2.5} />
     </div>
   )
 }

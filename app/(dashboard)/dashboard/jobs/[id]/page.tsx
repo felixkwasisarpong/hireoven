@@ -257,7 +257,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
       `SELECT j.*, to_jsonb(c.*) AS company
        FROM jobs j
        LEFT JOIN companies c ON c.id = j.company_id
-       WHERE j.id = $1::uuid AND j.is_active = true AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
+       WHERE j.id = $1::uuid AND j.is_active = true
        LIMIT 1`,
       [id]
     ),

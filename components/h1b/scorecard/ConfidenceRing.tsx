@@ -10,13 +10,15 @@ const STROKE: Record<ScoreHue, string> = {
   red: "stroke-red-500",
 }
 
+// Lightened per-hue text so each grade stays legible AND distinct on the dark
+// terminal canvas (strokes stay saturated in STROKE above).
 const TEXT: Record<ScoreHue, string> = {
-  emerald: "text-emerald-600",
-  green: "text-green-600",
-  blue: "text-sky-600",
-  amber: "text-amber-600",
-  orange: "text-orange-600",
-  red: "text-red-600",
+  emerald: "text-emerald-300",
+  green: "text-green-300",
+  blue: "text-sky-300",
+  amber: "text-amber-300",
+  orange: "text-orange-300",
+  red: "text-red-300",
 }
 
 const R = 52
@@ -33,7 +35,7 @@ export function ConfidenceRing({ score }: { score: number }) {
     <div className="flex flex-col items-center">
       <div className="relative h-32 w-32">
         <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
-          <circle cx="60" cy="60" r={R} className="stroke-slate-200" strokeWidth="9" fill="none" />
+          <circle cx="60" cy="60" r={R} className="stroke-[rgba(120,200,160,0.14)]" strokeWidth="9" fill="none" />
           <circle
             cx="60"
             cy="60"
@@ -48,10 +50,10 @@ export function ConfidenceRing({ score }: { score: number }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={"text-[28px] font-bold leading-none " + TEXT[b.hue]}>{b.grade}</span>
-          <span className="mt-1 text-xs font-medium tabular-nums text-slate-400">{clamped}/100</span>
+          <span className="mt-1 text-xs font-medium tabular-nums text-[#ccd6cf]/45">{clamped}/100</span>
         </div>
       </div>
-      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[#ccd6cf]/45">
         Sponsorship confidence
       </p>
       <p className={"text-[13px] font-semibold " + TEXT[b.hue]}>{b.label}</p>

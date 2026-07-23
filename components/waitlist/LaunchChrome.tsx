@@ -3,14 +3,15 @@ import HireovenLogo from "@/components/ui/HireovenLogo"
 
 export function LaunchNavbar() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border/80 bg-white/90 backdrop-blur-md">
+    <header className="term-nav sticky top-0 z-50 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
-        <Link href="/launch" className="flex shrink-0 items-center">
-          <HireovenLogo className="h-11 w-auto" priority />
+        <Link href="/launch" className="flex shrink-0 items-center gap-2">
+          <span className="text-[#38e08a]" aria-hidden>&gt;</span>
+          <HireovenLogo className="h-11 w-auto [filter:brightness(0)_invert(1)]" priority />
         </Link>
         <Link
           href="/login"
-          className="text-sm font-semibold text-muted-foreground transition hover:text-strong"
+          className="text-sm font-semibold text-[#ccd6cf]/70 transition-colors hover:text-[#38e08a]"
         >
           Already have an account? Log in
         </Link>
@@ -21,15 +22,15 @@ export function LaunchNavbar() {
 
 export function LaunchFooter() {
   return (
-    <footer className="border-t border-border py-10 text-center">
-      <div className="mx-auto max-w-6xl px-4 text-sm text-muted-foreground">
+    <footer className="border-t border-[rgba(120,200,160,0.2)] py-10 text-center">
+      <div className="mx-auto max-w-6xl px-4 text-sm text-[#ccd6cf]/55">
         <p>
           © <span suppressHydrationWarning>{new Date().getFullYear()}</span> Hireoven ·{" "}
-          <Link href="/privacy" className="font-medium underline-offset-4 hover:underline">
+          <Link href="/privacy" className="font-medium text-[#ccd6cf]/70 underline-offset-4 transition-colors hover:text-[#38e08a]">
             Privacy
           </Link>{" "}
           ·{" "}
-          <Link href="/terms" className="font-medium underline-offset-4 hover:underline">
+          <Link href="/terms" className="font-medium text-[#ccd6cf]/70 underline-offset-4 transition-colors hover:text-[#38e08a]">
             Terms
           </Link>
         </p>

@@ -93,10 +93,10 @@ type H1bRecordRow = {
 
 type Props = { params: Promise<{ id: string }> }
 
-const sectionCard = "border border-slate-200/80 bg-white p-6"
+const sectionCard = "term-panel p-6"
 
-const mutedCard = "border border-slate-200/75 bg-slate-50/75 p-4"
-const mergedBand = "border border-slate-200/70 bg-slate-50/55 p-5"
+const mutedCard = "border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4"
+const mergedBand = "border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-5"
 
 function formatMoney(value: number | null | undefined) {
   if (value == null || !Number.isFinite(Number(value))) return "Unknown"
@@ -112,20 +112,20 @@ function statusCopy(sponsorsH1b: boolean | null, confidence: number | null) {
   if (sponsorsH1b === true || (confidence ?? 0) >= 70) {
     return {
       label: "Historical H-1B signal",
-      tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+      tone: "border-[#38e08a]/25 bg-[#38e08a]/12 text-[#38e08a]",
       description: "Past data suggests sponsorship activity. Current role support is not confirmed.",
     }
   }
   if ((confidence ?? 0) >= 40) {
     return {
       label: "Possible sponsorship signal",
-      tone: "border-amber-200 bg-amber-50 text-amber-800",
+      tone: "border-[#f5a623]/30 bg-[#f5a623]/12 text-[#f5a623]",
       description: "Some signals exist, but they should be reviewed role by role.",
     }
   }
   return {
     label: "Sponsorship unknown",
-    tone: "border-slate-200 bg-slate-50 text-slate-700",
+    tone: "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#ccd6cf]/70",
     description: "Hireoven has not confirmed current sponsorship support.",
   }
 }
@@ -133,9 +133,9 @@ function statusCopy(sponsorsH1b: boolean | null, confidence: number | null) {
 function MiniStat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className={mutedCard}>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold tracking-tight text-slate-950">{value}</p>
-      {hint ? <p className="mt-1 text-xs leading-relaxed text-slate-500">{hint}</p> : null}
+      <p className="term-label">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-white">{value}</p>
+      {hint ? <p className="mt-1 text-xs leading-relaxed text-[#ccd6cf]/55">{hint}</p> : null}
     </div>
   )
 }
@@ -152,14 +152,14 @@ function SectionHeader({
   description?: string
 }) {
   return (
-    <div className="mb-5 flex items-start gap-3 border-b border-slate-200/75 pb-4">
-      <span className="grid h-9 w-9 shrink-0 place-items-center border border-sky-100 bg-sky-50/80 text-[#2563EB]">
+    <div className="mb-5 flex items-start gap-3 border-b border-[rgba(120,200,160,0.12)] pb-4">
+      <span className="grid h-9 w-9 shrink-0 place-items-center border border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#f5a623]">
         <Icon className="h-4.5 w-4.5" aria-hidden />
       </span>
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{eyebrow}</p>
-        <h2 className="mt-0.5 text-xl font-bold tracking-tight text-slate-950">{title}</h2>
-        {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
+        <p className="term-label">{eyebrow}</p>
+        <h2 className="mt-0.5 text-xl font-semibold tracking-tight text-white">{title}</h2>
+        {description ? <p className="mt-1 max-w-3xl text-sm leading-6 text-[#ccd6cf]/55">{description}</p> : null}
       </div>
     </div>
   )
@@ -178,20 +178,20 @@ function ProgressRow({
   return (
     <div>
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-slate-800">{label}</p>
-        <p className="text-sm font-bold tabular-nums text-slate-950">{value == null ? "Unknown" : `${width}%`}</p>
+        <p className="text-sm font-semibold text-[#ccd6cf]">{label}</p>
+        <p className="text-sm font-bold tabular-nums text-white">{value == null ? "Unknown" : `${width}%`}</p>
       </div>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-        <div className="h-full rounded-full bg-[#2563EB]" style={{ width: `${width}%` }} />
+      <div className="mt-2 h-2 overflow-hidden bg-[#0a0e0c] border border-[rgba(120,200,160,0.12)]">
+        <div className="h-full bg-[#38e08a]" style={{ width: `${width}%` }} />
       </div>
-      {detail ? <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{detail}</p> : null}
+      {detail ? <p className="mt-1.5 text-xs leading-relaxed text-[#ccd6cf]/55">{detail}</p> : null}
     </div>
   )
 }
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-5 text-sm leading-6 text-slate-500">
+    <div className="border border-dashed border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-5 text-sm leading-6 text-[#ccd6cf]/55">
       {children}
     </div>
   )
@@ -386,7 +386,7 @@ export default async function PublicCompanyPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script
         type="application/ld+json"
@@ -395,7 +395,7 @@ export default async function PublicCompanyPage({ params }: Props) {
       />
 
       <main className="mx-auto w-full max-w-[92rem] px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-        <section className="overflow-hidden border border-slate-200/85 bg-white">
+        <section className="overflow-hidden term-panel">
           <div className="grid gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:p-8">
             <div className="min-w-0">
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
@@ -404,7 +404,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                   domain={company.domain}
                   logoUrl={company.logo_url}
                   priority
-                  className="h-[88px] w-[88px] shrink-0 border border-slate-200/70 bg-white"
+                  className="h-[88px] w-[88px] shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
@@ -412,22 +412,19 @@ export default async function PublicCompanyPage({ params }: Props) {
                       {status.label}
                     </span>
                     {company.ats_type ? (
-                      <span className="border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium capitalize text-slate-600">
+                      <span className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-medium capitalize text-[#ccd6cf]/70">
                         {company.ats_type} ATS
                       </span>
                     ) : null}
                   </div>
-                  <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-                    {company.name} immigration profile
+                  <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-5xl">
+                    {company.name} <span className="text-[#f5a623]">immigration profile</span>
                   </h1>
-                  <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+                  <p className="mt-3 max-w-3xl text-base leading-7 text-[#ccd6cf]/70">
                     {profile.overviewSummary}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <Link
-                      href="#open-jobs"
-                      className="inline-flex items-center gap-2 rounded-sm bg-[#2563EB] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#1D4ED8]"
-                    >
+                    <Link href="#open-jobs" className="term-btn term-btn-amber">
                       View open jobs
                       <ArrowRight className="h-4 w-4" aria-hidden />
                     </Link>
@@ -435,7 +432,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                       href={company.careers_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-sm border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                      className="term-btn"
                     >
                       Company careers
                       <ExternalLink className="h-4 w-4" aria-hidden />
@@ -445,8 +442,8 @@ export default async function PublicCompanyPage({ params }: Props) {
               </div>
             </div>
 
-            <aside className="border border-slate-200/80 bg-slate-50/55 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">Decision snapshot</p>
+            <aside className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-5">
+              <p className="term-label">Decision snapshot</p>
               <div className="mt-4 space-y-4">
                 <ProgressRow
                   label="Historical sponsorship confidence"
@@ -466,32 +463,36 @@ export default async function PublicCompanyPage({ params }: Props) {
                   />
                 </div>
                 {healthSnapshot && (
-                  <div className="flex items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-3">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Employer health</p>
+                      <p className="term-label">Employer health</p>
                       <div className="mt-1 flex items-center gap-2">
                         <span
-                          className="text-lg font-black tabular-nums"
+                          className="text-lg font-bold tabular-nums"
                           style={{
-                            color: healthSnapshot.verdict === "strong" ? "#1D9E75"
+                            color: healthSnapshot.verdict === "strong" ? "#38e08a"
                               : healthSnapshot.verdict === "healthy" ? "#5DCAA5"
-                              : healthSnapshot.verdict === "caution" ? "#EF9F27"
+                              : healthSnapshot.verdict === "caution" ? "#f5a623"
                               : "#E24B4A"
                           }}
                         >
                           {healthSnapshot.total_score}
                         </span>
                         <span
-                          className="rounded-full px-2 py-0.5 text-[10px] font-bold capitalize"
+                          className="px-2 py-0.5 text-[10px] font-bold capitalize border"
                           style={{
-                            background: healthSnapshot.verdict === "strong" ? "#DCFCE7"
-                              : healthSnapshot.verdict === "healthy" ? "#D1FAE5"
-                              : healthSnapshot.verdict === "caution" ? "#FEF3C7"
-                              : "#FEE2E2",
-                            color: healthSnapshot.verdict === "strong" ? "#166534"
-                              : healthSnapshot.verdict === "healthy" ? "#166534"
-                              : healthSnapshot.verdict === "caution" ? "#92400E"
-                              : "#991B1B",
+                            background: healthSnapshot.verdict === "strong" ? "rgba(56,224,138,0.12)"
+                              : healthSnapshot.verdict === "healthy" ? "rgba(93,202,165,0.12)"
+                              : healthSnapshot.verdict === "caution" ? "rgba(245,166,35,0.12)"
+                              : "rgba(226,75,74,0.12)",
+                            borderColor: healthSnapshot.verdict === "strong" ? "rgba(56,224,138,0.3)"
+                              : healthSnapshot.verdict === "healthy" ? "rgba(93,202,165,0.3)"
+                              : healthSnapshot.verdict === "caution" ? "rgba(245,166,35,0.3)"
+                              : "rgba(226,75,74,0.3)",
+                            color: healthSnapshot.verdict === "strong" ? "#38e08a"
+                              : healthSnapshot.verdict === "healthy" ? "#5DCAA5"
+                              : healthSnapshot.verdict === "caution" ? "#f5a623"
+                              : "#E24B4A",
                           }}
                         >
                           {healthSnapshot.verdict}
@@ -500,16 +501,16 @@ export default async function PublicCompanyPage({ params }: Props) {
                     </div>
                     {healthSnapshot.glassdoor_rating != null && (
                       <div className="text-right">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Glassdoor</p>
-                        <p className="mt-1 text-lg font-black tabular-nums text-slate-900">
+                        <p className="term-label">Glassdoor</p>
+                        <p className="mt-1 text-lg font-bold tabular-nums text-white">
                           {Number(healthSnapshot.glassdoor_rating).toFixed(1)}
-                          <span className="ml-1 text-sm text-amber-400">★</span>
+                          <span className="ml-1 text-sm text-[#f5a623]">★</span>
                         </p>
                       </div>
                     )}
                   </div>
                 )}
-                <p className="border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+                <p className="border border-[#f5a623]/25 bg-[#f5a623]/10 px-4 py-3 text-xs leading-5 text-[#f5a623]">
                   Use this as a job-search signal. Sponsorship, OPT, STEM OPT, and cap-exempt support are never guaranteed by historical data.
                 </p>
               </div>
@@ -530,16 +531,16 @@ export default async function PublicCompanyPage({ params }: Props) {
 
               {isAuthenticated && jobs.length > 0 ? (
                 /* Logged in — real, clickable job rows linking to the detail page */
-                <div className="overflow-hidden rounded-xl border border-slate-200">
+                <div className="overflow-hidden border border-[rgba(120,200,160,0.2)]">
                   {jobs.map((job) => (
                     <Link
                       key={job.id}
                       href={`/dashboard/jobs/${job.id}`}
-                      className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 last:border-0 transition hover:bg-slate-50"
+                      className="flex items-center justify-between gap-3 border-b border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-4 py-3.5 last:border-0 transition hover:bg-[#111a15]"
                     >
                       <div className="min-w-0 space-y-1">
-                        <p className="truncate text-[14px] font-semibold text-slate-900">{job.title}</p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-500">
+                        <p className="truncate text-[14px] font-semibold text-white">{job.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#ccd6cf]/55">
                           {(job.is_remote || job.location) && (
                             <span className="inline-flex items-center gap-1">
                               <MapPin className="h-3 w-3" />
@@ -551,53 +552,51 @@ export default async function PublicCompanyPage({ params }: Props) {
                           )}
                         </div>
                       </div>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-slate-400" />
+                      <ArrowRight className="h-4 w-4 shrink-0 text-[#ccd6cf]/45" />
                     </Link>
                   ))}
                 </div>
               ) : (
-              /* Logged out (or no jobs) — blurred ghost rows + signup teaser */
-              <div className="relative overflow-hidden rounded-xl border border-slate-200">
+              /* Logged out (or no jobs) — ghost rows + signup teaser */
+              <div className="relative overflow-hidden border border-[rgba(120,200,160,0.2)]">
                 {(jobs.length > 0 ? jobs.slice(0, 3) : Array.from({ length: 3 })).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 last:border-0 select-none">
+                  <div key={i} className="flex items-center justify-between border-b border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-4 py-3.5 last:border-0 select-none">
                     <div className="space-y-1.5">
-                      <div className={cn("h-3.5 rounded-full bg-slate-200", i === 0 ? "w-52" : i === 1 ? "w-40" : "w-48")} />
+                      <div className={cn("h-3.5 bg-[#1a221d]", i === 0 ? "w-52" : i === 1 ? "w-40" : "w-48")} />
                       <div className="flex gap-3">
-                        <div className="h-2.5 w-20 rounded-full bg-slate-100" />
-                        <div className="h-2.5 w-16 rounded-full bg-slate-100" />
+                        <div className="h-2.5 w-20 bg-[#141c17]" />
+                        <div className="h-2.5 w-16 bg-[#141c17]" />
                       </div>
                     </div>
-                    <div className="h-7 w-16 rounded-lg bg-slate-200" />
+                    <div className="h-7 w-16 bg-[#1a221d]" />
                   </div>
                 ))}
 
                 {/* Lock overlay */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center rounded-xl bg-white/80 backdrop-blur-[3px]">
-                  <div className="mx-4 w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-[0_8px_32px_rgba(15,23,42,0.1)]">
-                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl"
-                      style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
-                      <Sparkles className="h-6 w-6 text-white" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0e0c]/85">
+                  <div className="mx-4 w-full max-w-sm border border-[rgba(120,200,160,0.26)] bg-[#0e1411] p-6 text-center">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]">
+                      <Sparkles className="h-6 w-6 text-[#f5a623]" />
                     </div>
-                    <p className="text-[15px] font-bold text-slate-900">
+                    <p className="text-[15px] font-semibold text-white">
                       {jobs.length > 0
                         ? `See all ${jobs.length} open role${jobs.length === 1 ? "" : "s"}`
                         : `Get alerts when ${company.name} hires`}
                     </p>
-                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-slate-500">
+                    <p className="mt-1.5 text-[12.5px] leading-relaxed text-[#ccd6cf]/55">
                       Sign up free to see live job listings, AI match scores, and apply in one click.
                     </p>
                     <div className="mt-4 flex flex-col gap-2">
                       <Link
-                        href={`/signup?next=/dashboard`}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-[13px] font-bold text-white transition hover:brightness-110"
-                        style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}
+                        href="/signup?next=%2Fdashboard%2Fonboarding"
+                        className="term-btn term-btn-amber w-full justify-center"
                       >
                         Sign up free — see all jobs
                         <ArrowRight className="h-3.5 w-3.5" />
                       </Link>
                       <Link
                         href="/login"
-                        className="flex w-full items-center justify-center rounded-xl border border-slate-200 py-2.5 text-[13px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                        className="term-btn w-full justify-center"
                       >
                         Already have an account? Sign in
                       </Link>
@@ -631,12 +630,12 @@ export default async function PublicCompanyPage({ params }: Props) {
                   />
                 </div>
 
-                <p className="text-sm leading-6 text-slate-600">{profile.sponsorshipHistory.summary}</p>
+                <p className="text-sm leading-6 text-[#ccd6cf]/70">{profile.sponsorshipHistory.summary}</p>
 
                 {profile.sponsorshipHistory.riskFlags.length > 0 ? (
-                  <div className="border border-amber-200/80 bg-amber-50 px-4 py-3">
-                    <p className="text-sm font-semibold text-amber-900">Signals to review</p>
-                    <ul className="mt-2 space-y-1 text-sm leading-6 text-amber-800">
+                  <div className="border border-[#f5a623]/30 bg-[#f5a623]/10 px-4 py-3">
+                    <p className="text-sm font-semibold text-[#f5a623]">Signals to review</p>
+                    <ul className="mt-2 space-y-1 text-sm leading-6 text-[#f5a623]/85">
                       {profile.sponsorshipHistory.riskFlags.map((flag) => (
                         <li key={flag}>• {flag}</li>
                       ))}
@@ -648,13 +647,13 @@ export default async function PublicCompanyPage({ params }: Props) {
                 {h1bRecords.length > 0 && (
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-center gap-2">
-                      <Landmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
-                      <h3 className="font-bold text-slate-950">H-1B petition history</h3>
+                      <Landmark className="h-4 w-4 text-[#f5a623]" aria-hidden />
+                      <h3 className="font-semibold text-white">H-1B petition history</h3>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                          <tr className="border-b border-[rgba(120,200,160,0.2)] text-left text-[11px] font-semibold uppercase tracking-[0.12em] text-[#ccd6cf]/45">
                             <th className="pb-2 pr-6">Year</th>
                             <th className="pb-2 pr-6">Petitions</th>
                             <th className="pb-2 pr-6">Approved</th>
@@ -662,22 +661,22 @@ export default async function PublicCompanyPage({ params }: Props) {
                             <th className="pb-2">Approval rate</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100">
+                        <tbody className="divide-y divide-[rgba(120,200,160,0.12)]">
                           {h1bRecords.map((row) => {
                             const rate = row.total_petitions > 0
                               ? Math.round((row.approved / row.total_petitions) * 100)
                               : null
                             return (
-                              <tr key={row.year} className="text-slate-700">
-                                <td className="py-2.5 pr-6 font-semibold text-slate-900">{row.year}</td>
+                              <tr key={row.year} className="text-[#ccd6cf]/80">
+                                <td className="py-2.5 pr-6 font-semibold text-white">{row.year}</td>
                                 <td className="py-2.5 pr-6">{row.total_petitions.toLocaleString()}</td>
-                                <td className="py-2.5 pr-6 font-medium text-emerald-700">{row.approved.toLocaleString()}</td>
-                                <td className="py-2.5 pr-6 text-red-600">{row.denied}</td>
+                                <td className="py-2.5 pr-6 font-medium text-[#38e08a]">{row.approved.toLocaleString()}</td>
+                                <td className="py-2.5 pr-6 text-red-400">{row.denied}</td>
                                 <td className="py-2.5">
                                   {rate != null ? (
                                     <span className={cn(
                                       "font-semibold",
-                                      rate >= 90 ? "text-emerald-700" : rate >= 70 ? "text-amber-700" : "text-red-600"
+                                      rate >= 90 ? "text-[#38e08a]" : rate >= 70 ? "text-[#f5a623]" : "text-red-400"
                                     )}>
                                       {rate}%
                                     </span>
@@ -688,18 +687,18 @@ export default async function PublicCompanyPage({ params }: Props) {
                           })}
                         </tbody>
                         <tfoot>
-                          <tr className="border-t border-slate-200 text-[12px] font-semibold text-slate-700">
+                          <tr className="border-t border-[rgba(120,200,160,0.2)] text-[12px] font-semibold text-[#ccd6cf]/80">
                             <td className="pt-2.5 pr-6">Total</td>
                             <td className="pt-2.5 pr-6">{h1bRecords.reduce((s, r) => s + r.total_petitions, 0).toLocaleString()}</td>
-                            <td className="pt-2.5 pr-6 text-emerald-700">{h1bRecords.reduce((s, r) => s + r.approved, 0).toLocaleString()}</td>
-                            <td className="pt-2.5 pr-6 text-red-600">{h1bRecords.reduce((s, r) => s + r.denied, 0)}</td>
+                            <td className="pt-2.5 pr-6 text-[#38e08a]">{h1bRecords.reduce((s, r) => s + r.approved, 0).toLocaleString()}</td>
+                            <td className="pt-2.5 pr-6 text-red-400">{h1bRecords.reduce((s, r) => s + r.denied, 0)}</td>
                             <td className="pt-2.5">
                               {(() => {
                                 const total = h1bRecords.reduce((s, r) => s + r.total_petitions, 0)
                                 const approved = h1bRecords.reduce((s, r) => s + r.approved, 0)
                                 const rate = total > 0 ? Math.round((approved / total) * 100) : null
                                 return rate != null ? (
-                                  <span className={cn("font-bold", rate >= 90 ? "text-emerald-700" : "text-amber-700")}>
+                                  <span className={cn("font-bold", rate >= 90 ? "text-[#38e08a]" : "text-[#f5a623]")}>
                                     {rate}%
                                   </span>
                                 ) : "—"
@@ -709,7 +708,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                         </tfoot>
                       </table>
                     </div>
-                    <p className="mt-3 text-xs leading-5 text-slate-400">
+                    <p className="mt-3 text-xs leading-5 text-[#ccd6cf]/45">
                       Source: USCIS H-1B employer data. These are petition counts, not individual employees.
                     </p>
                   </div>
@@ -718,12 +717,12 @@ export default async function PublicCompanyPage({ params }: Props) {
                 <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-start gap-3">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-[#2563EB] ring-1 ring-slate-200/70">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center border border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#f5a623]">
                         <Sparkles className="h-4 w-4" aria-hidden />
                       </span>
                       <div>
-                        <h3 className="font-bold text-slate-950">Sponsored role families</h3>
-                        <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                        <h3 className="font-semibold text-white">Sponsored role families</h3>
+                        <p className="mt-0.5 text-sm leading-6 text-[#ccd6cf]/55">
                           Compare the current job with historical sponsored role patterns.
                         </p>
                       </div>
@@ -733,19 +732,19 @@ export default async function PublicCompanyPage({ params }: Props) {
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
                         {profile.roleFamilies.map((role) => (
-                          <div key={role.label} className="border border-slate-200/70 bg-white p-4">
+                          <div key={role.label} className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-4">
                             <div className="flex items-start justify-between gap-3">
-                              <p className="font-semibold text-slate-900">{role.label}</p>
+                              <p className="font-semibold text-white">{role.label}</p>
                               {role.share != null ? (
-                                <span className="border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">
+                                <span className="border border-[#f5a623]/30 bg-[#f5a623]/12 px-2 py-0.5 text-xs font-bold text-[#f5a623]">
                                   {role.share}%
                                 </span>
                               ) : null}
                             </div>
-                            <p className="mt-1 text-sm text-slate-500">
+                            <p className="mt-1 text-sm text-[#ccd6cf]/55">
                               {role.count == null ? "Historical count unknown" : `${role.count.toLocaleString()} historical filing${role.count === 1 ? "" : "s"}`}
                             </p>
-                            <p className="mt-2 text-xs font-medium text-slate-400">{getProfileConfidenceLabel(role.confidence)}</p>
+                            <p className="mt-2 text-xs font-medium text-[#ccd6cf]/45">{getProfileConfidenceLabel(role.confidence)}</p>
                           </div>
                         ))}
                       </div>
@@ -754,12 +753,12 @@ export default async function PublicCompanyPage({ params }: Props) {
 
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-start gap-3">
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-2xl bg-white text-[#2563EB] ring-1 ring-slate-200/70">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center border border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#f5a623]">
                         <MapPin className="h-4 w-4" aria-hidden />
                       </span>
                       <div>
-                        <h3 className="font-bold text-slate-950">Common worksites</h3>
-                        <p className="mt-0.5 text-sm leading-6 text-slate-500">
+                        <h3 className="font-semibold text-white">Common worksites</h3>
+                        <p className="mt-0.5 text-sm leading-6 text-[#ccd6cf]/55">
                           Location history can vary by team and worksite.
                         </p>
                       </div>
@@ -769,15 +768,15 @@ export default async function PublicCompanyPage({ params }: Props) {
                     ) : (
                       <div className="space-y-2.5">
                         {profile.worksites.map((site) => (
-                          <div key={site.label} className="flex items-center justify-between gap-3 border border-slate-200/70 bg-white px-4 py-3">
+                          <div key={site.label} className="flex items-center justify-between gap-3 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-3">
                             <div>
-                              <p className="font-semibold text-slate-900">{site.label}</p>
-                              <p className="text-sm text-slate-500">
+                              <p className="font-semibold text-white">{site.label}</p>
+                              <p className="text-sm text-[#ccd6cf]/55">
                                 {site.count == null ? "Count unknown" : `${site.count.toLocaleString()} filing${site.count === 1 ? "" : "s"}`}
                               </p>
                             </div>
                             {site.share != null ? (
-                              <span className="border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-bold text-sky-700">
+                              <span className="border border-[#f5a623]/30 bg-[#f5a623]/12 px-2.5 py-1 text-xs font-bold text-[#f5a623]">
                                 {site.share}%
                               </span>
                             ) : null}
@@ -791,8 +790,8 @@ export default async function PublicCompanyPage({ params }: Props) {
                 <div className="grid gap-5 md:grid-cols-3">
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-center gap-2">
-                      <Banknote className="h-4 w-4 text-[#2563EB]" aria-hidden />
-                      <h3 className="font-bold text-slate-950">Salary context</h3>
+                      <Banknote className="h-4 w-4 text-[#f5a623]" aria-hidden />
+                      <h3 className="font-semibold text-white">Salary context</h3>
                     </div>
                     <div className="space-y-3">
                       <MiniStat label="Median wage" value={formatMoney(profile.salaryIntelligence.medianWage)} />
@@ -814,19 +813,19 @@ export default async function PublicCompanyPage({ params }: Props) {
                         }`}
                       />
                     </div>
-                    <p className="mt-4 text-sm leading-6 text-slate-600">{profile.salaryIntelligence.summary}</p>
+                    <p className="mt-4 text-sm leading-6 text-[#ccd6cf]/70">{profile.salaryIntelligence.summary}</p>
                   </div>
 
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4 text-[#2563EB]" aria-hidden />
-                      <h3 className="font-bold text-slate-950">STEM OPT readiness</h3>
+                      <GraduationCap className="h-4 w-4 text-[#f5a623]" aria-hidden />
+                      <h3 className="font-semibold text-white">STEM OPT readiness</h3>
                     </div>
-                    <p className="text-sm font-semibold capitalize text-slate-900">{profile.stemOptReadiness.readiness}</p>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{profile.stemOptReadiness.summary}</p>
-                    <div className="mt-4 flex items-start gap-2 border border-slate-200/70 bg-white p-3">
-                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                      <p className="text-xs leading-5 text-slate-500">
+                    <p className="text-sm font-semibold capitalize text-white">{profile.stemOptReadiness.readiness}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#ccd6cf]/70">{profile.stemOptReadiness.summary}</p>
+                    <div className="mt-4 flex items-start gap-2 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-3">
+                      <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#38e08a]" aria-hidden />
+                      <p className="text-xs leading-5 text-[#ccd6cf]/55">
                         E-Verify is {profile.stemOptReadiness.likelyEVerify === true ? "likely" : "not confirmed"} in the current data.
                       </p>
                     </div>
@@ -834,12 +833,12 @@ export default async function PublicCompanyPage({ params }: Props) {
 
                   <div className={mergedBand}>
                     <div className="mb-4 flex items-center gap-2">
-                      <Landmark className="h-4 w-4 text-[#2563EB]" aria-hidden />
-                      <h3 className="font-bold text-slate-950">Possible cap-exempt pathway</h3>
+                      <Landmark className="h-4 w-4 text-[#f5a623]" aria-hidden />
+                      <h3 className="font-semibold text-white">Possible cap-exempt pathway</h3>
                     </div>
-                    <p className="text-sm leading-6 text-slate-600">{profile.capExempt.summary}</p>
+                    <p className="text-sm leading-6 text-[#ccd6cf]/70">{profile.capExempt.summary}</p>
                     {profile.capExempt.evidence.length > 0 ? (
-                      <ul className="mt-3 space-y-1 text-sm leading-6 text-slate-500">
+                      <ul className="mt-3 space-y-1 text-sm leading-6 text-[#ccd6cf]/55">
                         {profile.capExempt.evidence.map((item) => (
                           <li key={item}>• {item}</li>
                         ))}
@@ -867,7 +866,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                 title={`Questions about ${company.name} sponsorship`}
                 description="Short answers use careful wording because employer policy can change by role, location, and year."
               />
-              <div className="divide-y divide-slate-100">
+              <div className="divide-y divide-[rgba(120,200,160,0.12)]">
                 {[
                   [`Does ${company.name} sponsor H-1B?`, profile.faq.h1b],
                   [`Does ${company.name} hire OPT students?`, profile.faq.opt],
@@ -875,8 +874,8 @@ export default async function PublicCompanyPage({ params }: Props) {
                   [`What roles has ${company.name} sponsored before?`, profile.faq.sponsoredRoles],
                 ].map(([question, answer]) => (
                   <div key={question} className="py-4 first:pt-0 last:pb-0">
-                    <h3 className="text-base font-bold text-slate-950">{question}</h3>
-                    <p className="mt-1.5 text-sm leading-6 text-slate-600">{answer}</p>
+                    <h3 className="text-base font-semibold text-white">{question}</h3>
+                    <p className="mt-1.5 text-sm leading-6 text-[#ccd6cf]/70">{answer}</p>
                   </div>
                 ))}
               </div>
@@ -890,11 +889,11 @@ export default async function PublicCompanyPage({ params }: Props) {
                 <MiniStat label="Active roles" value={(profile.hiringHealth.activeJobCount ?? jobs.length).toLocaleString()} />
                 <MiniStat label="Recent roles" value={(profile.hiringHealth.recentJobCount ?? 0).toLocaleString()} />
               </div>
-              <p className="mt-4 text-sm leading-6 text-slate-600">
+              <p className="mt-4 text-sm leading-6 text-[#ccd6cf]/70">
                 {profile.hiringHealth.summary ?? "Hiring trend is unknown until more crawl history is available."}
               </p>
 
-              <div className="my-6 border-t border-slate-100" />
+              <div className="my-6 border-t border-[rgba(120,200,160,0.12)]" />
 
               <SectionHeader icon={Building2} eyebrow="Similar companies" title="Compare employers" />
               {similarCompanies.length === 0 ? (
@@ -905,17 +904,17 @@ export default async function PublicCompanyPage({ params }: Props) {
                     <Link
                       key={similar.id}
                       href={`/companies/${similar.id}`}
-                      className="flex items-center gap-3 border border-slate-200 bg-white p-3 transition hover:border-sky-200 hover:bg-sky-50/30"
+                      className="term-panel-hover flex items-center gap-3 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-3"
                     >
                       <CompanyLogo
                         companyName={similar.name}
                         domain={similar.domain}
                         logoUrl={similar.logo_url}
-                        className="h-10 w-10 shrink-0 border border-slate-200/70 bg-white"
+                        className="h-10 w-10 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
                       />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-slate-900">{similar.name}</span>
-                        <span className="block text-xs text-slate-500">
+                        <span className="block truncate text-sm font-semibold text-white">{similar.name}</span>
+                        <span className="block text-xs text-[#ccd6cf]/55">
                           {similar.job_count} open role{similar.job_count === 1 ? "" : "s"}
                         </span>
                       </span>

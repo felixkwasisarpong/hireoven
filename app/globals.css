@@ -102,7 +102,7 @@
   body.site-chroma .bg-slate-50,
   body.site-chroma .bg-slate-50\/40,
   body.site-chroma .bg-slate-50\/60 {
-    background-color: hsl(212 100% 97% / 0.7) !important;
+    background-color: hsl(95 14% 96% / 0.78) !important;
   }
 
   body.site-chroma .bg-surface,
@@ -280,6 +280,171 @@
   .neo-shell {
     position: relative;
     isolation: isolate;
+  }
+
+  /* ── Data-desk / terminal marketing system ───────────────────────
+     Near-black canvas, monospace, thin grid rules, restrained amber +
+     green data accents, a slim live ticker. No gradients, no glow blobs,
+     no soft shadows. Used across the public marketing pages. */
+  :root {
+    --term-bg: #0a0e0c;
+    --term-panel: #0e1411;
+    --term-panel-2: #111a15;
+    --term-line: rgba(120, 200, 160, 0.12);
+    --term-line-strong: rgba(120, 200, 160, 0.26);
+    --term-fg: #ccd6cf;
+    --term-dim: #6c7a72;
+    --term-amber: #f5a623;
+    --term-green: #38e08a;
+    --term-mono: var(--font-mono), ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  .term-page {
+    background-color: var(--term-bg);
+    color: var(--term-fg);
+    font-family: var(--term-mono);
+    background-image:
+      linear-gradient(var(--term-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--term-line) 1px, transparent 1px);
+    background-size: 2.5rem 2.5rem;
+  }
+
+  .term-page ::selection {
+    background: var(--term-amber);
+    color: #0a0e0c;
+  }
+
+  .term-panel {
+    border: 1px solid var(--term-line-strong);
+    background: var(--term-panel);
+  }
+
+  .term-panel-hover {
+    transition: border-color 0.12s ease, background-color 0.12s ease;
+  }
+
+  .term-panel-hover:hover {
+    border-color: var(--term-green);
+    background: var(--term-panel-2);
+  }
+
+  .term-nav {
+    border-bottom: 1px solid var(--term-line-strong);
+    background: rgba(10, 14, 12, 0.92);
+    font-family: var(--term-mono);
+  }
+
+  .term-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid var(--term-line-strong);
+    padding: 0.6rem 1rem;
+    font-family: var(--term-mono);
+    font-weight: 600;
+    font-size: 0.82rem;
+    color: var(--term-fg);
+    background: transparent;
+    transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+  }
+
+  .term-btn:hover {
+    border-color: var(--term-green);
+    color: var(--term-green);
+  }
+
+  .term-btn-amber {
+    border-color: var(--term-amber);
+    background: var(--term-amber);
+    color: #0a0e0c;
+    font-weight: 700;
+  }
+
+  .term-btn-amber:hover {
+    background: transparent;
+    color: var(--term-amber);
+    border-color: var(--term-amber);
+  }
+
+  .term-label {
+    font-family: var(--term-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: var(--term-dim);
+    text-transform: lowercase;
+  }
+
+  .term-marquee {
+    display: inline-flex;
+    white-space: nowrap;
+    animation: term-scroll 42s linear infinite;
+  }
+
+  /* Native <select> ignores background-color without appearance:none, so on the
+     dark terminal canvas it renders as a light OS control with near-invisible
+     text. Force the dark theme + a custom caret. */
+  .term-select {
+    -webkit-appearance: none;
+    appearance: none;
+    border: 1px solid rgba(120, 200, 160, 0.2);
+    background-color: #0a0e0c;
+    color: var(--term-fg);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.65rem center;
+    padding-right: 1.9rem;
+  }
+  .term-select:focus {
+    border-color: var(--term-green);
+    outline: none;
+  }
+  .term-select option {
+    background-color: #0a0e0c;
+    color: var(--term-fg);
+  }
+
+  /* Keep autofilled inputs on the dark theme — otherwise the browser paints a
+     white box while the text stays light, so the value looks blank. */
+  .term-page input:-webkit-autofill,
+  .term-page input:-webkit-autofill:hover,
+  .term-page input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--term-fg);
+    -webkit-box-shadow: 0 0 0 1000px #0e1411 inset;
+    caret-color: var(--term-fg);
+    border: 1px solid rgba(120, 200, 160, 0.26);
+    transition: background-color 9999s ease-in-out 0s;
+  }
+
+  .stay-range {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 999px;
+    outline: none;
+    background: linear-gradient(90deg, var(--term-amber) var(--pct, 30%), rgba(120, 200, 160, 0.18) var(--pct, 30%));
+  }
+  .stay-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #0a0e0c;
+    border: 3px solid var(--term-amber);
+    cursor: pointer;
+  }
+  .stay-range::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #0a0e0c;
+    border: 3px solid var(--term-amber);
+    cursor: pointer;
+  }
+
+  @keyframes term-scroll {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
   }
 
   .neo-shell::before {
@@ -591,17 +756,17 @@
     isolation: isolate;
     min-height: 100dvh;
     background:
-      radial-gradient(900px 500px at 10% 0%, hsl(200 100% 94% / 0.5), transparent 55%),
-      radial-gradient(800px 480px at 90% 10%, hsl(28 100% 93% / 0.45), transparent 55%),
-      linear-gradient(180deg, hsl(220 30% 98%) 0%, hsl(255 20% 97%) 100%);
+      radial-gradient(900px 500px at 10% 0%, hsl(28 100% 93% / 0.45), transparent 55%),
+      radial-gradient(800px 480px at 90% 10%, hsl(95 18% 94% / 0.62), transparent 55%),
+      linear-gradient(180deg, hsl(95 14% 98%) 0%, hsl(95 12% 96%) 100%);
   }
 
   .legal-chrome {
     min-height: 100dvh;
     background:
-      radial-gradient(800px 400px at 0% 0%, hsl(210 100% 96% / 0.7), transparent 60%),
+      radial-gradient(800px 400px at 0% 0%, hsl(28 100% 94% / 0.62), transparent 60%),
       radial-gradient(700px 380px at 100% 20%, hsl(24 100% 95% / 0.6), transparent 55%),
-      linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(220 25% 98%) 100%);
+      linear-gradient(180deg, hsl(95 14% 98%) 0%, hsl(95 12% 96%) 100%);
   }
 
   .legal-chrome .legal-prose-card {
@@ -988,8 +1153,8 @@
   50%       { opacity: 0.75; }
 }
 
-/* Violet glow shimmer for active task bar */
-@keyframes apex-violet-sweep {
+/* Orange glow shimmer for active task bar */
+@keyframes apex-orange-sweep {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
 }

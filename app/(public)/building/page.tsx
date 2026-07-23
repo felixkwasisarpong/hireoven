@@ -32,48 +32,46 @@ const ENTRIES = [
 
 export default function BuildingInPublicPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-white/90 px-4 py-4 backdrop-blur-md">
+    <div className="term-page min-h-dvh">
+      <header className="term-nav border-b border-[rgba(120,200,160,0.26)] px-4 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
           <Link href="/" className="flex items-center gap-2">
             <HireovenLogo className="h-8 w-auto" />
           </Link>
-          <Link
-            href="/launch"
-            className="text-sm font-semibold text-teal-700 hover:underline"
-          >
+          <Link href="/launch" className="term-btn">
             Join waitlist
           </Link>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-14">
-        <p className="text-xs font-semibold uppercase tracking-widest text-teal-700">
-          Build log
-        </p>
-        <h1 className="mt-2 text-3xl font-extrabold text-strong">Building in public</h1>
-        <p className="mt-3 text-muted-foreground leading-relaxed">
+        <p className="term-label">{"// build_log"}</p>
+        <h1 className="mt-3 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
+          Building in <span className="text-[#f5a623]">public</span>
+          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
+        </h1>
+        <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Honest updates on what shipped each week. Tweet the highlights - link candidates here
           for proof we&apos;re real.
         </p>
 
-        <ol className="mt-12 space-y-10">
+        <ol className="mt-12 divide-y divide-[rgba(120,200,160,0.12)] border-x border-b border-t border-[rgba(120,200,160,0.2)]">
           {ENTRIES.map((e) => (
-            <li key={e.date} className="border-b border-border pb-10 last:border-0">
-              <time
-                dateTime={e.date}
-                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-              >
+            <li key={e.date} className="term-panel-hover bg-[#0e1411] p-5">
+              <time dateTime={e.date} className="term-label">
                 {e.date}
               </time>
-              <h2 className="mt-2 text-xl font-bold text-strong">{e.title}</h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{e.body}</p>
+              <h2 className="mt-2 text-[16px] font-semibold text-white">{e.title}</h2>
+              <p className="mt-2 text-[13px] leading-relaxed text-[#ccd6cf]/65">{e.body}</p>
             </li>
           ))}
         </ol>
 
-        <p className="mt-12 text-center text-sm text-muted-foreground">
-          <Link href="/launch" className="font-semibold text-teal-700 hover:underline">
+        <p className="mt-12 text-center">
+          <Link
+            href="/launch"
+            className="text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
             Get on the waitlist →
           </Link>
         </p>

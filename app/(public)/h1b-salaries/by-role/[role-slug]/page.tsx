@@ -47,13 +47,13 @@ export default async function RoleSalaryPage({ params }: Props) {
   ])
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <nav className="mb-5 text-[13px] text-slate-500">
-          <Link href="/h1b-salaries" className="hover:text-slate-800">H-1B salaries</Link>
-          <span className="mx-1.5 text-slate-300">/</span>
-          <span className="text-slate-700">{role.label}</span>
+        <nav className="mb-5 text-[13px] text-[#ccd6cf]/45">
+          <Link href="/h1b-salaries" className="hover:text-[#38e08a]">H-1B salaries</Link>
+          <span className="mx-1.5 text-[#ccd6cf]/25">/</span>
+          <span className="text-[#ccd6cf]/70">{role.label}</span>
         </nav>
 
         <SalaryCard
@@ -63,17 +63,17 @@ export default async function RoleSalaryPage({ params }: Props) {
         />
 
         {states.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">By state</h2>
+          <section className="mt-8">
+            <h2 className="term-label mb-3">by state</h2>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {states.map((s) => (
                 <Link
                   key={s.state}
                   href={`/h1b-salaries/by-role/${role.slug}/by-state/${s.state}`}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm hover:bg-slate-50"
+                  className="flex items-center justify-between border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2 text-[13px] transition hover:border-[#38e08a] hover:bg-[#111a15]"
                 >
-                  <span className="font-medium text-slate-700">{s.state}</span>
-                  <span className="tabular-nums text-slate-900">{fmtUsd(s.p50)}</span>
+                  <span className="font-medium text-[#ccd6cf]/80">{s.state}</span>
+                  <span className="font-semibold tabular-nums text-[#38e08a]">{fmtUsd(s.p50)}</span>
                 </Link>
               ))}
             </div>
@@ -81,24 +81,23 @@ export default async function RoleSalaryPage({ params }: Props) {
         )}
 
         {top.length > 0 && (
-          <section className="mt-6">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Top-paying employers
-            </h2>
-            <ul className="space-y-2">
+          <section className="mt-8">
+            <h2 className="term-label mb-3">top-paying employers</h2>
+            <ul className="divide-y divide-[rgba(120,200,160,0.12)] border border-[rgba(120,200,160,0.2)]">
               {top.map((t) => (
                 <li
                   key={t.company.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-3 text-sm"
+                  className="flex items-center justify-between bg-[#0e1411] p-3 text-[13px] transition-colors hover:bg-[#111a15]"
                 >
                   <Link
                     href={h1bSponsorPath(t.company.id, t.company.name)}
-                    className="font-medium text-slate-900 hover:underline"
+                    className="font-medium text-[#ccd6cf] hover:text-white hover:underline"
                   >
                     {t.company.name}
                   </Link>
-                  <span className="tabular-nums text-slate-700">
-                    {fmtUsd(t.p50)} <span className="text-xs text-slate-400">n={t.n}</span>
+                  <span className="tabular-nums text-[#ccd6cf]/70">
+                    <span className="font-semibold text-[#38e08a]">{fmtUsd(t.p50)}</span>{" "}
+                    <span className="text-[11px] text-[#ccd6cf]/40">n={t.n}</span>
                   </span>
                 </li>
               ))}
@@ -106,9 +105,12 @@ export default async function RoleSalaryPage({ params }: Props) {
           </section>
         )}
 
-        <p className="mt-6 text-xs text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Prevailing wage is the wage the employer files with the DOL, not necessarily what is paid.{" "}
-          <Link href="/h1b-sponsors/leaderboard/methodology#salaries" className="underline">
+          <Link
+            href="/h1b-sponsors/leaderboard/methodology#salaries"
+            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
             Methodology
           </Link>
         </p>

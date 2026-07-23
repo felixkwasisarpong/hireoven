@@ -10,22 +10,22 @@ interface TestimonialCardProps {
 // TODO: replace with real testimonials
 export default function TestimonialCard({ quote, name, role, stars = 5 }: TestimonialCardProps) {
   return (
-    <div className="flex flex-col rounded-[20px] border border-slate-200/80 bg-white p-6 shadow-[0_1px_0_rgba(15,23,42,0.03),0_6px_20px_rgba(15,23,42,0.05)]">
+    <div className="term-panel flex flex-col p-6">
       <div className="mb-4 flex gap-0.5">
         {Array.from({ length: stars }).map((_, i) => (
-          <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+          <Star key={i} className="h-4 w-4 fill-[#f5a623] text-[#f5a623]" />
         ))}
       </div>
-      <blockquote className="flex-1 text-[15px] leading-relaxed text-slate-700">
+      <blockquote className="flex-1 text-[15px] leading-relaxed text-[#ccd6cf]/80">
         &ldquo;{quote}&rdquo;
       </blockquote>
-      <div className="mt-5 flex items-center gap-3 border-t border-slate-100 pt-4">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0369A1] to-[#0284C7] text-xs font-bold text-white">
+      <div className="mt-5 flex items-center gap-3 border-t border-[rgba(120,200,160,0.12)] pt-4">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center bg-[#f5a623] text-xs font-bold text-[#0a0e0c]">
           {name.charAt(0)}
         </div>
         <div>
-          <p className="text-sm font-semibold text-slate-900">{name}</p>
-          <p className="text-xs text-slate-500">{role}</p>
+          <p className="text-sm font-semibold text-white">{name}</p>
+          <p className="text-xs text-[#ccd6cf]/55">{role}</p>
         </div>
       </div>
     </div>

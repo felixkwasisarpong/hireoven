@@ -10,18 +10,18 @@ type FeedJob = {
   title: string
   location: string
   freshness: string
-  freshColor: "green" | "teal"
+  freshColor: "hot" | "calm"
 }
 
 const JOBS: FeedJob[] = [
   {
     id: "1",
     initial: "S",
-    logoBg: "bg-[#0D9488]",
+    logoBg: "bg-[#FF5C18]",
     title: "Software Engineer, Backend",
     location: "San Francisco - Hybrid",
     freshness: "Just now",
-    freshColor: "green",
+    freshColor: "hot",
   },
   {
     id: "2",
@@ -30,16 +30,16 @@ const JOBS: FeedJob[] = [
     title: "Product Designer",
     location: "Remote",
     freshness: "1 min ago",
-    freshColor: "green",
+    freshColor: "hot",
   },
   {
     id: "3",
     initial: "L",
-    logoBg: "bg-[#7C3AED]",
+    logoBg: "bg-[#475569]",
     title: "Senior Frontend Engineer",
     location: "Remote",
     freshness: "3 min ago",
-    freshColor: "teal",
+    freshColor: "calm",
   },
   {
     id: "4",
@@ -48,7 +48,7 @@ const JOBS: FeedJob[] = [
     title: "DevOps Engineer",
     location: "Remote",
     freshness: "7 min ago",
-    freshColor: "teal",
+    freshColor: "calm",
   },
   {
     id: "5",
@@ -57,7 +57,7 @@ const JOBS: FeedJob[] = [
     title: "Growth Marketing Manager",
     location: "New York - Hybrid",
     freshness: "Just now",
-    freshColor: "green",
+    freshColor: "hot",
   },
 ]
 
@@ -79,18 +79,13 @@ export default function LaunchJobFeed() {
   }, [visibleCount])
 
   return (
-    <div
-      className="relative h-[420px] overflow-hidden rounded-3xl border border-border bg-card p-4 shadow-[0_24px_80px_rgba(15,23,42,0.08)]"
-      aria-hidden
-    >
-      <div className="mb-3 flex items-center justify-between border-b border-border pb-3">
-        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Live detections
-        </p>
-        <span className="flex items-center gap-1.5 text-xs font-medium text-teal-600">
+    <div className="term-panel relative h-[420px] overflow-hidden p-4" aria-hidden>
+      <div className="mb-3 flex items-center justify-between border-b border-[rgba(120,200,160,0.12)] pb-3">
+        <p className="term-label">live detections</p>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-[#38e08a]">
           <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-teal-500 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-teal-500" />
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#38e08a] opacity-60" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-[#38e08a]" />
           </span>
           Watching
         </span>
@@ -99,32 +94,27 @@ export default function LaunchJobFeed() {
         {visible.map((job, idx) => (
           <article
             key={`${job.id}-${visibleCount}-${idx}`}
-            className="animate-launch-feed-card rounded-2xl border border-border bg-surface p-4 shadow-sm"
+            className="animate-launch-feed-card border border-[rgba(120,200,160,0.2)] bg-[#0e1411] p-4"
           >
             <div className="flex gap-3">
-              <div
-                className={cn(
-                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-lg font-bold text-white shadow-inner",
-                  job.logoBg
-                )}
-              >
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-lg font-bold text-[#38e08a]">
                 {job.initial}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-strong">{job.title}</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">{job.location}</p>
+                <p className="truncate font-semibold text-white">{job.title}</p>
+                <p className="mt-0.5 text-sm text-[#ccd6cf]/60">{job.location}</p>
                 <p className="mt-2 flex items-center gap-1.5 text-sm font-bold">
                   <span
                     className={cn(
                       "h-2 w-2 rounded-full",
-                      job.freshColor === "green" ? "bg-emerald-500" : "bg-teal-500"
+                      job.freshColor === "hot" ? "bg-[#38e08a]" : "bg-[#ccd6cf]/40"
                     )}
                   />
                   <span
                     className={
-                      job.freshColor === "green"
-                        ? "text-emerald-600"
-                        : "text-teal-600"
+                      job.freshColor === "hot"
+                        ? "text-[#38e08a]"
+                        : "text-[#ccd6cf]/55"
                     }
                   >
                     {job.freshness}

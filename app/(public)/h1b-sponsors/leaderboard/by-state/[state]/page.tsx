@@ -61,7 +61,7 @@ export default function ByStatePage({
   const basePath = `/h1b-sponsors/leaderboard/by-state/${st}`
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <LeaderboardView
         filters={filters}

@@ -1,6 +1,6 @@
 "use client"
 
-import { type FormEvent, useState } from "react"
+import { type FormEvent, useEffect, useState } from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import { Eye, EyeOff } from "lucide-react"
@@ -74,6 +74,7 @@ const WAITLIST_MODE = process.env.NEXT_PUBLIC_WAITLIST_MODE === "true"
 export function AuthForm({ defaultMode = "login" }: Props) {
   const searchParams = useSearchParams()
   const next = sanitizeNext(searchParams.get("next"))
+  const emailFromQuery = searchParams.get("email")?.trim() ?? ""
   const inviteToken = searchParams.get("invite")?.trim() || null
   // Hide Google sign-in entirely while the waitlist is active — including for
   // invitees — so signups go through the password flow and we get a captured
@@ -83,7 +84,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
   // If arriving via invite link, lock to signup mode
   const [mode, setMode] = useState<AuthMode>(inviteToken ? "signup" : defaultMode)
   const [fullName, setFullName] = useState("")
-  const [email, setEmail] = useState("")
+  const [email, setEmail] = useState(emailFromQuery)
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -96,8 +97,13 @@ export function AuthForm({ defaultMode = "login" }: Props) {
     return OAUTH_ERRORS[raw] ?? "Something went wrong. Please try again."
   })
 
+  useEffect(() => {
+    if (!emailFromQuery || inviteToken) return
+    setEmail(emailFromQuery)
+  }, [emailFromQuery, inviteToken])
+
   // Resolve invite token → pre-fill email
-  useState(() => {
+  useEffect(() => {
     if (!inviteToken) return
     fetch(`/api/auth/invite-info?token=${encodeURIComponent(inviteToken)}`)
       .then((r) => r.ok ? r.json() : null)
@@ -106,7 +112,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         setInviteResolved(true)
       })
       .catch(() => setInviteResolved(true))
-  })
+  }, [inviteToken])
 
   async function claimReferralIfPresent() {
     try {
@@ -172,7 +178,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
       }
       window.location.assign(next ?? "/dashboard")
     } else {
-      if (password.length < 8) {
+      if (passwordVal.length < 8) {
         setError("Password must be at least 8 characters.")
         setLoading(false)
         return
@@ -201,7 +207,7 @@ export function AuthForm({ defaultMode = "login" }: Props) {
       await fetch("/api/profile", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, full_name: fullName }),
+        body: JSON.stringify({ email: emailVal, full_name: fullName }),
       })
       await claimReferralIfPresent()
       window.location.assign(next ?? "/dashboard/onboarding")

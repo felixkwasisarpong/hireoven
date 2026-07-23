@@ -31,17 +31,21 @@ export default async function EverifyPage() {
   const rows = await getEverifyCompanies()
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
-      <main className="mx-auto max-w-2xl px-4 py-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">E-Verify Employers</h1>
-        <p className="mt-2 text-slate-600">
+      <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+        <p className="term-label">&gt; e_verify --stem-opt</p>
+        <h1 className="mt-4 text-[2.1rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.6rem]">
+          E-Verify <span className="text-[#f5a623]">Employers</span>
+          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
+        </h1>
+        <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
           The STEM OPT 24-month extension requires that your employer is enrolled in{" "}
           <a
             href="https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-extension-for-stem-students-stem-opt"
             target="_blank"
             rel="noopener noreferrer"
-            className="underline"
+            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
           >
             E-Verify
           </a>
@@ -49,14 +53,14 @@ export default async function EverifyPage() {
           accepting an offer you&rsquo;re counting on for STEM OPT.
         </p>
 
-        <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-600">
+        <div className="term-panel mt-5 p-5 text-sm text-[#ccd6cf]/70">
           <p>
             USCIS publishes E-Verify participation through a daily-updated{" "}
             <a
               href="https://www.e-verify.gov/e-verify-employer-search"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-slate-900 underline"
+              className="font-medium text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
             >
               employer search tool
             </a>
@@ -64,7 +68,10 @@ export default async function EverifyPage() {
             record; for any employer not listed here, check the official tool directly.
           </p>
           <p className="mt-2">
-            <Link href="/h1b-sponsors/leaderboard/methodology#e-verify" className="underline">
+            <Link
+              href="/h1b-sponsors/leaderboard/methodology#e-verify"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            >
               How we source this
             </Link>
           </p>
@@ -73,9 +80,9 @@ export default async function EverifyPage() {
         {rows.length > 0 ? (
           <ul className="mt-5 space-y-2">
             {rows.map((r) => (
-              <li key={r.id} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                <CompanyLogo companyName={r.name} domain={r.domain} logoUrl={r.logo_url} className="h-9 w-9 shrink-0 rounded-md" />
-                <Link href={`/h1b-sponsors/${companyParam(r.id, r.name)}`} className="min-w-0 flex-1 truncate font-medium text-slate-900 hover:underline">
+              <li key={r.id} className="term-panel term-panel-hover flex items-center gap-3 p-3">
+                <CompanyLogo companyName={r.name} domain={r.domain} logoUrl={r.logo_url} className="h-9 w-9 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]" />
+                <Link href={`/h1b-sponsors/${companyParam(r.id, r.name)}`} className="min-w-0 flex-1 truncate font-medium text-[#ccd6cf] hover:text-white">
                   {r.name}
                 </Link>
                 <EverifyBadge size="sm" />
@@ -83,9 +90,9 @@ export default async function EverifyPage() {
             ))}
           </ul>
         ) : (
-          <p className="mt-5 text-sm text-slate-500">
+          <p className="mt-5 text-sm text-[#ccd6cf]/55">
             Our matched E-Verify list is being compiled. In the meantime, check any employer in the{" "}
-            <a href="https://www.e-verify.gov/e-verify-employer-search" target="_blank" rel="noopener noreferrer" className="underline">
+            <a href="https://www.e-verify.gov/e-verify-employer-search" target="_blank" rel="noopener noreferrer" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
               USCIS E-Verify employer search
             </a>
             .

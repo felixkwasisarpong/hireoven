@@ -63,7 +63,7 @@ export default function MobileNav() {
                     href={href}
                     onClick={() => setOpen(false)}
                     className={`flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-semibold transition-colors ${
-                      active ? "bg-emerald-50 text-emerald-700" : "text-muted-foreground hover:bg-slate-50 hover:text-strong"
+                      active ? "bg-orange-50 text-orange-700" : "text-muted-foreground hover:bg-slate-50 hover:text-strong"
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />

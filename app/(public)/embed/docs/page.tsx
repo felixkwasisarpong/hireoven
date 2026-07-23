@@ -13,8 +13,8 @@ const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
 
 function Snippet({ code }: { code: string }) {
   return (
-    <pre className="mt-3 overflow-x-auto rounded-lg bg-slate-900 p-3 text-[12px] leading-relaxed text-slate-100">
-      <code>{code}</code>
+    <pre className="mt-3 max-w-full overflow-x-auto border border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] p-3 text-[12px] leading-relaxed text-[#38e08a]">
+      <code className="block min-w-0 whitespace-pre-wrap break-all">{code}</code>
     </pre>
   )
 }
@@ -22,22 +22,28 @@ function Snippet({ code }: { code: string }) {
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <section id={id} className="mt-10 scroll-mt-24">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <div className="mt-2 space-y-2 text-slate-600">{children}</div>
+      <h2 className="term-label text-[0.8rem]">{title}</h2>
+      <div className="mt-2 space-y-2 break-words text-[14px] leading-relaxed text-[#ccd6cf]/70">{children}</div>
     </section>
   )
 }
 
 export default function EmbedDocsPage() {
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <Link href="/embed" className="text-sm text-slate-500 underline hover:text-slate-700">
+        <Link
+          href="/embed"
+          className="text-[13px] text-[#ccd6cf]/55 underline decoration-[#ccd6cf]/20 underline-offset-4 hover:text-[#38e08a]"
+        >
           ← Back to widgets
         </Link>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">Embed widget docs</h1>
-        <p className="mt-2 text-slate-600">
+        <p className="term-label mt-6">{"// embed_widget_docs"}</p>
+        <h1 className="mt-3 text-[2.1rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.7rem]">
+          Embed widget <span className="text-[#f5a623]">docs</span>
+        </h1>
+        <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Every widget is a plain <code>&lt;iframe&gt;</code>. Paste the snippet anywhere HTML is
           allowed. No script tag, no API key for the public widgets.
         </p>
@@ -93,7 +99,10 @@ export default function EmbedDocsPage() {
         <Section id="personal" title="Personal scorecard">
           <p>
             Your own sponsorability scorecard. Publish it from your{" "}
-            <Link href="/dashboard/scorecard" className="underline hover:text-slate-800">
+            <Link
+              href="/signup?next=%2Fdashboard%2Fscorecard"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            >
               dashboard
             </Link>{" "}
             to get a share token, then embed it. If you later make the card private or revoke the
@@ -125,7 +134,7 @@ export default function EmbedDocsPage() {
             <li>
               <strong>GitHub README</strong> — GitHub strips iframes, so embeds don&rsquo;t render
               there. Link your public scorecard instead:{" "}
-              <code>[My H-1B scorecard](https://hireoven.com/scorecard/SHARE_TOKEN)</code>.
+              <code className="break-all">[My H-1B scorecard](https://hireoven.com/scorecard/SHARE_TOKEN)</code>.
             </li>
           </ul>
         </Section>
@@ -136,7 +145,10 @@ export default function EmbedDocsPage() {
             small &ldquo;Powered by Hireoven&rdquo; link, which must remain visible. Removing
             attribution requires a partner plan token. Data is sourced from public DOL and USCIS
             disclosures; see the{" "}
-            <Link href="/h1b-sponsors/leaderboard/methodology" className="underline hover:text-slate-800">
+            <Link
+              href="/h1b-sponsors/leaderboard/methodology"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            >
               methodology
             </Link>
             .

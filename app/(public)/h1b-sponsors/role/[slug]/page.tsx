@@ -90,48 +90,49 @@ export default async function RoleHub({ params }: Props) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <nav className="mb-6 flex items-center gap-1.5 text-[13px] text-slate-500">
-          <Link href="/h1b-sponsors" className="hover:text-slate-800">H-1B sponsors</Link>
-          <span className="text-slate-300">/</span>
-          <span className="truncate text-slate-700">{d.soc.soc_title}</span>
+        <nav className="mb-6 flex items-center gap-1.5 text-[13px] text-[#ccd6cf]/45">
+          <Link href="/h1b-sponsors" className="hover:text-[#38e08a]">H-1B sponsors</Link>
+          <span className="text-[#ccd6cf]/25">/</span>
+          <span className="truncate text-[#ccd6cf]/70">{d.soc.soc_title}</span>
         </nav>
 
         <header className="max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-            <Briefcase className="h-3.5 w-3.5" /> {d.soc.n.toLocaleString()} LCA filings{d.medianWage ? ` · median ${money(d.medianWage)}` : ""}
+          <span className="inline-flex items-center gap-1.5 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-semibold text-[#ccd6cf]/80">
+            <Briefcase className="h-3.5 w-3.5 text-[#f5a623]" /> <span className="tabular-nums text-[#38e08a]">{d.soc.n.toLocaleString()}</span> LCA filings{d.medianWage ? ` · median ${money(d.medianWage)}` : ""}
           </span>
-          <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight sm:text-[33px]">Top H-1B sponsors for {d.soc.soc_title}</h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
+          <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.4rem]">Top <span className="text-[#f5a623]">H-1B sponsors</span> for {d.soc.soc_title}<span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span></h1>
+          <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             Employers that sponsor H-1B visas for {d.soc.soc_title} roles, ranked by certified Labor Condition Applications{d.medianWage ? `, with a median prevailing wage of ${money(d.medianWage)}` : ""}. Each links to its full sponsorship breakdown.
           </p>
         </header>
 
-        <ol className="mt-8 space-y-2">
+        <div className="mt-8 flex items-center justify-between border-b border-[rgba(120,200,160,0.26)] pb-2">
+          <span className="term-label">rank / company</span>
+          <span className="term-label">lcas</span>
+        </div>
+        <ol className="divide-y divide-[rgba(120,200,160,0.12)] border-x border-b border-[rgba(120,200,160,0.2)]">
           {d.sponsors.map((s, i) => {
             const inner = (
               <>
-                <span className="w-6 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-400">{i + 1}</span>
-                <CompanyLogo companyName={s.name} domain={s.domain} logoUrl={s.logo_url} className="h-10 w-10 shrink-0 rounded-xl border border-slate-200/70 bg-white" />
+                <span className="w-7 shrink-0 text-right text-[13px] tabular-nums text-[#ccd6cf]/35">{String(i + 1).padStart(2, "0")}</span>
+                <CompanyLogo companyName={s.name} domain={s.domain} logoUrl={s.logo_url} className="h-9 w-9 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-slate-900">{s.name}</p>
-                  {s.wage != null && <p className="text-[12px] text-slate-500">median wage {money(s.wage)}</p>}
+                  <p className="truncate text-[14px] font-medium text-[#ccd6cf] group-hover:text-white">{s.name}</p>
+                  {s.wage != null && <p className="text-[12px] text-[#ccd6cf]/45">median wage {money(s.wage)}</p>}
                 </div>
-                <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-bold tabular-nums text-slate-900">{s.n.toLocaleString()}</p>
-                  <p className="text-[10.5px] leading-tight text-slate-400">LCAs</p>
-                </div>
+                <p className="shrink-0 text-right text-[15px] font-semibold tabular-nums text-[#38e08a]">{s.n.toLocaleString()}</p>
               </>
             )
             return (
               <li key={`${s.company_id ?? s.name}-${i}`}>
                 {s.company_id ? (
-                  <Link href={`/h1b-sponsors/${companyParam(s.company_id, s.name)}`} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 transition hover:border-violet-200 hover:shadow-sm sm:px-4">{inner}</Link>
+                  <Link href={`/h1b-sponsors/${companyParam(s.company_id, s.name)}`} className="group flex items-center gap-3 bg-[#0e1411] px-3 py-2.5 transition-colors hover:bg-[#111a15] sm:px-4">{inner}</Link>
                 ) : (
-                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 sm:px-4">{inner}</div>
+                  <div className="flex items-center gap-3 bg-[#0e1411] px-3 py-2.5 sm:px-4">{inner}</div>
                 )}
               </li>
             )
@@ -139,11 +140,11 @@ export default async function RoleHub({ params }: Props) {
         </ol>
 
         {d.others.length > 0 && (
-          <section className="mt-12 border-t border-slate-200 pt-6">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">H-1B sponsors by occupation</h2>
+          <section className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-6">
+            <h2 className="term-label">{"// H-1B sponsors by occupation"}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {d.others.map((o) => (
-                <Link key={o.soc_code} href={`/h1b-sponsors/role/${companySlug(o.soc_title)}`} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 transition hover:border-violet-200 hover:text-slate-900">
+                <Link key={o.soc_code} href={`/h1b-sponsors/role/${companySlug(o.soc_title)}`} className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1.5 text-[12.5px] text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]">
                   {o.soc_title}
                 </Link>
               ))}
@@ -151,7 +152,7 @@ export default async function RoleHub({ params }: Props) {
           </section>
         )}
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">Based on U.S. Department of Labor LCA disclosure data (SOC {d.soc.soc_code}). Prevailing wage is the DOL-required minimum, not market pay. Last reviewed {YEAR}.</p>
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">Based on U.S. Department of Labor LCA disclosure data (SOC {d.soc.soc_code}). Prevailing wage is the DOL-required minimum, not market pay. Last reviewed {YEAR}.</p>
       </main>
     </div>
   )

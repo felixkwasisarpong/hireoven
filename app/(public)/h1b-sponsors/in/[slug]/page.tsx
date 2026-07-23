@@ -81,45 +81,46 @@ export default async function CityHub({ params }: Props) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <nav className="mb-6 flex items-center gap-1.5 text-[13px] text-slate-500">
-          <Link href="/h1b-sponsors" className="hover:text-slate-800">H-1B sponsors</Link>
-          <span className="text-slate-300">/</span>
-          <span className="text-slate-700">{loc}</span>
+        <nav className="mb-6 flex items-center gap-1.5 text-[13px] text-[#ccd6cf]/45">
+          <Link href="/h1b-sponsors" className="hover:text-[#38e08a]">H-1B sponsors</Link>
+          <span className="text-[#ccd6cf]/25">/</span>
+          <span className="text-[#ccd6cf]/70">{loc}</span>
         </nav>
 
         <header className="max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-            <MapPin className="h-3.5 w-3.5" /> {d.total.toLocaleString()} LCA filings
+          <span className="inline-flex items-center gap-1.5 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-semibold text-[#ccd6cf]/80">
+            <MapPin className="h-3.5 w-3.5 text-[#f5a623]" /> <span className="tabular-nums text-[#38e08a]">{d.total.toLocaleString()}</span> LCA filings
           </span>
-          <h1 className="mt-3 text-[30px] font-bold leading-tight tracking-tight sm:text-[34px]">Top H-1B sponsors in {loc}</h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
+          <h1 className="mt-4 text-[2rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.5rem]">Top <span className="text-[#f5a623]">H-1B sponsors</span> in {loc}<span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span></h1>
+          <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             Employers that sponsor H-1B visas at worksites in {loc}, ranked by certified Labor Condition Applications. Each links to its full sponsorship breakdown.
           </p>
         </header>
 
-        <ol className="mt-8 space-y-2">
+        <div className="mt-8 flex items-center justify-between border-b border-[rgba(120,200,160,0.26)] pb-2">
+          <span className="term-label">rank / company</span>
+          <span className="term-label">lcas</span>
+        </div>
+        <ol className="divide-y divide-[rgba(120,200,160,0.12)] border-x border-b border-[rgba(120,200,160,0.2)]">
           {d.sponsors.map((s, i) => {
             const inner = (
               <>
-                <span className="w-6 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-400">{i + 1}</span>
-                <CompanyLogo companyName={s.name} domain={s.domain} logoUrl={s.logo_url} className="h-10 w-10 shrink-0 rounded-xl border border-slate-200/70 bg-white" />
-                <p className="min-w-0 flex-1 truncate text-[14px] font-semibold text-slate-900">{s.name}</p>
-                <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-bold tabular-nums text-slate-900">{s.n.toLocaleString()}</p>
-                  <p className="text-[10.5px] leading-tight text-slate-400">LCAs</p>
-                </div>
+                <span className="w-7 shrink-0 text-right text-[13px] tabular-nums text-[#ccd6cf]/35">{String(i + 1).padStart(2, "0")}</span>
+                <CompanyLogo companyName={s.name} domain={s.domain} logoUrl={s.logo_url} className="h-9 w-9 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]" />
+                <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-[#ccd6cf] group-hover:text-white">{s.name}</p>
+                <p className="shrink-0 text-right text-[15px] font-semibold tabular-nums text-[#38e08a]">{s.n.toLocaleString()}</p>
               </>
             )
             return (
               <li key={`${s.company_id ?? s.name}-${i}`}>
                 {s.company_id ? (
-                  <Link href={`/h1b-sponsors/${companyParam(s.company_id, s.name)}`} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 transition hover:border-sky-200 hover:shadow-sm sm:px-4">{inner}</Link>
+                  <Link href={`/h1b-sponsors/${companyParam(s.company_id, s.name)}`} className="group flex items-center gap-3 bg-[#0e1411] px-3 py-2.5 transition-colors hover:bg-[#111a15] sm:px-4">{inner}</Link>
                 ) : (
-                  <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 sm:px-4">{inner}</div>
+                  <div className="flex items-center gap-3 bg-[#0e1411] px-3 py-2.5 sm:px-4">{inner}</div>
                 )}
               </li>
             )
@@ -127,11 +128,11 @@ export default async function CityHub({ params }: Props) {
         </ol>
 
         {d.others.length > 0 && (
-          <section className="mt-12 border-t border-slate-200 pt-6">
-            <h2 className="text-[13px] font-semibold uppercase tracking-wide text-slate-500">H-1B sponsors in other cities</h2>
+          <section className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-6">
+            <h2 className="term-label">{"// H-1B sponsors in other cities"}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {d.others.map((o) => (
-                <Link key={citySlug(o)} href={`/h1b-sponsors/in/${citySlug(o)}`} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-600 transition hover:border-sky-200 hover:text-slate-900">
+                <Link key={citySlug(o)} href={`/h1b-sponsors/in/${citySlug(o)}`} className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1.5 text-[12.5px] text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]">
                   {o.city}, {o.state}
                 </Link>
               ))}
@@ -139,7 +140,7 @@ export default async function CityHub({ params }: Props) {
           </section>
         )}
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">Based on U.S. Department of Labor LCA disclosure data. Last reviewed {YEAR}.</p>
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">Based on U.S. Department of Labor LCA disclosure data. Last reviewed {YEAR}.</p>
       </main>
     </div>
   )

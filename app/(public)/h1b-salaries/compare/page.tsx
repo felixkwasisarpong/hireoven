@@ -59,14 +59,20 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
 
   if (!ca || !cb || !role) {
     return (
-      <div className="min-h-dvh bg-[#F8FAFC]">
+      <div className="term-page min-h-dvh">
         <Navbar />
-        <main className="mx-auto max-w-2xl px-4 py-16 text-center text-slate-600">
-          <h1 className="text-xl font-semibold text-slate-900">Compare H-1B salaries</h1>
-          <p className="mt-2 text-sm">
+        <main className="mx-auto max-w-2xl px-4 py-16 text-center text-[#ccd6cf]/70">
+          <p className="term-label">&gt; salary_compare</p>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">Compare H-1B salaries</h1>
+          <p className="mt-2 text-[14px]">
             Open a comparison from any role&rsquo;s top-employers list, or pass two company ids and a role.
           </p>
-          <Link href="/h1b-salaries" className="mt-4 inline-block underline">Browse roles →</Link>
+          <Link
+            href="/h1b-salaries"
+            className="mt-4 inline-block text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
+            Browse roles →
+          </Link>
         </main>
       </div>
     )
@@ -80,18 +86,19 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
   const where = state ? ` in ${state}` : ""
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-          {ca.name} vs {cb.name}
+        <p className="term-label">&gt; salary_compare</p>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
+          {ca.name} <span className="text-[#f5a623]">vs</span> {cb.name}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-[13px] text-[#ccd6cf]/55">
           {role.label} · H-1B median prevailing wage{where}
         </p>
 
         {delta && (
-          <p className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700">
+          <p className="term-panel mt-4 px-4 py-3 text-[14px] font-medium text-[#ccd6cf]/80">
             {delta}
           </p>
         )}
@@ -101,10 +108,15 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
           <SalaryCard subtitle={cb.name} title={`${role.label}${where}`} aggregate={wb.aggregate} />
         </div>
 
-        <p className="mt-6 text-xs text-slate-400">
+        <p className="mt-6 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Prevailing wage is what the employer files, not necessarily what is paid; excludes bonus and
           equity.{" "}
-          <Link href="/h1b-sponsors/leaderboard/methodology#salaries" className="underline">Methodology</Link>
+          <Link
+            href="/h1b-sponsors/leaderboard/methodology#salaries"
+            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
+            Methodology
+          </Link>
         </p>
       </main>
     </div>

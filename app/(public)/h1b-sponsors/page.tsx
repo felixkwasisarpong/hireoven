@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { ShieldCheck } from "lucide-react"
+import { ArrowRight, Building2, Scale, ShieldCheck } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
@@ -87,13 +87,13 @@ export const metadata: Metadata = {
 function FacetGroup({ title, items }: { title: string; items: { label: string; href: string }[] }) {
   return (
     <div>
-      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
+      <p className="term-label mb-2">{title}</p>
       <div className="flex flex-wrap gap-2">
         {items.map((it) => (
           <Link
             key={it.href}
             href={it.href}
-            className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700"
+            className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1.5 text-[12.5px] text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]"
           >
             {it.label}
           </Link>
@@ -118,48 +118,92 @@ export default async function H1bSponsorsHub() {
     })),
   }
 
+  const totalLcas = sponsors.reduce((sum, c) => sum + (c.h1b_sponsor_count_1yr ?? 0), 0)
+  const heroStats = [
+    { value: `${sponsors.length.toLocaleString()}+`, label: "sponsors ranked", Icon: Building2 },
+    { value: totalLcas.toLocaleString(), label: "certified lcas · 12 mo", Icon: Scale },
+    { value: "DOL", label: "petition-backed proof", Icon: ShieldCheck },
+  ]
+  const ticker = sponsors.slice(0, 24).map((c) => ({ name: c.name, n: c.h1b_sponsor_count_1yr ?? 0 }))
+
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" suppressHydrationWarning dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <header className="max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            <ShieldCheck className="h-3.5 w-3.5" /> {YEAR} DOL data
-          </span>
-          <h1 className="mt-3 text-[30px] font-bold leading-tight tracking-tight sm:text-[36px]">
-            Top H-1B sponsor companies
+      {/* Live ticker strip. */}
+      {ticker.length > 0 && (
+        <div className="overflow-hidden border-b border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] py-1.5">
+          <div className="term-marquee">
+            {[0, 1].map((dup) => (
+              <span key={dup} className="flex shrink-0 items-center" aria-hidden={dup === 1}>
+                {ticker.map((t, i) => (
+                  <span key={`${dup}-${i}`} className="px-4 text-[12px] text-[#ccd6cf]/70">
+                    {t.name} <span className="text-[#38e08a]">+{t.n.toLocaleString()}</span>{" "}
+                    <span className="text-[#ccd6cf]/35">LCA</span>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <section className="mx-auto grid w-full max-w-[78rem] gap-6 px-4 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.62fr)] lg:items-end">
+        <div>
+          <p className="term-label">&gt; top_sponsors --year={YEAR} --source=DOL</p>
+          <h1 className="mt-4 max-w-[34rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
+            Top H-1B <span className="text-[#f5a623]">sponsor companies</span>
+            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-slate-600">
+          <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Ranked by certified LCA filings over the last 12 months. Every company links to its full sponsorship
             breakdown — petition history, sponsorship confidence, and the roles they&apos;re hiring for right now.
           </p>
-        </header>
+          <Link href="/signup?next=%2Fdashboard%2Fonboarding" className="term-btn term-btn-amber mt-7">
+            Get sponsor alerts <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <div className="grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)]">
+          {heroStats.map(({ value, label, Icon }) => (
+            <div key={label} className="flex items-center gap-4 bg-[#0e1411] p-4">
+              <Icon className="h-5 w-5 shrink-0 text-[#f5a623]" />
+              <div className="min-w-0">
+                <p className="text-2xl font-semibold leading-none tabular-nums text-[#38e08a]">{value}</p>
+                <p className="term-label mt-1">{label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
-        <ol className="mt-8 space-y-2">
+      <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6 lg:py-14">
+        <div className="mb-2 flex items-center justify-between border-b border-[rgba(120,200,160,0.26)] pb-2">
+          <span className="term-label">rank / company</span>
+          <span className="term-label">lcas · 12mo</span>
+        </div>
+        <ol className="divide-y divide-[rgba(120,200,160,0.12)] border-x border-b border-[rgba(120,200,160,0.2)]">
           {sponsors.map((c, i) => (
             <li key={c.id}>
               <Link
                 href={`/h1b-sponsors/${companyParam(c.id, c.name)}`}
-                className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 transition hover:border-emerald-200 hover:shadow-sm sm:px-4"
+                className="group flex items-center gap-3 bg-[#0e1411] px-3 py-2.5 transition-colors hover:bg-[#111a15] sm:px-4"
               >
-                <span className="w-6 shrink-0 text-right text-[13px] font-semibold tabular-nums text-slate-400">{i + 1}</span>
+                <span className="w-7 shrink-0 text-right text-[13px] tabular-nums text-[#ccd6cf]/35">{String(i + 1).padStart(2, "0")}</span>
                 <CompanyLogo
                   companyName={c.name}
                   domain={c.domain}
                   logoUrl={c.logo_url}
-                  className="h-10 w-10 shrink-0 rounded-xl border border-slate-200/70 bg-white"
+                  className="h-9 w-9 shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-semibold text-slate-900">{c.name}</p>
-                  {c.industry && <p className="truncate text-[12px] text-slate-500">{c.industry}</p>}
+                  <p className="truncate text-[14px] font-medium text-[#ccd6cf] group-hover:text-white">{c.name}</p>
+                  {c.industry && <p className="truncate text-[11px] text-[#ccd6cf]/45">{c.industry}</p>}
                 </div>
                 <div className="shrink-0 text-right">
-                  <p className="text-[15px] font-bold tabular-nums text-slate-900">
+                  <p className="text-[15px] font-semibold tabular-nums text-[#38e08a]">
                     {(c.h1b_sponsor_count_1yr ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-[10.5px] leading-tight text-slate-400">LCAs · 12 mo</p>
                 </div>
               </Link>
             </li>
@@ -168,7 +212,7 @@ export default async function H1bSponsorsHub() {
 
         {(facets.industries.length > 0 || facets.cities.length > 0 || facets.roles.length > 0) && (
           <section className="mt-12 space-y-6">
-            <h2 className="text-lg font-bold text-slate-900">Browse H-1B sponsors by</h2>
+            <h2 className="term-label">{"// browse H-1B sponsors by"}</h2>
             {facets.industries.length > 0 && (
               <FacetGroup title="Industry" items={facets.industries} />
             )}
@@ -181,7 +225,7 @@ export default async function H1bSponsorsHub() {
           </section>
         )}
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Based on U.S. Department of Labor LCA disclosure data and Hireoven&apos;s live job index. Counts reflect
           certified Labor Condition Applications, a leading indicator of H-1B sponsorship. Last reviewed {YEAR}.
         </p>

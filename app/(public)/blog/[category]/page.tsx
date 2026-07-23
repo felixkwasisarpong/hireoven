@@ -17,16 +17,18 @@ export async function generateMetadata({ params }: { params: { category: string 
   }
 }
 
-const CATEGORY_COLORS: Record<string, { bar: string; badge: string; text: string; hero: string }> = {
-  "h1b-visa-intel":     { bar: "bg-blue-500",   badge: "bg-blue-50 text-blue-700 border-blue-200",   text: "text-blue-700",   hero: "from-blue-900 to-blue-950" },
-  "job-market-pulse":   { bar: "bg-violet-500",  badge: "bg-violet-50 text-violet-700 border-violet-200", text: "text-violet-700", hero: "from-orange-900 to-orange-950" },
-  "career-strategy":    { bar: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200", text: "text-emerald-700", hero: "from-emerald-900 to-emerald-950" },
-  "tech-company-watch": { bar: "bg-orange-500",  badge: "bg-orange-50 text-orange-700 border-orange-200", text: "text-orange-700", hero: "from-orange-900 to-orange-950" },
-  "interview-offers":   { bar: "bg-rose-500",    badge: "bg-rose-50 text-rose-700 border-rose-200",   text: "text-rose-700",   hero: "from-rose-900 to-rose-950" },
+// Semantic per-category accents in the terminal palette: distinct-but-muted
+// dark-tinted chips + a thin accent bar, kept visually separable on the dark canvas.
+const CATEGORY_COLORS: Record<string, { bar: string; chip: string; accent: string }> = {
+  "h1b-visa-intel":     { bar: "bg-blue-400/70",    chip: "border-blue-500/25 bg-blue-500/12 text-blue-300",       accent: "text-blue-300" },
+  "job-market-pulse":   { bar: "bg-violet-400/70",  chip: "border-violet-500/25 bg-violet-500/12 text-violet-300", accent: "text-violet-300" },
+  "career-strategy":    { bar: "bg-emerald-400/70", chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-300", accent: "text-emerald-300" },
+  "tech-company-watch": { bar: "bg-orange-400/70",  chip: "border-orange-500/25 bg-orange-500/12 text-orange-300", accent: "text-orange-300" },
+  "interview-offers":   { bar: "bg-rose-400/70",    chip: "border-rose-500/25 bg-rose-500/12 text-rose-300",       accent: "text-rose-300" },
 }
 
 function categoryColor(slug: string) {
-  return CATEGORY_COLORS[slug] ?? { bar: "bg-gray-400", badge: "bg-gray-50 text-gray-600 border-gray-200", text: "text-gray-600", hero: "from-gray-900 to-gray-950" }
+  return CATEGORY_COLORS[slug] ?? { bar: "bg-[#38e08a]/70", chip: "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#ccd6cf]/80", accent: "text-[#38e08a]" }
 }
 
 function PostCard({ post }: { post: BlogPost }) {
@@ -39,11 +41,11 @@ function PostCard({ post }: { post: BlogPost }) {
   return (
     <Link
       href={`/blog/${category.slug}/${post.slug}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white/90 shadow-[0_12px_34px_-26px_rgba(15,23,42,0.55)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_24px_52px_-30px_rgba(15,23,42,0.65)]"
+      className="term-panel term-panel-hover group flex flex-col overflow-hidden"
     >
-      <div className={`h-1 w-full ${c.bar}`} />
+      <div className={`h-0.5 w-full ${c.bar}`} />
       <div className="flex flex-1 flex-col gap-3 p-5">
-        <div className="relative mb-1 h-36 overflow-hidden rounded-lg border border-gray-100 bg-gray-100">
+        <div className="relative mb-1 h-36 overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]">
           {post.hero_image_url ? (
             <Image
               src={post.hero_image_url}
@@ -53,20 +55,19 @@ function PostCard({ post }: { post: BlogPost }) {
               className="object-cover transition duration-300 group-hover:scale-[1.03]"
             />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-slate-100 via-white to-orange-50" />
+            <div className="absolute inset-0" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-950/10 via-transparent to-white/10" />
         </div>
         <div className="flex items-center justify-between">
           {post.reading_time && (
-            <span className="text-xs text-gray-400">{post.reading_time} min read</span>
+            <span className="text-xs text-[#ccd6cf]/45">{post.reading_time} min read</span>
           )}
-          {date && <span className="text-xs text-gray-400">{date}</span>}
+          {date && <span className="text-xs text-[#ccd6cf]/45">{date}</span>}
         </div>
-        <h3 className="text-[15px] font-semibold leading-snug text-gray-900 group-hover:text-[#0369A1] transition-colors line-clamp-2">
+        <h3 className="text-[15px] font-semibold leading-snug text-white group-hover:text-[#f5a623] transition-colors line-clamp-2">
           {post.title}
         </h3>
-        <p className="text-sm leading-relaxed text-gray-500 line-clamp-3">{post.excerpt}</p>
+        <p className="text-sm leading-relaxed text-[#ccd6cf]/55 line-clamp-3">{post.excerpt}</p>
       </div>
     </Link>
   )
@@ -81,31 +82,28 @@ export default async function CategoryPage({ params }: { params: { category: str
 
   if (!category) notFound()
 
-  const c = categoryColor(category.slug)
-
   return (
-    <div className="min-h-screen bg-white">
+    <div className="term-page min-h-dvh">
       <Navbar />
 
-      {/* Hero */}
-      <section className={`border-b border-gray-100 bg-gradient-to-b ${c.hero} px-6 py-14 md:py-20`}>
-        <div className="mx-auto max-w-3xl text-center">
-          <Link href="/blog" className="text-xs font-semibold uppercase tracking-widest text-white/40 hover:text-white/60 transition-colors">
-            ← All posts
-          </Link>
-          <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-4xl md:text-5xl">
-            {category.name}
-          </h1>
-          <p className="mt-4 text-lg text-white/60">{category.description}</p>
-        </div>
+      {/* Hero — flat terminal masthead. */}
+      <section className="mx-auto w-full max-w-3xl px-4 pt-12 text-center sm:px-6 sm:pt-16">
+        <Link href="/blog" className="term-label hover:text-[#38e08a] transition-colors">
+          ← all posts
+        </Link>
+        <h1 className="mt-4 text-[2.2rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3rem]">
+          {category.name}
+          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
+        </h1>
+        <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">{category.description}</p>
       </section>
 
       {/* Category nav */}
-      <div className="sticky top-[60px] z-20 border-b border-gray-100 bg-white/90 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-6xl gap-1 overflow-x-auto px-4 py-3 lg:px-8 [&::-webkit-scrollbar]:hidden">
+      <div className="sticky top-[60px] z-20 mt-10 border-y border-[rgba(120,200,160,0.26)] bg-[#0a0e0c]">
+        <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 py-3 lg:px-8 [&::-webkit-scrollbar]:hidden">
           <Link
             href="/blog"
-            className="shrink-0 rounded-full border border-gray-200 px-4 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-50"
+            className="shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3.5 py-1.5 text-sm font-medium text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]"
           >
             All posts
           </Link>
@@ -116,7 +114,7 @@ export default async function CategoryPage({ params }: { params: { category: str
               <Link
                 key={cat.slug}
                 href={`/blog/${cat.slug}`}
-                className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors hover:opacity-90 ${active ? cc.badge + " font-semibold" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                className={`shrink-0 border px-3.5 py-1.5 text-sm font-medium transition ${active ? cc.chip + " font-semibold" : "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#ccd6cf]/80 hover:border-[#38e08a] hover:text-[#38e08a]"}`}
               >
                 {cat.name}
               </Link>
@@ -128,9 +126,9 @@ export default async function CategoryPage({ params }: { params: { category: str
       <main className="mx-auto max-w-6xl px-4 py-12 lg:px-8">
         {posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-lg font-semibold text-gray-700">No posts yet in this category</p>
-            <p className="mt-1 text-sm text-gray-400">Check back soon — new posts publish every weekday.</p>
-            <Link href="/blog" className="mt-6 text-sm font-semibold text-[#0369A1] hover:underline">
+            <p className="text-lg font-semibold text-white">No posts yet in this category</p>
+            <p className="mt-1 text-sm text-[#ccd6cf]/45">Check back soon — new posts publish every weekday.</p>
+            <Link href="/blog" className="mt-6 text-sm font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
               ← Browse all posts
             </Link>
           </div>

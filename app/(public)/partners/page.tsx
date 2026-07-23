@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Sparkles, Compass, Users, BellRing, ShieldCheck, ArrowRight } from "lucide-react"
+import { Sparkles, Compass, Users, BellRing, ArrowRight } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import PartnerInquiryForm from "@/components/marketing/PartnerInquiryForm"
 import { getPublishedTestimonials, getPublishedPartners } from "@/lib/marketing/social-proof-store"
@@ -58,39 +58,46 @@ export default async function PartnersPage() {
   const [testimonials, partners] = await Promise.all([getPublishedTestimonials(), getPublishedPartners()])
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
 
-      {/* Hero */}
-      <section className="mx-auto w-full max-w-3xl px-4 pt-12 text-center sm:px-6 sm:pt-16">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-          <ShieldCheck className="h-3.5 w-3.5" /> Partnerships
-        </span>
-        <h1 className="mt-4 text-[30px] font-black leading-[1.1] tracking-tight text-slate-950 sm:text-[42px]">
-          Give your audience a real hiring edge.
-        </h1>
-        <p className="mx-auto mt-4 max-w-xl text-[16px] leading-relaxed text-slate-600">
-          Fresh jobs straight from company career pages, with H-1B sponsorship intelligence on every role.
-          Partner with Hireoven and put it in front of your people — under your name.
-        </p>
-        <a
-          href="#become-a-partner"
-          className="mt-7 inline-flex items-center gap-2 rounded-full bg-emerald-600 px-6 py-3 text-[15px] font-semibold text-white transition hover:bg-emerald-700"
-        >
-          Become a partner <ArrowRight className="h-4 w-4" />
-        </a>
+      {/* Hero — flat terminal, no photo band. */}
+      <section className="mx-auto grid w-full max-w-[78rem] items-end gap-10 px-4 pt-12 sm:px-6 sm:pt-16 md:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]">
+        <div>
+          <p className="term-label">&gt; partnerships</p>
+          <h1 className="mt-4 max-w-[43rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
+            Give your audience a real <span className="text-[#f5a623]">hiring edge</span>
+            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
+          </h1>
+          <p className="mt-4 max-w-[36rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
+            Fresh jobs straight from company career pages, with H-1B sponsorship intelligence on every role.
+            Partner with Hireoven and put it in front of your people under your name.
+          </p>
+          <a href="#become-a-partner" className="term-btn term-btn-amber mt-7">
+            Become a partner <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+        <div className="term-panel p-4">
+          <p className="term-label border-b border-[rgba(120,200,160,0.12)] pb-3">Partner surface</p>
+          <div className="mt-4 space-y-3">
+            {["Co-branded landing page", "Curated sponsor-friendly feed", "Weekly fresh-jobs report"].map((line, i) => (
+              <div key={line} className="flex items-center justify-between border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 py-3">
+                <span className="text-[14px] font-medium text-white">{line}</span>
+                <span className="text-2xl font-semibold leading-none tabular-nums text-[#38e08a]">0{i + 1}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
       {/* Who we partner with */}
       <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
-        <h2 className="text-center text-[13px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-          Who we partner with
-        </h2>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <h2 className="term-label text-center">{"// who we partner with"}</h2>
+        <div className="mt-5 grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-2 lg:grid-cols-3">
           {AUDIENCES.map((a) => (
-            <div key={a.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-[15px] font-bold text-slate-900">{a.title}</h3>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-600">{a.body}</p>
+            <div key={a.title} className="term-panel-hover bg-[#0e1411] p-5">
+              <h3 className="text-[14px] font-semibold text-white">{a.title}</h3>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#ccd6cf]/65">{a.body}</p>
             </div>
           ))}
         </div>
@@ -98,13 +105,13 @@ export default async function PartnersPage() {
 
       {/* What you get */}
       <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
-        <h2 className="text-center text-[22px] font-bold text-slate-900">What partners get</h2>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <p className="term-label text-center">{"// what partners get"}</p>
+        <div className="mt-6 grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-2">
           {BENEFITS.map(({ Icon, title, body }) => (
-            <div key={title} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <Icon className="h-6 w-6 text-emerald-600" />
-              <h3 className="mt-3 text-[15px] font-bold text-slate-900">{title}</h3>
-              <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-600">{body}</p>
+            <div key={title} className="term-panel-hover bg-[#0e1411] p-5">
+              <Icon className="h-5 w-5 text-[#f5a623]" />
+              <h3 className="mt-3 text-[14px] font-semibold text-white">{title}</h3>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-[#ccd6cf]/65">{body}</p>
             </div>
           ))}
         </div>
@@ -113,19 +120,19 @@ export default async function PartnersPage() {
       {/* Testimonials — rendered only when published rows exist (admin-managed). */}
       {testimonials.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
-          <h2 className="text-center text-[22px] font-bold text-slate-900">What partners say</h2>
+          <p className="term-label text-center">{"// what partners say"}</p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {testimonials.map((t, i) => (
-              <figure key={i} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-                <blockquote className="text-[15px] leading-relaxed text-slate-800">&ldquo;{t.quote}&rdquo;</blockquote>
+              <figure key={i} className="term-panel p-6">
+                <blockquote className="text-[14px] leading-relaxed text-[#ccd6cf]">&ldquo;{t.quote}&rdquo;</blockquote>
                 <figcaption className="mt-4 flex items-center gap-3">
                   {t.avatarUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={t.avatarUrl} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" />
                   )}
                   <div>
-                    <p className="text-[14px] font-semibold text-slate-900">{t.name}</p>
-                    <p className="text-[12.5px] text-slate-500">
+                    <p className="text-[14px] font-semibold text-white">{t.name}</p>
+                    <p className="text-[12.5px] text-[#ccd6cf]/50">
                       {t.role}
                       {t.org ? ` · ${t.org}` : ""}
                     </p>
@@ -140,16 +147,14 @@ export default async function PartnersPage() {
       {/* Partner logos — rendered only when published rows exist. */}
       {partners.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
-          <h2 className="text-center text-[13px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-            Trusted by
-          </h2>
+          <p className="term-label text-center">{"// trusted by"}</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-6">
             {partners.map((p) => {
               const inner = p.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={p.logoUrl} alt={p.name} height={32} className="h-8 w-auto opacity-70 grayscale" />
               ) : (
-                <span className="text-[15px] font-semibold text-slate-500">{p.name}</span>
+                <span className="text-[15px] font-semibold text-[#ccd6cf]/60">{p.name}</span>
               )
               return p.url ? (
                 <a key={p.name} href={p.url} target="_blank" rel="noopener noreferrer">
@@ -164,22 +169,29 @@ export default async function PartnersPage() {
       )}
 
       {/* Inquiry form */}
-      <section id="become-a-partner" className="mx-auto mt-16 mb-20 w-full max-w-2xl px-4 sm:px-6 scroll-mt-20">
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-          <h2 className="text-[22px] font-bold text-slate-900">Become a partner</h2>
-          <p className="mt-2 text-[14px] text-slate-600">
+      <section id="become-a-partner" className="mx-auto mb-20 mt-16 w-full max-w-2xl scroll-mt-20 px-4 sm:px-6">
+        <div className="term-panel p-6 sm:p-8">
+          <p className="term-label">{"// become a partner"}</p>
+          <h2 className="mt-2 text-[1.9rem] font-semibold leading-tight tracking-tight text-white">Become a partner</h2>
+          <p className="mt-2 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Tell us who you reach and we&apos;ll set up a co-branded page or curated feed you can share. It&apos;s free.
           </p>
           <div className="mt-6">
             <PartnerInquiryForm />
           </div>
-          <p className="mt-6 text-[13px] text-slate-500">
+          <p className="mt-6 text-[13px] text-[#ccd6cf]/50">
             Prefer email? Reach us at{" "}
-            <a href="mailto:hello@hireoven.com" className="font-medium text-emerald-700 underline-offset-2 hover:underline">
+            <a
+              href="mailto:hello@hireoven.com"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            >
               hello@hireoven.com
             </a>{" "}
             — or see other ways to{" "}
-            <Link href="/contact" className="font-medium text-emerald-700 underline-offset-2 hover:underline">
+            <Link
+              href="/contact"
+              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            >
               get in touch
             </Link>
             .

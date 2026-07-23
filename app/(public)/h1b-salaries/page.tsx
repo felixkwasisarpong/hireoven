@@ -27,27 +27,29 @@ export default async function SalariesIndexPage() {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-900">H-1B Salaries</h1>
-        <p className="mt-2 text-slate-600">
+        <p className="term-label">&gt; prevailing_wages --source=DOL</p>
+        <h1 className="mt-4 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
+          H-1B <span className="text-[#f5a623]">Salaries</span>
+          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
+        </h1>
+        <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Median prevailing wages from U.S. Department of Labor LCA filings — by role, company, and
           state. Every number shows its sample size and fiscal-year range. Prevailing wage is the
           wage an employer files, not necessarily what is paid.
         </p>
 
-        <section className="mt-6">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-            Popular roles
-          </h2>
+        <section className="mt-8">
+          <h2 className="term-label mb-3">popular roles</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {featured.map((r) => (
               <Link
                 key={r.slug}
                 href={`/h1b-salaries/by-role/${r.slug}`}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2.5 text-[13px] font-medium text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]"
               >
                 {r.label}
               </Link>
@@ -56,10 +58,8 @@ export default async function SalariesIndexPage() {
         </section>
 
         {all.length > featured.length && (
-          <section className="mt-6">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              All roles
-            </h2>
+          <section className="mt-8">
+            <h2 className="term-label mb-3">all roles</h2>
             <div className="flex flex-wrap gap-2">
               {all
                 .filter((r) => !featured.some((f) => f.slug === r.slug))
@@ -67,7 +67,7 @@ export default async function SalariesIndexPage() {
                   <Link
                     key={r.slug}
                     href={`/h1b-salaries/by-role/${r.slug}`}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-[12px] text-[#ccd6cf]/70 transition hover:border-[#38e08a] hover:text-[#38e08a]"
                   >
                     {r.label}
                   </Link>
@@ -76,9 +76,12 @@ export default async function SalariesIndexPage() {
           </section>
         )}
 
-        <p className="mt-8 text-xs text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Sourced from DOL LCA disclosure data.{" "}
-          <Link href="/h1b-sponsors/leaderboard/methodology#salaries" className="underline">
+          <Link
+            href="/h1b-sponsors/leaderboard/methodology#salaries"
+            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
             Methodology
           </Link>
         </p>

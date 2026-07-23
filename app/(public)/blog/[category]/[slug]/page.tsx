@@ -7,16 +7,18 @@ import Navbar from "@/components/layout/Navbar"
 
 export const dynamic = "force-dynamic"
 
-const CATEGORY_COLORS: Record<string, { bar: string; badge: string }> = {
-  "h1b-visa-intel":     { bar: "bg-blue-500",   badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  "job-market-pulse":   { bar: "bg-violet-500",  badge: "bg-violet-50 text-violet-700 border-violet-200" },
-  "career-strategy":    { bar: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  "tech-company-watch": { bar: "bg-orange-500",  badge: "bg-orange-50 text-orange-700 border-orange-200" },
-  "interview-offers":   { bar: "bg-rose-500",    badge: "bg-rose-50 text-rose-700 border-rose-200" },
+// Semantic per-category accents in the terminal palette: distinct-but-muted
+// dark-tinted chips + a thin accent bar, kept visually separable on dark.
+const CATEGORY_COLORS: Record<string, { bar: string; chip: string }> = {
+  "h1b-visa-intel":     { bar: "bg-blue-400/70",    chip: "border-blue-500/25 bg-blue-500/12 text-blue-300" },
+  "job-market-pulse":   { bar: "bg-violet-400/70",  chip: "border-violet-500/25 bg-violet-500/12 text-violet-300" },
+  "career-strategy":    { bar: "bg-emerald-400/70", chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-300" },
+  "tech-company-watch": { bar: "bg-orange-400/70",  chip: "border-orange-500/25 bg-orange-500/12 text-orange-300" },
+  "interview-offers":   { bar: "bg-rose-400/70",    chip: "border-rose-500/25 bg-rose-500/12 text-rose-300" },
 }
 
 function categoryColor(slug: string) {
-  return CATEGORY_COLORS[slug] ?? { bar: "bg-gray-400", badge: "bg-gray-50 text-gray-600 border-gray-200" }
+  return CATEGORY_COLORS[slug] ?? { bar: "bg-[#38e08a]/70", chip: "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#ccd6cf]/80" }
 }
 
 export async function generateMetadata({ params }: { params: { category: string; slug: string } }): Promise<Metadata> {
@@ -46,44 +48,44 @@ export default async function PostPage({ params }: { params: { category: string;
     : null
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="term-page min-h-dvh">
       <Navbar />
 
-      {/* Color accent bar at the very top of content */}
-      <div className={`h-1 w-full ${c.bar}`} />
+      {/* Category accent bar at the very top of content */}
+      <div className={`h-0.5 w-full ${c.bar}`} />
 
       <main className="mx-auto max-w-4xl px-5 py-12 lg:px-8">
         {/* Breadcrumb */}
-        <nav className="mb-8 flex items-center gap-1.5 text-sm text-gray-400">
-          <Link href="/blog" className="hover:text-gray-700 transition-colors">Blog</Link>
+        <nav className="mb-8 flex items-center gap-1.5 text-sm text-[#ccd6cf]/45">
+          <Link href="/blog" className="hover:text-[#38e08a] transition-colors">Blog</Link>
           <span>/</span>
-          <Link href={`/blog/${category.slug}`} className="hover:text-gray-700 transition-colors">{category.name}</Link>
+          <Link href={`/blog/${category.slug}`} className="hover:text-[#38e08a] transition-colors">{category.name}</Link>
         </nav>
 
         <article>
           <header className="mb-10">
-            <span className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${c.badge}`}>
+            <span className={`inline-block border px-2.5 py-0.5 text-xs font-semibold ${c.chip}`}>
               {category.name}
             </span>
-            <h1 className="mt-4 text-3xl font-bold leading-tight tracking-tight text-gray-900 sm:text-4xl">
+            <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight text-white sm:text-4xl">
               {post.title}
             </h1>
-            <p className="mt-4 text-lg leading-relaxed text-gray-500">{post.excerpt}</p>
-            <div className="mt-5 flex items-center gap-3 border-t border-gray-100 pt-5 text-sm text-gray-400">
+            <p className="mt-4 text-lg leading-relaxed text-[#ccd6cf]/70">{post.excerpt}</p>
+            <div className="mt-5 flex items-center gap-3 border-t border-[rgba(120,200,160,0.2)] pt-5 text-sm text-[#ccd6cf]/45">
               {date && <span>{date}</span>}
               {post.reading_time && (
                 <>
-                  <span className="text-gray-200">·</span>
+                  <span className="text-[#ccd6cf]/25">·</span>
                   <span>{post.reading_time} min read</span>
                 </>
               )}
-              <span className="text-gray-200">·</span>
+              <span className="text-[#ccd6cf]/25">·</span>
               <span>Hireoven Blog</span>
             </div>
           </header>
 
           {post.hero_image_url && (
-            <div className="mb-10 overflow-hidden rounded-xl border border-gray-200 bg-gray-100 shadow-[0_20px_54px_-32px_rgba(15,23,42,0.45)]">
+            <div className="mb-10 overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]">
               <div className="relative aspect-[3/2] w-full sm:aspect-[16/9]">
                 <Image
                   src={post.hero_image_url}
@@ -99,29 +101,29 @@ export default async function PostPage({ params }: { params: { category: string;
 
           {/* Body */}
           <div
-            className="prose prose-gray max-w-none
-              prose-headings:font-bold prose-headings:tracking-tight prose-headings:text-gray-900
+            className="prose prose-invert max-w-none
+              prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-white
               prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-3
-              prose-p:text-gray-600 prose-p:leading-relaxed
-              prose-li:text-gray-600 prose-li:leading-relaxed
+              prose-p:text-[#ccd6cf] prose-p:leading-relaxed
+              prose-li:text-[#ccd6cf] prose-li:leading-relaxed
               prose-ul:my-4 prose-ul:space-y-1
-              prose-strong:text-gray-800 prose-strong:font-semibold
-              prose-a:text-[#0369A1] prose-a:no-underline hover:prose-a:underline"
+              prose-strong:text-white prose-strong:font-semibold
+              prose-a:text-[#f5a623] prose-a:no-underline hover:prose-a:underline"
             dangerouslySetInnerHTML={{ __html: post.body }}
           />
         </article>
 
         {/* Footer nav */}
-        <div className="mt-14 flex items-center justify-between border-t border-gray-100 pt-8">
+        <div className="mt-14 flex items-center justify-between border-t border-[rgba(120,200,160,0.2)] pt-8">
           <Link
             href={`/blog/${category.slug}`}
-            className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+            className="text-sm font-semibold text-[#ccd6cf]/70 hover:text-white transition-colors"
           >
             ← More in {category.name}
           </Link>
           <Link
             href="/blog"
-            className="text-sm font-semibold text-gray-500 hover:text-gray-900 transition-colors"
+            className="text-sm font-semibold text-[#ccd6cf]/70 hover:text-white transition-colors"
           >
             All posts →
           </Link>

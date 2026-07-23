@@ -83,7 +83,7 @@ export default async function JobCollectionPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-dvh bg-[#F8FAFC] text-slate-950">
+    <div className="term-page min-h-dvh">
       <Navbar />
       <script
         type="application/ld+json"
@@ -92,21 +92,21 @@ export default async function JobCollectionPage({ params }: Props) {
       />
 
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 lg:py-14">
-        <nav className="text-[12.5px] text-slate-400">
-          <Link href="/jobs/browse" className="hover:text-slate-700">
+        <nav className="text-[12.5px] text-[#ccd6cf]/45">
+          <Link href="/jobs/browse" className="hover:text-[#38e08a]">
             Browse jobs
           </Link>{" "}
-          / <span className="text-slate-600">{collection.label}</span>
+          / <span className="text-[#ccd6cf]/70">{collection.label}</span>
         </nav>
 
         <header className="mt-4 max-w-2xl">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-            <Briefcase className="h-3.5 w-3.5" /> {total.toLocaleString("en-US")} live roles
+          <span className="inline-flex items-center gap-1.5 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-semibold text-[#ccd6cf]/80">
+            <Briefcase className="h-3.5 w-3.5 text-[#f5a623]" /> <span className="tabular-nums text-[#38e08a]">{total.toLocaleString("en-US")}</span> live roles
           </span>
-          <h1 className="mt-3 text-[28px] font-bold leading-tight tracking-tight sm:text-[34px]">
+          <h1 className="mt-4 text-[1.9rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.3rem]">
             {collection.h1}
           </h1>
-          <p className="mt-3 text-[15px] leading-relaxed text-slate-600">{collection.tagline}</p>
+          <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">{collection.tagline}</p>
         </header>
 
         <PublicJobList jobs={jobs} />
@@ -115,7 +115,7 @@ export default async function JobCollectionPage({ params }: Props) {
           <div className="mt-6">
             <Link
               href={`/signup?next=${encodeURIComponent(`/jobs/browse/${collection.slug}`)}`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+              className="term-btn term-btn-amber"
             >
               See all {total.toLocaleString("en-US")} roles &amp; set alerts <ArrowRight className="h-4 w-4" />
             </Link>
@@ -124,13 +124,13 @@ export default async function JobCollectionPage({ params }: Props) {
 
         {related.length > 0 && (
           <section className="mt-12">
-            <h2 className="text-lg font-bold text-slate-900">Browse more</h2>
+            <h2 className="text-lg font-semibold text-white">Browse more</h2>
             <div className="mt-4 flex flex-wrap gap-2">
               {related.map((c) => (
                 <Link
                   key={c.slug}
                   href={`/jobs/browse/${c.slug}`}
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-medium text-slate-700 transition hover:border-sky-300 hover:text-sky-700"
+                  className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1.5 text-[12.5px] font-medium text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]"
                 >
                   {c.label} jobs
                 </Link>
@@ -139,7 +139,7 @@ export default async function JobCollectionPage({ params }: Props) {
           </section>
         )}
 
-        <p className="mt-10 text-[12px] leading-relaxed text-slate-400">
+        <p className="mt-10 text-[12px] leading-relaxed text-[#ccd6cf]/45">
           Live roles from Hireoven&apos;s continuously-updated US job index. Showing the{" "}
           {Math.min(jobs.length, total).toLocaleString("en-US")} most recent of {total.toLocaleString("en-US")}.
         </p>
