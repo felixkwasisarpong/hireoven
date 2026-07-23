@@ -177,60 +177,51 @@ export default async function HomePage() {
       <Navbar />
 
       {/* ── Hero ────────────────────────────────────────────────────────── */}
-      <section className="relative overflow-hidden"
-        style={{ background: "linear-gradient(150deg, #0f0a1e 0%, #1a0800 40%, #0d1220 75%, #080614 100%)" }}>
+      <section className="relative overflow-hidden border-b border-slate-100 bg-white">
 
-        {/* Ambient glows */}
+        {/* Soft light accents */}
         <div className="pointer-events-none absolute inset-0">
-          <div className="absolute -left-32 -top-32 h-[500px] w-[500px] rounded-full bg-[#FF5C18]/12 blur-[120px]" />
-          <div className="absolute right-0 top-1/4 h-[400px] w-[400px] rounded-full bg-violet-600/10 blur-[100px]" />
-          <div className="absolute bottom-0 left-1/3 h-64 w-64 rounded-full bg-[#FF9A3C]/8 blur-[80px]" />
+          <div className="absolute -left-32 -top-40 h-[440px] w-[440px] rounded-full bg-[#FF5C18]/5 blur-[120px]" />
+          <div className="absolute right-0 top-0 h-[360px] w-[360px] rounded-full bg-emerald-500/5 blur-[120px]" />
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-6 pb-24 pt-20 md:pb-32 md:pt-28">
+        <div className="relative mx-auto max-w-6xl px-6 pb-20 pt-16 md:pb-28 md:pt-24">
           <div className="mx-auto max-w-3xl text-center">
 
             {/* Live badge */}
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs font-semibold text-white/70 backdrop-blur-sm">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-semibold text-slate-600 shadow-sm">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live · {stats.jobs > 0 ? stats.jobs.toLocaleString() : "10,000+"} jobs tracked right now
             </div>
 
-            <p className="mb-4 text-[15px] font-semibold italic text-white/50">
-              &ldquo;Do you sponsor?&rdquo; shouldn&apos;t be a final-round question.
-            </p>
-
-            <h1 className="text-[2.8rem] font-black leading-[1.04] tracking-tight text-white sm:text-5xl md:text-[3.75rem]">
+            <h1 className="text-[2.8rem] font-black leading-[1.05] tracking-tight text-slate-950 sm:text-5xl md:text-[3.75rem]">
               Know they sponsor{" "}
-              <span style={{ background: "linear-gradient(90deg,#FF5C18,#FF9A3C,#FFD280)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-                before
-              </span>{" "}
+              <span className="text-[#FF5C18]">before</span>{" "}
               you apply.
             </h1>
 
-            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-white/60 md:text-xl">
+            <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600 md:text-xl">
               Every listing checked against real DOL and USCIS petition records. Every opening
-              surfaced minutes after it posts. Apex applies for you with a tailored resume, so you
+              surfaced minutes after it posts. Apex applies for you with a tailored resume — so you
               show up first, with proof instead of hope.
             </p>
 
-            <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <div className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link href="/signup"
-                className="inline-flex items-center gap-2 rounded-2xl px-8 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.4)] transition hover:brightness-110"
-                style={{ background: "linear-gradient(135deg,#FF5C18,#FF7A35)" }}>
+                className="inline-flex items-center gap-2 rounded-2xl bg-[#FF5C18] px-8 py-4 text-base font-bold text-white shadow-[0_8px_30px_rgba(255,92,24,0.35)] transition hover:brightness-110">
                 Get started free
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link href="/pricing"
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/5 px-8 py-4 text-base font-semibold text-white/80 backdrop-blur-sm transition hover:bg-white/10">
-                See pricing
+              <Link href="/find"
+                className="inline-flex items-center gap-2 rounded-2xl border border-slate-300 bg-white px-8 py-4 text-base font-semibold text-slate-700 transition hover:bg-slate-50">
+                Search jobs free
               </Link>
             </div>
 
-            <ul className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
+            <ul className="mt-7 flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
               {["Free to start", "No credit card", "Set up in 2 minutes"].map((t) => (
-                <li key={t} className="inline-flex items-center gap-1.5 text-sm text-white/45">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <li key={t} className="inline-flex items-center gap-1.5 text-sm text-slate-400">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                   {t}
                 </li>
               ))}
@@ -242,72 +233,71 @@ export default async function HomePage() {
             <div className="grid gap-3 md:grid-cols-[1fr,auto,1fr,auto,1fr] md:items-stretch">
 
               {/* Step 1: job detected */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">1 · Job detected</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">1 · Job detected</p>
                 <div className="mt-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-sm font-black text-white"
-                    style={{ background: "linear-gradient(135deg,#FF5C18,#FF9A3C)" }}>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#FF5C18] text-sm font-black text-white">
                     S
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-[13.5px] font-semibold text-white">Senior Frontend Engineer</p>
-                    <p className="text-[11.5px] text-white/45">Stripe · Remote · $180k+</p>
+                    <p className="truncate text-[13.5px] font-semibold text-slate-900">Senior Frontend Engineer</p>
+                    <p className="text-[11.5px] text-slate-400">Stripe · Remote · $180k+</p>
                   </div>
                 </div>
-                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-400/15 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   Posted 2 minutes ago
                 </span>
-                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                <p className="mt-3 text-[12px] leading-relaxed text-slate-400">
                   Straight from the company&apos;s career page, before job boards index it.
                 </p>
               </div>
 
               <div className="hidden items-center md:flex" aria-hidden>
-                <ArrowRight className="h-5 w-5 text-white/25" />
+                <ArrowRight className="h-5 w-5 text-slate-300" />
               </div>
 
               {/* Step 2: sponsorship checked */}
-              <div className="rounded-2xl border border-[#FF5C18]/40 bg-white/8 p-5 backdrop-blur-md shadow-[0_8px_40px_rgba(255,92,24,0.15)]">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FF9A3C]">2 · Sponsorship checked</p>
+              <div className="rounded-2xl border-2 border-[#FF5C18]/30 bg-white p-5 shadow-[0_8px_40px_rgba(255,92,24,0.10)]">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#FF5C18]">2 · Sponsorship checked</p>
                 <div className="mt-4 grid grid-cols-3 gap-2">
-                  {[["Sponsor", "89", "#FF9A3C"], ["Petitions", "412", "#A78BFA"], ["Approval", "81%", "#34D399"]].map(([l, v, c]) => (
-                    <div key={l} className="rounded-lg bg-white/5 px-2 py-2 text-center">
+                  {[["Sponsor", "89", "#FF5C18"], ["Petitions", "412", "#7C3AED"], ["Approval", "81%", "#059669"]].map(([l, v, c]) => (
+                    <div key={l} className="rounded-lg bg-slate-50 px-2 py-2 text-center">
                       <p className="text-[19px] font-black tabular-nums" style={{ color: c }}>{v}</p>
-                      <p className="text-[9px] font-semibold uppercase tracking-wide text-white/35">{l}</p>
+                      <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{l}</p>
                     </div>
                   ))}
                 </div>
-                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/8 px-2.5 py-1 text-[11px] font-bold text-white/70">
-                  <ShieldCheck className="h-3 w-3 text-emerald-400" />
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+                  <ShieldCheck className="h-3 w-3 text-emerald-600" />
                   DOL + USCIS public records
                 </span>
-                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                <p className="mt-3 text-[12px] leading-relaxed text-slate-400">
                   Real petition history, not a guess. You know they file before you apply.
                 </p>
               </div>
 
               <div className="hidden items-center md:flex" aria-hidden>
-                <ArrowRight className="h-5 w-5 text-white/25" />
+                <ArrowRight className="h-5 w-5 text-slate-300" />
               </div>
 
               {/* Step 3: applied with confidence */}
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur-md">
-                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">3 · Applied with confidence</p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">3 · Applied with confidence</p>
                 <div className="mt-4 flex items-center gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-400/15">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-400" />
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                   </span>
                   <div>
-                    <p className="text-[13.5px] font-semibold text-white">Application sent</p>
-                    <p className="text-[11.5px] text-white/45">Tailored resume + cover letter attached</p>
+                    <p className="text-[13.5px] font-semibold text-slate-900">Application sent</p>
+                    <p className="text-[11.5px] text-slate-400">Tailored resume + cover letter attached</p>
                   </div>
                 </div>
-                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#FF5C18]/15 px-2.5 py-1 text-[11px] font-bold text-[#FF9A3C]">
+                <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[#FF5C18]/10 px-2.5 py-1 text-[11px] font-bold text-[#FF5C18]">
                   <Zap className="h-3 w-3" />
                   You&apos;re applicant #4, not #2,401
                 </span>
-                <p className="mt-3 text-[12px] leading-relaxed text-white/40">
+                <p className="mt-3 text-[12px] leading-relaxed text-slate-400">
                   Apex autofills the form. You review and hit send while the role is still hot.
                 </p>
               </div>
