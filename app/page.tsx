@@ -37,6 +37,9 @@ import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import HireovenLogo from "@/components/ui/HireovenLogo"
+import StayDemo from "@/components/stay/StayDemo"
+import { getCapExemptStats } from "@/lib/stay/queries"
+import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 
 export const revalidate = 300
@@ -91,27 +94,6 @@ const fallbackCompanies: LogoCompany[] = [
 const curatedCompanyDomains = fallbackCompanies
   .map((company) => company.domain?.trim().toLowerCase())
   .filter((domain): domain is string => Boolean(domain))
-
-const evidenceCards = [
-  {
-    icon: Clock3,
-    title: "Fresh roles first",
-    body: "Company career pages are checked continuously, so new roles reach your feed while they are still warm.",
-    stat: "Minutes",
-  },
-  {
-    icon: ShieldCheck,
-    title: "Sponsor proof",
-    body: "Each job is paired with H-1B petition history, visa language, and sponsorship confidence signals.",
-    stat: "DOL + USCIS",
-  },
-  {
-    icon: Gauge,
-    title: "Fit ranked",
-    body: "Apex scores each role against your resume, target titles, seniority, location, and work authorization.",
-    stat: "AI match",
-  },
-]
 
 const apexCards = [
   {
@@ -620,132 +602,6 @@ function MetricStrip({ stats }: { stats: Stat[] }) {
   )
 }
 
-function EvidenceCard({
-  body,
-  icon: Icon,
-  stat,
-  title,
-}: {
-  body: string
-  icon: LucideIcon
-  stat: string
-  title: string
-}) {
-  return (
-    <div className="term-panel p-5">
-      <div className="flex items-center justify-between gap-4">
-        <span className="flex h-9 w-9 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-          <Icon className="h-5 w-5" aria-hidden />
-        </span>
-        <span className="term-label">{stat}</span>
-      </div>
-      <h3 className="mt-5 text-[16px] font-semibold text-white">{title}</h3>
-      <p className="mt-2 text-[13px] leading-6 text-[#ccd6cf]/65">{body}</p>
-    </div>
-  )
-}
-
-function EvidenceDecisionVisual() {
-  const rows = [
-    { label: "Freshness", value: "7m ago", detail: "Company career page", tone: "text-[#f5a623]", width: "92%" },
-    { label: "Sponsor signal", value: "Strong", detail: "DOL + USCIS match", tone: "text-[#38e08a]", width: "84%" },
-    { label: "Profile fit", value: "71%", detail: "Skills and seniority", tone: "text-[#38e08a]", width: "71%" },
-    { label: "Ghost risk", value: "Low", detail: "No stale repost loop", tone: "text-[#ccd6cf]/70", width: "18%" },
-  ]
-
-  return (
-    <div className="term-panel p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-4 border-b border-[rgba(120,200,160,0.12)] pb-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-            <FileSearch className="h-5 w-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="term-label truncate">live job packet</p>
-            <p className="truncate text-[14px] font-semibold text-white">AI/ML Engineer · Greenhouse</p>
-          </div>
-        </div>
-        <span className="shrink-0 border border-[#f5a623]/40 px-2 py-1 text-[0.7rem] tracking-wide text-[#f5a623]">
-          worth review
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
-        <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="term-label">decision signals</p>
-              <p className="mt-1 text-[16px] font-semibold text-white">One screen before you apply</p>
-            </div>
-            <Radar className="h-5 w-5 text-[#f5a623]" aria-hidden />
-          </div>
-
-          <div className="mt-5 space-y-3">
-            {rows.map(({ detail, label, tone, value, width }) => (
-              <div className="border border-[rgba(120,200,160,0.12)] bg-[#0e1411] p-3" key={label}>
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[12.5px] font-medium text-[#ccd6cf]">{label}</span>
-                  <span className={["text-[12.5px] font-semibold tabular-nums", tone].join(" ")}>{value}</span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden bg-[rgba(120,200,160,0.12)]">
-                  <div className="h-full bg-[#38e08a]" style={{ width }} />
-                </div>
-                <p className="term-label mt-1.5">{detail}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="grid gap-4">
-          <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-            <p className="term-label">application rank</p>
-            <div className="mt-4 flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[3rem] font-semibold leading-none tabular-nums text-[#38e08a]">#4</p>
-                <p className="term-label mt-2">early applicant window</p>
-              </div>
-              <BellRing className="mb-2 h-7 w-7 text-[#f5a623]" aria-hidden />
-            </div>
-          </div>
-
-          <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-            <p className="term-label">sponsor proof</p>
-            <div className="mt-4 grid gap-2">
-              {["USCIS petition history", "Visa language detected", "E-Verify context"].map((label) => (
-                <div className="flex items-center gap-2 border border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-3 py-2 text-[12px] font-medium text-[#ccd6cf]" key={label}>
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[#38e08a]" aria-hidden />
-                  <span className="min-w-0 truncate">{label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="border border-[#f5a623]/30 bg-[#f5a623]/10 p-4">
-            <p className="text-[13px] font-semibold text-[#f5a623]">Apex packet ready</p>
-            <p className="mt-1 text-[12px] leading-5 text-[#ccd6cf]/70">
-              Tailored resume, cover letter, and autofill answers wait for review.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 grid gap-px border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-4">
-        {[
-          ["Career page", "source"],
-          ["Sponsor check", "evidence"],
-          ["Apex prep", "packet"],
-          ["You review", "control"],
-        ].map(([title, label]) => (
-          <div className="bg-[#0e1411] px-3 py-3" key={title}>
-            <p className="text-[12px] font-semibold text-white">{title}</p>
-            <p className="term-label mt-1">{label}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 function ProductShowcaseImage() {
   return (
     <div className="space-y-4">
@@ -895,27 +751,35 @@ function WorkflowStorySection() {
   )
 }
 
-function ProofSection() {
+function StaySection({
+  capExemptRoles,
+  roleOptions,
+}: {
+  capExemptRoles: number
+  roleOptions: { socGroup: string; label: string }[]
+}) {
   return (
     <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="mx-auto max-w-[42rem] text-center">
-        <p className="term-label">{"// evidence_first"}</p>
+      <div className="mx-auto max-w-[46rem] text-center">
+        <p className="term-label">{"> stay --survival-odds --rules=2026"}</p>
         <h2 className="mt-4 text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-          Stop guessing which applications are <span className="text-[#f5a623]">worth it</span>.
+          Will this job actually <span className="text-[#f5a623]">keep you in the country?</span>
         </h2>
         <p className="mt-5 text-[15px] leading-relaxed text-[#ccd6cf]/70">
-          Job boards show you postings. Hireoven shows timing, sponsorship history, and whether the role fits before you start the application.
+          The 2026 rules changed the H-1B math. Stay scores every job by your real odds of building a lasting career
+          here — and surfaces the roles that skip the lottery entirely.
         </p>
       </div>
 
-      <div className="mt-12 grid gap-4 lg:grid-cols-[0.9fr_1.1fr] lg:items-stretch">
-        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
-          {evidenceCards.map((card) => (
-            <EvidenceCard key={card.title} {...card} />
-          ))}
-        </div>
+      <div className="mx-auto mt-10 max-w-[78rem]">
+        <StayDemo capExemptRoles={capExemptRoles} roleOptions={roleOptions} />
+      </div>
 
-        <EvidenceDecisionVisual />
+      <div className="mt-6 flex justify-center">
+        <Link href="/stay" className="term-btn term-btn-amber">
+          Open the full Stay toolkit
+          <ArrowRight className="h-4 w-4" aria-hidden />
+        </Link>
       </div>
     </section>
   )
@@ -1485,7 +1349,13 @@ function Footer() {
 }
 
 export default async function HomePage() {
-  const [stats, featured] = await Promise.all([getPlatformStats(), getFeaturedCompanies()])
+  const [stats, featured, stayStats, socRoles] = await Promise.all([
+    getPlatformStats(),
+    getFeaturedCompanies(),
+    getCapExemptStats(),
+    getFeaturedSocRoles(),
+  ])
+  const roleOptions = socRoles.map((r) => ({ socGroup: r.soc_group, label: r.short_label || r.label }))
 
   return (
     <div className="term-page relative min-h-dvh overflow-hidden">
@@ -1498,7 +1368,7 @@ export default async function HomePage() {
         <LogoProofSection companies={featured} stats={stats} />
         <CompaniesSection stats={stats} />
         <WorkflowStorySection />
-        <ProofSection />
+        <StaySection capExemptRoles={stayStats.openRoles} roleOptions={roleOptions} />
         <BeyondRadarSection />
         <ApexSection />
         <CandidateMomentsSection />
