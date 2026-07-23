@@ -83,7 +83,7 @@ export default async function FindPage() {
       <Navbar />
 
       {/* Above the fold: headline + live search, nothing else. */}
-      <section className="mx-auto w-full max-w-2xl px-4 pt-10 sm:px-6 sm:pt-14">
+      <section className="mx-auto w-full max-w-4xl px-4 pt-10 sm:px-6 sm:pt-14">
         <h1 className="text-center text-[30px] font-black leading-[1.1] tracking-tight text-slate-950 sm:text-[40px]">
           Every job, sponsorship-checked before you apply.
         </h1>
@@ -99,7 +99,7 @@ export default async function FindPage() {
 
       {/* Proof: one real company profile. */}
       {proof && (
-        <section className="mx-auto mt-16 w-full max-w-2xl px-4 sm:px-6">
+        <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
           <h2 className="text-[13px] font-semibold uppercase tracking-[0.16em] text-slate-400">
             Here&apos;s what you see for an employer
           </h2>
@@ -134,7 +134,7 @@ export default async function FindPage() {
       )}
 
       {/* Three benefits. */}
-      <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
+      <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
         <div className="grid gap-4 sm:grid-cols-3">
           {BENEFITS.map(({ Icon, title, body }) => (
             <div key={title} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -147,7 +147,7 @@ export default async function FindPage() {
       </section>
 
       {/* Signup last — unlocking, not gatekeeping. */}
-      <section className="mx-auto mt-16 mb-20 w-full max-w-2xl px-4 sm:px-6">
+      <section className="mx-auto mt-16 mb-20 w-full max-w-3xl px-4 sm:px-6">
         <div className="rounded-3xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-6 py-9 text-center">
           <h2 className="text-[22px] font-bold text-slate-900">Save searches and get alerts. Free.</h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] text-slate-600">
