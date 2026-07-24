@@ -2,7 +2,7 @@ import { test } from "node:test"
 import assert from "node:assert/strict"
 import type { Pool } from "pg"
 import { bumpHarvestForActiveCompanies } from "@/lib/harvester/freshness-signal"
-import { yieldAdjustedInterval } from "@/lib/harvester/run-harvest"
+import { resolveHarvestIntervalSec, yieldAdjustedInterval } from "@/lib/harvester/run-harvest"
 
 type Call = { sql: string; params: unknown[] }
 
@@ -51,4 +51,22 @@ test("yieldAdjustedInterval: geometric backoff at 5/10/20 empty crawls", () => {
 
 test("yieldAdjustedInterval: caps at the 7-day ceiling", () => {
   assert.equal(yieldAdjustedInterval(604_800, 20), 604_800)
+})
+
+test("resolveHarvestIntervalSec: tier_dead skips the yield-adjustment multiplier entirely", () => {
+  // Real bug: tier_dead's base interval was shortened to 23h to guarantee a
+  // daily check-in, but virtually every tier_dead board has 20+ consecutive
+  // empty crawls (that's how it got demoted there) — running that back
+  // through yieldAdjustedInterval applied an 8x multiplier, stretching the
+  // "fixed" 23h interval back out to ~7.7 days.
+  const tierDeadBaseSec = 82_800 // 23h, matches TIER_INTERVAL_DEFAULTS.tier_dead
+  assert.equal(resolveHarvestIntervalSec("tier_dead", 0, {}), tierDeadBaseSec)
+  assert.equal(resolveHarvestIntervalSec("tier_dead", 20, {}), tierDeadBaseSec)
+  assert.equal(resolveHarvestIntervalSec("tier_dead", 500, {}), tierDeadBaseSec)
+})
+
+test("resolveHarvestIntervalSec: tier_1/2/3 still get the yield-adjustment backoff", () => {
+  assert.equal(resolveHarvestIntervalSec("tier_1", 0, {}), 180)
+  assert.equal(resolveHarvestIntervalSec("tier_1", 20, {}), 180 * 8)
+  assert.equal(resolveHarvestIntervalSec("tier_3", 10, {}), 21_600 * 4)
 })
