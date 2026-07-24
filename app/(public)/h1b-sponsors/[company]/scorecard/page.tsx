@@ -23,7 +23,7 @@ import type { ScoreHue } from "@/types/h1b-scorecard"
 const GRADE_PILL: Record<ScoreHue, string> = {
   emerald: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300",
   green: "border-green-500/30 bg-green-500/12 text-green-300",
-  blue: "border-blue-500/30 bg-blue-500/12 text-blue-300",
+  lime: "border-lime-500/30 bg-lime-500/12 text-lime-300",
   amber: "border-amber-500/30 bg-amber-500/12 text-amber-300",
   orange: "border-orange-500/30 bg-orange-500/12 text-orange-300",
   red: "border-red-500/30 bg-red-500/12 text-red-300",

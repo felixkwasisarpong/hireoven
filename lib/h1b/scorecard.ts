@@ -28,7 +28,7 @@ export function scoreBucket(confidence: number): ScoreBucket {
       grade: "B",
       label: "Reliable Sponsor",
       short: "Reliable",
-      hue: "blue",
+      hue: "lime",
       description: "Sponsors H-1B candidates regularly across multiple years.",
     }
   if (c >= 60)

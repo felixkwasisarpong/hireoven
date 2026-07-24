@@ -24,8 +24,8 @@ export interface PersonalBucket {
 export function personalScoreBucket(total: number): PersonalBucket {
   if (total >= 85) return { grade: "A+", label: "Exceptional Profile", hue: "emerald" }
   if (total >= 80) return { grade: "A", label: "Strong Profile", hue: "green" }
-  if (total >= 72) return { grade: "B+", label: "Competitive Profile", hue: "blue" }
-  if (total >= 64) return { grade: "B", label: "Solid Profile", hue: "blue" }
+  if (total >= 72) return { grade: "B+", label: "Competitive Profile", hue: "lime" }
+  if (total >= 64) return { grade: "B", label: "Solid Profile", hue: "lime" }
   return { grade: "C", label: "Building Profile", hue: "amber" } // floor — never "Limited"/"Unlikely"
 }
 

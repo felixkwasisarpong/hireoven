@@ -9,7 +9,7 @@ export const runtime = "nodejs"
 const HUE_TO_HEX: Record<ScoreHue, { bg: string; fg: string; accent: string }> = {
   emerald: { bg: "#022c22", fg: "#d1fae5", accent: "#34d399" },
   green: { bg: "#052e16", fg: "#dcfce7", accent: "#4ade80" },
-  blue: { bg: "#0c1e3a", fg: "#dbeafe", accent: "#60a5fa" },
+  lime: { bg: "#1a2e05", fg: "#ecfccb", accent: "#a3e635" },
   amber: { bg: "#3a2208", fg: "#fef3c7", accent: "#fbbf24" },
   orange: { bg: "#3a1808", fg: "#ffedd5", accent: "#fb923c" },
   red: { bg: "#3a0808", fg: "#fee2e2", accent: "#f87171" },
@@ -121,7 +121,7 @@ export async function GET(
   }
   if (!data) return new Response("Not found", { status: 404 })
 
-  const colors = HUE_TO_HEX[data.bucket.hue] ?? HUE_TO_HEX.blue
+  const colors = HUE_TO_HEX[data.bucket.hue] ?? HUE_TO_HEX.amber
   const logo = absoluteLogoUrl(data.company.logo_url)
   const certifiedValue =
     data.metrics.filed_latest_fy > 0

@@ -1,6 +1,11 @@
 export type Grade = "A+" | "A" | "B" | "C" | "D" | "F"
 
-export type ScoreHue = "emerald" | "green" | "blue" | "amber" | "orange" | "red"
+// Ordered green -> red so a consumer can treat the union as a severity scale.
+// "blue" used to sit in the "B" grade slot — a different hue family entirely
+// (cool vs. the warm green->red gradient everywhere else), which made a B
+// grade read as an unrelated/informational color instead of "one step below
+// A". "lime" keeps the gradient continuous.
+export type ScoreHue = "emerald" | "green" | "lime" | "amber" | "orange" | "red"
 
 export interface ScoreBucket {
   grade: Grade

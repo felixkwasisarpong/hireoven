@@ -6,7 +6,7 @@ import type { ScoreHue } from "@/types/h1b-scorecard"
 const HUE_CLASSES: Record<ScoreHue, string> = {
   emerald: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   green: "bg-green-50 text-green-700 ring-green-200",
-  blue: "bg-blue-50 text-blue-700 ring-blue-200",
+  lime: "bg-lime-50 text-lime-700 ring-lime-200",
   amber: "bg-amber-50 text-amber-700 ring-amber-200",
   orange: "bg-orange-50 text-orange-700 ring-orange-200",
   red: "bg-red-50 text-red-600 ring-red-200",
@@ -16,7 +16,7 @@ const HUE_CLASSES: Record<ScoreHue, string> = {
 const DARK_HUE_CLASSES: Record<ScoreHue, string> = {
   emerald: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
   green: "bg-green-400/10 text-green-300 ring-green-400/25",
-  blue: "bg-sky-400/10 text-sky-300 ring-sky-400/25",
+  lime: "bg-lime-400/10 text-lime-300 ring-lime-400/25",
   amber: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
   orange: "bg-orange-400/10 text-orange-300 ring-orange-400/25",
   red: "bg-red-400/10 text-red-300 ring-red-400/25",
