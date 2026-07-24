@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Navbar from "@/components/layout/Navbar"
+import HireovenLogo from "@/components/ui/HireovenLogo"
 import { track } from "@/lib/analytics"
 
 type Match = {
@@ -99,8 +99,12 @@ export default function FindClient() {
   }
 
   return (
-    <main className="term-page min-h-dvh">
-      <Navbar />
+    <main className="term-page min-h-dvh [font-feature-settings:normal]">
+      {/* Bare ad-landing header — logo only, no nav links (every link is an exit). */}
+      <header className="term-nav sticky top-0 z-40 flex items-center gap-2 px-5 py-3 lg:px-8">
+        <span className="text-[#38e08a]" aria-hidden>&gt;</span>
+        <HireovenLogo variant="header" className="h-8 w-auto [filter:brightness(0)_invert(1)]" priority />
+      </header>
       <div className="mx-auto w-full max-w-xl px-5 py-10 sm:py-14">
         {/* HERO */}
         <p className="text-[13px] font-medium text-[#f5a623]">
@@ -239,8 +243,7 @@ export default function FindClient() {
                 Create my free account →
               </a>
               <p className="mt-3 text-[12.5px] text-[#ccd6cf]/55">
-                Joining <span className="font-semibold text-white">8,200+</span> international
-                students already using HireOven
+                Free · no credit card · your matches are saved instantly
               </p>
             </div>
 
@@ -256,21 +259,13 @@ export default function FindClient() {
           </div>
         )}
 
-        {/* SOCIAL PROOF */}
+        {/* TRUST — factual, verifiable claims only */}
         <div className="mt-8 border-t border-[rgba(120,200,160,0.2)] pt-6">
-          <div className="tracking-widest text-[#f5a623]">★★★★★</div>
-          <p className="mt-2 text-[17px] leading-snug text-[#ccd6cf]">
-            &ldquo;Found my current role 3 days after signing up — and I knew it sponsored before I applied.&rdquo;
-          </p>
-          <p className="mt-1 text-[12.5px] text-[#ccd6cf]/55">— Priya M., F-1 → H-1B, Software Engineer</p>
-          <div className="mt-4 flex flex-wrap justify-center gap-4 text-[11.5px] text-[#ccd6cf]/55">
-            <span>● DOL + USCIS verified</span>
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-[11.5px] text-[#ccd6cf]/55">
+            <span>● Every job checked against DOL + USCIS records</span>
             <span>● 1.5M+ jobs tracked</span>
-            <span>● No credit card</span>
+            <span>● Free — no credit card</span>
           </div>
-          <p className="mt-4 text-center text-xs text-[#ccd6cf]/45">
-            Trusted by international students at 200+ universities
-          </p>
         </div>
       </div>
     </main>
