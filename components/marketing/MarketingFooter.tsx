@@ -14,7 +14,7 @@ function FooterColumn({ links, title }: { links: FooterLink[]; title: string }) 
       <ul className="space-y-2.5">
         {links.map(({ href, label }) => (
           <li key={href}>
-            <Link className="text-[13px] font-medium text-[#ccd6cf]/55 transition hover:text-[#38e08a]" href={href}>
+            <Link className="text-[13px] font-medium text-[var(--term-fg)] opacity-60 transition hover:text-[var(--term-green)] hover:opacity-100" href={href}>
               {label}
             </Link>
           </li>
@@ -26,14 +26,14 @@ function FooterColumn({ links, title }: { links: FooterLink[]; title: string }) 
 
 export default function MarketingFooter() {
   return (
-    <footer className="border-t border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] px-5 py-16 font-mono lg:px-12">
+    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-bg)] px-5 py-16 font-mono lg:px-12">
       <div className="mx-auto max-w-[78rem]">
         <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr_1fr]">
           <div>
             <Link href="/">
-              <HireovenLogo className="h-10 w-auto max-w-[180px] [filter:brightness(0)_invert(1)]" variant="full" />
+              <HireovenLogo className="marketing-logo h-10 w-auto max-w-[180px]" variant="full" />
             </Link>
-            <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-[#ccd6cf]/55">
+            <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-[var(--term-fg)] opacity-60">
               Fresh jobs, sponsor proof, and AI application workflows for job seekers who move early.
             </p>
           </div>
@@ -75,10 +75,10 @@ export default function MarketingFooter() {
           />
         </div>
 
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(120,200,160,0.12)] pt-6">
-          <p className="text-[12px] text-[#ccd6cf]/45">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
-          <div className="flex items-center gap-2 text-[12px] font-medium text-[#ccd6cf]/45">
-            <Check className="h-3.5 w-3.5 text-[#f5a623]" aria-hidden />
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--term-line)] pt-6">
+          <p className="text-[12px] text-[var(--term-fg)] opacity-45">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
+          <div className="flex items-center gap-2 text-[12px] font-medium text-[var(--term-fg)] opacity-45">
+            <Check className="h-3.5 w-3.5 text-[var(--term-amber)]" aria-hidden />
             Built for fast, evidence-backed applications.
           </div>
         </div>

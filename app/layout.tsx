@@ -23,6 +23,15 @@ const jakarta = Plus_Jakarta_Sans({
   weight: ["400", "500", "600", "700", "800"],
 })
 
+const marketingThemeScript = `
+try {
+  var theme = localStorage.getItem("hireoven:marketing-theme");
+  document.documentElement.dataset.marketingTheme = theme === "light" ? "light" : "dark";
+} catch (_) {
+  document.documentElement.dataset.marketingTheme = "dark";
+}
+`
+
 export const metadata: Metadata = {
   // Production fallback, NOT localhost: metadataBase is baked into every
   // absolute og:/twitter: URL, and a blank build-time env would otherwise put
@@ -99,8 +108,9 @@ export default async function RootLayout({
     : null
 
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={`${jakarta.variable} site-chroma`}>
+        <script dangerouslySetInnerHTML={{ __html: marketingThemeScript }} />
         <AuthProvider initialUser={initialUser}>
           <UpgradeModalProvider>
             <SubscriptionProvider>
