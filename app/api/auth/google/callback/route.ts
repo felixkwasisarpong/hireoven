@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { signSessionJwt, verifyOAuthStateJwt } from "@/lib/auth/jwt"
 import { buildSessionSetCookie } from "@/lib/auth/session-cookie"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { sendMetaCapiEvent, parseFbCookies } from "@/lib/marketing/meta-capi"
 
 export const runtime = "nodejs"
 
@@ -67,6 +68,7 @@ export async function GET(request: NextRequest) {
 
   // Resolve or create user
   let userId: string | null = null
+  let isNewSignup = false
 
   const byGoogleSub = await pool.query<{ id: string }>(
     `SELECT id FROM auth.users WHERE google_sub = $1 LIMIT 1`,
@@ -116,6 +118,7 @@ export async function GET(request: NextRequest) {
           [userId, email, googleProfile.name ?? null, googleProfile.picture ?? null]
         )
         await client.query("COMMIT")
+        isNewSignup = true
       } catch (e) {
         await client.query("ROLLBACK").catch(() => {})
         console.error("[google/callback] user creation failed", e)
@@ -146,6 +149,22 @@ export async function GET(request: NextRequest) {
     isAdmin: Boolean(flags.rows[0]?.is_admin),
     suspended: false,
   })
+
+  // Fire Meta CAPI CompleteRegistration only for brand-new accounts (not
+  // returning Google logins). Guarded + time-bounded — never breaks the redirect.
+  if (isNewSignup) {
+    const { fbp, fbc } = parseFbCookies(request.headers.get("cookie"))
+    await sendMetaCapiEvent({
+      eventName: "CompleteRegistration",
+      eventId: userId!,
+      email,
+      eventSourceUrl: `${origin}/find`,
+      clientIpAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      clientUserAgent: request.headers.get("user-agent"),
+      fbp,
+      fbc,
+    })
+  }
 
   const res = NextResponse.redirect(new URL(claims.next, origin))
   res.headers.append("Set-Cookie", buildSessionSetCookie(sessionToken, 60 * 60 * 24 * 14))

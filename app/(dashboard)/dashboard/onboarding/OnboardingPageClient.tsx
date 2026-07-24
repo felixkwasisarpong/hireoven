@@ -125,6 +125,19 @@ export default function OnboardingPage() {
       .catch(() => {})
   }, [])
 
+  // Pre-seed the target role from the /find ad-landing handoff (?ho_role=…), so a
+  // visitor who typed a role before signing up doesn't have to re-enter it. Only
+  // fills when empty — the profile hydration above still wins for returning users.
+  useEffect(() => {
+    try {
+      const seed = new URLSearchParams(window.location.search).get("ho_role")?.trim()
+      if (!seed) return
+      setStepOne(prev => (prev.roles.length ? prev : { ...prev, roles: [seed] }))
+    } catch {
+      // never break onboarding over a URL parse
+    }
+  }, [])
+
   const [stepTwo, setStepTwo] = useState<StepTwoData>({
     isInternational: false,
     visaStatus: "",
