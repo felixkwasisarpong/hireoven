@@ -143,6 +143,31 @@ test("extractJobDescriptionFromHtml drops Greenhouse-style chrome wrappers", () 
   assert.ok(/backend services/i.test(text ?? ""))
 })
 
+test("parseJobDescriptionSections does not fragment a 'Category: values' skills list into fake headings", () => {
+  // Real bug, found live in a Nike posting: "Languages:", "Frameworks:",
+  // "Platforms:" etc. (plain category labels within a skills breakdown) each
+  // got promoted to their own one-line "section", scattering the whole list
+  // across unrelated buckets instead of staying together under its real
+  // heading ("Preferred skills and experiences").
+  const desc = [
+    "We are looking for a senior engineer to join our growing platform team.",
+    "",
+    "Preferred skills and experiences:",
+    "Leadership: Collaborative working style, excellent communication skills",
+    "Languages: NodeJS, TypeScript, Python",
+    "Frameworks: React, Express, NX monorepo",
+    "Platforms: Docker, AWS, Azure",
+  ].join("\n")
+
+  const sections = parseJobDescriptionSections(desc)
+  const headings = sections.map((s) => s.heading)
+  assert.ok(headings.includes("Preferred skills and experiences"))
+  assert.ok(!headings.includes("Leadership"), "'Leadership:' must not become its own heading")
+  assert.ok(!headings.includes("Languages"), "'Languages:' must not become its own heading")
+  assert.ok(!headings.includes("Frameworks"), "'Frameworks:' must not become its own heading")
+  assert.ok(!headings.includes("Platforms"), "'Platforms:' must not become its own heading")
+})
+
 test("parseJobDescriptionSections does not promote chrome lines to headings", () => {
   const desc = [
     "SIGN IN",
