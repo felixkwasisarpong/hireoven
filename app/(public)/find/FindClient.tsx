@@ -50,6 +50,16 @@ function beacon(name: string, role?: string) {
   }
 }
 
+// Fire a Meta Pixel standard event so the ad campaign can optimize toward the
+// funnel. No-ops safely if the pixel hasn't loaded (blocked, adblock, etc.).
+function fbTrack(event: string, params?: Record<string, unknown>) {
+  try {
+    window.fbq?.("track", event, params)
+  } catch {
+    // pixel must never break the page
+  }
+}
+
 export default function FindClient() {
   const [role, setRole] = useState("")
   const [loading, setLoading] = useState(false)
@@ -68,6 +78,7 @@ export default function FindClient() {
     setSubmittedRole(r)
     track("find_role_submitted", { role: r })
     beacon("find_role_submitted", r)
+    fbTrack("Search", { search_string: r })
     try {
       const res = await fetch("/api/public/matches", {
         method: "POST",
@@ -79,6 +90,7 @@ export default function FindClient() {
       setMatches(list)
       track("find_matches_shown", { role: r, count: list.length })
       beacon("find_matches_shown", r)
+      fbTrack("ViewContent", { content_category: "sponsor_matches", search_string: r, num_items: list.length })
     } catch {
       setMatches([])
     } finally {
@@ -220,6 +232,7 @@ export default function FindClient() {
                 onClick={() => {
                   track("find_signup_clicked", { role: submittedRole })
                   beacon("find_signup_clicked", submittedRole)
+                  fbTrack("Lead", { content_name: submittedRole || "find" })
                 }}
                 className="term-btn term-btn-amber mt-3.5 w-full justify-center py-3.5 text-[15px]"
               >
