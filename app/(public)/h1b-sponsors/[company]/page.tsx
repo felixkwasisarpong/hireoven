@@ -25,6 +25,7 @@ import { EverifyBadge } from "@/components/h1b/badges/EverifyBadge"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { WAGE_LEVEL_META, LEGACY_SINGLE_DRAW_ODDS, type WageLevel } from "@/lib/stay/lottery-odds"
 import { companyIdFromParam, companyParam, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 
 export const dynamic = "force-dynamic"
@@ -103,11 +104,27 @@ function verdictSentence(c: CompanyData): string {
   return `We found no public H-1B sponsorship record for ${c.name}. That doesn't guarantee they won't sponsor — it means no certified LCA filings surfaced in the data we track.`
 }
 
+// Stay's 2026 survival-odds reframe as a single quotable sentence (GEO + FAQ).
+const L1_PCT = Math.round(WAGE_LEVEL_META[1].singleDrawOdds * 100)
+const L4_PCT = Math.round(WAGE_LEVEL_META[4].singleDrawOdds * 100)
+const LEGACY_PCT = Math.round(LEGACY_SINGLE_DRAW_ODDS * 100)
+
+function stayOutlookSentence(c: CompanyData): string {
+  if (c.is_cap_exempt) {
+    return `${c.name} is cap-exempt — it can file H-1B petitions year-round with no annual cap and no lottery, so the 2026 wage-weighted selection rule does not apply. For entry-level talent, a cap-exempt employer is the strongest structural path to staying in the U.S.`
+  }
+  if (c.verdict === "yes" || c.verdict === "likely") {
+    return `${c.name} sponsors H-1B, but it is cap-subject, so a petition still goes through the 2026 wage-weighted lottery. Odds of selection now depend on the DOL wage level of your offer — roughly ${L1_PCT}% per draw at Level I, rising to about ${L4_PCT}% at Level IV (down from a flat ~${LEGACY_PCT}% under the old random lottery).`
+  }
+  return `We have no public H-1B sponsorship record for ${c.name}, so we can't estimate 2026 lottery odds here. If they don't sponsor, cap-exempt employers remain a lottery-free path to status.`
+}
+
 function faqItems(c: CompanyData): Array<{ q: string; a: string }> {
   const c1 = c.h1b_sponsor_count_1yr ?? 0
   const c3 = c.h1b_sponsor_count_3yr ?? 0
   return [
     { q: `Does ${c.name} sponsor H-1B visas?`, a: verdictSentence(c) },
+    { q: `What are my H-1B lottery odds at ${c.name} in 2026?`, a: stayOutlookSentence(c) },
     {
       q: `How many H-1B / LCA petitions has ${c.name} filed?`,
       a: `${c.name} has ${c1.toLocaleString()} certified LCA filings in the last 12 months and ${c3.toLocaleString()} over the last 3 years, based on U.S. Department of Labor disclosure data.`,
@@ -182,6 +199,21 @@ export default async function H1bSponsorPage({ params }: Props) {
         ],
       },
       { "@type": "Organization", name: c.name, ...(c.domain ? { url: `https://${c.domain}` } : {}) },
+      {
+        "@type": "Dataset",
+        name: `${c.name} H-1B sponsorship record (${YEAR})`,
+        description: `Certified H-1B / LCA filing counts, sponsorship confidence, cap-exempt status, and 2026 wage-weighted lottery outlook for ${c.name}, derived from U.S. Department of Labor disclosure data.`,
+        creator: { "@type": "Organization", name: "Hireoven", url: BASE },
+        temporalCoverage: `${YEAR - 3}/${YEAR}`,
+        isAccessibleForFree: true,
+        variableMeasured: [
+          "Certified LCA count (last 12 months)",
+          "Certified LCA count (last 3 years)",
+          "Sponsorship confidence",
+          "Cap-exempt status",
+        ],
+        url: `${BASE}/h1b-sponsors/${companyParam(c.id, c.name)}`,
+      },
     ],
   }
 
@@ -318,6 +350,55 @@ export default async function H1bSponsorPage({ params }: Props) {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Stay — 2026 survival-odds outlook (the differentiator) */}
+        <section className="term-panel mt-6 p-6 sm:p-8">
+          <p className="term-label">&gt; stay --2026-outlook</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">
+            Will {c.name} keep you in the U.S.? <span className="text-[#ccd6cf]/45">— the 2026 outlook</span>
+          </h2>
+          <p className="mt-3 max-w-3xl text-[14px] leading-relaxed text-[#ccd6cf]/70">{stayOutlookSentence(c)}</p>
+
+          {c.is_cap_exempt ? (
+            <div className="mt-5 border border-[#38e08a]/30 bg-[#38e08a]/[0.07] p-4">
+              <p className="text-[13px] font-semibold text-[#38e08a]">Lottery-free path</p>
+              <p className="mt-1 text-[13px] leading-relaxed text-[#ccd6cf]/80">
+                Cap-exempt filing means no annual cap and no lottery — the 2026 weighted-selection rule doesn&apos;t
+                touch this employer. Pay is often lower, but your odds of staying are dramatically higher.
+              </p>
+            </div>
+          ) : c.verdict !== "unknown" ? (
+            <div className="mt-5">
+              <p className="term-label mb-2">your draw odds by DOL wage level · 2026 weighted lottery</p>
+              <div className="grid grid-cols-2 gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-4">
+                {([1, 2, 3, 4] as WageLevel[]).map((lv) => {
+                  const pct = Math.round(WAGE_LEVEL_META[lv].singleDrawOdds * 100)
+                  const color = pct < 20 ? "#e5695f" : pct < 40 ? "#f5a623" : "#38e08a"
+                  return (
+                    <div key={lv} className="bg-[#0e1411] p-4">
+                      <p className="term-label">{WAGE_LEVEL_META[lv].label}</p>
+                      <p className="mt-1 text-2xl font-semibold tabular-nums leading-none" style={{ color }}>
+                        {pct}%
+                      </p>
+                      <p className="term-label mt-1">per draw</p>
+                    </div>
+                  )
+                })}
+              </div>
+              <p className="mt-2 text-[12px] text-[#ccd6cf]/45">
+                Old random lottery: ~{LEGACY_PCT}% for everyone → now weighted by salary. STEM OPT stacks ~3 draws.
+              </p>
+            </div>
+          ) : null}
+
+          <Link
+            href="/stay/timeline"
+            className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          >
+            Get your personalized odds — salary + OPT clock
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
         </section>
 
         {layoffSignal && (
