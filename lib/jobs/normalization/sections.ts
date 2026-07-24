@@ -480,6 +480,60 @@ function fallbackFromFirstParagraphs(
   buckets.about_role.isFallback = true
 }
 
+/**
+ * Unlike about_role/responsibilities/requirements, company_info had no
+ * fallback at all — a JD phrased without one of the recognized "Who we are" /
+ * "About us" / "Our mission" headings left the About-company section on the
+ * job page fully blank (just the logo, no text). fallbackFromFirstParagraphs
+ * above explicitly EXCLUDES company-like sentences from the about_role
+ * fallback (via COMPANY_LIKE_RE) — this reuses that same signal to route
+ * those excluded sentences into company_info instead of discarding them.
+ * Deliberately uses only COMPANY_LIKE_RE (not the looser
+ * COMPANY_POSITIONING_RE, which false-positives on plain role/product
+ * sentences) to keep false positives low — better an empty section than a
+ * wrong one.
+ */
+function fallbackCompanyInfo(
+  buckets: Record<CanonicalSectionKey, SectionBucket>,
+  description: string,
+  adapter: SourceAdapterKind
+) {
+  if (buckets.company_info.items.length > 0) return
+
+  const paragraphs = description
+    .split(/\n{2,}/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 20)
+
+  const fallbackItems = paragraphs
+    .slice(0, 6)
+    .flatMap((paragraph) => splitIntoSentences(paragraph))
+    .map((line) => line.trim())
+    .filter((line) => line.length >= 40 && line.length <= 240)
+    .filter((line) => !ABOUT_BLOCKED_RE.test(line))
+    .filter((line) => !RESPONSIBILITY_LIKE_RE.test(line))
+    .filter((line) => !REQUIREMENT_LIKE_RE.test(line))
+    .filter((line) => !PREFERRED_LIKE_RE.test(line))
+    .filter((line) => !PROMOTIONAL_LIKE_RE.test(line))
+    .filter((line) => COMPANY_LIKE_RE.test(line))
+    .slice(0, 3)
+
+  if (fallbackItems.length === 0) return
+
+  addItems(
+    buckets.company_info,
+    fallbackItems,
+    0.46,
+    {
+      adapter,
+      method: "fallback",
+      source_path: "description",
+    },
+    6
+  )
+  buckets.company_info.isFallback = true
+}
+
 function fallbackResponsibilities(
   buckets: Record<CanonicalSectionKey, SectionBucket>,
   adapter: SourceAdapterKind
@@ -656,10 +710,26 @@ function findInlineHeadingMatches(description: string): InlineHeadingMatch[] {
         beforeNonWhitespace === "?" ||
         beforeNonWhitespace === ":"
 
+      // Reject a match like "Who we are" inside "WHO WE ARE LOOKING FOR:" —
+      // the alias is genuinely just a PREFIX of a longer, unrelated heading
+      // (observed live: a Nike JD's candidate-fit heading "WHO WE ARE
+      // LOOKING FOR:" got matched as the company_info alias "Who we are",
+      // scooping the entire candidate-requirements section into the
+      // About-company page section). If the rest of the current line
+      // continues as more capitalized heading-like words before reaching a
+      // colon, this is that longer heading, not a real match for the
+      // shorter alias.
+      const restOfLine = (() => {
+        const nlIndex = description.indexOf("\n", index + target.length)
+        return description.slice(index + target.length, nlIndex === -1 ? undefined : nlIndex)
+      })()
+      const continuesAsLongerHeading = /^[ \t]*[A-Z][A-Za-z \t]*:\s*$/.test(restOfLine)
+
       const hasWhitespaceHeadingSignal =
         (after === " " || after === "\t") &&
         !singleWordAlias &&
-        /[A-Z0-9]/.test(nextNonWhitespace)
+        /[A-Z0-9]/.test(nextNonWhitespace) &&
+        !continuesAsLongerHeading
 
       const hasEndSignal =
         !after ||
@@ -1834,6 +1904,7 @@ export function extractCanonicalSections(input: {
     }
 
     fallbackFromFirstParagraphs(buckets, description, input.adapter)
+    fallbackCompanyInfo(buckets, description, input.adapter)
     fallbackResponsibilities(buckets, input.adapter)
     fallbackRequirements(buckets, input.adapter)
     enrichFromMixedText(buckets, input.adapter)

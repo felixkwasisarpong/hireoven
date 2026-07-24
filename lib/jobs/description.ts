@@ -573,6 +573,12 @@ export function cleanJobDescription(input: string | null | undefined): string | 
   return trimmed
 }
 
+// Shared keyword gate for the two generic (non-SECTION_HEADING_PATTERNS)
+// heading heuristics below. Requiring one of these prevents treating an
+// arbitrary short, capitalized, colon-terminated label as a new section.
+const GENERIC_HEADING_KEYWORD_RE =
+  /\b(ABOUT|ROLE|TEAM|RESPONSIBILITIES|REQUIREMENTS|QUALIFICATIONS|SKILLS|BENEFITS|COMPENSATION|EXPERIENCE|PREFERRED|SUMMARY|OVERVIEW|POSITION|DESCRIPTION|DUTIES)\b/
+
 function isSectionHeading(line: string): boolean {
   const normalized = line.replace(/:$/, "").trim()
   if (!normalized || normalized.length > 80) return false
@@ -587,18 +593,28 @@ function isSectionHeading(line: string): boolean {
     if (BLOCKED_HEADING_PHRASES.has(upper)) return false
     // Require at least 5 characters and a job-section keyword to prevent
     // treating generic uppercase navigation labels as headings.
-    if (
-      normalized.length >= 5 &&
-      /\b(ABOUT|ROLE|TEAM|RESPONSIBILITIES|REQUIREMENTS|QUALIFICATIONS|SKILLS|BENEFITS|COMPENSATION|EXPERIENCE|PREFERRED|SUMMARY|OVERVIEW|POSITION|DESCRIPTION|DUTIES)\b/.test(
-        upper
-      )
-    ) {
+    if (normalized.length >= 5 && GENERIC_HEADING_KEYWORD_RE.test(upper)) {
       return true
     }
     return false
   }
 
-  if (/^[A-Z][A-Za-z0-9 /&(),'+-]+:$/.test(line)) return true
+  // Mixed-case "Label:" fallback. Unguarded, this used to accept ANY short
+  // capitalized colon-terminated line — which meant a "Category: values"
+  // skills breakdown (e.g. "Languages: NodeJS, TypeScript, Python",
+  // "Frameworks: React, Express") got fragmented into a dozen fake
+  // one-line "sections" (heading="Languages", content="NodeJS..."), each
+  // too small for the classifier to place correctly (observed live: Nike's
+  // JD fragmented this way, scattering its skills list across company_info/
+  // other/benefits instead of staying together as one skills block). Apply
+  // the same keyword gate as the ALL-CAPS branch above — a real section
+  // heading ("Requirements:", "About the Team:") almost always contains one
+  // of these words; a plain category label ("Languages:", "Tools:") doesn't.
+  if (/^[A-Z][A-Za-z0-9 /&(),'+-]+:$/.test(line)) {
+    const upper = normalized.toUpperCase()
+    if (BLOCKED_HEADING_PHRASES.has(upper)) return false
+    return normalized.length >= 5 && GENERIC_HEADING_KEYWORD_RE.test(upper)
+  }
   return false
 }
 

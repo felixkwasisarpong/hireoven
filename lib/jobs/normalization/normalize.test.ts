@@ -113,6 +113,34 @@ test("extractCanonicalSections keeps about/requirements/preferred boundaries pre
   assert.ok(about.every((item) => !responsibilities.includes(item)))
 })
 
+test("extractCanonicalSections does not match a company_info alias that's just a prefix of a longer, unrelated heading", () => {
+  // Real bug, found live in a Nike posting: the inline-alias matcher found
+  // "Who we are" (a company_info alias) inside "WHO WE ARE LOOKING FOR:" — a
+  // heading about candidate fit, not the company — because it only checked
+  // for a capitalized word after the alias, not whether that word was part
+  // of the SAME heading continuing further. That single mismatch scooped the
+  // entire candidate-requirements section (including an unrelated skills
+  // breakdown) into the About-company page section.
+  const sections = extractCanonicalSections({
+    adapter: "workday",
+    description: [
+      "WHO YOU WILL WORK WITH:",
+      "Our team supports Nike Product Innovation by building solutions that use robotics and data.",
+      "",
+      "WHO WE ARE LOOKING FOR:",
+      "You are an experienced software engineer.",
+      "",
+      "Preferred skills and experiences:",
+      "Languages: NodeJS, TypeScript, Python",
+      "Frameworks: React, Express",
+    ].join("\n"),
+  })
+
+  const companyInfo = sections.company_info.items.join(" ").toLowerCase()
+  assert.ok(!companyInfo.includes("nodejs"), "the skills breakdown must not land in company_info")
+  assert.ok(!companyInfo.includes("typescript"), "the skills breakdown must not land in company_info")
+})
+
 test("extractCanonicalSections rebalances ideal-candidate and offer bullets from responsibilities", () => {
   const sections = extractCanonicalSections({
     adapter: "greenhouse",
