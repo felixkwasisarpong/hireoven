@@ -4,7 +4,7 @@ import type { ScoreHue } from "@/types/h1b-scorecard"
 const STROKE: Record<ScoreHue, string> = {
   emerald: "stroke-emerald-500",
   green: "stroke-green-500",
-  blue: "stroke-sky-500",
+  lime: "stroke-lime-500",
   amber: "stroke-amber-500",
   orange: "stroke-orange-500",
   red: "stroke-red-500",
@@ -15,7 +15,7 @@ const STROKE: Record<ScoreHue, string> = {
 const TEXT: Record<ScoreHue, string> = {
   emerald: "text-emerald-300",
   green: "text-green-300",
-  blue: "text-sky-300",
+  lime: "text-lime-300",
   amber: "text-amber-300",
   orange: "text-orange-300",
   red: "text-red-300",

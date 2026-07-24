@@ -33,6 +33,6 @@ test("scoreBucket returns a stable hue + non-empty copy for every grade", () => 
     assert.ok(b.label.length > 0)
     assert.ok(b.short.length > 0)
     assert.ok(b.description.length > 0)
-    assert.ok(["emerald", "green", "blue", "amber", "orange", "red"].includes(b.hue))
+    assert.ok(["emerald", "green", "lime", "amber", "orange", "red"].includes(b.hue))
   }
 })

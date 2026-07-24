@@ -15,7 +15,7 @@ type Props = { params: Promise<{ token: string }> }
 const HUE_TEXT: Record<ScoreHue, string> = {
   emerald: "text-emerald-400",
   green: "text-green-400",
-  blue: "text-blue-400",
+  lime: "text-lime-400",
   amber: "text-amber-400",
   orange: "text-orange-400",
   red: "text-red-400",
