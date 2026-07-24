@@ -82,8 +82,13 @@ function detectFromUrl(url: string): { slug: string } | null {
 
 function stripHtml(value: string | undefined | null): string | undefined {
   if (!value) return undefined
+  // Preserve line boundaries for <li>/<p>/etc so list items (e.g. a long
+  // state-eligibility list) don't collapse into one unbroken, unpunctuated
+  // run-on string that later sentence/length-based filters silently drop.
   const text = value
-    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -91,7 +96,10 @@ function stripHtml(value: string | undefined | null): string | undefined {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, " ")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
     .trim()
   return text || undefined
 }

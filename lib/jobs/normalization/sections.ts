@@ -61,6 +61,19 @@ const EQUAL_OPPORTUNITY_LIKE_RE =
 const LOCATION_META_LIKE_RE =
   /\b(office locations?|office-assigned|job type|work model|on-site|onsite|hybrid|remote|location[s]?)\b/i
 
+// Matches an intro line for an eligible/excluded state (or similar) list, e.g.
+// "...applicants must currently reside in one of the following states..." or
+// "...open to applicants in the states listed below...".
+const LOCATION_ELIGIBILITY_INTRO_RE =
+  /\b(?:reside|residing|located|based|eligible|approved|permitted|authorized)\b[^\n]{0,120}\b(?:states?|locations?|provinces?|countries?|regions?|jurisdictions?)\b|\b(?:states?|locations?|provinces?|countries?|regions?)\b[^\n]{0,60}\blisted below\b/i
+
+function looksLikeShortEnumItem(value: string): boolean {
+  if (value.length < 2 || value.length > 40) return false
+  if (/[.!?;:]$/.test(value)) return false
+  if (!/^[A-Z]/.test(value)) return false
+  return value.split(/\s+/).length <= 6
+}
+
 const PROMOTIONAL_LIKE_RE =
   /\b(career advancement|grow your skills|grow and develop|personal development plans|join [a-z][a-z ]+ and do work that matters|stand out|set you apart|extraordinary twists and turns|welcome diverse perspectives|challenge assumptions|make a difference|be part of something|impact millions)\b/i
 
@@ -596,6 +609,76 @@ function fallbackRequirements(
     14
   )
   buckets.requirements.isFallback = true
+}
+
+// A run of short bullets under a "reside in one of the following states"-style
+// intro (place names, one line each) fails every prose-oriented quality gate
+// downstream (min length ~12-16 chars, "looks like a requirement sentence",
+// etc.) and gets silently dropped item-by-item. Detect the pattern directly
+// on the raw description and join the run into readable, gate-surviving
+// chunks before the rest of the pipeline ever sees the individual items.
+// Runs after the qualification sanitizer so its own rebuild-from-scratch pass
+// (which enforces a ~220-char per-item cap) never sees — and can't shred —
+// these chunks.
+function fallbackLocationEligibilityList(
+  buckets: Record<CanonicalSectionKey, SectionBucket>,
+  description: string,
+  adapter: SourceAdapterKind
+) {
+  const lines = description.split("\n").map((line) => line.trim())
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const introLine = lines[i]
+    if (!introLine || !LOCATION_ELIGIBILITY_INTRO_RE.test(introLine)) continue
+
+    const items: string[] = []
+    let j = i + 1
+    while (j < lines.length) {
+      const bulletMatch = lines[j].match(/^[-*•]\s+(.+)$/)
+      if (!bulletMatch) break
+      const value = bulletMatch[1].trim()
+      if (!looksLikeShortEnumItem(value)) break
+      items.push(value)
+      j += 1
+    }
+
+    if (items.length < 6) continue
+
+    const chunks: string[] = []
+    let current = ""
+    for (const item of items) {
+      const candidate = current ? `${current}, ${item}` : item
+      if (candidate.length > 180 && current) {
+        chunks.push(current)
+        current = item
+      } else {
+        current = candidate
+      }
+    }
+    if (current) chunks.push(current)
+
+    chunks.forEach((chunk, idx) => {
+      const label =
+        chunks.length > 1
+          ? `Must be located in one of the following (${idx + 1}/${chunks.length}): `
+          : "Must be located in one of the following: "
+
+      addItems(
+        buckets.requirements,
+        [`${label}${chunk}`],
+        0.68,
+        {
+          adapter,
+          method: "fallback",
+          source_path: "description.location_eligibility_list",
+          source_excerpt: introLine.slice(0, 200),
+        },
+        30
+      )
+    })
+
+    i = j - 1
+  }
 }
 
 function enrichFromMixedText(
@@ -1917,6 +2000,7 @@ export function extractCanonicalSections(input: {
     sanitizeBenefitsBucket(buckets, input.adapter)
     sanitizeApplicationInfoBucket(buckets, input.adapter)
     refineAboutRole(buckets, input.adapter)
+    fallbackLocationEligibilityList(buckets, description, input.adapter)
     removeCrossSectionDuplicates(buckets)
     trimSectionItemCounts(buckets)
   }
