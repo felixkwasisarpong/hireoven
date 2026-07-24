@@ -327,6 +327,25 @@ async function recentFailureCount(
   return rows.filter((r) => r.status === "failed").length
 }
 
+/**
+ * tier_dead already IS the maximally-backed-off state — its base interval
+ * (23h, see TIER_INTERVAL_DEFAULTS) was deliberately shortened to guarantee a
+ * daily check-in even for likely-dead boards. Running it back through
+ * yieldAdjustedInterval double-counts the exact same consecutive_empty_crawls
+ * signal that got the board demoted into tier_dead in the first place — since
+ * virtually every tier_dead board has 20+ empty crawls, the 8x multiplier
+ * silently stretched it back out to ~7.7 days, undoing the fix entirely. Skip
+ * the multiplier once a board is already at the terminal tier.
+ */
+export function resolveHarvestIntervalSec(
+  tier: string | null,
+  consecutiveEmptyCrawls: number,
+  env: Record<string, string | undefined> = process.env
+): number {
+  const baseIntervalSec = tierIntervalSeconds(tier, env)
+  return tier === "tier_dead" ? baseIntervalSec : yieldAdjustedInterval(baseIntervalSec, consecutiveEmptyCrawls)
+}
+
 export async function runAtsHarvest(input: {
   pool: Pool
   company: AtsHarvestCompany
@@ -337,10 +356,7 @@ export async function runAtsHarvest(input: {
   if (!detection) return { matched: false }
 
   const startedAt = Date.now()
-  const intervalSec = yieldAdjustedInterval(
-    tierIntervalSeconds(company.freshness_tier),
-    company.consecutive_empty_crawls ?? 0
-  )
+  const intervalSec = resolveHarvestIntervalSec(company.freshness_tier, company.consecutive_empty_crawls ?? 0)
   const adapterName = detection.adapter.name
 
   try {
