@@ -3,6 +3,7 @@ import { Suspense } from "react"
 import { Plus_Jakarta_Sans } from "next/font/google"
 import ServiceWorkerRegistration from "@/components/pwa/ServiceWorkerRegistration"
 import PageViewTracker from "@/components/analytics/PageViewTracker"
+import MetaPixel from "@/components/analytics/MetaPixel"
 import { RouteToastBridge, ToastProvider } from "@/components/ui/ToastProvider"
 import { AuthProvider } from "@/lib/context/AuthContext"
 import { SubscriptionProvider } from "@/lib/context/SubscriptionContext"
@@ -113,6 +114,7 @@ export default async function RootLayout({
                   <FeedbackModal />
                   <ServiceWorkerRegistration />
                   <PageViewTracker />
+                  <MetaPixel />
                 </ToastProvider>
               </FeedbackModalProvider>
             </SubscriptionProvider>
