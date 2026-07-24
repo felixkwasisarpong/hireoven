@@ -75,19 +75,35 @@ function salaryLabel(
   return k((min || max) as number)
 }
 
-/** Honest role-relevance heuristic (NOT a resume match) → 60–99. */
+const titleWords = (s: string | null | undefined): string[] =>
+  (s ?? "").toLowerCase().match(/[a-z0-9+#.]+/g) ?? []
+
+/**
+ * Honest title-fit heuristic (NOT a resume match). Discriminates by how well the
+ * job title actually matches the typed role — every candidate already contains
+ * the query tokens (the SQL requires it), so the signal is *specificity* (is the
+ * title mostly the query, or is the query buried in a long title?) plus whether
+ * the exact phrase appears. Ranges ~62–97 so results visibly vary instead of all
+ * pinning to 99.
+ */
 function roleMatchPct(
   title: string,
   normalizedTitle: string,
-  sponsorshipScore: number | null,
-  sponsorsH1b: boolean,
   tokens: string[],
+  rawRole: string,
 ): number {
-  const hay = `${title ?? ""} ${normalizedTitle ?? ""}`.toLowerCase()
-  const hits = tokens.filter((t) => hay.includes(t.toLowerCase())).length
-  const rel = tokens.length ? hits / tokens.length : 0
-  const spon = Math.min(1, (sponsorshipScore ?? (sponsorsH1b ? 85 : 60)) / 100)
-  return Math.min(99, Math.round(60 + rel * 32 + spon * 8))
+  const words = new Set([...titleWords(title), ...titleWords(normalizedTitle)])
+  const q = tokens.map((t) => t.toLowerCase())
+  const matched = q.filter((t) => words.has(t)).length
+  const coverage = q.length ? matched / q.length : 0
+  const len = Math.max(titleWords(title).length, titleWords(normalizedTitle).length, 1)
+  const specificity = Math.min(1, matched / len)
+  const role = rawRole.trim().toLowerCase()
+  const exact = role && `${title} ${normalizedTitle}`.toLowerCase().includes(role) ? 1 : 0
+  // Weight specificity heavily so a tight title ("Software Engineer") clearly
+  // out-scores the query buried in a long one ("Sr. Software Engineer II, Ads").
+  const fit = 0.3 * coverage + 0.5 * specificity + 0.2 * exact // 0–1
+  return Math.max(62, Math.min(97, Math.round(62 + fit * 35)))
 }
 
 type Row = {
@@ -179,25 +195,46 @@ export async function POST(request: NextRequest) {
     const { rows } = await getPostgresPool().query<Row>(sql, params)
 
     const enriched = rows.map((r) => {
-      const matchPct = roleMatchPct(
-        r.title ?? "",
-        r.normalized_title ?? "",
-        r.sponsorship_score,
-        Boolean(r.sponsors_h1b),
-        tokens,
-      )
-      const sponsorScore = r.sponsorship_score ?? (r.sponsors_h1b ? 90 : 65)
+      const matchPct = roleMatchPct(r.title ?? "", r.normalized_title ?? "", tokens, role)
+      // Composite sponsor strength from REAL signals: DOL sponsorship confidence
+      // nudged by actual recent petition volume (a heavier filer is a stronger
+      // bet). Capped at 98 so it spreads and never pins to a flat, fake-looking
+      // 100. Falls back modestly only when confidence is genuinely missing.
+      const conf =
+        typeof r.sponsorship_score === "number" && r.sponsorship_score > 0
+          ? r.sponsorship_score
+          : r.sponsors_h1b
+            ? 72
+            : 55
+      const petitions = r.company_petitions ?? 0
+      const petAdj = petitions > 0 ? Math.min(12, Math.round(Math.log10(petitions + 1) * 4)) : 0
+      const sponsorScore = Math.max(40, Math.min(98, Math.round(conf * 0.88 + petAdj)))
       const freshMins = r.first_detected_at
         ? Math.floor((Date.now() - new Date(r.first_detected_at).getTime()) / 60_000)
         : 99_999
-      // Blend: sponsor strength leads, role relevance, then freshness.
-      const blend = sponsorScore * 1.2 + matchPct * 1.0 + Math.max(0, 500 - freshMins) * 0.1
+      // Relevance leads (so the shown match % and sponsor scores actually vary),
+      // then sponsor strength, then freshness.
+      const blend = matchPct * 1.5 + sponsorScore * 0.5 + Math.max(0, 500 - freshMins) * 0.1
       return { r, matchPct, sponsorScore, blend }
     })
 
-    const ranked = enriched
-      .sort((a, b) => b.blend - a.blend)
-      .slice(0, TEASER_COUNT)
+    // Rank by blend, but drop near-duplicate titles + repeated companies so the
+    // teaser reads as a varied, credible set instead of five identical rows.
+    const sorted = enriched.sort((a, b) => b.blend - a.blend)
+    const seenTitle = new Set<string>()
+    const companyCount = new Map<string, number>()
+    const picked: typeof sorted = []
+    for (const e of sorted) {
+      const titleKey = (e.r.title ?? "").trim().toLowerCase()
+      const companyKey = (e.r.company_name ?? "").trim().toLowerCase()
+      if (titleKey && seenTitle.has(titleKey)) continue
+      if (companyKey && (companyCount.get(companyKey) ?? 0) >= 2) continue
+      if (titleKey) seenTitle.add(titleKey)
+      if (companyKey) companyCount.set(companyKey, (companyCount.get(companyKey) ?? 0) + 1)
+      picked.push(e)
+      if (picked.length >= TEASER_COUNT) break
+    }
+    const ranked = (picked.length ? picked : sorted.slice(0, TEASER_COUNT))
       .map(({ r, matchPct, sponsorScore }) => ({
         id: r.id,
         title: r.title ?? role,
