@@ -41,8 +41,8 @@ type ProfessionGlyph = {
   accent?: "amber" | "green"
 }
 
-const GREEN = "56, 224, 138"
-const AMBER = "245, 166, 35"
+const GREEN = "var(--term-green-rgb)"
+const AMBER = "var(--term-amber-rgb)"
 
 const GLYPHS: ProfessionGlyph[] = [
   { label: "Software engineer", Icon: Code2, x: 9, y: 18, size: 36, drift: 8, phase: 0.2 },
@@ -123,7 +123,7 @@ export default function LandingParticleBackground() {
             scale = 1 + proximity * 0.64
             rotate += (dx / radius) * 18
             alpha = 0.32 + proximity * 0.58
-            shadowAlpha = proximity * 0.32
+            shadowAlpha = proximity * 0.28
           }
         }
 
@@ -189,7 +189,7 @@ export default function LandingParticleBackground() {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 overflow-hidden opacity-80 mix-blend-screen"
+      className="marketing-particle-field pointer-events-none fixed inset-0 z-0 overflow-hidden"
     >
       {GLYPHS.map((glyph, index) => {
         const Icon = glyph.Icon
@@ -200,7 +200,7 @@ export default function LandingParticleBackground() {
             ref={(node) => {
               glyphRefs.current[index] = node
             }}
-            className="absolute flex items-center justify-center rounded-full border bg-[#0a0e0c]/45 backdrop-blur-[1px] will-change-transform"
+            className="absolute flex items-center justify-center rounded-full border bg-[var(--term-particle-bg)] backdrop-blur-[1px] shadow-[0_10px_30px_rgba(7,19,14,0.05)] will-change-transform"
             style={{
               left: `${glyph.x}%`,
               top: `${glyph.y}%`,

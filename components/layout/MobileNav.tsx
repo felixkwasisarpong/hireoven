@@ -37,7 +37,7 @@ export default function MobileNav() {
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-surface text-strong shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--term-line-strong)] bg-[var(--term-panel)] text-[var(--term-fg)] shadow-[0_1px_0_rgba(15,23,42,0.04)]"
       >
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
@@ -50,10 +50,10 @@ export default function MobileNav() {
             aria-label="Close menu"
             tabIndex={-1}
             onClick={() => setOpen(false)}
-            className="fixed inset-0 top-[56px] z-40 bg-slate-950/30 backdrop-blur-sm"
+            className="fixed inset-0 top-[56px] z-40 bg-slate-950/45 backdrop-blur-sm"
           />
           {/* Panel */}
-          <div className="fixed inset-x-0 top-[56px] z-50 border-t border-border bg-surface px-4 py-3 shadow-lg">
+          <div className="fixed inset-x-0 top-[56px] z-50 border-t border-[var(--term-line-strong)] bg-[var(--term-panel)] px-4 py-3 shadow-lg">
             <nav className="flex flex-col" aria-label="Mobile">
               {NAV_LINKS.map(({ href, label, icon: Icon }) => {
                 const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))
@@ -63,7 +63,9 @@ export default function MobileNav() {
                     href={href}
                     onClick={() => setOpen(false)}
                     className={`flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-semibold transition-colors ${
-                      active ? "bg-orange-50 text-orange-700" : "text-muted-foreground hover:bg-slate-50 hover:text-strong"
+                      active
+                        ? "bg-[var(--term-amber)] text-[var(--term-amber-fg)]"
+                        : "text-[var(--term-fg)] opacity-75 hover:bg-[var(--term-panel-2)] hover:text-[var(--term-green)] hover:opacity-100"
                     }`}
                   >
                     <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
