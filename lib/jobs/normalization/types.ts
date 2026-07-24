@@ -5,7 +5,16 @@ import type {
 } from "@/types"
 import type { CategorizedSkills } from "@/lib/skills/taxonomy"
 
-export const JOB_NORMALIZATION_VERSION = "job_normalization_v4"
+// Bumped v4 -> v5 for the description-heading fragmentation / inline-alias
+// prefix-match / company_info-fallback fixes (see fix/company-info-section-
+// misclassification). resolveJobNormalization() only trusts a stored
+// raw_data.normalized blob when its schema_version matches this constant —
+// bumping it is how already-ingested jobs pick up a normalization fix
+// without a backfill script: read-time recompute is cheap and side-effect
+// free (job detail pages call resolveJobNormalization purely for rendering,
+// never persisting the result back), so every job gets the corrected
+// About-company section on its very next page view.
+export const JOB_NORMALIZATION_VERSION = "job_normalization_v5"
 
 export type SourceAdapterKind =
   | "greenhouse"
