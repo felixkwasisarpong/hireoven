@@ -210,6 +210,14 @@ export function AuthForm({ defaultMode = "login" }: Props) {
         body: JSON.stringify({ email: emailVal, full_name: fullName }),
       })
       await claimReferralIfPresent()
+      // Meta Pixel: the real registration conversion (fires once, on actual
+      // signup success). Meta attributes it to the /find ad for users who
+      // arrived via the pixel. No-op if the pixel isn't loaded.
+      try {
+        window.fbq?.("track", "CompleteRegistration")
+      } catch {
+        // tracking must never block the redirect
+      }
       window.location.assign(next ?? "/dashboard/onboarding")
     }
   }
