@@ -282,10 +282,9 @@
     isolation: isolate;
   }
 
-  /* ── Data-desk / terminal marketing system ───────────────────────
-     Near-black canvas, monospace, thin grid rules, restrained amber +
-     green data accents, a slim live ticker. No gradients, no glow blobs,
-     no soft shadows. Used across the public marketing pages. */
+  /* ── Data-desk marketing system ───────────────────────────────────
+     Dark by default, with an opt-in light theme controlled by
+     html[data-marketing-theme="light"]. */
   :root {
     --term-bg: #0a0e0c;
     --term-panel: #0e1411;
@@ -293,10 +292,61 @@
     --term-line: rgba(120, 200, 160, 0.12);
     --term-line-strong: rgba(120, 200, 160, 0.26);
     --term-fg: #ccd6cf;
+    --term-strong: #ffffff;
     --term-dim: #6c7a72;
     --term-amber: #f5a623;
     --term-green: #38e08a;
+    --term-amber-rgb: 245, 166, 35;
+    --term-green-rgb: 56, 224, 138;
+    --term-nav-bg: rgba(10, 14, 12, 0.92);
+    --term-button-bg: transparent;
+    --term-amber-fg: #0a0e0c;
+    --term-input-bg: #0a0e0c;
+    --term-input-fill: #0e1411;
+    --term-muted-surface: #0a0e0c;
+    --term-muted-line: rgba(120, 200, 160, 0.2);
+    --term-logo-filter: brightness(0) invert(1);
+    --term-selection-fg: #0a0e0c;
+    --term-particle-bg: rgba(10, 14, 12, 0.45);
+    --term-particle-opacity: 0.8;
+    --term-particle-blend: screen;
     --term-mono: var(--font-mono), ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+  }
+
+  :root[data-marketing-theme="light"] {
+    --term-bg: #fbfbf8;
+    --term-panel: #ffffff;
+    --term-panel-2: #f4f6f1;
+    --term-line: rgba(31, 41, 37, 0.055);
+    --term-line-strong: rgba(31, 41, 37, 0.16);
+    --term-fg: #23342b;
+    --term-strong: #07130e;
+    --term-dim: #79837c;
+    --term-amber: #ff5c18;
+    --term-green: #1f7a58;
+    --term-amber-rgb: 255, 92, 24;
+    --term-green-rgb: 31, 122, 88;
+    --term-nav-bg: rgba(255, 255, 255, 0.9);
+    --term-button-bg: #ffffff;
+    --term-amber-fg: #ffffff;
+    --term-input-bg: #ffffff;
+    --term-input-fill: #ffffff;
+    --term-muted-surface: #f7f8f4;
+    --term-muted-line: rgba(31, 41, 37, 0.13);
+    --term-logo-filter: none;
+    --term-selection-fg: #ffffff;
+    --term-particle-bg: rgba(255, 255, 255, 0.7);
+    --term-particle-opacity: 0.55;
+    --term-particle-blend: normal;
+  }
+
+  .marketing-logo {
+    filter: var(--term-logo-filter);
+  }
+
+  .marketing-particle-field {
+    opacity: var(--term-particle-opacity);
+    mix-blend-mode: var(--term-particle-blend);
   }
 
   .term-page {
@@ -307,16 +357,18 @@
       linear-gradient(var(--term-line) 1px, transparent 1px),
       linear-gradient(90deg, var(--term-line) 1px, transparent 1px);
     background-size: 2.5rem 2.5rem;
+    transition: background-color 0.16s ease, color 0.16s ease;
   }
 
   .term-page ::selection {
     background: var(--term-amber);
-    color: #0a0e0c;
+    color: var(--term-selection-fg);
   }
 
   .term-panel {
     border: 1px solid var(--term-line-strong);
     background: var(--term-panel);
+    box-shadow: 0 1px 0 rgba(7, 19, 14, 0.04);
   }
 
   .term-panel-hover {
@@ -330,8 +382,9 @@
 
   .term-nav {
     border-bottom: 1px solid var(--term-line-strong);
-    background: rgba(10, 14, 12, 0.92);
+    background: var(--term-nav-bg);
     font-family: var(--term-mono);
+    box-shadow: 0 1px 0 rgba(7, 19, 14, 0.04);
   }
 
   .term-btn {
@@ -344,7 +397,7 @@
     font-weight: 600;
     font-size: 0.82rem;
     color: var(--term-fg);
-    background: transparent;
+    background: var(--term-button-bg);
     transition: border-color 0.12s ease, color 0.12s ease, background-color 0.12s ease;
   }
 
@@ -356,7 +409,7 @@
   .term-btn-amber {
     border-color: var(--term-amber);
     background: var(--term-amber);
-    color: #0a0e0c;
+    color: var(--term-amber-fg);
     font-weight: 700;
   }
 
@@ -380,39 +433,155 @@
     animation: term-scroll 42s linear infinite;
   }
 
-  /* Native <select> ignores background-color without appearance:none, so on the
-     dark terminal canvas it renders as a light OS control with near-invisible
-     text. Force the dark theme + a custom caret. */
+  /* Native <select> ignores background-color without appearance:none in some
+     browsers, so force the active marketing theme. */
   .term-select {
     -webkit-appearance: none;
     appearance: none;
     border: 1px solid rgba(120, 200, 160, 0.2);
-    background-color: #0a0e0c;
+    background-color: var(--term-input-bg);
     color: var(--term-fg);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.65rem center;
     padding-right: 1.9rem;
   }
+  :root[data-marketing-theme="light"] .term-select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2323342b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  }
   .term-select:focus {
     border-color: var(--term-green);
     outline: none;
   }
   .term-select option {
-    background-color: #0a0e0c;
+    background-color: var(--term-input-bg);
     color: var(--term-fg);
   }
 
-  /* Keep autofilled inputs on the dark theme — otherwise the browser paints a
-     white box while the text stays light, so the value looks blank. */
+  .term-page input[type="email"],
+  .term-page input[type="text"],
+  .term-page input[type="search"],
+  .term-page input[type="tel"],
+  .term-page input[type="url"],
+  .term-page input[type="password"],
+  .term-page input[type="number"],
+  .term-page textarea,
+  .term-page select {
+    background-color: var(--term-input-bg) !important;
+    color: var(--term-fg) !important;
+    -webkit-text-fill-color: var(--term-fg);
+    caret-color: var(--term-fg);
+  }
+
+  /* Keep autofilled inputs on the active marketing theme. */
   .term-page input:-webkit-autofill,
   .term-page input:-webkit-autofill:hover,
   .term-page input:-webkit-autofill:focus {
     -webkit-text-fill-color: var(--term-fg);
-    -webkit-box-shadow: 0 0 0 1000px #0e1411 inset;
+    -webkit-box-shadow: 0 0 0 1000px var(--term-input-fill) inset;
     caret-color: var(--term-fg);
     border: 1px solid rgba(120, 200, 160, 0.26);
     transition: background-color 9999s ease-in-out 0s;
+  }
+
+  .term-page input::placeholder,
+  .term-page textarea::placeholder {
+    color: color-mix(in srgb, var(--term-fg) 35%, transparent);
+  }
+
+  :root[data-marketing-theme="light"] .term-page .text-white,
+  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-white"] {
+    color: var(--term-strong) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]"] {
+    color: var(--term-fg) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/80"] {
+    color: rgba(35, 52, 43, 0.8) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/70"] {
+    color: rgba(35, 52, 43, 0.7) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/65"] {
+    color: rgba(35, 52, 43, 0.65) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/60"] {
+    color: rgba(35, 52, 43, 0.6) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/55"] {
+    color: rgba(35, 52, 43, 0.55) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/50"] {
+    color: rgba(35, 52, 43, 0.5) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/45"] {
+    color: rgba(35, 52, 43, 0.45) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/40"] {
+    color: rgba(35, 52, 43, 0.4) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/35"] {
+    color: rgba(35, 52, 43, 0.35) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/30"] {
+    color: rgba(35, 52, 43, 0.3) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#38e08a]"],
+  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-[#38e08a]"] {
+    color: var(--term-green) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-[rgba(120,200,160"] {
+    border-color: rgba(31, 41, 37, 0.13) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="divide-[rgba(120,200,160"] > :not([hidden]) ~ :not([hidden]) {
+    border-color: rgba(31, 41, 37, 0.1) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#0e1411]"],
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#111a15]"] {
+    background-color: #ffffff !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#0a0e0c]"] {
+    background-color: #f7f8f4 !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[rgba(120,200,160"] {
+    background-color: rgba(31, 41, 37, 0.075) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#ccd6cf]"] {
+    background-color: rgba(35, 52, 43, 0.26) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="bg-[#38e08a]"] {
+    background-color: var(--term-green) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#38e08a]/"] {
+    background-color: rgba(31, 122, 88, 0.09) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-[#38e08a]"] {
+    border-color: rgba(31, 122, 88, 0.28) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-t-[#0e1411]"] {
+    border-top-color: #ffffff !important;
   }
 
   .stay-range {
@@ -429,7 +598,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #0a0e0c;
+    background: var(--term-input-bg);
     border: 3px solid var(--term-amber);
     cursor: pointer;
   }
@@ -437,7 +606,7 @@
     width: 18px;
     height: 18px;
     border-radius: 50%;
-    background: #0a0e0c;
+    background: var(--term-input-bg);
     border: 3px solid var(--term-amber);
     cursor: pointer;
   }

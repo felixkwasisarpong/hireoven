@@ -410,7 +410,7 @@ function EmailCapture({ next = "/dashboard/onboarding" }: { next?: string }) {
       <input name="next" type="hidden" value={next} />
       <input
         aria-label="Email"
-        className="min-h-[3rem] min-w-0 flex-1 border border-[rgba(120,200,160,0.26)] bg-[#0e1411] px-4 text-[14px] text-[#ccd6cf] outline-none transition placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
+        className="min-h-[3rem] min-w-0 flex-1 border border-[var(--term-line-strong)] bg-[var(--term-input-bg)] px-4 text-[14px] text-[var(--term-fg)] outline-none transition focus:border-[var(--term-green)]"
         name="email"
         placeholder="you@email.com"
         type="email"
@@ -489,14 +489,14 @@ function LogoCloud({ companies }: { companies: LogoCompany[] }) {
             {isLocalCompanyLogo(company.logo_url) ? (
               <Image
                 alt={company.name}
-                className="h-8 w-8 object-contain opacity-70 transition duration-200 group-hover:opacity-100"
+                className="h-8 w-8 object-contain opacity-70 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
                 height={32}
                 src={company.logo_url ?? ""}
                 width={32}
               />
             ) : (
               <CompanyLogo
-                className="h-8 w-8 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] opacity-80 transition duration-200 group-hover:opacity-100"
+                className="h-8 w-8 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] opacity-80 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
                 companyName={company.name}
                 domain={company.domain}
                 logoUrl={company.logo_url}
@@ -1276,7 +1276,7 @@ function FooterColumn({ links, title }: { links: { href: string; label: string }
       <ul className="space-y-2.5">
         {links.map(({ href, label }) => (
           <li key={href}>
-            <Link className="text-[13px] text-[#ccd6cf]/55 transition hover:text-[#38e08a]" href={href}>
+            <Link className="text-[13px] text-[var(--term-fg)] opacity-60 transition hover:text-[var(--term-green)] hover:opacity-100" href={href}>
               {label}
             </Link>
           </li>
@@ -1288,14 +1288,14 @@ function FooterColumn({ links, title }: { links: { href: string; label: string }
 
 function Footer() {
   return (
-    <footer className="border-t border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] px-5 py-16 lg:px-12">
+    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-bg)] px-5 py-16 lg:px-12">
       <div className="mx-auto max-w-[88rem]">
         <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr_1fr]">
           <div>
             <Link href="/">
-              <HireovenLogo className="h-10 w-auto max-w-[180px] [filter:brightness(0)_invert(1)]" variant="full" />
+              <HireovenLogo className="marketing-logo h-10 w-auto max-w-[180px]" variant="full" />
             </Link>
-            <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-[#ccd6cf]/55">
+            <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-[var(--term-fg)] opacity-60">
               Fresh jobs, sponsor proof, and AI application workflows for job seekers who move early.
             </p>
           </div>
@@ -1336,10 +1336,10 @@ function Footer() {
           />
         </div>
 
-        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[rgba(120,200,160,0.12)] pt-6">
-          <p className="text-[12px] text-[#ccd6cf]/40">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
-          <div className="flex items-center gap-2 text-[12px] text-[#ccd6cf]/40">
-            <Check className="h-3.5 w-3.5 text-[#38e08a]" aria-hidden />
+        <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--term-line)] pt-6">
+          <p className="text-[12px] text-[var(--term-fg)] opacity-45">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
+          <div className="flex items-center gap-2 text-[12px] text-[var(--term-fg)] opacity-45">
+            <Check className="h-3.5 w-3.5 text-[var(--term-green)]" aria-hidden />
             Built for fast, evidence-backed applications.
           </div>
         </div>

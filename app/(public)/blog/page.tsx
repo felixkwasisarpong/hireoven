@@ -131,8 +131,28 @@ function PostVisual({
           className="object-cover transition duration-300 group-hover:scale-[1.03]"
         />
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Icon className={`h-8 w-8 ${c.accent}`} aria-hidden />
+        <div className="absolute inset-0 overflow-hidden bg-[var(--term-muted-surface)]">
+          <div className={`absolute inset-x-0 top-0 h-1 ${c.bar}`} />
+          <div className="absolute inset-5 grid grid-cols-[minmax(0,1fr)_6rem] gap-4 opacity-90">
+            <div className="space-y-3">
+              <div className="h-3 w-24 border border-[var(--term-line-strong)] bg-[var(--term-panel)]" />
+              <div className="grid grid-cols-3 gap-2">
+                <span className="h-14 border border-[var(--term-line-strong)] bg-[var(--term-panel)]" />
+                <span className="h-14 border border-[var(--term-line-strong)] bg-[var(--term-panel)]" />
+                <span className="h-14 border border-[var(--term-line-strong)] bg-[var(--term-panel)]" />
+              </div>
+              <div className="space-y-2">
+                <span className="block h-2 w-4/5 bg-[var(--term-line-strong)]" />
+                <span className="block h-2 w-3/5 bg-[var(--term-line-strong)]" />
+                <span className="block h-2 w-2/5 bg-[var(--term-line-strong)]" />
+              </div>
+            </div>
+            <div className="flex flex-col justify-between border border-[var(--term-line-strong)] bg-[var(--term-panel)] p-3">
+              <Icon className={`h-8 w-8 ${c.accent}`} aria-hidden />
+              <span className="h-2 w-full bg-[var(--term-line-strong)]" />
+              <span className="h-2 w-2/3 bg-[var(--term-line-strong)]" />
+            </div>
+          </div>
         </div>
       )}
     </div>
