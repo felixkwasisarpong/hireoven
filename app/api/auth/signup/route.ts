@@ -4,6 +4,7 @@ import { buildSessionSetCookie } from "@/lib/auth/session-cookie"
 import { hashPassword } from "@/lib/auth/password"
 import { signSessionJwt } from "@/lib/auth/jwt"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { sendMetaCapiEvent, parseFbCookies } from "@/lib/marketing/meta-capi"
 
 export const runtime = "nodejs"
 
@@ -113,6 +114,20 @@ export async function POST(request: Request) {
     } finally {
       client.release()
     }
+
+    // Server-side Meta CAPI CompleteRegistration (deduped with the browser pixel
+    // via event_id = user id). Guarded + time-bounded — never blocks/breaks signup.
+    const { fbp, fbc } = parseFbCookies(request.headers.get("cookie"))
+    await sendMetaCapiEvent({
+      eventName: "CompleteRegistration",
+      eventId: id,
+      email,
+      eventSourceUrl: request.headers.get("referer"),
+      clientIpAddress: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+      clientUserAgent: request.headers.get("user-agent"),
+      fbp,
+      fbc,
+    })
 
     const sessionToken = await signSessionJwt({ sub: id, email, isAdmin: false, suspended: false })
     const res = NextResponse.json({ ok: true, user: { id, email } })
