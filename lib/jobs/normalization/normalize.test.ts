@@ -88,6 +88,32 @@ test("extractCanonicalSections uses heuristics/fallback for unstructured blobs",
   assert.ok(sections.company_info.items.length > 0 || sections.about_role.items.length > 0)
 })
 
+test("extractCanonicalSections preserves a state-eligibility list instead of dropping every short item", () => {
+  const states = [
+    "Arizona", "California", "District of Columbia", "Florida", "Georgia", "Idaho",
+    "Illinois", "Maryland", "Massachusetts", "Montana", "Nevada", "New Jersey",
+    "New York", "North Carolina", "Oregon", "South Carolina", "Tennessee", "Texas",
+    "Virginia", "Washington", "Wisconsin",
+  ]
+  const description = [
+    "We are looking for a thoughtful, collaborative Senior Software Engineer to join our growing, distributed team.",
+    "This is a US-based remote position open to applicants in the states listed below.",
+    "To ensure we remain compliant with all state, county, and local employment and tax regulations, applicants must currently reside in one of the following states to be considered for employment.",
+    ...states.map((state) => `- ${state}`),
+  ].join("\n")
+
+  const sections = extractCanonicalSections({ adapter: "generic_html", description })
+
+  const allItems = Object.values(sections).flatMap((section) => section.items)
+  for (const state of states) {
+    assert.ok(
+      allItems.some((item) => item.includes(state)),
+      `expected "${state}" to survive extraction somewhere in the canonical sections`
+    )
+  }
+  assert.ok(sections.requirements.items.length > 0)
+})
+
 test("extractCanonicalSections keeps about/requirements/preferred boundaries precise", () => {
   const sections = extractCanonicalSections({
     adapter: "generic_html",

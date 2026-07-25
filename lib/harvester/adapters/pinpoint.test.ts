@@ -19,6 +19,41 @@ test("pinpoint: detectFromUrl rejects non-Pinpoint hosts", () => {
   assert.equal(pinpointAdapter.detectFromUrl("https://boards.greenhouse.io/stripe"), null)
 })
 
+test("pinpoint: stripHtml keeps <li> items on separate lines instead of collapsing them into a run-on string", async () => {
+  const payload = {
+    data: [
+      {
+        id: 1,
+        title: "Senior Engineer",
+        url: "https://acme.pinpointhq.com/en/postings/eng",
+        description:
+          "<div>Must reside in one of the following states:</div><ul><li>Arizona</li><li>California</li><li>Texas</li></ul>",
+      },
+    ],
+  }
+
+  const fakeFetch = (async () =>
+    ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => payload,
+    }) as unknown as Response) as unknown as typeof fetch
+
+  const result = await pinpointAdapter.fetchJobs({
+    slug: "acme",
+    ctx: { etag: null, lastModified: null, fetchImpl: fakeFetch },
+  })
+
+  const description = result.jobs[0]?.description ?? ""
+  const lines = description.split("\n").map((line) => line.trim())
+  // Each state must land on its own line, not glued to its neighbor
+  // ("ArizonaCalifornia" / "Arizona California" with no separator).
+  assert.ok(lines.some((line) => /arizona/i.test(line) && !/california/i.test(line)))
+  assert.ok(lines.some((line) => /california/i.test(line) && !/arizona/i.test(line)))
+  assert.ok(!/Arizona\s+California/.test(description), "states must not be collapsed onto one line")
+})
+
 test("pinpoint: maps a realistic postings.json payload", async () => {
   const payload = {
     data: [

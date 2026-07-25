@@ -14,7 +14,11 @@ import type { CategorizedSkills } from "@/lib/skills/taxonomy"
 // free (job detail pages call resolveJobNormalization purely for rendering,
 // never persisting the result back), so every job gets the corrected
 // About-company section on its very next page view.
-export const JOB_NORMALIZATION_VERSION = "job_normalization_v5"
+// v6: fixed Pinpoint's stripHtml collapsing <li> list items into one
+// unpunctuated run-on line, and rescued short enumeration lists (e.g. a
+// state-eligibility list) that were being silently dropped item-by-item by
+// the prose-oriented section quality gates.
+export const JOB_NORMALIZATION_VERSION = "job_normalization_v6"
 
 export type SourceAdapterKind =
   | "greenhouse"
