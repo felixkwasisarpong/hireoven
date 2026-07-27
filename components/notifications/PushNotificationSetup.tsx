@@ -4,7 +4,10 @@ import { useEffect, useMemo, useState } from "react"
 import { BellRing, X } from "lucide-react"
 
 const DISMISS_KEY = "hireoven:push-dismissed-until"
-const DISMISS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+// Re-surface the push prompt after ~2 days instead of a full week — push is the
+// strongest re-engagement channel, so a shorter snooze recovers more opt-ins
+// without nagging on every visit.
+const DISMISS_WINDOW_MS = 2 * 24 * 60 * 60 * 1000
 
 function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4)

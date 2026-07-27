@@ -197,6 +197,32 @@ export default function OnboardingPage() {
         )
       )
 
+      // Turn the stated preferences into a real job alert. Without this, the
+      // roles above only live on the profile — which the notification matcher
+      // never reads — so a new user would get zero alerts and no reason to
+      // return. Creating the alert also flips email_alerts on (see /api/alerts).
+      // Best-effort: never block finishing onboarding on it.
+      if (stepOne.roles.length > 0) {
+        const seniorityLevels = Array.isArray(stepOne.seniority)
+          ? stepOne.seniority
+          : stepOne.seniority
+            ? [stepOne.seniority]
+            : []
+        await fetch("/api/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `${stepOne.roles[0]} roles`,
+            keywords: stepOne.roles,
+            locations: stepOne.locations,
+            seniority_levels: seniorityLevels,
+            remote_only: stepOne.locations.includes("Remote"),
+            sponsorship_required: stepTwo.needsSponsorship,
+            is_active: true,
+          }),
+        }).catch(() => {})
+      }
+
       router.push("/dashboard")
       router.refresh()
     } catch {
