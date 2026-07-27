@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { Search, X } from "lucide-react"
+import { trackSearch } from "@/lib/analytics/session-events"
 import {
   filtersToSearchParams,
   parseJobFilters,
@@ -39,6 +40,7 @@ export default function DashboardFeedSearch({ className }: { className?: string 
       return
     }
     const trimmed = draft.trim()
+    if (trimmed) trackSearch()
     router.push(trimmed ? `/dashboard?q=${encodeURIComponent(trimmed)}` : "/dashboard")
   }, [draft, isFeed, mounted, pathname, router, searchParams, searchQuery])
 

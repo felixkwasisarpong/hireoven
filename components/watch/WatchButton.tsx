@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Star } from "lucide-react"
+import { trackSave } from "@/lib/analytics/session-events"
 
 // Watch toggle wired to the existing /api/watchlist endpoints. Self-fetches its state
 // on mount so it can sit on cached/public pages without per-user server rendering.
@@ -55,6 +56,7 @@ export function WatchButton({
     if (busy) return
     setBusy(true)
     const watching = state === "watched"
+    if (!watching) trackSave() // saving (not un-saving) a company
     setState(watching ? "unwatched" : "watched") // optimistic
     try {
       await fetch("/api/watchlist", {
