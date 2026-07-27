@@ -20,6 +20,7 @@ import {
   TextRun,
   UnderlineType,
 } from "docx"
+import { splitDescriptionIntoLines } from "@/lib/resume/experience-draft"
 import type { Resume } from "@/types"
 
 // ─── unit helpers ──────────────────────────────────────────────────────────────
@@ -112,6 +113,15 @@ function bodyPara(text: string, opts: { size?: number; color?: string; spacingAf
     spacing: { before: 0, after: twips(opts.spacingAfter ?? 1) },
     children: [run(text, { size: opts.size ?? 10, color: opts.color ?? C_DARK })],
   })
+}
+
+// Description fields can be multi-line prose (multiple non-bulleted lines
+// in the studio textarea). The site preview renders these with
+// `whitespace-pre-line`, so each line appears on its own line without a
+// bullet — a single bodyPara() call collapses that "\n" into one run-on
+// line since OOXML text runs don't treat embedded newlines as line breaks.
+function bodyParaLines(text: string, opts: { size?: number; color?: string; spacingAfter?: number } = {}): Paragraph[] {
+  return splitDescriptionIntoLines(text).map((line) => bodyPara(line, opts))
 }
 
 /** Disc bullet — matches `<ul class="list-disc">` */
@@ -291,7 +301,7 @@ function buildExperience(resume: Resume): Paragraph[] {
     // description (plain text — shown when present, same as preview)
     const description = safeStr(item.description)
     if (description) {
-      paragraphs.push(bodyPara(description, { size: 9.5, color: C_MID, spacingAfter: 1 }))
+      paragraphs.push(...bodyParaLines(description, { size: 9.5, color: C_MID, spacingAfter: 1 }))
     }
 
     // achievements as disc bullets (matches `<ul class="list-disc">` in preview)
@@ -337,7 +347,7 @@ function buildProjects(resume: Resume): Paragraph[] {
 
     const description = safeStr(item.description)
     if (description) {
-      paragraphs.push(bodyPara(description, { size: 9.5, spacingAfter: 1 }))
+      paragraphs.push(...bodyParaLines(description, { size: 9.5, spacingAfter: 1 }))
     }
 
     const techs = safeStrArr(item.technologies)

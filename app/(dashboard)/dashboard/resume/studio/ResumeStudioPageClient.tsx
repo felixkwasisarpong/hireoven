@@ -62,6 +62,7 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import MetricElicitationModal from "@/components/resume/MetricElicitationModal"
 import { useToast } from "@/components/ui/ToastProvider"
 import { useFeatureAccess } from "@/lib/hooks/useFeatureAccess"
+import { splitDescriptionAndAchievements } from "@/lib/resume/experience-draft"
 import { buildStudioSectionChecks } from "@/lib/resume/studio-section-analysis"
 import { useResumeHubData } from "@/lib/resume/use-resume-hub-data"
 import { cn } from "@/lib/utils"
@@ -246,6 +247,7 @@ function splitTextLines(value: string) {
     .map((line) => line.trim())
     .filter(Boolean)
 }
+
 
 function normalizeForBulletMatch(s: string): string {
   return s
@@ -1288,19 +1290,18 @@ export default function ResumeStudioPage() {
       primary_role: headline || selectedResume?.primary_role || "Software Engineer",
       top_skills: skillTokens,
       skills: skillsTextToSkills(skillsText),
-      work_experience: experienceDrafts.map((experienceDraft) => ({
-        title: experienceDraft.role,
-        company: experienceDraft.company,
-        start_date: experienceDraft.from,
-        end_date: experienceDraft.current ? null : experienceDraft.to,
-        is_current: experienceDraft.current,
-        description: "",
-        achievements: experienceDraft.description
-            .split(/\n/)
-            .map((line) => line.replace(/^[-•]\s*/, "").trim())
-            .filter(Boolean)
-            .slice(0, 6),
-      })),
+      work_experience: experienceDrafts.map((experienceDraft) => {
+        const { description, achievements } = splitDescriptionAndAchievements(experienceDraft.description)
+        return {
+          title: experienceDraft.role,
+          company: experienceDraft.company,
+          start_date: experienceDraft.from,
+          end_date: experienceDraft.current ? null : experienceDraft.to,
+          is_current: experienceDraft.current,
+          description,
+          achievements: achievements.slice(0, 6),
+        }
+      }),
       education: educationDrafts.map((educationDraft) => ({
         institution: educationDraft.school,
         degree: educationDraft.degree,
@@ -1853,28 +1854,24 @@ export default function ResumeStudioPage() {
         portfolio_url: personalInfo.website || null,
         primary_role: headline || null,
         summary: profileSummary || null,
-        work_experience: experienceDrafts.map((draft) => ({
-          title: draft.role,
-          company: draft.company,
-          start_date: draft.from,
-          end_date: draft.current ? null : draft.to,
-          is_current: draft.current,
+        work_experience: experienceDrafts.map((draft) => {
           // Inverse of how this draft was loaded (around line 1206): the
           // editor concatenates `description` + bullet-prefixed achievements
           // into one textarea. On save, split them back so we don't store
           // the same content twice (which made downloads render both as a
-          // paragraph mash AND as a bullet list).
-          description: draft.description
-            .split(/\n/)
-            .filter((line) => !/^[-•]\s/.test(line.trim()))
-            .join("\n")
-            .trim(),
-          achievements: draft.description
-            .split(/\n/)
-            .filter((line) => /^[-•]\s/.test(line.trim()))
-            .map((line) => line.replace(/^[-•]\s*/, "").trim())
-            .filter(Boolean),
-        })),
+          // paragraph mash AND as a bullet list). Same split the live preview
+          // uses, so editing, previewing, and downloading all agree.
+          const { description, achievements } = splitDescriptionAndAchievements(draft.description)
+          return {
+            title: draft.role,
+            company: draft.company,
+            start_date: draft.from,
+            end_date: draft.current ? null : draft.to,
+            is_current: draft.current,
+            description,
+            achievements,
+          }
+        }),
         education: educationDrafts.map((draft) => ({
           institution: draft.school,
           degree: draft.degree,
