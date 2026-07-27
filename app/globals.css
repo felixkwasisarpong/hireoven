@@ -145,6 +145,15 @@
     background: rgba(255, 92, 24, 0.12);
   }
 
+  /* The global ::selection above is tuned for light surfaces — its low-alpha
+     orange plus unset (browser-default) text color washes out light text on
+     dark surfaces like the admin HTML editor. Override with a scheme that
+     stays legible on dark backgrounds. */
+  .dark-surface-editor::selection {
+    background: rgba(56, 189, 248, 0.35);
+    color: #f8fafc;
+  }
+
   *:focus-visible {
     outline: 2px solid hsl(var(--primary) / 0.45);
     outline-offset: 2px;
