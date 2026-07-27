@@ -138,7 +138,10 @@ export function AuthForm({ defaultMode = "login" }: Props) {
   function handleGoogle() {
     setGoogleLoading(true)
     setError(null)
-    window.location.assign(`/api/auth/google?next=${encodeURIComponent(next ?? "/dashboard")}`)
+    // New users land in onboarding (which converts stated roles into a job
+    // alert); the onboarding page redirects already-set-up users to /dashboard,
+    // so returning Google users aren't trapped in the wizard.
+    window.location.assign(`/api/auth/google?next=${encodeURIComponent(next ?? "/dashboard/onboarding")}`)
   }
 
   async function handleSubmit(e: FormEvent) {

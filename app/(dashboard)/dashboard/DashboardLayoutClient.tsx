@@ -6,6 +6,7 @@ import { X } from "lucide-react"
 import DashboardHeader from "@/components/dashboard/DashboardHeader"
 import { DashboardMobileNavProvider } from "@/components/dashboard/DashboardMobileNav"
 import DashboardProductTour from "@/components/dashboard/DashboardProductTour"
+import SessionQualityTracker from "@/components/dashboard/SessionQualityTracker"
 import DashboardSubpageSidebar from "@/components/dashboard/DashboardSubpageSidebar"
 import SavedJobReminderPopup from "@/components/apex/SavedJobReminderPopup"
 import InterviewReminderWatcher from "@/components/interview/InterviewReminderWatcher"
@@ -137,6 +138,7 @@ export default function DashboardLayout({
       <DashboardMobileNavProvider>
         <div className="product-skin">
           <ActivityPinger />
+          <SessionQualityTracker />
           <ReferralClaimer />
           <DashboardLayoutInner>{children}</DashboardLayoutInner>
           <DashboardProductTour />
