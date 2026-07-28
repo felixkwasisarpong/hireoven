@@ -155,6 +155,62 @@ test("ripplingAdapter.fetchJobs: extracts jobs from __NEXT_DATA__ listing", asyn
   assert.equal(detailCalls, 2)
 })
 
+test("ripplingAdapter.fetchJobs: stripHtml keeps headings/bullets on separate lines instead of collapsing them into one run-on line", async () => {
+  const structuredJobPost = {
+    uuid: "ccc-333",
+    name: "Payments Engineer",
+    description: {
+      company: "<p>We build payments infrastructure.</p>",
+      role:
+        '<p><b><strong>What You Will Do:</strong></b></p>' +
+        '<ul><li><span>Build payment integrations</span></li>' +
+        '<li><span>Own reconciliation pipelines</span></li></ul>' +
+        '<p><b><strong>What We Are Looking For:</strong></b></p>' +
+        '<ul><li><span>7+ years of experience</span></li></ul>',
+    },
+    workLocations: ["Remote"],
+    employmentType: { id: "Full-Time" },
+    createdOn: "2026-02-01T10:00:00.000Z",
+  }
+
+  const fakeFetch: typeof fetch = async (input) => {
+    const url = String(input)
+    if (url.includes("/jobs/ccc-333")) {
+      return new Response(makeDetailHtml(structuredJobPost), {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      })
+    }
+    return new Response(
+      makeListingHtml(
+        "acme",
+        [{ id: "ccc-333", name: "Payments Engineer", url: "https://ats.rippling.com/acme/jobs/ccc-333", locations: [] }],
+        1
+      ),
+      { status: 200, headers: { "content-type": "text/html" } }
+    )
+  }
+
+  const result = await ripplingAdapter.fetchJobs({
+    slug: "acme",
+    ctx: { etag: null, lastModified: null, fetchImpl: fakeFetch },
+  })
+
+  const job = result.jobs.find((j) => j.externalId === "rippling:acme:ccc-333")
+  assert.ok(job, "should find the job")
+  const lines = (job!.description ?? "").split("\n").map((l) => l.trim())
+
+  // Each heading/bullet must land on its own line — not glued to its
+  // neighbor ("Build payment integrationsOwn reconciliation pipelines").
+  assert.ok(lines.some((l) => /what you will do/i.test(l)))
+  assert.ok(lines.some((l) => l === "- Build payment integrations" || l.includes("Build payment integrations")))
+  assert.ok(
+    !/Build payment integrations\s*Own reconciliation/i.test(job!.description ?? ""),
+    "bullets must not be collapsed onto the same line"
+  )
+  assert.ok(lines.some((l) => /what we are looking for/i.test(l)))
+})
+
 test("ripplingAdapter.fetchJobs: paginates when totalItems > pageSize", async () => {
   const page0Items = [{ id: "j1", name: "Job 1", url: "https://ats.rippling.com/co/jobs/j1", locations: [] }]
   const page1Items = [{ id: "j2", name: "Job 2", url: "https://ats.rippling.com/co/jobs/j2", locations: [] }]

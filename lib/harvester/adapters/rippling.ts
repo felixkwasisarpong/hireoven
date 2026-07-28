@@ -160,11 +160,17 @@ function extractListingData(data: RipplingNextData): RipplingListingData | null 
 
 function stripHtml(html: string | undefined | null): string | undefined {
   if (!html) return undefined
+  // NOTE: line breaks must be preserved through to the final split/join —
+  // an earlier version collapsed `\s{2,}` (which matches "\n " runs left by
+  // the closing-tag → "\n" step above) into a single space, silently
+  // flattening every heading/paragraph/bullet boundary into one run-on line.
   const text = html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
     .replace(/<style[\s\S]*?<\/style>/gi, " ")
     .replace(/<meta[^>]*>/gi, "")
-    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -172,9 +178,10 @@ function stripHtml(html: string | undefined | null): string | undefined {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/g, "'")
-    .replace(/\s{2,}/g, " ")
-    .replace(/\n\s+/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]{2,}/g, " ").trim())
+    .filter(Boolean)
+    .join("\n")
     .trim()
   return text || undefined
 }
