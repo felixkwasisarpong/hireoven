@@ -4,12 +4,13 @@ import Navbar from "@/components/layout/Navbar"
 import DailyReportView from "@/components/grow/DailyReportView"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { getLatestReport, listReportDates, type DailyReport } from "@/lib/grow/daily-report"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 // The "latest" view changes daily — revalidate hourly so a fresh snapshot shows
 // up promptly after the nightly cron without rebuilding on every request.
 export const revalidate = 3600
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 export const metadata: Metadata = {
   title: "Fresh Jobs Report — jobs posted today | Hireoven",

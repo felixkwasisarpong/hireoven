@@ -4,10 +4,11 @@ import { Sparkles, Compass, Users, BellRing, ArrowRight } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import PartnerInquiryForm from "@/components/marketing/PartnerInquiryForm"
 import { getPublishedTestimonials, getPublishedPartners } from "@/lib/marketing/social-proof-store"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const revalidate = 3600
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 export const metadata: Metadata = {
   title: "Partner with Hireoven — career centers, bootcamps, creators & coaches",

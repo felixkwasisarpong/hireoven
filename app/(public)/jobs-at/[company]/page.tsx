@@ -8,10 +8,11 @@ import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { companyIdFromParam, companyParam, salariesPath } from "@/lib/seo/company-seo"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const dynamic = "force-dynamic"
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 type Props = { params: Promise<{ company: string }> }
 

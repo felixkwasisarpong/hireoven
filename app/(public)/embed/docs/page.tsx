@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import Navbar from "@/components/layout/Navbar"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const metadata: Metadata = {
   title: "Embed Widget Docs — Hireoven",
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/embed/docs" },
 }
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 function Snippet({ code }: { code: string }) {
   return (

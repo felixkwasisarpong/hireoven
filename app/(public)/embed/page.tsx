@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import Navbar from "@/components/layout/Navbar"
 import { getH1bLeaderboard } from "@/lib/h1b/leaderboard"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const revalidate = 3600
 
@@ -12,7 +13,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "/embed" },
 }
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 // A real sponsor to preview the company widget with. Falls back gracefully if the
 // leaderboard is empty at render time.

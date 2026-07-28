@@ -13,13 +13,14 @@ import {
   listCollection,
   type JobCollection,
 } from "@/lib/jobs/collections"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 // SEO landing pages — ISR hourly so counts stay fresh without rebuilding per
 // request. dynamicParams stays true so a newly-added slug still renders.
 export const revalidate = 3600
 export const dynamicParams = true
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 type Props = { params: Promise<{ slug: string }> }
 

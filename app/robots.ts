@@ -15,7 +15,7 @@ export default function robots(): MetadataRoute.Robots {
         // scrapers (LinkedIn, Facebook, Twitter) can fetch the preview image while the rest
         // of /api/ stays blocked. Without this, shared job links show "Cannot display preview".
         allow: ["/", "/api/og/", "/companies", "/companies/", "/report", "/report/", "/h1b-sponsors", "/h1b-sponsors/", "/jobs/", "/jobs-at/", "/salaries/", "/privacy", "/terms"],
-        disallow: ["/dashboard", "/dashboard/", "/admin", "/admin/", "/api/", "/auth/"],
+        disallow: ["/dashboard", "/dashboard/", "/admin", "/admin/", "/api/", "/login", "/signup", "/forgot-password", "/reset-password", "/shared/interview/"],
       },
     ],
     sitemap: `${base}/sitemap.xml`,

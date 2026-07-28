@@ -3,12 +3,13 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import Navbar from "@/components/layout/Navbar"
 import { getPublicPersonalScorecard } from "@/lib/scorecard/personal-scorecard"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 import { cn } from "@/lib/utils"
 import type { ScoreHue } from "@/types/h1b-scorecard"
 
 export const revalidate = 86400
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 type Props = { params: Promise<{ token: string }> }
 
 // Semantic grade hues — kept DISTINCT (do not collapse). Brightened for the dark canvas.
@@ -23,13 +24,15 @@ const HUE_TEXT: Record<ScoreHue, string> = {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const card = await getPublicPersonalScorecard((await params).token)
-  if (!card) return { title: "Scorecard not found — Hireoven" }
+  if (!card) return { title: "Scorecard not found — Hireoven", robots: { index: false, follow: false } }
   const { token } = await params
   const title = `${card.display_name}'s H-1B Sponsorability Scorecard: ${card.grade} (${card.total_score}/100)`
   const ogImage = `${BASE}/api/og/personal-scorecard/${token}`
   return {
     title,
     description: `${card.display_name} scored ${card.grade} on Hireoven's Sponsorability Scorecard. Get yours in 60 seconds.`,
+    alternates: { canonical: `${BASE}/scorecard/${token}` },
+    robots: { index: false, follow: true },
     openGraph: {
       title,
       description: "Sponsorability scorecard powered by DOL LCA + USCIS public data.",

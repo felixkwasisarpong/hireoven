@@ -4,11 +4,12 @@ import { resolveEmbedToken, resolveAttribution, resolveAccent, hashSubject } fro
 import { logEmbedImpression } from "@/lib/embed/log"
 import { resolveTheme } from "@/lib/embed/themes"
 import { PersonalScorecardWidget, UnavailableWidget } from "@/components/embed/PersonalScorecardWidget"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 type SearchParams = Record<string, string | undefined>
 

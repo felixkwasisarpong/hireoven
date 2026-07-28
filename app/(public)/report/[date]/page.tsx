@@ -5,11 +5,12 @@ import Navbar from "@/components/layout/Navbar"
 import DailyReportView from "@/components/grow/DailyReportView"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { getStoredReport, listReportDates, toReportDate, type DailyReport } from "@/lib/grow/daily-report"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 // Individual days are immutable once captured — cache aggressively (ISR daily).
 export const revalidate = 86400
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 function isValidDate(date: string): boolean {
