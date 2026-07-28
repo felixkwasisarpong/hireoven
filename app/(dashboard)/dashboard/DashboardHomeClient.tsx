@@ -13,6 +13,7 @@ import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightC
 import JobFeed from "@/components/jobs/JobFeed"
 import ResumeNudgeBanner from "@/components/dashboard/ResumeNudgeBanner"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
+import NewSinceBanner from "@/components/dashboard/NewSinceBanner"
 import dynamic from "next/dynamic"
 const ApexMiniPanel  = dynamic(() => import("@/components/apex/ApexMiniPanel").then(m => ({ default: m.ApexMiniPanel })), { ssr: false })
 const ApexFocusBanner = dynamic(() => import("@/components/apex/ApexFocusBanner").then(m => ({ default: m.ApexFocusBanner })), { ssr: false })
@@ -225,6 +226,7 @@ export default function DashboardHomeClient({
               <section className="min-w-0 space-y-3" aria-labelledby="feed-heading">
                 <h1 id="feed-heading" className="sr-only">Job feed</h1>
                 <PushNotificationSetup />
+                <NewSinceBanner />
 
                 <DashboardFeedToolbar
                   filters={filters}

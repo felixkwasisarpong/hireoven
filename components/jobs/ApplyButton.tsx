@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ExternalLink, CheckCircle2 } from "lucide-react"
 import { markJobApplied } from "@/lib/applications/save-job-client"
+import { trackApply } from "@/lib/analytics/session-events"
 
 interface Props {
   jobId: string
@@ -28,6 +29,7 @@ export default function ApplyButton({
   const [confirming, setConfirming] = useState(false)
 
   async function handleApply() {
+    trackApply()
     window.open(applyUrl, "_blank", "noopener,noreferrer")
     if (clicked) return
     setClicked(true)
