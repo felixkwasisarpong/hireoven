@@ -5,13 +5,14 @@ import { logEmbedImpression } from "@/lib/embed/log"
 import { resolveTheme, tokensFor } from "@/lib/embed/themes"
 import { CompanyScorecardWidget } from "@/components/embed/CompanyScorecardWidget"
 import { WidgetShell } from "@/components/embed/WidgetShell"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const runtime = "nodejs"
 // headers() (impression logging) forces dynamic rendering; the underlying scorecard
 // query is a single indexed MV lookup, cheap enough per request on the web box.
 export const dynamic = "force-dynamic"
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 type SearchParams = Record<string, string | undefined>

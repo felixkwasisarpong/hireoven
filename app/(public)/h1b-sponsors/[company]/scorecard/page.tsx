@@ -17,6 +17,7 @@ import { getCompanyWageBreakdown } from "@/lib/salaries/wage-query"
 import { getSocLabelMap } from "@/lib/salaries/soc-roles"
 import { fmtUsd } from "@/components/salaries/SalaryCard"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 import type { ScoreHue } from "@/types/h1b-scorecard"
 
 // Grade hues stay semantically distinct (A+ → F), dark-adapted surfaces.
@@ -44,7 +45,7 @@ async function getPathways(companyId: string) {
 
 export const revalidate = 86400
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 type Props = { params: Promise<{ company: string }> }
 

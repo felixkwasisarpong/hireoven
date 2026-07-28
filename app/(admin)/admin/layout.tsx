@@ -1,8 +1,13 @@
+import type { Metadata } from "next"
 import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
 import AdminSidebarNav, { AdminSidebarRealtimeTip } from "@/components/admin/AdminSidebarNav"
 import HireovenLogo from "@/components/ui/HireovenLogo"
 import { requireAdminProfile } from "@/lib/admin/auth"
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+}
 
 export default async function AdminLayout({
   children,

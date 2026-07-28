@@ -5,11 +5,12 @@ import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { companyParam, companySlug } from "@/lib/seo/company-seo"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 // Cached hourly (ISR) — the ranking sort shouldn't run on every request.
 export const revalidate = 3600
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 const YEAR = new Date().getFullYear()
 
 type Row = {

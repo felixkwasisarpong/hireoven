@@ -9,10 +9,11 @@ import {
   countAllCollections,
   type CollectionKind,
 } from "@/lib/jobs/collections"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const revalidate = 3600
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 
 const KIND_ORDER: CollectionKind[] = ["role", "remote", "location", "ats", "visa"]
 

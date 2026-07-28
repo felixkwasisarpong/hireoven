@@ -5,10 +5,11 @@ import { SalaryCard, fmtUsd } from "@/components/salaries/SalaryCard"
 import { getSocRoleBySlug } from "@/lib/salaries/soc-roles"
 import { getWageForCompanyRole, type WageRollup } from "@/lib/salaries/wage-query"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const revalidate = 86400
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 type SP = Record<string, string | undefined>
 
 async function getCo(id: string | undefined): Promise<{ id: string; name: string } | null> {

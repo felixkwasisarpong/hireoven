@@ -13,6 +13,7 @@ import FeedbackModal from "@/components/feedback/FeedbackModal"
 import { FeedbackModalProvider } from "@/lib/context/FeedbackModalContext"
 import { headers } from "next/headers"
 import { getSessionUser } from "@/lib/auth/session-user"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 import "./globals.css"
 
 /** Plus Jakarta Sans — geometric SaaS feel (Cruip / Mosaic-adjacent). */
@@ -36,7 +37,7 @@ export const metadata: Metadata = {
   // Production fallback, NOT localhost: metadataBase is baked into every
   // absolute og:/twitter: URL, and a blank build-time env would otherwise put
   // localhost links in social shares.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://hireoven.com"),
+  metadataBase: new URL(siteBaseUrl()),
   title: "Hireoven – Jobs served fresh",
   description:
     "We monitor thousands of company career pages in real time so you see new roles within minutes of posting.",

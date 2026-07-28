@@ -25,6 +25,17 @@ export const SITEMAP_JOB_LIMIT = 25000
 
 export type SitemapEntry = MetadataRoute.Sitemap[number]
 
+type BlogCategorySitemapRow = {
+  slug: string
+  last_modified: string | null
+}
+
+type BlogPostSitemapRow = {
+  category_slug: string
+  slug: string
+  last_modified: string | null
+}
+
 const SALARY_TOP_STATES = ["CA", "TX", "NY", "WA", "NJ", "MA", "IL", "GA", "PA", "VA"]
 
 const LEADERBOARD_STATES = [
@@ -44,7 +55,11 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/companies`, lastModified: new Date(), changeFrequency: "hourly", priority: 0.9 },
     { url: `${base}/report`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/find`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
+    { url: `${base}/blog`, lastModified: new Date(), changeFrequency: "daily", priority: 0.8 },
+    { url: `${base}/pricing`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.7 },
     { url: `${base}/partners`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.6 },
+    { url: `${base}/contact`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.4 },
+    { url: `${base}/support`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.4 },
     { url: `${base}/jobs/browse`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     ...allCollectionSlugs().map((slug) => ({
       url: `${base}/jobs/browse/${slug}`,
@@ -60,6 +75,10 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/h1b-sponsors/lottery-rescue`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/h1b-sponsors/leaderboard/methodology`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     { url: `${base}/h1b-salaries`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.85 },
+    { url: `${base}/stay`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.75 },
+    { url: `${base}/stay/rules`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
+    { url: `${base}/stay/talent`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
+    { url: `${base}/stay/timeline`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
     ...LEADERBOARD_STATES.map((s) => ({
       url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
       lastModified: new Date(),
@@ -68,8 +87,6 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     })),
     { url: `${base}/embed`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.6 },
     { url: `${base}/embed/docs`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.4 },
-    { url: `${base}/login`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.3 },
-    { url: `${base}/signup`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.2 },
     { url: `${base}/terms`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.2 },
   ]
@@ -77,7 +94,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
   try {
     const pool = getPostgresPool()
 
-    const [companiesResult, jobsResult, citiesResult, socsResult] = await Promise.all([
+    const [companiesResult, jobsResult, citiesResult, socsResult, blogCategoriesResult, blogPostsResult] = await Promise.all([
       pool.query<{ id: string; name: string; updated_at: string; sponsors_h1b: boolean | null; h1b_sponsor_count_1yr: number | null; sponsorship_confidence: number | null; job_count: number | null; industry: string | null }>(
         `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr, sponsorship_confidence, job_count, industry FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
@@ -94,7 +111,35 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
           WHERE soc_code IS NOT NULL AND soc_title IS NOT NULL AND soc_title <> ''
           GROUP BY soc_code HAVING count(*) >= 50 ORDER BY count(*) DESC LIMIT 60`
       ),
+      pool.query<BlogCategorySitemapRow>(
+        `SELECT c.slug, MAX(p.published_at)::text AS last_modified
+           FROM blog_categories c
+           LEFT JOIN blog_posts p ON p.category_id = c.id AND p.status = 'published'
+          GROUP BY c.slug, c.day_of_week
+          ORDER BY c.day_of_week ASC`
+      ).catch(() => ({ rows: [] as BlogCategorySitemapRow[] })),
+      pool.query<BlogPostSitemapRow>(
+        `SELECT c.slug AS category_slug, p.slug, COALESCE(p.published_at, p.created_at)::text AS last_modified
+           FROM blog_posts p
+           JOIN blog_categories c ON c.id = p.category_id
+          WHERE p.status = 'published'
+          ORDER BY p.published_at DESC NULLS LAST, p.created_at DESC`
+      ).catch(() => ({ rows: [] as BlogPostSitemapRow[] })),
     ])
+
+    const blogCategoryRoutes: SitemapEntry[] = blogCategoriesResult.rows.map((c) => ({
+      url: `${base}/blog/${c.slug}`,
+      lastModified: c.last_modified ? new Date(c.last_modified) : new Date(),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    }))
+
+    const blogPostRoutes: SitemapEntry[] = blogPostsResult.rows.map((p) => ({
+      url: `${base}/blog/${p.category_slug}/${p.slug}`,
+      lastModified: p.last_modified ? new Date(p.last_modified) : new Date(),
+      changeFrequency: "monthly",
+      priority: 0.65,
+    }))
 
     const companyRoutes: SitemapEntry[] = companiesResult.rows.map((c) => ({
       url: `${base}/companies/${c.id}`, lastModified: new Date(c.updated_at), changeFrequency: "daily", priority: 0.7,
@@ -155,7 +200,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
       })),
     ])
 
-    return { entries: [...staticRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes], ok: true }
+    return { entries: [...staticRoutes, ...blogCategoryRoutes, ...blogPostRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes], ok: true }
   } catch {
     // DB unreachable (e.g. cold start). Return static-only but flag NOT ok so the
     // caller refuses to cache it or emit a truncated index — see getSitemapEntries.

@@ -27,10 +27,11 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { WAGE_LEVEL_META, LEGACY_SINGLE_DRAW_ODDS, type WageLevel } from "@/lib/stay/lottery-odds"
 import { companyIdFromParam, companyParam, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export const dynamic = "force-dynamic"
 
-const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+const BASE = siteBaseUrl()
 const YEAR = new Date().getFullYear()
 
 type Props = { params: Promise<{ company: string }> }

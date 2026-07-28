@@ -16,11 +16,73 @@ import StayScorePanel from "@/components/stay/StayScorePanel"
 import OutcomeReporter from "@/components/stay/OutcomeReporter"
 import { computeStayScore } from "@/lib/stay/stay-score"
 import { getOutcomeSummary } from "@/lib/stay/outcomes"
+import { siteBaseUrl } from "@/lib/seo/site-url"
 import type { Company, Job } from "@/types"
 
 export const dynamic = "force-dynamic"
 
 type Props = { params: Promise<{ id: string }> }
+type PublicJobRow = Job & {
+  posted_at?: string | null
+  closed_at?: string | null
+}
+
+const EMPLOYMENT_TYPE_SCHEMA: Partial<Record<NonNullable<Job["employment_type"]>, string>> = {
+  fulltime: "FULL_TIME",
+  parttime: "PART_TIME",
+  contract: "CONTRACTOR",
+  internship: "INTERN",
+}
+
+function isoDate(value: string | Date | null | undefined): string | undefined {
+  if (!value) return undefined
+  const date = value instanceof Date ? value : new Date(value)
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString()
+}
+
+function plainText(value: string | null | undefined): string | undefined {
+  const text = value?.replace(/\s+/g, " ").trim()
+  return text ? text.slice(0, 5000) : undefined
+}
+
+function locationAddress(location: string | null | undefined) {
+  const clean = location?.replace(/\s+/g, " ").trim()
+  if (!clean || /^remote$/i.test(clean)) return undefined
+  const parts = clean.split(",").map((part) => part.trim()).filter(Boolean)
+  return {
+    "@type": "Place",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: parts[0] ?? clean,
+      ...(parts[1] ? { addressRegion: parts[1] } : {}),
+      addressCountry: "US",
+    },
+  }
+}
+
+function baseSalary(job: PublicJobRow) {
+  if (job.salary_min == null && job.salary_max == null) return undefined
+  const currency = job.salary_currency?.trim() || "USD"
+  const value =
+    job.salary_min != null && job.salary_max != null
+      ? { "@type": "QuantitativeValue", minValue: job.salary_min, maxValue: job.salary_max, unitText: "YEAR" }
+      : { "@type": "QuantitativeValue", value: job.salary_min ?? job.salary_max, unitText: "YEAR" }
+
+  return {
+    "@type": "MonetaryAmount",
+    currency,
+    value,
+  }
+}
+
+function absoluteUrl(value: string | null | undefined, base: string): string | undefined {
+  if (!value) return undefined
+  try {
+    return new URL(value, base).toString()
+  } catch {
+    return undefined
+  }
+}
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!hasPostgresEnv()) return { title: "Job - Hireoven" }
@@ -44,25 +106,27 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = rows[0]
   if (!data) return { title: "Job - Hireoven" }
   const companyName = data.company_name ?? ""
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://hireoven.com"
+  const appUrl = siteBaseUrl()
   const canonicalUrl = `${appUrl}/jobs/${id}`
   const ogImageUrl = `${appUrl}/api/og/job/${id}`
   const locationStr = data.is_remote ? "Remote" : (data.location ?? "")
+  const companyPart = companyName ? ` at ${companyName}` : ""
 
   return {
-    title: `${data.title} at ${companyName} - Hireoven`,
-    description: `${data.title} at ${companyName}${locationStr ? ` · ${locationStr}` : ""}. Fresh on Hireoven — see it before the crowd.`,
+    title: `${data.title}${companyPart} - Hireoven`,
+    description: `${data.title}${companyPart}${locationStr ? ` · ${locationStr}` : ""}. Fresh on Hireoven — see it before the crowd.`,
+    alternates: { canonical: canonicalUrl },
     openGraph: {
-      title: `${data.title} at ${companyName}`,
+      title: `${data.title}${companyPart}`,
       description: `${locationStr ? `${locationStr} · ` : ""}Fresh job on Hireoven`,
       type: "website",
       url: canonicalUrl,
-      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: `${data.title} at ${companyName}` }],
+      images: [{ url: ogImageUrl, width: 1200, height: 630, alt: `${data.title}${companyPart}` }],
       siteName: "Hireoven",
     },
     twitter: {
       card: "summary_large_image",
-      title: `${data.title} at ${companyName}`,
+      title: `${data.title}${companyPart}`,
       description: `${locationStr ? `${locationStr} · ` : ""}Fresh job on Hireoven`,
       images: [ogImageUrl],
     },
@@ -75,7 +139,7 @@ export default async function PublicJobPage({ params }: Props) {
   const { id } = await params
   const pool = getPostgresPool()
 
-  const jobResult = await pool.query<Job>(
+  const jobResult = await pool.query<PublicJobRow>(
     `SELECT jobs.*
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
@@ -95,7 +159,7 @@ export default async function PublicJobPage({ params }: Props) {
     : { rows: [] as Company[] }
 
   const company = companyResult.rows[0] ?? null
-  const job = { ...jobRow, company } as Job & { company: Company | null }
+  const job = { ...jobRow, company } as PublicJobRow & { company: Company | null }
 
   // Per-job Stay Score — the survival-odds reframe, computed from this role's
   // salary + this employer's real sponsorship / cap-exempt signals.
@@ -150,9 +214,48 @@ export default async function PublicJobPage({ params }: Props) {
     Boolean(section && section.items.length > 0)
   )
 
+  const base = siteBaseUrl()
+  const canonicalUrl = `${base}/jobs/${job.id}`
+  const description =
+    plainText(page.clean_description) ??
+    plainText(topSections.flatMap((section) => section.items).join(" ")) ??
+    `${page.title}${company?.name ? ` at ${company.name}` : ""}.`
+  const address = locationAddress(page.location ?? job.location)
+  const salaryJsonLd = baseSalary(job)
+  const companyLogoUrl = absoluteUrl(company?.logo_url, base)
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    title: page.title,
+    description,
+    identifier: {
+      "@type": "PropertyValue",
+      name: "Hireoven",
+      value: job.id,
+    },
+    datePosted: isoDate(job.posted_at ?? job.first_detected_at),
+    url: canonicalUrl,
+    directApply: false,
+    hiringOrganization: {
+      "@type": "Organization",
+      name: company?.name ?? "Company",
+      ...(company?.domain ? { sameAs: `https://${company.domain}` } : {}),
+      ...(companyLogoUrl ? { logo: companyLogoUrl } : {}),
+    },
+    ...(job.employment_type ? { employmentType: EMPLOYMENT_TYPE_SCHEMA[job.employment_type] ?? job.employment_type } : {}),
+    ...(job.is_remote ? { jobLocationType: "TELECOMMUTE", applicantLocationRequirements: { "@type": "Country", name: "United States" } } : {}),
+    ...(address ? { jobLocation: address } : {}),
+    ...(salaryJsonLd ? { baseSalary: salaryJsonLd } : {}),
+  }
+
   return (
     <div className="term-page min-h-dvh">
       <Navbar />
+      <script
+        type="application/ld+json"
+        suppressHydrationWarning
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
 
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
         <nav className="mb-8 text-[12.5px] text-[#ccd6cf]/45">
