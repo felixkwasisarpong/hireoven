@@ -31,6 +31,9 @@ const PAIRS: Array<{ label: string; canonical: string; dup: string }> = [
   { label: "Vanguard ← The Vanguard Group (thevanguard.com)",
     canonical: "4cc5311e-1675-40a4-a32a-1050136b2640",
     dup: "a1160540-0c1b-49e0-89f0-8b29bc31703f" },
+  { label: "Allstate (allstate.com) ← Allstate (allstate:wd5:allstate_careers.workday-tenant placeholder domain)",
+    canonical: "674cdd3a-0857-44fb-93ed-fe65d9ca26aa",
+    dup: "a40671c5-6486-4e11-b491-135387419fcb" },
 ]
 
 async function mergeOne(

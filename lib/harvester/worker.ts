@@ -118,7 +118,13 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   icims: 60_000,
   oraclecloud: 180_000, // large tenants (JPMorgan ~7.1k) paginate 200/page → ~36 pages + detail-fetch budget
   apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
-  amazon: 150_000, // paginates up to 100 pages of the amazon.jobs API per tick
+  // Was 150_000 — measured ~2.6s/page x up to 100 pages + 300ms inter-page
+  // delay = ~290s for a full traversal at Amazon's current (~10k-cap) job
+  // volume, so every single run was hitting the outer kill at exactly
+  // 150000ms (100% failure, stale for 8+ days). Adapter also self-limits via
+  // an internal soft deadline so it returns whatever it collected instead of
+  // being hard-killed with zero results.
+  amazon: 300_000,
   walmart: 480_000, // 5 career areas × up to 200 pages (10/page) of the careers GraphQL
   sitemapjsonld: 300_000, // enumerate sitemap + fetch up to ~2.5k job pages (concurrent)
   ibm: 120_000, // ~9 pages (100/page) of the careers Elasticsearch index
