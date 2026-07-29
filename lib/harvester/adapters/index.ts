@@ -17,6 +17,7 @@ import { teamworkOnlineAdapter } from "@/lib/harvester/adapters/teamworkonline"
 import { jsonldAdapter } from "@/lib/harvester/adapters/jsonld"
 import { sitemapJsonLdAdapter } from "@/lib/harvester/adapters/sitemap-jsonld"
 import { radancyAdapter } from "@/lib/harvester/adapters/radancy"
+import { jobs2webAdapter } from "@/lib/harvester/adapters/jobs2web"
 import { tiktokAdapter } from "@/lib/harvester/adapters/tiktok"
 import { googleAdapter } from "@/lib/harvester/adapters/google"
 import { greenhouseAdapter } from "@/lib/harvester/adapters/greenhouse"
@@ -107,6 +108,7 @@ export const adapters: Partial<Record<AtsName, AtsAdapter>> = {
   jsonld: jsonldAdapter,
   sitemapjsonld: sitemapJsonLdAdapter,
   radancy: radancyAdapter,
+  jobs2web: jobs2webAdapter,
   tiktok: tiktokAdapter,
   google: googleAdapter,
 }

@@ -127,6 +127,11 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   microsoft: 240_000, // ~146 search pages (10/page) + a detail-fetch budget
   netflix: 120_000, // ~52 list pages (10/page, Eightfold) + a detail-fetch budget
   eightfold: 240_000, // large tenants (HSBC ~1.6k) paginate 10/page → up to 200 pages
+  // Measured a live full run against Capgemini (570 US jobs, list pagination
+  // + up to 150 detail-page fetches at concurrency 4): ~52s. Default 60s
+  // leaves only ~8s of margin for a first-time crawl of a large tenant
+  // before ever hitting yield-adjusted backoff — double it for headroom.
+  jobs2web: 120_000,
 }
 
 function parseTimeoutMs(raw: string | undefined, fallback: number): number {
@@ -226,6 +231,12 @@ const SUPPORTED_ATS_TYPES = [
   // tenant (L3Harris) was never claimed by the fast loop. Enrolled by ats_type;
   // slug falls back to careers_url (no canonical URL builder for radancy).
   "radancy",
+  // Radancy "Jobs2Web" (careers.*/services/jobs/search/ POST JSON API) — a
+  // DIFFERENT Radancy product line than "radancy" above (TalentBrew), found
+  // investigating why Capgemini's only enrolled record found exactly 2 jobs
+  // forever (its careers_url was a marketing landing page, not this API).
+  // Enrolled by ats_type; slug falls back to careers_url.
+  "jobs2web",
   // Registered + already crawlable, but claimed only opportunistically via
   // careers_url URL-detection — so many enrolled/reactivated tenants sat
   // uncrawled (gem/pinpoint barely appeared in crawl_logs). List them here so

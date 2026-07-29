@@ -150,6 +150,7 @@ const FULL_ADAPTER_LIST = [
   "adecco",
   "kelly",
   "radancy",
+  "jobs2web",
   "gem",
   "pinpoint",
   "rippling",
