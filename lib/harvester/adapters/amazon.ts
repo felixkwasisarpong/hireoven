@@ -40,6 +40,13 @@ function intEnv(name: string, dflt: number, min = 0): number {
 }
 const MAX_PAGES = Math.min(100, intEnv("HARVESTER_AMAZON_MAX_PAGES", 100, 1))
 const PAGE_DELAY_MS = intEnv("HARVESTER_AMAZON_PAGE_DELAY_MS", 300, 0)
+// Read fresh per-call (not frozen at module load) so it's actually
+// overridable/testable. Below the 300_000ms outer per-company kill (worker.ts
+// PER_COMPANY_TIMEOUT_BY_ADAPTER) with margin for the in-flight request +
+// persistence to still complete.
+function softDeadlineMs(): number {
+  return intEnv("HARVESTER_AMAZON_SOFT_DEADLINE_MS", 260_000, 100)
+}
 // amazon.jobs uses 3-letter country codes (USA, CAN, AUS, ...). Empty = keep all.
 const COUNTRIES = new Set(
   (process.env.HARVESTER_AMAZON_COUNTRIES ?? "USA,CAN")
@@ -134,6 +141,12 @@ export const amazonAdapter: AtsAdapter = {
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const offset = page * PAGE_SIZE
       if (offset > MAX_OFFSET) break
+      // Self-limit well before the outer per-company kill (worker.ts) so a
+      // full ~100-page traversal that's running long returns whatever it
+      // collected instead of being hard-killed with zero results. "recent"
+      // sort means newest postings land on early pages, so cutting the tail
+      // under time pressure loses the least-fresh jobs first.
+      if (page > 0 && Date.now() - startedAt > softDeadlineMs()) break
       if (page > 0 && PAGE_DELAY_MS > 0) await sleep(PAGE_DELAY_MS) // pace requests
 
       const res = await conditionalFetchJson<SearchResponse>(buildUrl(offset), reqCtx, { maxAttempts: 3 })

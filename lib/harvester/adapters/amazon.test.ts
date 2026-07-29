@@ -69,6 +69,53 @@ test("amazon: maps a page, assembles JD, and filters by country_code", async () 
   assert.ok(!job.description?.includes("<br/>")) // HTML stripped
 })
 
+test("amazon: stops pagination at the internal soft deadline instead of running until hard-killed", async () => {
+  // Real bug: a full ~100-page traversal took ~290s at Amazon's current job
+  // volume but the outer per-company timeout was 150s, so every run got
+  // hard-killed with ZERO results (the in-flight `jobs` array is discarded,
+  // not returned, when the outer AbortSignal fires). The adapter must give
+  // up gracefully on its own before that happens and return whatever it has.
+  const originalDeadline = process.env.HARVESTER_AMAZON_SOFT_DEADLINE_MS
+  process.env.HARVESTER_AMAZON_SOFT_DEADLINE_MS = "100"
+
+  let calls = 0
+  const fullPage = {
+    hits: 100,
+    jobs: Array.from({ length: 100 }, (_, i) => ({
+      id: i + 1,
+      title: `Job ${i + 1}`,
+      job_path: `/en/jobs/${i + 1}/job`,
+      city: "Seattle",
+      state: "Washington",
+      country_code: "USA",
+      posted_date: "June 1, 2026",
+      description: "Some role.",
+    })),
+  }
+  const fetchImpl = (async () => {
+    calls += 1
+    await new Promise((resolve) => setTimeout(resolve, 15))
+    return new Response(JSON.stringify(fullPage), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }) as unknown as typeof fetch
+
+  try {
+    const result = await amazonAdapter.fetchJobs({
+      slug: "amazon",
+      ctx: { etag: null, lastModified: null, timeoutMs: 5_000, fetchImpl },
+    })
+    // Full pagination would be 100 pages; the soft deadline must cut this
+    // off far short of that, and it must still return real, non-empty jobs.
+    assert.ok(calls < 100, `expected pagination to stop early, made ${calls} calls`)
+    assert.ok(result.jobs.length > 0, "must return whatever was collected, not zero")
+  } finally {
+    if (originalDeadline === undefined) delete process.env.HARVESTER_AMAZON_SOFT_DEADLINE_MS
+    else process.env.HARVESTER_AMAZON_SOFT_DEADLINE_MS = originalDeadline
+  }
+})
+
 const LIVE = process.env.HARVESTER_LIVE_TESTS === "1"
 test("amazon: live fetch returns shaped US/CA jobs", { skip: !LIVE }, async () => {
   process.env.HARVESTER_AMAZON_MAX_PAGES = "2"
