@@ -92,6 +92,48 @@ test("extractSkills: new ambiguous-ish aliases stay word-bounded", () => {
   assert.equal(skills.includes("Bootstrap"), false)
 })
 
+test("extractSkills: recognizes the 'C' programming language when disambiguated", () => {
+  // Real bug: a job requiring "6 years of experience with 'C' Programming"
+  // (quoted, the PRIMARY required language) never surfaced "C" as a skill —
+  // there was no dictionary entry for bare "C" at all — so a resume missing
+  // it still scored as a near-perfect language match.
+  const quoted = extractSkills("At least 6 years of experience with 'C' Programming.")
+  assert.ok(quoted.includes("C"), "quoted 'C' Programming must extract as C")
+
+  const plain = extractSkills("Strong C programming and C++ skills required.")
+  assert.ok(plain.includes("C"))
+  assert.ok(plain.includes("C++"))
+
+  const slash = extractSkills("Proficient in C/C++ for embedded systems.")
+  assert.ok(slash.includes("C"))
+  assert.ok(slash.includes("C++"))
+
+  const ansi = extractSkills("Experience writing ANSI C for firmware.")
+  assert.ok(ansi.includes("C"))
+})
+
+test("extractSkills: 'C' requires disambiguation — no false positives from common English", () => {
+  const skills = extractSkills(
+    "Grade C students can still apply. Vitamin C is not required. See section C for details."
+  )
+  assert.equal(skills.includes("C"), false, "bare 'C' without a language disambiguator must not match")
+})
+
+test("extractSkills: C++/C#/.NET match in ordinary prose, not just glued to a following word char", () => {
+  // Real bug: the default `\b<alias>\b` wrapping put a boundary directly
+  // after "+"/"#" (C++, C#) or directly before "." (.NET) — a non-word char
+  // next to another non-word char (a following space or trailing period)
+  // is NOT a `\b` transition, so these never matched ordinary phrasing like
+  // "C++ skills" or "with .NET framework", only the rare case of being
+  // glued straight to a word char (e.g. "C++11").
+  assert.ok(extractSkills("Strong C++ skills required.").includes("C++"), "C++ followed by a space")
+  assert.ok(extractSkills("5 years of C++.").includes("C++"), "C++ followed by a period")
+  assert.ok(extractSkills("Experience with C# and ASP.NET.").includes("C#"), "C# followed by a space")
+  assert.ok(extractSkills("Looking for a C# developer.").includes("C#"), "C# followed by a space, different sentence")
+  assert.ok(extractSkills("Built services with .NET Core.").includes(".NET"), ".NET preceded by a space")
+  assert.ok(extractSkills("5+ years of .NET.").includes(".NET"), ".NET preceded by a space, followed by a period")
+})
+
 test("mergeSkills: unions existing + extracted case-insensitively", () => {
   const merged = mergeSkills(["typescript", "PostgreSQL"], ["TypeScript", "Python"])
   // Existing 'typescript' wins (came first), Python added from extracted.

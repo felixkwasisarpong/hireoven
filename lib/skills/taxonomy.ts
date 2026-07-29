@@ -37,6 +37,14 @@ const GO_LANGUAGE_SIGNAL_RE =
 const RUST_LANGUAGE_SIGNAL_RE =
   /\b(?:rust\s+(?:language|developer|engineer|programming|crate|crates|ownership|borrow|async|tokio|axum)|written in rust|using rust|experience\s+(?:with|in)\s+rust|proficien(?:cy|t)\s+(?:with|in)\s+rust|knowledge of rust|familiarity\s+with\s+rust|(?:python|java|go|kotlin|c\+\+|typescript|javascript)\s*(?:,|\/|\band\b|\bor\b)\s*rust|rust\s*(?:,|\/|\band\b|\bor\b)\s*(?:python|java|go|kotlin|c\+\+|typescript|javascript))\b/i
 
+// Bare "C" is a single letter — far too ambiguous to allow as a literal
+// alias (grade C, vitamin C, section C, etc.), so — like Go/Rust above —
+// it only counts when a disambiguating context fires. Real-world postings
+// commonly quote it ("'C' Programming") to visually disambiguate it from
+// running prose, so the quote characters must be optional, not required.
+const C_LANGUAGE_SIGNAL_RE =
+  /\bansi\s+c\b|\bc\/c\+\+|\bc\+\+\/c\b|['"]?\bc\b['"]?\s+(?:programming|language)\b/i
+
 const MACHINE_LEARNING_SIGNAL_RE =
   /\b(?:machine learning|ml engineer|ml platform|ml model|ml pipeline|ml ops|mlops|ml infrastructure|train(?:ing)?\s+(?:a\s+)?(?:model|algorithm)|ml\s+(?:framework|project|team|experience|background)|deploy(?:ing)?\s+ml|build(?:ing)?\s+ml)\b/i
 
@@ -86,6 +94,7 @@ export const SKILL_DEFINITIONS: SkillDefinition[] = [
   { label: "Rust",        aliases: ["rust"], patterns: [RUST_LANGUAGE_SIGNAL_RE], requiresPattern: true },
   { label: "C++",         aliases: ["c++", "cpp"] },
   { label: "C#",          aliases: ["c#", "csharp"] },
+  { label: "C",           aliases: ["c"], patterns: [C_LANGUAGE_SIGNAL_RE], requiresPattern: true },
   { label: "Ruby",        aliases: ["ruby"] },
   { label: "PHP",         aliases: ["php"] },
   { label: "Swift",       aliases: ["swift"] },

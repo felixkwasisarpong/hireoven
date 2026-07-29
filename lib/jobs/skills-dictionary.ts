@@ -46,8 +46,24 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   { canonical: "Swift", aliases: ["swift"], category: "language" },
   { canonical: "Ruby", aliases: ["ruby"], category: "language" },
   { canonical: "PHP", aliases: ["php"], category: "language" },
-  { canonical: "C++", aliases: ["c\\+\\+", "cpp"], category: "language" },
-  { canonical: "C#", aliases: ["c#", "csharp"], category: "language" },
+  // "c\+\+"/"c#" end in a non-word char ("+"/"#"), so the default `\b<alias>\b`
+  // wrapping's TRAILING boundary never fires when followed by whitespace or
+  // punctuation (no word/non-word transition between two non-word chars) —
+  // i.e. these silently never matched "C++ skills" or "C# developer", only
+  // the rare case of being glued directly to a following word char (e.g.
+  // "C++11"). Custom-anchor with `\b` on the leading side only.
+  { canonical: "C++", aliases: ["\\bc\\+\\+", "\\bcpp\\b"], category: "language" },
+  { canonical: "C#", aliases: ["\\bc#", "\\bcsharp\\b"], category: "language" },
+  {
+    canonical: "C",
+    aliases: [
+      "ansi c",
+      "\\bc\\/c\\+\\+",
+      "['\"]?\\bc\\b['\"]?\\s+programming",
+      "\\bc\\b\\s+language",
+    ],
+    category: "language",
+  }, // single-letter name — require disambiguation (mirrors "R"); also matches quoted "'C' Programming"
   { canonical: "Scala", aliases: ["scala"], category: "language" },
   { canonical: "Elixir", aliases: ["elixir"], category: "language" },
   { canonical: "Haskell", aliases: ["haskell"], category: "language" },
@@ -75,7 +91,12 @@ export const SKILL_DICTIONARY: SkillEntry[] = [
   { canonical: "FastAPI", aliases: ["fastapi", "fast api"], category: "framework" },
   { canonical: "Rails", aliases: ["ruby on rails", "rails framework"], category: "framework" },
   { canonical: "Spring", aliases: ["spring boot", "spring framework"], category: "framework" },
-  { canonical: ".NET", aliases: ["\\.net", "dotnet"], category: "framework" },
+  // "\.net" starts with a non-word char ("."), so the default wrapping's
+  // LEADING boundary never fires when preceded by whitespace (no word/
+  // non-word transition between two non-word chars) — this silently never
+  // matched "with .NET framework", only ".NET" glued to a preceding word
+  // char. Custom-anchor with `\b` on the trailing side only.
+  { canonical: ".NET", aliases: ["\\.net\\b", "\\bdotnet\\b"], category: "framework" },
   { canonical: "Laravel", aliases: ["laravel"], category: "framework" },
   { canonical: "NestJS", aliases: ["nest\\.js", "nestjs"], category: "framework" },
   { canonical: "tRPC", aliases: ["trpc"], category: "framework" },
