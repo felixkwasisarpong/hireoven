@@ -34,6 +34,15 @@ const PAIRS: Array<{ label: string; canonical: string; dup: string }> = [
   { label: "Allstate (allstate.com) ← Allstate (allstate:wd5:allstate_careers.workday-tenant placeholder domain)",
     canonical: "674cdd3a-0857-44fb-93ed-fe65d9ca26aa",
     dup: "a40671c5-6486-4e11-b491-135387419fcb" },
+  // Wrong-survivor case: an earlier auto-dedupe pass picked the SYNTHETIC
+  // placeholder-domain row as canonical and flagged the real-domain row as
+  // its duplicate (without deactivating it) — the real plaid.com row kept
+  // is_active=true but stopped being crawled ~1 month ago once flagged.
+  // Reversing direction here: plaid.com becomes canonical, the
+  // ashby-discovered placeholder becomes the (properly deactivated) dup.
+  { label: "Plaid (plaid.com) ← Plaid (plaid.ashby-discovered placeholder domain) — reversing a wrong-survivor auto-dedupe",
+    canonical: "275b8392-5a38-4ec7-8b39-acb924acec26",
+    dup: "4aa5321c-446b-4e99-90ee-e6c9a1752370" },
 ]
 
 async function mergeOne(
