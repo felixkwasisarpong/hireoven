@@ -140,6 +140,18 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
       compact.includes("you do not have permission to access")
     )
 
+  const hasAccessDeniedBlockSignal =
+    compact.includes("access denied") &&
+    (
+      compact.includes("<title>access denied") ||
+      compact.includes("access denied</title>") ||
+      compact.includes("you don't have permission to access") ||
+      compact.includes("you dont have permission to access") ||
+      compact.includes("you do not have permission to access") ||
+      compact.includes("error code: access denied") ||
+      compact.includes("access denied |")
+    )
+
   const hasCloudflareBlockSignal =
     compact.includes("cloudflare") &&
     (
@@ -191,7 +203,7 @@ export function detectBlockedHtml(html: string | null | undefined): string | nul
     !compact.includes("job-description")
   if (isAngularShell) return "blocked_html_angular_spa"
 
-  if (compact.includes("access denied")) return "blocked_html_access_denied"
+  if (hasAccessDeniedBlockSignal) return "blocked_html_access_denied"
   if (hasForbiddenBlockSignal) return "blocked_html_forbidden"
   if (compact.includes("request blocked")) return "blocked_html_request_blocked"
   if (compact.includes("attention required")) return "blocked_html_attention_required"

@@ -293,7 +293,7 @@ const GENERIC_NON_JOB_PATH_PREFIXES = [
 ]
 
 const GENERIC_NON_JOB_ANCHOR_TEXT =
-  /^(benefits|culture|university|life at [\w\s.'-]+|how we operate|how we work|our values|our mission|our story|teams?|locations?|departments?|see open roles?|open roles?|view openings?|work in [\w\s,().-]+|explore (?:jobs|careers|roles)|remote opportunities?|hybrid opportunities?|contractor roles?)$/i
+  /^(benefits|culture|privacy policy|research policies(?: and procedures)?|university|life at [\w\s.'-]+|how we operate|how we work|our values|our mission|our story|teams?|locations?|departments?|see open roles?|open roles?|view openings?|work in [\w\s,().-]+|explore (?:jobs|careers|roles)|remote opportunities?|hybrid opportunities?|contractor roles?)$/i
 
 const COMPANY_STOPWORDS = new Set([
   "inc",
@@ -1718,6 +1718,20 @@ function isLikelyJobLink(url: URL, text: string, baseUrl: URL): boolean {
 function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
   const out: RawJob[] = []
   const seen = new Set<string>()
+  for (const job of extractHeadingApplyJobsFromHtml(html, baseUrl)) {
+    if (seen.has(job.url)) continue
+    seen.add(job.url)
+    out.push(job)
+    if (out.length >= MAX_GENERIC_JOBS) return out
+  }
+
+  for (const job of extractCurrentOpeningsJobsFromHtml(html, baseUrl)) {
+    if (seen.has(job.url)) continue
+    seen.add(job.url)
+    out.push(job)
+    if (out.length >= MAX_GENERIC_JOBS) return out
+  }
+
   for (const job of extractWordPressCategoryJobsFromHtml(html, baseUrl)) {
     if (seen.has(job.url)) continue
     seen.add(job.url)
@@ -1745,6 +1759,105 @@ function extractGenericJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
 
     if (out.length >= MAX_GENERIC_JOBS) break
   }
+  return out
+}
+
+function extractHeadingApplyJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
+  if (!/\b(job|current)\s+openings?\b/i.test(html)) return []
+
+  const out: RawJob[] = []
+  const seen = new Set<string>()
+  const addJob = (args: {
+    title: string
+    href: string
+    anchorHtml: string
+    location?: string
+  }) => {
+    const title = cleanText(args.title)
+    if (!title || title.length < 4 || title.length > 120) return
+    if (GENERIC_ANCHOR_TEXT.test(title) || GENERIC_NON_JOB_ANCHOR_TEXT.test(title)) return
+
+    const anchorText = cleanText(args.anchorHtml)
+    if (!/^(apply(?:\s+today|\s+now)?|view job)$/i.test(anchorText)) return
+
+    const href = toUrl(decodeHtmlEntities(args.href.trim()), baseUrl)
+    if (!href) return
+    if (!/^https?:$/i.test(href.protocol)) return
+    if (isBlockedAggregatorHost(href.hostname)) return
+    if (/\.(pdf|docx?|png|jpe?g|gif|svg|webp|zip|ics)$/i.test(href.pathname)) return
+
+    const url = normalizeJobApplyUrl(href.toString())
+    if (seen.has(url)) return
+    seen.add(url)
+
+    const location = cleanText(args.location ?? "")
+    out.push({
+      title,
+      url,
+      location: location && location.length <= 80 ? location : undefined,
+    })
+  }
+
+  const cardRegex =
+    /<div\b[^>]*\bclass\s*=\s*(["'])[^"']*\bbg-white\b[^"']*\1[^>]*>\s*<p\b[^>]*>([\s\S]{0,160}?)<\/p>\s*<h([2-4])\b[^>]*>([\s\S]*?)<\/h\3>[\s\S]{0,1000}?<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\5[^>]*>([\s\S]*?)<\/a>[\s\S]{0,300}?<\/div>/gi
+
+  for (const match of html.matchAll(cardRegex)) {
+    addJob({
+      location: match[2] ?? "",
+      title: match[4] ?? "",
+      href: match[6] ?? "",
+      anchorHtml: match[7] ?? "",
+    })
+    if (out.length >= MAX_GENERIC_JOBS) return out
+  }
+
+  const headingApplyRegex =
+    /(?:<p\b[^>]*>([\s\S]{0,160}?)<\/p>\s*)?<h([2-4])\b[^>]*>([\s\S]*?)<\/h\2>[\s\S]{0,1600}?<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\4[^>]*>([\s\S]*?)<\/a>/gi
+
+  for (const match of html.matchAll(headingApplyRegex)) {
+    addJob({
+      location: match[1] ?? "",
+      title: match[3] ?? "",
+      href: match[5] ?? "",
+      anchorHtml: match[6] ?? "",
+    })
+    if (out.length >= MAX_GENERIC_JOBS) break
+  }
+
+  return out
+}
+
+function extractCurrentOpeningsJobsFromHtml(html: string, baseUrl: URL): RawJob[] {
+  const heading = /<h[1-6]\b[^>]*>[\s\S]*?\bcurrent\s+openings?:?\b[\s\S]*?<\/h[1-6]>/i.exec(html)
+  if (!heading) return []
+
+  const afterHeading = html.slice(heading.index + heading[0].length)
+  const nextSectionIndex = afterHeading.search(/<h[1-3]\b|<footer\b|<nav\b/i)
+  const sectionHtml = (nextSectionIndex >= 0 ? afterHeading.slice(0, nextSectionIndex) : afterHeading)
+    .slice(0, 8_000)
+
+  const out: RawJob[] = []
+  const seen = new Set<string>()
+
+  for (const link of extractAnchorLinks(sectionHtml, baseUrl)) {
+    if (!/^https?:$/i.test(link.href.protocol)) continue
+    if (isBlockedAggregatorHost(link.href.hostname)) continue
+    if (link.href.hostname.toLowerCase() !== baseUrl.hostname.toLowerCase()) continue
+    if (link.href.pathname.toLowerCase() === baseUrl.pathname.toLowerCase()) continue
+    if (/\.(pdf|docx?|png|jpe?g|gif|svg|webp|zip|ics)$/i.test(link.href.pathname)) continue
+
+    const title = extractJobTitleFromAnchorHtml(link.innerHtml) ?? link.text
+    if (!title || title.length < 4 || title.length > 120) continue
+    if (GENERIC_ANCHOR_TEXT.test(title) || GENERIC_NON_JOB_ANCHOR_TEXT.test(title)) continue
+
+    const url = normalizeJobApplyUrl(link.href.toString())
+    if (seen.has(url)) continue
+    seen.add(url)
+
+    out.push({ title, url })
+    if (out.length >= MAX_GENERIC_JOBS) break
+  }
+
   return out
 }
 
@@ -3621,6 +3734,10 @@ function isAppleJobsUrl(url: URL) {
   return url.hostname.toLowerCase() === "jobs.apple.com"
 }
 
+function isIsolvedHireUrl(url: URL) {
+  return url.hostname.toLowerCase().endsWith(".isolvedhire.com")
+}
+
 type AppleJobResult = {
   positionId?: string
   postingTitle?: string
@@ -3628,6 +3745,28 @@ type AppleJobResult = {
   postDateInGMT?: string
   jobSummary?: string
   locations?: Array<{ name?: string; countryID?: string }>
+}
+
+type IsolvedHireJob = {
+  id?: number | string
+  title?: string
+  jobUrl?: string
+  city?: string
+  abbreviation?: string | null
+  iso3?: string | null
+  jobLocation?: string | null
+  workplaceType?: string | null
+  employmentType?: string | null
+  startDateRef?: string | null
+  minSalary?: string | null
+  maxSalary?: string | null
+}
+
+type IsolvedHireResponse = {
+  success?: boolean
+  data?: {
+    jobs?: IsolvedHireJob[]
+  }
 }
 
 function extractAppleJobs(html: string): AppleJobResult[] {
@@ -3671,6 +3810,65 @@ async function crawlAppleJobs(careersUrl: URL): Promise<RawJob[]> {
         location,
         description: j.jobSummary || undefined,
         postedAt: j.postDateInGMT,
+      }
+    })
+}
+
+function parseIsolvedHireDomainId(html: string): string | null {
+  return (
+    html.match(/\bdomainId\s*:\s*(\d+)/)?.[1] ??
+    html.match(/"domain_id"\s*:\s*"(\d+)"/)?.[1] ??
+    html.match(/\/core\/jobs\/(\d+)/)?.[1] ??
+    null
+  )
+}
+
+function parseSalaryValue(value: string | null | undefined): number | undefined {
+  const cleaned = value?.replace(/,/g, "").trim()
+  if (!cleaned) return undefined
+  const parsed = Number(cleaned)
+  return Number.isFinite(parsed) ? Math.round(parsed) : undefined
+}
+
+function locationFromIsolvedJob(job: IsolvedHireJob): string | undefined {
+  const parts = [job.city, job.abbreviation].map((part) => part?.trim()).filter(Boolean)
+  if (parts.length > 0) return parts.join(", ")
+
+  const location = job.jobLocation?.replace(/,\s*0{5}\b/, "").trim()
+  if (location && location !== "USA") return location
+  return job.iso3?.toUpperCase() === "USA" ? "USA" : undefined
+}
+
+async function crawlIsolvedHireJobs(careersUrl: URL, html?: string): Promise<RawJob[]> {
+  const pageHtml = html ?? await fetchText(careersUrl.toString())
+  if (!pageHtml) return []
+
+  const domainId = parseIsolvedHireDomainId(pageHtml)
+  if (!domainId) return []
+
+  const apiUrl = new URL(`/core/jobs/${domainId}`, careersUrl.origin)
+  apiUrl.searchParams.set("getParams", "{}")
+  const response = await fetchCrawlerJson<IsolvedHireResponse>(apiUrl.toString(), {
+    method: "GET",
+  })
+  if (!response.ok) return []
+
+  const jobs = response.data?.data?.jobs ?? []
+  return jobs
+    .filter((job) => job.id && job.title)
+    .map((job) => {
+      const jobUrl = job.jobUrl || new URL(`/jobs/${job.id}`, careersUrl.origin).toString()
+      return {
+        externalId: `isolved:${job.id}`,
+        title: job.title!,
+        url: normalizeJobApplyUrl(jobUrl),
+        location: locationFromIsolvedJob(job),
+        postedAt: job.startDateRef ?? undefined,
+        workMode: job.workplaceType ?? undefined,
+        employmentType: job.employmentType ?? undefined,
+        salaryMin: parseSalaryValue(job.minSalary),
+        salaryMax: parseSalaryValue(job.maxSalary),
+        salaryCurrency: job.minSalary || job.maxSalary ? "USD" : undefined,
       }
     })
 }
@@ -3793,6 +3991,10 @@ async function crawlByKnownAts(careersUrl: URL): Promise<RawJob[]> {
 
   if (isAppleJobsUrl(careersUrl)) {
     return crawlAppleJobs(careersUrl)
+  }
+
+  if (isIsolvedHireUrl(careersUrl)) {
+    return crawlIsolvedHireJobs(careersUrl)
   }
 
   if (isMetaCareersUrl(careersUrl)) {
@@ -3937,6 +4139,19 @@ async function discoverAndCrawlFromHtml(careersUrl: URL): Promise<DiscoverAndCra
       if (googleJobs.length > 0) {
         return {
           jobs: googleJobs,
+          primaryStatusCode,
+          primaryErrorReason,
+          blocked,
+          fallbackUsed,
+        }
+      }
+    }
+
+    if (isIsolvedHireUrl(careersUrl)) {
+      const isolvedJobs = await crawlIsolvedHireJobs(careersUrl, html)
+      if (isolvedJobs.length > 0) {
+        return {
+          jobs: isolvedJobs,
           primaryStatusCode,
           primaryErrorReason,
           blocked,

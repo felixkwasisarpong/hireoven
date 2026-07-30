@@ -331,6 +331,36 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
     })
   }
 
+  const COMPANY_INFO_BOUNDARY_RE =
+    /^(job description|about (?:the )?role|responsibilities|qualifications|requirements|required qualifications|minimum qualifications|basic qualifications|preferred qualifications|nice to have|skills|benefits|compensation|equal opportunity|eeo|application process|how to apply)\s*:?\s*$/i
+
+  const COMPANY_INFO_ROLE_COPY_RE =
+    /\b(this role|you will|you'll|the candidate|ideal candidate|engineering team works on|day to day activities|responsibilities|qualifications|required|experience with|proficiency|develop(?:ing)?|design(?:ing)?|implement(?:ing)?|unit and integration testing)\b/i
+
+  function cleanCompanyInfoItems(items: string[]): string[] {
+    const seen = new Set<string>()
+    const out: string[] = []
+
+    for (const item of items) {
+      const t = item.trim()
+      if (!t) continue
+      if (COMPANY_INFO_BOUNDARY_RE.test(t)) break
+      if (t.length < 40) continue
+      if (t.length > 1200) continue
+      if (DISPLAY_NOISE_RE.test(t)) continue
+      if (DISPLAY_EEO_RE.test(t)) continue
+      if (DISPLAY_BENEFITS_RE.test(t)) continue
+      if (COMPANY_INFO_ROLE_COPY_RE.test(t)) continue
+
+      const key = t.toLowerCase().replace(/\s+/g, " ")
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(t)
+    }
+
+    return out.slice(0, 3)
+  }
+
   // The same display guards apply to every prose section — fragments and
   // boilerplate are not specific to benefits/comp/visa.
   const responsibilities = cleanItems(page.sections.responsibilities.items)
@@ -377,6 +407,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
   const sponsorsConfirmed = employerLikelySponsorsH1b({ ...job, company })
 
   const visaItems = cleanItems(page.sections.visa.items, { rejectBenefits: true })
+  const companyInfoItems = cleanCompanyInfoItems(page.sections.company_info.items)
 
   const showVisaJdSection =
     visaItems.length > 0 ||
@@ -823,16 +854,16 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                     className="h-12 w-12 shrink-0 rounded-xl border-0 bg-transparent"
                   />
                   <div className="min-w-0 flex-1">
-                    {page.sections.company_info.items.length > 0 && (
+                    {companyInfoItems.length > 0 && (
                       <div className="space-y-3 text-[14px] leading-[1.7] text-slate-600">
-                        {page.sections.company_info.items.map((p) => (
+                        {companyInfoItems.map((p) => (
                           <p key={p}>{p}</p>
                         ))}
                       </div>
                     )}
                     <div className={cn(
                       "flex flex-wrap gap-x-4 gap-y-2",
-                      page.sections.company_info.items.length > 0 ? "mt-3" : ""
+                      companyInfoItems.length > 0 ? "mt-3" : ""
                     )}>
                       {company?.careers_url && (
                         <a
