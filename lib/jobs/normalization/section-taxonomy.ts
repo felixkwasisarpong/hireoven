@@ -43,7 +43,7 @@ const HEADING_RULES: Rule[] = [
   {
     key: "about_role",
     pattern:
-      /\b(about the role|about this role|role overview|job summary|position summary|overview|the opportunity|the position|role description|your role|the role|role purpose)\b/i,
+      /\b(about the role|about this role|role overview|job summary|job description|position summary|overview|the opportunity|the position|role description|your role|the role|role purpose)\b/i,
   },
   {
     key: "responsibilities",

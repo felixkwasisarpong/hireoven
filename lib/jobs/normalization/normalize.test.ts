@@ -167,6 +167,28 @@ test("extractCanonicalSections does not match a company_info alias that's just a
   assert.ok(!companyInfo.includes("typescript"), "the skills breakdown must not land in company_info")
 })
 
+test("extractCanonicalSections stops company_info at Job Description heading", () => {
+  const sections = extractCanonicalSections({
+    adapter: "workday",
+    description: [
+      "Who We Are:",
+      "Hewlett Packard Enterprise is the global edge-to-cloud company advancing the way people live and work.",
+      "Job Description:",
+      "The SD-WAN engineering team works on a highly scalable, distributed SDWAN application that is AI-Driven.",
+      "About the Role",
+      "- Contribute to the design and develop large-scale, distributed systems.",
+      "Responsibilities",
+      "- Drive development from technology selection to product delivery.",
+    ].join("\n"),
+  })
+
+  const companyInfo = sections.company_info.items.join(" ").toLowerCase()
+  const aboutRole = sections.about_role.items.join(" ").toLowerCase()
+
+  assert.ok(!companyInfo.includes("sd-wan engineering team"), "role description must not land in company_info")
+  assert.match(aboutRole, /sd-wan engineering team/)
+})
+
 test("extractCanonicalSections rebalances ideal-candidate and offer bullets from responsibilities", () => {
   const sections = extractCanonicalSections({
     adapter: "greenhouse",

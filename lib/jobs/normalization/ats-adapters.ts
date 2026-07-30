@@ -49,7 +49,7 @@ const COMMON_HEADING_RULES: HeadingRule[] = [
   {
     key: "about_role",
     pattern:
-      /\b(about the role|about this role|role overview|job summary|position summary|overview|the opportunity|the role)\b/i,
+      /\b(about the role|about this role|role overview|job summary|job description|position summary|overview|the opportunity|the role)\b/i,
   },
   {
     key: "responsibilities",
@@ -265,6 +265,7 @@ const COMMON_INLINE_ALIASES: HeadingAlias[] = [
   { key: "about_role", alias: "Role overview" },
   { key: "about_role", alias: "Overview" },
   { key: "about_role", alias: "Job summary" },
+  { key: "about_role", alias: "Job description" },
   { key: "responsibilities", alias: "Position responsibilities" },
   { key: "responsibilities", alias: "Key responsibilities" },
   { key: "responsibilities", alias: "Responsibilities" },

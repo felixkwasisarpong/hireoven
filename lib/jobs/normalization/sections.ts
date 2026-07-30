@@ -179,6 +179,7 @@ const INLINE_SECTION_ALIASES: InlineHeadingAlias[] = [
   { key: "about_role", alias: "Your role" },
   { key: "about_role", alias: "The role" },
   { key: "about_role", alias: "Job summary" },
+  { key: "about_role", alias: "Job description" },
   { key: "about_role", alias: "Position summary" },
   { key: "responsibilities", alias: "Key responsibilities" },
   { key: "responsibilities", alias: "In this role" },
@@ -405,7 +406,7 @@ function flattenSectionContent(section: { bullets: string[]; paragraphs: string[
 }
 
 const EXPLICIT_HEADING_PATTERN =
-  /(about the role|about the team|role overview|job summary|what you(?:’|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|perks|total rewards|what you(?:’|’)ll get|what we provide|employee benefits|benefits? package|compensation|compensation range|compensation details|compensation & benefits|base salary|base pay|pay range|salary range|on-target earnings|u\.?s\.? applicants? only|for u\.?s\.? (?:based )?applicants?|salary information|pay transparency|travel requirements?|physical requirements?|mental\/physical requirements?|work environment|work conditions?|physical demands?|working conditions?|additional information|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|work eligibility|employment eligibility|visa sponsorship|visa requirements|h-?1b(?: sponsorship)?|immigration|sponsorship|legally authorized)(?:\s*\([^)\n]{1,100}\))?\s*:/gi
+  /(about the role|about the team|role overview|job summary|job description|what you(?:’|’)ll do|what you will do|responsibilities|preferred qualifications|minimum qualifications|minimum requirements|required qualifications|basic qualifications|qualifications|requirements|nice to have|technical skills|key skills|skills|technologies|benefits|perks|total rewards|what you(?:’|’)ll get|what we provide|employee benefits|benefits? package|compensation|compensation range|compensation details|compensation & benefits|base salary|base pay|pay range|salary range|on-target earnings|u\.?s\.? applicants? only|for u\.?s\.? (?:based )?applicants?|salary information|pay transparency|travel requirements?|physical requirements?|mental\/physical requirements?|work environment|work conditions?|physical demands?|working conditions?|additional information|about us|about the company|who we are|company|equal opportunity|eeo|application process|how to apply|work authorization|work eligibility|employment eligibility|visa sponsorship|visa requirements|h-?1b(?: sponsorship)?|immigration|sponsorship|legally authorized)(?:\s*\([^)\n]{1,100}\))?\s*:/gi
 
 function extractExplicitHeadingSegments(description: string): Array<{ heading: string; body: string }> {
   const matches = [...description.matchAll(EXPLICIT_HEADING_PATTERN)]
