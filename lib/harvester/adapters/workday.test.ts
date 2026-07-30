@@ -34,6 +34,18 @@ test("workday: detectFromUrl handles three-digit wd hosts", () => {
   )
 })
 
+test("workday: detectFromUrl and fetchJobs accept an underscore in the tenant", () => {
+  // Real tenant found live: Sallie Mae's Workday tenant is "sallie_mae" on
+  // both the subdomain and the cxs API path (confirmed directly against the
+  // live API) — every crawl attempt 422'd for months because "_" wasn't in
+  // the allowed tenant character set, even though Workday's own platform
+  // accepts it fine.
+  assert.deepEqual(
+    workdayAdapter.detectFromUrl("https://sallie_mae.wd5.myworkdayjobs.com/en-US/Careers"),
+    { slug: "sallie_mae:wd5:Careers" }
+  )
+})
+
 test("workday: detectFromUrl returns null for non-Workday hosts", () => {
   assert.equal(workdayAdapter.detectFromUrl("https://boards.greenhouse.io/stripe"), null)
 })
@@ -49,6 +61,25 @@ test("workday: detectFromUrl rejects malformed hosts", () => {
     null
   )
   assert.equal(workdayAdapter.detectFromUrl("https://nvidia.wd.myworkdayjobs.com/External"), null)
+})
+
+test("workday: fetchJobs accepts an underscore-tenant slug and hits the underscore host", async () => {
+  let calledUrl = ""
+  const fetchImpl = (async (url: string) => {
+    calledUrl = url
+    return new Response(JSON.stringify({ total: 0, jobPostings: [] }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  }) as unknown as typeof fetch
+
+  const result = await workdayAdapter.fetchJobs({
+    slug: "sallie_mae:wd5:Careers",
+    ctx: { etag: null, lastModified: null, fetchImpl },
+  })
+
+  assert.equal(result.jobs.length, 0)
+  assert.match(calledUrl, /^https:\/\/sallie_mae\.wd5\.myworkdayjobs\.com\/wday\/cxs\/sallie_mae\/Careers\/jobs$/)
 })
 
 test("workday: fetchJobs throws when slug is malformed", async () => {
