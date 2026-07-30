@@ -56,6 +56,9 @@ const PAIRS: Array<{ label: string; canonical: string; dup: string }> = [
   { label: "Western Governors University (wgu.edu) ← WGU (wgu:wd5:external.workday-tenant synthetic identifier-as-domain)",
     canonical: "3d1c2cfc-f9b5-4352-a85d-56e00d6e45f4",
     dup: "9ef7d81b-2b46-4c5b-b38c-4afc8e9789a1" },
+  { label: "Flock Homes (flock.com) ← Flock Homes (flockhomes.greenhouse-discovered placeholder domain)",
+    canonical: "8da7b7ce-12b7-4273-bcde-737076558589",
+    dup: "a0d48b9b-99d5-4116-8063-51a7bdfcf4d3" },
 ]
 
 async function mergeOne(
