@@ -36,6 +36,7 @@ const DEFAULT_FAILURE_COOLDOWN_SEC = 1_800
 const DEFAULT_RATE_LIMIT_COOLDOWN_SEC = 900
 const DEFAULT_HTTP_403_COOLDOWN_SEC = 21_600
 const DEFAULT_HTTP_404_COOLDOWN_SEC = 604_800 // 7 days — board is gone
+const DEFAULT_MAX_VISIT_INTERVAL_SEC = 82_800 // 23h — keeps active boards under a 24h visit SLA.
 const ADAPTER_REQUEST_TIMEOUT_MS: Partial<Record<AtsName, number>> = {
   // Slower APIs and large boards often breach the generic 8s transport timeout.
   workday: 20_000,
@@ -78,8 +79,14 @@ function tierIntervalSeconds(
   return TIER_INTERVAL_DEFAULTS[key]
 }
 
-// Hard ceiling so a runaway empty streak can't push next_harvest_at out past
-// the dead-tier cadence (7 days).
+function maxVisitIntervalSeconds(env: Record<string, string | undefined> = process.env): number {
+  const raw = Number.parseInt(env.HARVESTER_MAX_VISIT_INTERVAL_SEC ?? "", 10)
+  if (Number.isFinite(raw) && raw >= 3_600) return raw
+  return DEFAULT_MAX_VISIT_INTERVAL_SEC
+}
+
+// Legacy yield backoff ceiling. `resolveHarvestIntervalSec` applies the stricter
+// visit-SLA clamp below before scheduling the next attempt.
 const YIELD_MAX_INTERVAL_SEC = 604_800
 
 /**
@@ -343,7 +350,10 @@ export function resolveHarvestIntervalSec(
   env: Record<string, string | undefined> = process.env
 ): number {
   const baseIntervalSec = tierIntervalSeconds(tier, env)
-  return tier === "tier_dead" ? baseIntervalSec : yieldAdjustedInterval(baseIntervalSec, consecutiveEmptyCrawls)
+  const intervalSec = tier === "tier_dead"
+    ? baseIntervalSec
+    : yieldAdjustedInterval(baseIntervalSec, consecutiveEmptyCrawls)
+  return Math.min(intervalSec, maxVisitIntervalSeconds(env))
 }
 
 export async function runAtsHarvest(input: {
@@ -459,6 +469,7 @@ export async function runAtsHarvest(input: {
         ? rateLimitCooldownSeconds()
         : baseCooldownSec
     )
+    const boundedCooldownSec = Math.min(cooldownSec, maxVisitIntervalSeconds())
     // After 3+ consecutive failures (this attempt counts as the 3rd) demote
     // the company one freshness tier. Stops always-broken tenants from
     // burning tier_1 polling cycles forever. Healthy crawls reset the
@@ -480,7 +491,7 @@ export async function runAtsHarvest(input: {
       await updateCompanyHarvestState(pool, company.id, {
         etag: company.etag,
         lastModified: company.last_modified,
-        intervalSec: cooldownSec,
+        intervalSec: boundedCooldownSec,
         crawledAtIso,
         bumpLastCrawled: false,
         newFreshnessTier: newTier,

@@ -231,3 +231,94 @@ test("selectPolicyBatchByLaneShare: reserves capacity for low-signal and likely-
   assert(batch.some((row) => row.id === "low-1" || row.id === "low-2"))
   assert(batch.some((row) => row.id === "inactive-1" || row.id === "inactive-2"))
 })
+
+test("applyCrawlQueuePolicy: max visit age bypasses lane exclusion and failure cooldown", () => {
+  const oldIso = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+  const recentIso = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const companies: CrawlCompanyLike[] = [
+    {
+      id: "blocked-old",
+      name: "Blocked Old",
+      careers_url: "https://example.com/careers",
+      last_crawled_at: oldIso,
+      ats_type: "custom",
+      job_count: 0,
+    },
+    {
+      id: "blocked-recent",
+      name: "Blocked Recent",
+      careers_url: "https://example.org/careers",
+      last_crawled_at: recentIso,
+      ats_type: "custom",
+      job_count: 0,
+    },
+    {
+      id: "rate-limited-old",
+      name: "Rate Limited Old",
+      careers_url: "https://example.net/careers",
+      last_crawled_at: oldIso,
+      ats_type: "custom",
+      job_count: 0,
+    },
+  ]
+  const blockedSignals = (companyId: string, crawledAt: string): CrawlSignal[] => [
+    { companyId, status: "blocked", errorMessage: "access denied", crawledAt },
+    { companyId, status: "blocked", errorMessage: "access denied", crawledAt },
+    { companyId, status: "blocked", errorMessage: "access denied", crawledAt },
+  ]
+  const rateLimitedSignals = (companyId: string, crawledAt: string): CrawlSignal[] => [
+    { companyId, status: "blocked", errorMessage: "too many requests", crawledAt },
+    { companyId, status: "blocked", errorMessage: "too many requests", crawledAt },
+    { companyId, status: "blocked", errorMessage: "too many requests", crawledAt },
+  ]
+  const signalMap = new Map<string, CrawlSignal[]>([
+    ["blocked-old", blockedSignals("blocked-old", oldIso)],
+    ["blocked-recent", blockedSignals("blocked-recent", recentIso)],
+    ["rate-limited-old", rateLimitedSignals("rate-limited-old", oldIso)],
+  ])
+
+  const policy = applyCrawlQueuePolicy(
+    companies,
+    signalMap,
+    defaultCrawlPolicyOptions({
+      includeBlocked: false,
+      bypassCooldown: false,
+      maxVisitAgeHours: 24,
+      blockedCooldownDays: 14,
+    })
+  )
+
+  assert.deepEqual(policy.selected.map((row) => row.id), ["blocked-old", "rate-limited-old"])
+  assert.deepEqual(policy.skipped.map((row) => row.companyId), ["blocked-recent"])
+})
+
+test("applyCrawlQueuePolicy: max visit age rows sort before fresher higher-priority rows", () => {
+  const oldIso = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString()
+  const recentIso = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()
+  const companies: CrawlCompanyLike[] = [
+    {
+      id: "fresh-ats",
+      name: "Fresh ATS",
+      careers_url: "https://boards.greenhouse.io/fresh",
+      last_crawled_at: recentIso,
+      ats_type: "greenhouse",
+      job_count: 10,
+    },
+    {
+      id: "old-custom",
+      name: "Old Custom",
+      careers_url: "https://old.example.com/careers",
+      last_crawled_at: oldIso,
+      ats_type: "custom",
+      job_count: 3,
+    },
+  ]
+
+  const policy = applyCrawlQueuePolicy(
+    companies,
+    new Map(),
+    defaultCrawlPolicyOptions({ maxVisitAgeHours: 24 })
+  )
+
+  assert.deepEqual(policy.selected.map((row) => row.id), ["old-custom", "fresh-ats"])
+})

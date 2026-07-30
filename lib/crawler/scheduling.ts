@@ -31,6 +31,7 @@ export type CrawlPolicyOptions = {
   includeDomainBroken: boolean
   includeLikelyInactive: boolean
   bypassCooldown: boolean
+  maxVisitAgeHours: number
   failureStreakMin: number
   defaultCooldownDays: number
   blockedCooldownDays: number
@@ -194,6 +195,13 @@ function addDays(iso: string, days: number): string | null {
   return new Date(ms + days * 24 * 60 * 60 * 1000).toISOString()
 }
 
+function isPastMaxVisitAge(lastCrawledAt: string | null | undefined, maxVisitAgeHours: number): boolean {
+  if (!Number.isFinite(maxVisitAgeHours) || maxVisitAgeHours <= 0) return false
+  const parsed = Date.parse(lastCrawledAt ?? "")
+  if (!Number.isFinite(parsed)) return true
+  return parsed <= Date.now() - maxVisitAgeHours * 60 * 60 * 1000
+}
+
 function emptyLaneCounts(): Record<CrawlLane, number> {
   return {
     ats_direct_possible: 0,
@@ -309,6 +317,7 @@ export function defaultCrawlPolicyOptions(overrides?: Partial<CrawlPolicyOptions
     includeDomainBroken: boolEnv("CRAWLER_INCLUDE_DOMAIN_BROKEN_IN_MAIN", false),
     includeLikelyInactive: boolEnv("CRAWLER_INCLUDE_LIKELY_INACTIVE_IN_MAIN", false),
     bypassCooldown: false,
+    maxVisitAgeHours: Math.max(1, Number.parseInt(process.env.CRAWLER_MAX_VISIT_AGE_HOURS ?? "24", 10)),
     failureStreakMin: Math.max(2, Number.parseInt(process.env.CRAWLER_FAILURE_STREAK_MIN ?? "3", 10)),
     defaultCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_FAILURE_COOLDOWN_DAYS ?? "7", 10)),
     blockedCooldownDays: Math.max(1, Number.parseInt(process.env.CRAWLER_BLOCKED_COOLDOWN_DAYS ?? "14", 10)),
@@ -380,11 +389,15 @@ export function applyCrawlQueuePolicy<T extends CrawlCompanyLike>(
     const latest = signals[0] ?? null
     const lane = classifyCrawlLane(company, latest, signals)
     const streak = failureStreak(signals)
+    const mustVisitForSla = isPastMaxVisitAge(company.last_crawled_at, options.maxVisitAgeHours)
 
     if (
-      (lane === "blocked" && !options.includeBlocked) ||
-      (lane === "domain_broken" && !options.includeDomainBroken) ||
-      (lane === "likely_inactive" && !options.includeLikelyInactive)
+      !mustVisitForSla &&
+      (
+        (lane === "blocked" && !options.includeBlocked) ||
+        (lane === "domain_broken" && !options.includeDomainBroken) ||
+        (lane === "likely_inactive" && !options.includeLikelyInactive)
+      )
     ) {
       skipped.push({
         companyId: company.id,
@@ -399,7 +412,7 @@ export function applyCrawlQueuePolicy<T extends CrawlCompanyLike>(
     }
 
     const isRateLimited = latest ? normalizeReason(latest.errorMessage) === "rate_limited" : false
-    const effectiveBypassCooldown = options.bypassCooldown && !isRateLimited
+    const effectiveBypassCooldown = mustVisitForSla || (options.bypassCooldown && !isRateLimited)
     if (!effectiveBypassCooldown && latest && streak >= options.failureStreakMin) {
       const cooldownDays = cooldownDaysForLane(lane, latest, options)
       const until = addDays(latest.crawledAt, cooldownDays)
@@ -422,6 +435,10 @@ export function applyCrawlQueuePolicy<T extends CrawlCompanyLike>(
   }
 
   selected.sort((a, b) => {
+    const aPastSla = isPastMaxVisitAge(a.row.last_crawled_at, options.maxVisitAgeHours)
+    const bPastSla = isPastMaxVisitAge(b.row.last_crawled_at, options.maxVisitAgeHours)
+    if (aPastSla !== bPastSla) return aPastSla ? -1 : 1
+
     const laneDelta = LANE_PRIORITY[a.lane] - LANE_PRIORITY[b.lane]
     if (laneDelta !== 0) return laneDelta
     const aTs = Date.parse(a.row.last_crawled_at ?? "")

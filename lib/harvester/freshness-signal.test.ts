@@ -53,6 +53,18 @@ test("yieldAdjustedInterval: caps at the 7-day ceiling", () => {
   assert.equal(yieldAdjustedInterval(604_800, 20), 604_800)
 })
 
+test("resolveHarvestIntervalSec: clamps every active board below the 24h visit SLA", () => {
+  assert.equal(resolveHarvestIntervalSec("tier_3", 20, {}), 82_800)
+  assert.equal(resolveHarvestIntervalSec("tier_dead", 20, {}), 82_800)
+})
+
+test("resolveHarvestIntervalSec: max visit interval can be overridden", () => {
+  assert.equal(
+    resolveHarvestIntervalSec("tier_3", 20, { HARVESTER_MAX_VISIT_INTERVAL_SEC: "43200" }),
+    43_200
+  )
+})
+
 test("resolveHarvestIntervalSec: tier_dead skips the yield-adjustment multiplier entirely", () => {
   // Real bug: tier_dead's base interval was shortened to 23h to guarantee a
   // daily check-in, but virtually every tier_dead board has 20+ consecutive
@@ -68,5 +80,5 @@ test("resolveHarvestIntervalSec: tier_dead skips the yield-adjustment multiplier
 test("resolveHarvestIntervalSec: tier_1/2/3 still get the yield-adjustment backoff", () => {
   assert.equal(resolveHarvestIntervalSec("tier_1", 0, {}), 180)
   assert.equal(resolveHarvestIntervalSec("tier_1", 20, {}), 180 * 8)
-  assert.equal(resolveHarvestIntervalSec("tier_3", 10, {}), 21_600 * 4)
+  assert.equal(resolveHarvestIntervalSec("tier_2", 10, {}), 3_600 * 4)
 })
