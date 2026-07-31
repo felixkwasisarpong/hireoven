@@ -318,10 +318,25 @@ export async function countCollection(pool: Pool, collection: JobCollection): Pr
   return rows[0]?.n ?? 0
 }
 
-/** Counts for every collection, keyed by slug (parallel). */
+/** Counts for every collection, keyed by slug. */
 export async function countAllCollections(pool: Pool): Promise<Record<string, number>> {
-  const entries = await Promise.all(
-    JOB_COLLECTIONS.map(async (c) => [c.slug, await countCollection(pool, c)] as const),
+  const selectList = JOB_COLLECTIONS.map(
+    (collection) =>
+      `COUNT(*) FILTER (WHERE (${collection.predicate}))::int AS "${collection.slug}"`,
+  ).join(",\n       ")
+  const { rows } = await pool.query<Record<string, number>>(
+    `SELECT ${selectList}
+       FROM jobs j
+       JOIN companies c ON c.id = j.company_id
+      WHERE j.is_active = true
+        AND ${sqlPublishedJob("j")}
+        AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}`,
   )
-  return Object.fromEntries(entries)
+  const row = rows[0] ?? {}
+  return Object.fromEntries(
+    JOB_COLLECTIONS.map((collection) => [
+      collection.slug,
+      Number(row[collection.slug] ?? 0),
+    ]),
+  )
 }
