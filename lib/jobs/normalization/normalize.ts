@@ -118,11 +118,11 @@ const EXPLICIT_SPONSORS_RE =
 // Checked BEFORE the positive regex so negation context ("unable to provide")
 // is never mis-classified as affirmative.
 const EXPLICIT_NO_SPONSORSHIP_RE =
-  /\b(no (visa |work |h-?1b )?sponsorship|sponsorship (is )?not (available|provided|offered)|cannot (provide |offer )?sponsorship|unable to (provide |offer |sponsor)|does not (provide |offer |sponsor)|will not (provide |offer |sponsor)|must (be|have) (an? )?(valid |current |unrestricted )?(work |employment )?authorization|must be (legally )?authorized to work|not eligible for sponsorship|sponsorship not available|no h-?1b|h-?1b not (available|supported|offered|provided)|(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required|requires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?|citizen(?:ship)?\s+(?:is\s+)?required|u\.?\s?s\.?\s+persons?\s+only|security\s+clearance\s+required)\b/i
+  /\b(no (visa |work |h-?1b )?sponsorship|sponsorship (is )?not (available|provided|offered|considered)|cannot (provide |offer )?sponsorship|unable to (provide |offer |sponsor)|does not (provide |offer |sponsor)|will not (provide |offer |sponsor)|(?:candidate|applicant|individual)s? (?:who )?(?:require|requiring|requires) sponsorship[^.\n]{0,100}will not be considered|temporary visas?[^.\n]{0,180}will not be considered|must (?:currently )?(be|have|possess|hold) (an? )?(valid |current |unrestricted |valid and unrestricted )?(?:u\.?\s?s\.?\s+)?(work |employment )?authorization|must be (legally )?authorized to work|not eligible for sponsorship|sponsorship not available|no h-?1b|h-?1b not (available|supported|offered|provided)|(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required|requires?\s+(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?|citizen(?:ship)?\s+(?:is\s+)?required|u\.?\s?s\.?\s+persons?\s+only|security\s+clearance\s+required)\b/i
 
 // Ambiguous visa mentions — terms present but intent unclear.
 const VISA_MENTION_RE =
-  /\b(visa|sponsorship|work authorization|h-?1b|opt|tn visa|e-?3|green card|citizen(?:ship)?|u\.s\.\s*person|security clearance|export control)\b/i
+  /\b(visa|temporary visa|sponsorship|work authorization|h-?1b|h-?2|f-?1|opt|cpt|stem|tn visa|e-?3|green card|citizen(?:ship)?|u\.s\.\s*person|security clearance|export control)\b/i
 
 function inferSponsorshipFromText(description: string | null): {
   sponsors_h1b: boolean | null

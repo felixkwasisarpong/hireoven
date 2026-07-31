@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
@@ -13,7 +13,7 @@ export { siteBaseUrl }
 // Google caps a single sitemap at 50,000 URLs. We routinely exceed that, so the
 // routes split entries into chunks and serve a sitemap index. Keep headroom under
 // the hard limit so a growth spike between deploys can't push a chunk over.
-export const SITEMAP_CHUNK = 45000
+export const SITEMAP_CHUNK = 10000
 
 // Cap on individual /jobs/[id] URLs in the sitemap. Job detail pages are the core
 // long-tail SEO surface, so we index far more than the old 1000, but keep a bound:
@@ -99,7 +99,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
         `SELECT id, name, updated_at, sponsors_h1b, h1b_sponsor_count_1yr, sponsorship_confidence, job_count, industry FROM companies WHERE is_active = true ORDER BY job_count DESC`
       ),
       pool.query<{ id: string; updated_at: string }>(
-        `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")} ORDER BY first_detected_at DESC NULLS LAST LIMIT ${SITEMAP_JOB_LIMIT}`
+        `SELECT id, updated_at FROM jobs WHERE is_active = true AND ${sqlSeoVisibleJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")} ORDER BY first_detected_at DESC NULLS LAST LIMIT ${SITEMAP_JOB_LIMIT}`
       ),
       pool.query<{ city: string; state: string }>(
         `SELECT worksite_city AS city, worksite_state_abbr AS state FROM lca_records

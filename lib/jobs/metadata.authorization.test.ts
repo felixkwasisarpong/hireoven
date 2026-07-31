@@ -26,6 +26,7 @@ test("still flags explicit no-sponsorship / citizenship language", () => {
     "No visa sponsorship is available.",
     "Sponsorship is not available for this position.",
     "The employer will not sponsor applicants for work visas.",
+    "You must currently possess valid and unrestricted U.S. work authorization to be considered for this role. Individuals with temporary visas including, but not limited to, F-1 (OPT, CPT, STEM), H-1B, H-2, or TN, or any candidate requiring sponsorship, now or in the future, will not be considered for this role.",
     "Applicants must be U.S. citizens.",
     "U.S. Citizenship is required for this role.",
   ]

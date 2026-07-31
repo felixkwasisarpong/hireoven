@@ -54,10 +54,16 @@ export default async function LeaderboardView({
   const [data, industries] = await Promise.all([
     getH1bLeaderboard({ ...filters, limit: PAGE_SIZE }),
     getLeaderboardIndustries(),
-  ])
+  ]).catch(() => [
+    { results: [], next_cursor: null, total_count: 0, refreshed_at: null },
+    [],
+  ] satisfies [Awaited<ReturnType<typeof getH1bLeaderboard>>, string[]])
 
-  // One batched query for all rows' layoff badges (no N+1).
-  const layoffSignals = await getCompanyLayoffSignalsBatch(data.results.map((r) => r.company.id))
+  // One batched query for all rows' layoff badges (no N+1). Treat layoff badges
+  // as non-critical SEO decoration; the leaderboard page should still render.
+  const layoffSignals = await getCompanyLayoffSignalsBatch(data.results.map((r) => r.company.id)).catch(
+    () => new Map(),
+  )
 
   const cursor = filters.cursor ?? 0
   // Display ranks are contiguous within the current filter/sort view (1, 2, 3, …),

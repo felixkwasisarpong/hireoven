@@ -85,6 +85,9 @@ const AUTH_REQUIRED_PATTERNS = [
   /\bno\s+(?:visa|employment|work|company)?\s*sponsorship\b/i,
   /\bsponsorship\s+(?:is|will)?\s*not\s+(?:available|provided|offered|possible|considered)\b/i,
   /\b(?:do(?:es)?\s+not|will\s+not|won'?t|cannot|can\s?not|(?:are|is)\s+not\s+able\s+to|unable\s+to|not\s+able\s+to)\b[^.\n]{0,30}\bsponsor(?:ship)?\b/i,
+  /\b(?:candidate|applicant|individual)s?\s+(?:who\s+)?(?:require|requiring|requires)\s+sponsorship[^.\n]{0,100}\bwill\s+not\s+be\s+considered\b/i,
+  /\btemporary\s+visas?\b[^.\n]{0,180}\bwill\s+not\s+be\s+considered\b/i,
+  /\bmust\s+(?:currently\s+)?(?:possess|have|hold)\s+(?:valid\s+|current\s+|unrestricted\s+|valid\s+and\s+unrestricted\s+)?(?:u\.?\s?s\.?\s+)?(?:work|employment)\s+authorization\b/i,
   // Citizenship / U.S.-persons requirements (exclude visa holders).
   /\bmust be (?:a\s+|an\s+)?u\.?\s?s\.?\s+citizens?\b/i,
   /\b(?:u\.?\s?s\.?|united states)\s+citizen(?:ship)?\s+(?:is\s+)?required\b/i,

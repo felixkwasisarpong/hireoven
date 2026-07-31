@@ -10,7 +10,7 @@ import {
   resolveJobNormalization,
   type PersistedJobForNormalization,
 } from "@/lib/jobs/normalization"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import StayScorePanel from "@/components/stay/StayScorePanel"
 import OutcomeReporter from "@/components/stay/OutcomeReporter"
@@ -43,6 +43,39 @@ function isoDate(value: string | Date | null | undefined): string | undefined {
 function plainText(value: string | null | undefined): string | undefined {
   const text = value?.replace(/\s+/g, " ").trim()
   return text ? text.slice(0, 5000) : undefined
+}
+
+function htmlEscape(value: string): string {
+  return value.replace(
+    /[<>&'"]/g,
+    (char) =>
+      ({
+        "<": "&lt;",
+        ">": "&gt;",
+        "&": "&amp;",
+        "'": "&#39;",
+        '"': "&quot;",
+      })[char] ?? char,
+  )
+}
+
+function jobPostingDescriptionHtml(
+  sections: Array<{ label: string; items: string[] }>,
+  fallback: string | null | undefined,
+): string {
+  const blocks = sections
+    .map((section) => {
+      const items = section.items.map((item) => item.trim()).filter(Boolean)
+      if (items.length === 0) return null
+      return (
+        `<p>${htmlEscape(section.label)}</p>` +
+        `<ul>${items.map((item) => `<li>${htmlEscape(item)}</li>`).join("")}</ul>`
+      )
+    })
+    .filter(Boolean)
+
+  if (blocks.length > 0) return blocks.join("")
+  return `<p>${htmlEscape(plainText(fallback) ?? "Full role details are available on Hireoven.")}</p>`
 }
 
 function locationAddress(location: string | null | undefined) {
@@ -98,7 +131,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.id = $1::uuid
-       AND ${sqlPublishedJob("j")}
+       AND ${sqlSeoVisibleJob("j")}
        AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
      LIMIT 1`,
     [id]
@@ -144,7 +177,7 @@ export default async function PublicJobPage({ params }: Props) {
      FROM jobs
      LEFT JOIN companies ON companies.id = jobs.company_id
      WHERE jobs.id = $1::uuid
-       AND ${sqlPublishedJob("jobs")}
+       AND ${sqlSeoVisibleJob("jobs")}
        AND ${sqlJobLocatedInUsa("jobs", { companyAlias: "companies" })}
      LIMIT 1`,
     [id]
@@ -220,6 +253,10 @@ export default async function PublicJobPage({ params }: Props) {
     plainText(page.clean_description) ??
     plainText(topSections.flatMap((section) => section.items).join(" ")) ??
     `${page.title}${company?.name ? ` at ${company.name}` : ""}.`
+  const jobPostingDescription = jobPostingDescriptionHtml(
+    topSections.map((section) => ({ label: section.label, items: section.items })),
+    page.clean_description,
+  )
   const address = locationAddress(page.location ?? job.location)
   const salaryJsonLd = baseSalary(job)
   const companyLogoUrl = absoluteUrl(company?.logo_url, base)
@@ -227,11 +264,11 @@ export default async function PublicJobPage({ params }: Props) {
     "@context": "https://schema.org",
     "@type": "JobPosting",
     title: page.title,
-    description,
+    description: jobPostingDescription,
     identifier: {
       "@type": "PropertyValue",
-      name: "Hireoven",
-      value: job.id,
+      name: company?.name ?? "Hireoven",
+      value: job.external_id ?? job.id,
     },
     datePosted: isoDate(job.posted_at ?? job.first_detected_at),
     url: canonicalUrl,

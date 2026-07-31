@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { ArrowRight, Banknote, MapPin, Briefcase } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { companyIdFromParam, companyParam, salariesPath } from "@/lib/seo/company-seo"
@@ -60,7 +60,7 @@ async function getData(param: string): Promise<Data | null> {
   const company = cRes.rows[0]
   if (!company) return null
 
-  const where = `company_id = $1::uuid AND is_active = true AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`
+  const where = `company_id = $1::uuid AND is_active = true AND ${sqlSeoVisibleJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`
   const [jobsRes, countRes] = await Promise.all([
     pool.query<Job>(
       `SELECT id, title, location, is_remote, salary_min, salary_max, salary_currency, first_detected_at
@@ -72,7 +72,6 @@ async function getData(param: string): Promise<Data | null> {
   ])
 
   const total = countRes.rows[0]?.n ?? 0
-  if (total === 0) return null
   return { company, jobs: jobsRes.rows, total }
 }
 
@@ -94,6 +93,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function JobsAtPage({ params }: Props) {
   const d = await getData((await params).company)
   if (!d) notFound()
+  if (d.total === 0) redirect(`/companies/${d.company.id}`)
   const { company, jobs, total } = d
 
   const jsonLd = {
