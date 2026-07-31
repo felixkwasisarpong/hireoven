@@ -190,3 +190,12 @@ export function sqlPublishedJob(alias = "jobs"): string {
   }
   return `${col} = 'published'`
 }
+
+/**
+ * Public SEO pages should recognize the extended harvested-job visibility states
+ * regardless of the feed rollout flag. Otherwise sitemap/listing pages can link
+ * to jobs-at/company/job URLs that immediately 404 in production.
+ */
+export function sqlSeoVisibleJob(alias = "jobs"): string {
+  return `COALESCE(${alias}.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')`
+}

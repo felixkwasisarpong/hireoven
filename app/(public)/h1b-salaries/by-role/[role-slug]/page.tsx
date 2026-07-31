@@ -44,7 +44,8 @@ export default async function RoleSalaryPage({ params }: Props) {
     getWageForRole(role.soc_group),
     getRoleStateBreakdown(role.soc_group),
     getTopPayingCompaniesForRole(role.soc_group, undefined, 15),
-  ])
+  ]).catch(() => [null, [], []] as const)
+  if (!national) notFound()
 
   return (
     <div className="term-page min-h-dvh">

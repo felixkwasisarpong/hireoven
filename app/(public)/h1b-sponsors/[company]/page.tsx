@@ -22,7 +22,7 @@ import { getCompanyLayoffSignal } from "@/lib/h1b/layoff-signal-query"
 import { LayoffSignalCard } from "@/components/h1b/layoffs/LayoffSignalCard"
 import { CapExemptBadge } from "@/components/h1b/badges/CapExemptBadge"
 import { EverifyBadge } from "@/components/h1b/badges/EverifyBadge"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { WAGE_LEVEL_META, LEGACY_SINGLE_DRAW_ODDS, type WageLevel } from "@/lib/stay/lottery-odds"
@@ -84,7 +84,7 @@ async function getCompany(param: string): Promise<CompanyData | null> {
   const jobs = await pool.query<{ n: number }>(
     `SELECT count(*)::int AS n FROM jobs
       WHERE company_id = $1::uuid AND is_active = true
-        AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`,
+        AND ${sqlSeoVisibleJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`,
     [id],
   )
   return { ...r, openUsJobs: jobs.rows[0]?.n ?? 0, verdict: verdictFor(r) }

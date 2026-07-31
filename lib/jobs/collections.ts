@@ -13,7 +13,7 @@
  */
 
 import type { Pool } from "pg"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import type { PublicJobRow } from "@/lib/jobs/format"
 
@@ -267,7 +267,7 @@ export const KIND_LABELS: Record<CollectionKind, string> = {
 function baseWhere(predicate: string): string {
   return `
     j.is_active = true
-    AND ${sqlPublishedJob("j")}
+    AND ${sqlSeoVisibleJob("j")}
     AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
     AND (${predicate})
   `
@@ -329,7 +329,7 @@ export async function countAllCollections(pool: Pool): Promise<Record<string, nu
        FROM jobs j
        JOIN companies c ON c.id = j.company_id
       WHERE j.is_active = true
-        AND ${sqlPublishedJob("j")}
+        AND ${sqlSeoVisibleJob("j")}
         AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}`,
   )
   const row = rows[0] ?? {}

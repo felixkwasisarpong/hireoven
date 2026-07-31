@@ -1,10 +1,10 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { ArrowRight, Banknote, Briefcase, HelpCircle } from "lucide-react"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { companyIdFromParam, companyParam } from "@/lib/seo/company-seo"
@@ -45,7 +45,7 @@ async function getData(param: string): Promise<Data | null> {
 
   const where = `company_id = $1::uuid AND is_active = true
      AND salary_min IS NOT NULL AND salary_max IS NOT NULL AND salary_min >= ${ANNUAL_FLOOR}
-     AND ${sqlPublishedJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`
+     AND ${sqlSeoVisibleJob("jobs")} AND ${sqlJobLocatedInUsa("jobs")}`
 
   const aggRes = await pool.query<Agg>(
     `SELECT count(*)::int AS n,
@@ -57,7 +57,7 @@ async function getData(param: string): Promise<Data | null> {
     [id],
   )
   const agg = aggRes.rows[0]
-  if (!agg || agg.n < 3) return null // avoid thin pages
+  if (!agg) return null
 
   const rolesRes = await pool.query<Role>(
     `SELECT DISTINCT ON (title) title, salary_min, salary_max
@@ -108,8 +108,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SalariesPage({ params }: Props) {
-  const d = await getData((await params).company)
+  const param = (await params).company
+  const d = await getData(param)
   if (!d) notFound()
+  if (d.agg.n < 3) redirect(`/companies/${d.company.id}`)
   const { company, agg, roles } = d
   const cur = agg.currency ?? "USD"
   const faqs = faqItems(d)

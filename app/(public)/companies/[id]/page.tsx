@@ -21,7 +21,7 @@ import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
 import { EmployerHealthScore } from "@/components/employers/EmployerHealthScore"
 import { buildCompanyImmigrationProfile, formatProfilePercent, getProfileConfidenceLabel } from "@/lib/companies/immigration-profile"
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { getSessionUser } from "@/lib/auth/session-user"
@@ -208,7 +208,7 @@ async function loadCompany(id: string) {
        FROM jobs
        WHERE company_id = $1::uuid
          AND is_active = true
-         AND ${sqlPublishedJob("jobs")}
+         AND ${sqlSeoVisibleJob("jobs")}
          AND ${sqlJobLocatedInUsa("jobs")}
        ORDER BY first_detected_at DESC NULLS LAST
        LIMIT 12`,
