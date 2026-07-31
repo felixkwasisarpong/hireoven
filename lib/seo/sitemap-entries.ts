@@ -13,7 +13,7 @@ export { siteBaseUrl }
 // Google caps a single sitemap at 50,000 URLs. We routinely exceed that, so the
 // routes split entries into chunks and serve a sitemap index. Keep headroom under
 // the hard limit so a growth spike between deploys can't push a chunk over.
-export const SITEMAP_CHUNK = 45000
+export const SITEMAP_CHUNK = 10000
 
 // Cap on individual /jobs/[id] URLs in the sitemap. Job detail pages are the core
 // long-tail SEO surface, so we index far more than the old 1000, but keep a bound:
