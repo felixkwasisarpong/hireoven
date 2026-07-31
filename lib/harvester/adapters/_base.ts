@@ -54,6 +54,7 @@ export type AtsName =
   | "jsonld"
   | "sitemapjsonld"
   | "radancy"
+  | "jobs2web"
   | "tiktok"
   | "google"
 

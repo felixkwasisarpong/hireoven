@@ -311,8 +311,15 @@ SELECT
   COALESCE((v->>'is_remote')::boolean, false)                                   AS is_remote,
   COALESCE((v->>'is_hybrid')::boolean, false)                                   AS is_hybrid,
   NULLIF(v->>'requires_authorization','')::boolean                               AS requires_authorization,
-  NULLIF(v->>'salary_min','')::integer                                          AS salary_min,
-  NULLIF(v->>'salary_max','')::integer                                          AS salary_max,
+  -- Route through ::numeric first: some sources (Walmart's hourly-wage
+  -- postings, e.g. minPay=22.80) report fractional salary values, and a
+  -- direct ::integer cast on a decimal-looking string ("22.8") is a hard
+  -- Postgres error ("invalid input syntax for type integer"), which failed
+  -- Walmart's ENTIRE bulk upsert (and therefore its whole crawl) every time
+  -- any job in the batch had a fractional wage. ::numeric parses the
+  -- decimal; ::integer then rounds to the nearest whole dollar.
+  NULLIF(v->>'salary_min','')::numeric::integer                                 AS salary_min,
+  NULLIF(v->>'salary_max','')::numeric::integer                                 AS salary_max,
   v->>'salary_currency'                                                         AS salary_currency,
   (SELECT array_agg(x) FROM jsonb_array_elements_text(COALESCE(v->'skills', '[]'::jsonb)) x) AS skills,
   NULLIF(v->>'sponsors_h1b','')::boolean                                        AS sponsors_h1b,

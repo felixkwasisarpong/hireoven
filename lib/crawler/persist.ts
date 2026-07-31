@@ -190,8 +190,13 @@ async function updateJobsBatch(
          is_remote              = (v->>'is_remote')::boolean,
          is_hybrid              = (v->>'is_hybrid')::boolean,
          requires_authorization = (v->>'requires_authorization')::boolean,
-         salary_min             = (v->>'salary_min')::integer,
-         salary_max             = (v->>'salary_max')::integer,
+         -- ::numeric first: a direct ::integer cast on a decimal-looking
+         -- string ("22.8", e.g. a fractional hourly wage) is a hard Postgres
+         -- error that fails the whole batch update. ::numeric parses the
+         -- decimal; ::integer then rounds to the nearest whole dollar. Same
+         -- defect confirmed live in lib/harvester/persist-bulk.ts (Walmart).
+         salary_min             = (v->>'salary_min')::numeric::integer,
+         salary_max             = (v->>'salary_max')::numeric::integer,
          salary_currency        = v->>'salary_currency',
          description            = v->>'description',
          external_id            = v->>'external_id',

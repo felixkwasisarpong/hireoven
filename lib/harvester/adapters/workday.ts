@@ -141,7 +141,11 @@ type ParsedSlug = {
   site: string
 }
 
-const WD_HOST_RE = /^([a-z0-9-]+)\.(wd\d{1,3})\.myworkdayjobs\.com$/i
+// Real tenant (subdomain AND cxs API path) can contain an underscore — found
+// live: Sallie Mae's Workday tenant is "sallie_mae" on both, even though
+// "_" is technically invalid in DNS hostnames (Workday's own platform
+// tolerates it — verified directly against the live cxs API and subdomain).
+const WD_HOST_RE = /^([a-z0-9_-]+)\.(wd\d{1,3})\.myworkdayjobs\.com$/i
 
 function isLocaleSegment(segment: string): boolean {
   return /^[a-z]{2}(-[a-z]{2,3})?$/i.test(segment)
@@ -152,7 +156,7 @@ function parseSlug(slug: string): ParsedSlug | null {
   if (parts.length !== 3) return null
   const [tenant, wd, site] = parts
   if (!tenant || !wd || !site) return null
-  if (!/^[a-z0-9-]+$/i.test(tenant)) return null
+  if (!/^[a-z0-9_-]+$/i.test(tenant)) return null
   if (!/^wd\d{1,3}$/i.test(wd)) return null
   if (!/^[A-Za-z0-9_-]+$/.test(site)) return null
   return { tenant, wd, site }

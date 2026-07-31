@@ -31,6 +31,34 @@ const PAIRS: Array<{ label: string; canonical: string; dup: string }> = [
   { label: "Vanguard ← The Vanguard Group (thevanguard.com)",
     canonical: "4cc5311e-1675-40a4-a32a-1050136b2640",
     dup: "a1160540-0c1b-49e0-89f0-8b29bc31703f" },
+  { label: "Allstate (allstate.com) ← Allstate (allstate:wd5:allstate_careers.workday-tenant placeholder domain)",
+    canonical: "674cdd3a-0857-44fb-93ed-fe65d9ca26aa",
+    dup: "a40671c5-6486-4e11-b491-135387419fcb" },
+  // Wrong-survivor case: an earlier auto-dedupe pass picked the SYNTHETIC
+  // placeholder-domain row as canonical and flagged the real-domain row as
+  // its duplicate (without deactivating it) — the real plaid.com row kept
+  // is_active=true but stopped being crawled ~1 month ago once flagged.
+  // Reversing direction here: plaid.com becomes canonical, the
+  // ashby-discovered placeholder becomes the (properly deactivated) dup.
+  { label: "Plaid (plaid.com) ← Plaid (plaid.ashby-discovered placeholder domain) — reversing a wrong-survivor auto-dedupe",
+    canonical: "275b8392-5a38-4ec7-8b39-acb924acec26",
+    dup: "4aa5321c-446b-4e99-90ee-e6c9a1752370" },
+  // Genuinely broken dedupe state found live: THREE active WGU rows for the
+  // same Workday tenant (ats_identifier "wgu:wd5:External" on all three),
+  // with a literal circular duplicate_of_company_id reference between two
+  // of them (b5e7a06a -> 3d1c2cfc -> b5e7a06a) plus a third row pointing at
+  // the same hub. Real institutional domain (wgu.edu) becomes canonical;
+  // the raw ATS-hosted URL and the synthetic "workday-tenant" identifier-
+  // as-domain rows both fold into it.
+  { label: "Western Governors University (wgu.edu) ← Wgu (wgu.wd5.myworkdayjobs.com raw ATS URL) — breaking a circular dedupe reference",
+    canonical: "3d1c2cfc-f9b5-4352-a85d-56e00d6e45f4",
+    dup: "b5e7a06a-aecc-4ca3-8ba1-6b5192a94bfd" },
+  { label: "Western Governors University (wgu.edu) ← WGU (wgu:wd5:external.workday-tenant synthetic identifier-as-domain)",
+    canonical: "3d1c2cfc-f9b5-4352-a85d-56e00d6e45f4",
+    dup: "9ef7d81b-2b46-4c5b-b38c-4afc8e9789a1" },
+  { label: "Flock Homes (flock.com) ← Flock Homes (flockhomes.greenhouse-discovered placeholder domain)",
+    canonical: "8da7b7ce-12b7-4273-bcde-737076558589",
+    dup: "a0d48b9b-99d5-4116-8063-51a7bdfcf4d3" },
 ]
 
 async function mergeOne(
