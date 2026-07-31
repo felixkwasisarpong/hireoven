@@ -818,6 +818,7 @@ test("normalizeCrawlerJobForPersistence sets explicit_sponsorship_status=no_spon
     "No sponsorship available for this position.",
     "Candidates must be authorized to work in the US. We are unable to provide sponsorship.",
     "H1B sponsorship is not available for this role.",
+    "You must currently possess valid and unrestricted U.S. work authorization to be considered for this role. Individuals with temporary visas including, but not limited to, F-1 (OPT, CPT, STEM), H-1B, H-2, or TN, or any candidate requiring sponsorship, now or in the future, will not be considered for this role.",
   ]) {
     const result = normalizeCrawlerJobForPersistence({
       rawJob: {
