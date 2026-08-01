@@ -36,6 +36,7 @@ services:
       HARVESTER_HTTP_403_COOLDOWN_SECONDS: ${HARVESTER_HTTP_403_COOLDOWN_SECONDS:-86400}
       HARVESTER_PER_COMPANY_TIMEOUT_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_MS:-60000}
       HARVESTER_PER_COMPANY_TIMEOUT_WORKDAY_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_WORKDAY_MS:-120000}
+      HARVESTER_PER_COMPANY_TIMEOUT_WORKABLE_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_WORKABLE_MS:-180000}
       HARVESTER_PER_COMPANY_TIMEOUT_SMARTRECRUITERS_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_SMARTRECRUITERS_MS:-90000}
       HARVESTER_PER_COMPANY_TIMEOUT_ASHBY_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_ASHBY_MS:-90000}
       HARVESTER_PER_COMPANY_TIMEOUT_USAJOBS_MS: ${HARVESTER_PER_COMPANY_TIMEOUT_USAJOBS_MS:-90000}
@@ -45,6 +46,7 @@ services:
       # we go per crawl. Keep it paired with the APPLE per-company timeout above.
       HARVESTER_APPLE_MAX_PAGES: ${HARVESTER_APPLE_MAX_PAGES:-100}
       HARVESTER_WORKDAY_REQUEST_TIMEOUT_MS: ${HARVESTER_WORKDAY_REQUEST_TIMEOUT_MS:-20000}
+      HARVESTER_WORKABLE_REQUEST_TIMEOUT_MS: ${HARVESTER_WORKABLE_REQUEST_TIMEOUT_MS:-28000}
       HARVESTER_SMARTRECRUITERS_REQUEST_TIMEOUT_MS: ${HARVESTER_SMARTRECRUITERS_REQUEST_TIMEOUT_MS:-12000}
       HARVESTER_ASHBY_REQUEST_TIMEOUT_MS: ${HARVESTER_ASHBY_REQUEST_TIMEOUT_MS:-12000}
       HARVESTER_USAJOBS_REQUEST_TIMEOUT_MS: ${HARVESTER_USAJOBS_REQUEST_TIMEOUT_MS:-20000}
@@ -52,9 +54,11 @@ services:
       HARVESTER_ASHBY_CONCURRENCY: ${HARVESTER_ASHBY_CONCURRENCY:-2}
       HARVESTER_GREENHOUSE_CONCURRENCY: ${HARVESTER_GREENHOUSE_CONCURRENCY:-3}
       HARVESTER_LEVER_CONCURRENCY: ${HARVESTER_LEVER_CONCURRENCY:-2}
+      HARVESTER_WORKABLE_CONCURRENCY: ${HARVESTER_WORKABLE_CONCURRENCY:-3}
       # Route adapter fetches whose host matches HARVESTER_PROXY_HOSTS through a
-      # proxy. Default is Workday only (its per-tenant rate is low enough for one
-      # proxy IP). Keep high-volume ATS hosts direct unless you have a legitimate
+      # proxy. Code-level defaults always include Workday + Workable; this env is
+      # additive, so overriding it extends those defaults rather than replacing
+      # them. Keep other high-volume ATS hosts direct unless you have a legitimate
       # proxy route and still keep their host-rate caps in place.
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
@@ -123,7 +127,7 @@ services:
       # HARVESTER_PROXY_HOSTS. Leave HARVESTER_PROXY_URL unset for direct fetch.
       # WARNING: keep the host list targeted to known-WAF hosts — funnelling
       # high-volume ATS hosts (greenhouse/lever) through one proxy IP will get
-      # that IP blocked. Default proxies Workday only.
+      # that IP blocked. Code-level defaults include Workday + Workable.
       HARVESTER_PROXY_URL: ${HARVESTER_PROXY_URL:-}
       HARVESTER_PROXY_HOSTS: ${HARVESTER_PROXY_HOSTS:-myworkdayjobs.com}
       # Pages Jooble walks per query (was single-page; raise if quota allows).

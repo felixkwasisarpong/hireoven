@@ -254,10 +254,18 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
   const [session, jobResult] = await Promise.all([
     getSessionUser(),
     pool.query(
-      `SELECT j.*, to_jsonb(c.*) AS company
-       FROM jobs j
+      `WITH requested AS (
+         SELECT id, duplicate_of_id, is_active
+         FROM jobs
+         WHERE id = $1::uuid
+         LIMIT 1
+       )
+       SELECT j.*, to_jsonb(c.*) AS company
+       FROM requested r
+       JOIN jobs j ON j.id = COALESCE(r.duplicate_of_id, r.id)
        LEFT JOIN companies c ON c.id = j.company_id
-       WHERE j.id = $1::uuid AND j.is_active = true
+       WHERE (r.is_active = true OR r.duplicate_of_id IS NOT NULL)
+         AND j.is_active = true
        LIMIT 1`,
       [id]
     ),
@@ -266,6 +274,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
   if (!rawJob) notFound()
 
   const job = rawJob as unknown as Job & { company: Company | null }
+  const canonicalJobId = job.id
   const company = job.company
   const logoFallback = jobSourceFallbackLogo(
     job,
@@ -441,7 +450,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
            WHERE jms.user_id = $1 AND jms.job_id = $2
            ORDER BY jms.computed_at DESC
            LIMIT 1`,
-          [session.sub, id]
+          [session.sub, canonicalJobId]
         )
       : Promise.resolve({ rows: [] as CachedScoreRow[] }),
     session?.sub
@@ -459,7 +468,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
           `${similarSql} AND j.company_id = $1 AND j.id <> $2::uuid
            ORDER BY j.first_detected_at DESC NULLS LAST
            LIMIT 4`,
-          [job.company_id, id]
+          [job.company_id, canonicalJobId]
         )
       : Promise.resolve({ rows: [] as SimilarJob[] }),
   ])
@@ -674,7 +683,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
             {/* CTA — desktop */}
             <div className="hidden shrink-0 flex-col items-end gap-2.5 sm:flex">
               <ApplyButton
-                jobId={id}
+                jobId={canonicalJobId}
                 jobTitle={displayTitle}
                 companyName={company?.name ?? "Company"}
                 companyLogoUrl={companyLogoUrl}
@@ -683,7 +692,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                 className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-[14px] font-bold text-primary-foreground shadow-[0_4px_24px_rgba(255,92,24,0.35)] transition hover:bg-primary-hover active:scale-[0.98] disabled:opacity-70"
               />
               <ReferralDraftButton
-                jobId={id}
+                jobId={canonicalJobId}
                 jobTitle={displayTitle}
                 companyName={company?.name ?? "Company"}
                 applyUrl={page.apply_url}
@@ -694,7 +703,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
           {/* CTA — mobile (desktop CTA above is hidden on phones) */}
           <div className="flex flex-col gap-2.5 pb-5 sm:hidden">
             <ApplyButton
-              jobId={id}
+              jobId={canonicalJobId}
               jobTitle={displayTitle}
               companyName={company?.name ?? "Company"}
               companyLogoUrl={companyLogoUrl}
@@ -703,7 +712,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
               className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-[14px] font-bold text-primary-foreground shadow-[0_4px_24px_rgba(255,92,24,0.35)] transition hover:bg-primary-hover active:scale-[0.98] disabled:opacity-70"
             />
             <ReferralDraftButton
-              jobId={id}
+              jobId={canonicalJobId}
               jobTitle={displayTitle}
               companyName={company?.name ?? "Company"}
               applyUrl={page.apply_url}
@@ -962,7 +971,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
 
       <ApexMiniPanel
         pagePath={`/dashboard/jobs/${id}`}
-        jobId={id}
+        jobId={canonicalJobId}
         companyId={company?.id ?? undefined}
         suggestionChips={["Should I apply?", "What should I fix first?"]}
       />

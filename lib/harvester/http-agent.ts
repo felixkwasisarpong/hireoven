@@ -139,14 +139,19 @@ function dispatcherFor(url: Parameters<typeof undiciFetch>[0]): Dispatcher {
  * types differ subtly (Symbol.dispose iterator) so we cast through `unknown`
  * and trust runtime behaviour.
  */
-export const harvesterFetch = (async (
+export async function waitForHarvesterHostGate(
+  url: Parameters<typeof undiciFetch>[0],
+  signal?: AbortSignal
+): Promise<void> {
+  const href = hrefOf(url)
+  if (href) await gateHostRate(href, Date.now(), signal)
+}
+
+async function harvesterFetchNetworkImpl(
   url: Parameters<typeof undiciFetch>[0],
   init?: Parameters<typeof undiciFetch>[1]
-) => {
-  // Proactively rate-gate configured (path-based, per-IP-limited) hosts so we
-  // never exceed their threshold and earn a 429. No-op for unconfigured hosts.
+) {
   const href = hrefOf(url)
-  if (href) await gateHostRate(href)
   const res = await undiciFetch(url, { ...init, dispatcher: dispatcherFor(url) })
   // Feed the status back into the adaptive governor + circuit breaker. A 429/403
   // here cuts this host's rate (and, on a streak, trips its breaker) so the NEXT
@@ -155,6 +160,19 @@ export const harvesterFetch = (async (
   // reported: they may be our own timeout/abort, not the host refusing us.
   if (href) reportHostResult(href, res.status)
   return res
+}
+
+export const harvesterFetchNetwork = harvesterFetchNetworkImpl as unknown as typeof fetch
+
+export const harvesterFetch = (async (
+  url: Parameters<typeof undiciFetch>[0],
+  init?: Parameters<typeof undiciFetch>[1]
+) => {
+  // Proactively rate-gate configured (path-based, per-IP-limited) hosts so we
+  // never exceed their threshold and earn a 429. No-op for unconfigured hosts.
+  const signal = init && "signal" in init ? (init.signal as AbortSignal | undefined) : undefined
+  await waitForHarvesterHostGate(url, signal)
+  return harvesterFetchNetworkImpl(url, init)
 }) as unknown as typeof fetch
 
 /** Test/debug accessor — never used in production code. */

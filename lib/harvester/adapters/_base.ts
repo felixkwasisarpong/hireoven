@@ -1,5 +1,8 @@
 import crypto from "node:crypto"
-import { harvesterFetch } from "@/lib/harvester/http-agent"
+import {
+  harvesterFetchNetwork,
+  waitForHarvesterHostGate,
+} from "@/lib/harvester/http-agent"
 
 export type AtsName =
   | "greenhouse"
@@ -174,7 +177,7 @@ export async function conditionalFetchJson<T>(
   const method = options.method ?? "GET"
   const userAgent = ctx.userAgent ?? DEFAULT_USER_AGENT
   const timeoutMs = Math.max(1_000, ctx.timeoutMs ?? DEFAULT_TIMEOUT_MS)
-  const doFetch = ctx.fetchImpl ?? harvesterFetch
+  const doFetch = ctx.fetchImpl ?? harvesterFetchNetwork
 
   const headers: Record<string, string> = {
     "user-agent": userAgent,
@@ -193,13 +196,21 @@ export async function conditionalFetchJson<T>(
 
   while (attempt < maxAttempts) {
     attempt += 1
-    const startedAt = Date.now()
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), timeoutMs)
-    const unlinkAbortSignal = linkAbortSignal(ctx.signal, controller)
+    let startedAt = 0
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let unlinkAbortSignal: (() => void) | undefined
 
     try {
       throwIfAborted(ctx.signal)
+      if (!ctx.fetchImpl) {
+        await waitForHarvesterHostGate(url, ctx.signal)
+        throwIfAborted(ctx.signal)
+      }
+
+      startedAt = Date.now()
+      const controller = new AbortController()
+      timeout = setTimeout(() => controller.abort(), timeoutMs)
+      unlinkAbortSignal = linkAbortSignal(ctx.signal, controller)
       const response = await doFetch(url, {
         method,
         headers,
@@ -268,7 +279,7 @@ export async function conditionalFetchJson<T>(
         : 250 * 2 ** (attempt - 1) + Math.random() * 250
       await sleep(backoff)
     } catch (error) {
-      const upstreamLatencyMs = Date.now() - startedAt
+      const upstreamLatencyMs = startedAt > 0 ? Date.now() - startedAt : 0
       lastStatus = null
       lastReason =
         error instanceof Error && error.name === "AbortError" ? "timeout" : "fetch_error"
@@ -277,8 +288,8 @@ export async function conditionalFetchJson<T>(
       }
       await sleep(250 * 2 ** (attempt - 1) + Math.random() * 250)
     } finally {
-      clearTimeout(timeout)
-      unlinkAbortSignal()
+      if (timeout) clearTimeout(timeout)
+      unlinkAbortSignal?.()
     }
   }
 
