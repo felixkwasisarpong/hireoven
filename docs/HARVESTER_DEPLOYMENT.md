@@ -128,7 +128,9 @@ worker.
    - `DATABASE_URL` — same as web service
    - `HARVESTER_TICK_INTERVAL_MS=30000`
    - `HARVESTER_CLAIM_BATCH_SIZE=20`
-   - `HARVESTER_LEASE_SECONDS=240`
+   - `HARVESTER_LEASE_SECONDS=900`
+   - `HARVESTER_TICK_TIMEOUT_MS=600000`
+   - `HARVESTER_PER_COMPANY_TIMEOUT_ORACLECLOUD_MS=420000`
    - `HARVESTER_CONCURRENCY=8`
    - `HARVESTER_FAILURE_COOLDOWN_SECONDS=1800` (failed rows wait at least 30m before retry)
    - `HARVESTER_HTTP2=false` (only set `true` if on Node 22+)
@@ -138,7 +140,7 @@ worker.
 **Verify worker logs:**
 
 ```text
-[harvester] started {"tickMs":30000,"batch":20,"leaseSec":240,"defaultConcurrency":8,
+[harvester] started {"tickMs":30000,"batch":20,"leaseSec":900,"defaultConcurrency":8,
   "perAdapter":{"greenhouse":16,"lever":8,"ashby":8,"smartrecruiters":6,"workable":8,
   "workday":4,"recruitee":8,"teamtailor":8,"personio":6,"bamboohr":6,"jazzhr":6,"icims":3,"infosys":1,"apple":1}}
 [harvester] tick {"claimed":20,"succeeded":18,"failed":2,"notModified":4,"newJobs":6,"durationMs":3120,

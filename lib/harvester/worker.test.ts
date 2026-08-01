@@ -36,7 +36,7 @@ test("loadWorkerConfig: defaults when env is empty", () => {
   const config = loadWorkerConfig({})
   assert.equal(config.tickIntervalMs, 30_000)
   assert.equal(config.claimBatchSize, 20)
-  assert.equal(config.leaseSeconds, 240)
+  assert.equal(config.leaseSeconds, 900)
   assert.equal(config.concurrency, 8)
 })
 
@@ -64,7 +64,7 @@ test("loadWorkerConfig: falls back on garbage env", () => {
   })
   assert.equal(config.tickIntervalMs, 30_000)
   assert.equal(config.claimBatchSize, 20)
-  assert.equal(config.leaseSeconds, 240)
+  assert.equal(config.leaseSeconds, 900)
   assert.equal(config.concurrency, 8)
 })
 
@@ -72,6 +72,7 @@ test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters",
   assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 60_000)
   assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 60_000)
   assert.equal(resolvePerCompanyTimeoutMs("workable", {}), 180_000)
+  assert.equal(resolvePerCompanyTimeoutMs("oraclecloud", {}), 420_000)
   assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 280_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
 })

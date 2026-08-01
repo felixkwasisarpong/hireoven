@@ -74,9 +74,10 @@ export function loadWorkerConfig(
     // the lease still covers it and Coolify's health checks don't flag
     // the worker as unresponsive.
     claimBatchSize: intPositive(env.HARVESTER_CLAIM_BATCH_SIZE, 20, 1, MAX_CLAIM_BATCH_SIZE),
-    // Bumped 120 → 240 to give a worst-case slightly-slow tick room
-    // before the lease expires and companies get re-claimed.
-    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 240),
+    // Large single-customer boards (OracleCloud/JPMorgan, Apple, Walmart) can
+    // legitimately run for several minutes. Keep the default lease longer than
+    // the tick watchdog so claimed rows are not re-claimed mid-run.
+    leaseSeconds: intPositive(env.HARVESTER_LEASE_SECONDS, 900),
     concurrency: intPositive(env.HARVESTER_CONCURRENCY, 8, 1, MAX_DEFAULT_CONCURRENCY),
     adapterFilter: loadAdapterClaimFilter(env),
   }
@@ -116,7 +117,9 @@ const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   ashby: 60_000,
   usajobs: 60_000,
   icims: 60_000,
-  oraclecloud: 180_000, // large tenants (JPMorgan ~7.1k) paginate 200/page → ~36 pages + detail-fetch budget
+  // JPMorgan/Chase is ~7.3k jobs and observed full runs land between 211s and
+  // 348s under production load; 180s killed the board with zero persisted jobs.
+  oraclecloud: 420_000,
   apple: 280_000, // ~100 Playwright-rendered list pages + a detail-fetch budget
   // Was 150_000 — measured ~2.6s/page x up to 100 pages + 300ms inter-page
   // delay = ~290s for a full traversal at Amazon's current (~10k-cap) job
@@ -851,7 +854,7 @@ export function startWorkerLoop(
     // tick on top of the stuck one.
     const tickTimeoutMs = Math.max(
       60_000,
-      Number.parseInt(process.env.HARVESTER_TICK_TIMEOUT_MS ?? "300000", 10)
+      Number.parseInt(process.env.HARVESTER_TICK_TIMEOUT_MS ?? "600000", 10)
     )
 
     while (!stopping) {
