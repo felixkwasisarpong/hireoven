@@ -180,12 +180,19 @@ test("dedupJobs: dry-run rolls back, still reports would-have-changed count", as
   assert.equal(getCommitted(), false)
 })
 
-test("COMPANY_DEDUP_SQL: partitions on (ats_type, lower(ats_identifier)) and prefers richer canonicals", () => {
-  assert.match(COMPANY_DEDUP_SQL, /PARTITION BY c\.ats_type, lower\(c\.ats_identifier\)/)
+test("COMPANY_DEDUP_SQL: partitions on canonical ats key and prefers richer canonicals", () => {
+  assert.match(COMPANY_DEDUP_SQL, /PARTITION BY c\.ats_type, c\.ats_dedupe_key/)
   assert.match(COMPANY_DEDUP_SQL, /CASE WHEN c\.status = 'active' THEN 0 ELSE 1 END/)
+  assert.match(COMPANY_DEDUP_SQL, /lower\(trim\(c\.ats_identifier\)\) = c\.ats_dedupe_key/)
   assert.match(COMPANY_DEDUP_SQL, /COALESCE\(c\.job_count, 0\) DESC/)
   assert.match(COMPANY_DEDUP_SQL, /c\.created_at ASC NULLS LAST/)
   assert.match(COMPANY_DEDUP_SQL, /duplicate_of_company_id IS DISTINCT FROM ranked\.canonical_id/)
+})
+
+test("COMPANY_DEDUP_SQL: canonicalizes legacy Workday identifiers from careers_url", () => {
+  assert.match(COMPANY_DEDUP_SQL, /myworkdayjobs\\\.com/)
+  assert.match(COMPANY_DEDUP_SQL, /regexp_replace\(/)
+  assert.match(COMPANY_DEDUP_SQL, /\\1:\\2:\\3/)
 })
 
 test("COMPANY_DEDUP_SQL: skips rows missing ats_type or ats_identifier", () => {

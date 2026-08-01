@@ -86,10 +86,19 @@ export async function GET(
   const pool = getPostgresPool()
 
   const result = await pool.query<JobWithCompany>(
-    `SELECT j.*, to_jsonb(c.*) AS company
-     FROM jobs j
+    `WITH requested AS (
+       SELECT id, duplicate_of_id, is_active
+       FROM jobs
+       WHERE id = $1
+       LIMIT 1
+     )
+     SELECT j.*, to_jsonb(c.*) AS company
+     FROM requested r
+     JOIN jobs j ON j.id = COALESCE(r.duplicate_of_id, r.id)
      LEFT JOIN companies c ON c.id = j.company_id
-     WHERE j.id = $1 AND ${sqlJobLocatedInUsa("j")}
+     WHERE (r.is_active = true OR r.duplicate_of_id IS NOT NULL)
+       AND j.is_active = true
+       AND ${sqlJobLocatedInUsa("j")}
      LIMIT 1`,
     [id]
   )

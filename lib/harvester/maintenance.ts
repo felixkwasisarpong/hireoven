@@ -115,39 +115,69 @@ RETURNING jobs.id
 `
 
 /**
- * Companies-level dedup. Two `companies` rows with the same
- * `(ats_type, ats_identifier)` map to the same real-world employer board and
- * would harvest identical jobs. Pick the richest canonical (active > inactive,
+ * Companies-level dedup. Two `companies` rows with the same canonical ATS board
+ * map to the same harvest source and would harvest identical jobs. Pick the
+ * richest canonical (active > inactive, canonical identifier > legacy alias,
  * more jobs > fewer, older > newer) and point the rest at it via
  * `duplicate_of_company_id`. The worker's claim filter then skips duplicates.
  *
- * `ats_identifier` is lower-cased for the partition key so "Stripe" and
- * "stripe" collapse; we keep the originals in the canonical row.
+ * Workday historically entered the DB in both `{tenant}:{wd}:{site}` and
+ * `{tenant}/{site}` forms. Canonicalize from the URL when possible so legacy
+ * rows like `takeda/External` collapse with `takeda:wd3:external`.
  */
 export const COMPANY_DEDUP_SQL = `
-WITH ranked AS (
+WITH keyed AS (
+  SELECT
+    c.*,
+    CASE
+      WHEN c.ats_type = 'workday' THEN
+        COALESCE(
+          CASE
+            WHEN COALESCE(NULLIF(c.direct_ats_url, ''), NULLIF(c.careers_url, ''), '') ~* '^https?://[a-z0-9_-]+\\.wd[0-9]{1,3}\\.myworkdayjobs\\.com/(?:[a-z]{2}(?:-[a-z]{2,3})?/)?[A-Za-z0-9_-]+'
+            THEN lower(regexp_replace(
+              COALESCE(NULLIF(c.direct_ats_url, ''), NULLIF(c.careers_url, ''), ''),
+              '^https?://([a-z0-9_-]+)\\.(wd[0-9]{1,3})\\.myworkdayjobs\\.com/(?:[a-z]{2}(?:-[a-z]{2,3})?/)?([A-Za-z0-9_-]+).*$',
+              '\\1:\\2:\\3',
+              'i'
+            ))
+          END,
+          CASE
+            WHEN trim(c.ats_identifier) ~* '^[a-z0-9_-]+:wd[0-9]{1,3}:[A-Za-z0-9_-]+$'
+            THEN lower(trim(c.ats_identifier))
+          END,
+          lower(trim(c.ats_identifier))
+        )
+      ELSE lower(trim(c.ats_identifier))
+    END AS ats_dedupe_key
+  FROM companies c
+  WHERE c.ats_type IS NOT NULL
+    AND c.ats_identifier IS NOT NULL
+    AND length(trim(c.ats_identifier)) > 0
+),
+ranked AS (
   SELECT
     c.id,
     row_number() OVER (
-      PARTITION BY c.ats_type, lower(c.ats_identifier)
+      PARTITION BY c.ats_type, c.ats_dedupe_key
       ORDER BY
         CASE WHEN c.status = 'active' THEN 0 ELSE 1 END,
+        CASE WHEN lower(trim(c.ats_identifier)) = c.ats_dedupe_key THEN 0 ELSE 1 END,
         COALESCE(c.job_count, 0) DESC,
         c.created_at ASC NULLS LAST,
         c.id
     ) AS rn,
     first_value(c.id) OVER (
-      PARTITION BY c.ats_type, lower(c.ats_identifier)
+      PARTITION BY c.ats_type, c.ats_dedupe_key
       ORDER BY
         CASE WHEN c.status = 'active' THEN 0 ELSE 1 END,
+        CASE WHEN lower(trim(c.ats_identifier)) = c.ats_dedupe_key THEN 0 ELSE 1 END,
         COALESCE(c.job_count, 0) DESC,
         c.created_at ASC NULLS LAST,
         c.id
     ) AS canonical_id
-  FROM companies c
-  WHERE c.ats_type IS NOT NULL
-    AND c.ats_identifier IS NOT NULL
-    AND length(trim(c.ats_identifier)) > 0
+  FROM keyed c
+  WHERE c.ats_dedupe_key IS NOT NULL
+    AND length(c.ats_dedupe_key) > 0
 )
 UPDATE companies
 SET duplicate_of_company_id = ranked.canonical_id,
