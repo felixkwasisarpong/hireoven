@@ -32,6 +32,22 @@ test("gate throttles once the burst allowance is spent", async () => {
   assert.ok(waited >= 30, `expected a throttle wait, got ${waited}ms`)
 })
 
+test("gate wait can be aborted by the caller signal", async () => {
+  __setHostRateConfig("apply.workable.com=1")
+  const url = "https://apply.workable.com/api"
+  const base = 2_000_000
+  await gateHostRate(url, base)
+
+  const controller = new AbortController()
+  const wait = gateHostRate(url, base, controller.signal)
+  setTimeout(() => controller.abort(), 20)
+
+  await assert.rejects(
+    wait,
+    (error) => error instanceof Error && error.name === "AbortError"
+  )
+})
+
 test("__resetHostRateGate clears config", async () => {
   __setHostRateConfig("apply.workable.com=6")
   assert.equal(isHostGated("https://apply.workable.com/x"), true)
@@ -76,12 +92,13 @@ test("a success recovers the rate and closes the circuit", () => {
 
 test("circuit opens after the consecutive-block threshold, then gate waits", async () => {
   __resetHostRateGate()
-  __setHostRateConfig("waf.example.com=5")
+  __setHostRateConfig("waf.example.com=1000")
   const url = "https://waf.example.com/x"
+  const now = Date.now()
   // Default threshold is 5 consecutive blocks.
-  for (let i = 0; i < 5; i++) reportHostResult(url, 403)
+  for (let i = 0; i < 5; i++) reportHostResult(url, 403, now)
   assert.equal(__hostGateState(url)!.circuitOpen, true, "circuit trips after the threshold")
   const t0 = Date.now()
-  await gateHostRate(url)
-  assert.ok(Date.now() - t0 >= 20, "an open circuit makes the next request wait out the cooldown")
+  await gateHostRate(url, now + 29_980)
+  assert.ok(Date.now() - t0 >= 10, "an open circuit makes the next request wait out the cooldown")
 })

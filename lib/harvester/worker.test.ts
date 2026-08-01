@@ -11,6 +11,7 @@ import {
   scaleWorkerConfigForLoops,
   type AdapterClaimFilter,
 } from "./worker"
+import { registeredAdapterNames } from "./adapters"
 
 test("enabledClaimAdapters: explicit include wins over a global exclude", () => {
   // Dedicated workable worker: include=[workable] must survive even when the
@@ -25,6 +26,10 @@ test("enabledClaimAdapters: exclude filters the default set when no include", ()
   const result = enabledClaimAdapters({ include: null, exclude: ["workable"] })
   assert.ok(!result.includes("workable"), "workable excluded from default set")
   assert.ok(result.includes("greenhouse"), "other adapters remain")
+})
+
+test("enabledClaimAdapters: default covers every registered adapter", () => {
+  assert.deepEqual(enabledClaimAdapters(), registeredAdapterNames())
 })
 
 test("loadWorkerConfig: defaults when env is empty", () => {
@@ -66,6 +71,7 @@ test("loadWorkerConfig: falls back on garbage env", () => {
 test("resolvePerCompanyTimeoutMs: uses ATS-specific defaults for slow adapters", () => {
   assert.equal(resolvePerCompanyTimeoutMs("workday", {}), 60_000)
   assert.equal(resolvePerCompanyTimeoutMs("smartrecruiters", {}), 60_000)
+  assert.equal(resolvePerCompanyTimeoutMs("workable", {}), 180_000)
   assert.equal(resolvePerCompanyTimeoutMs("apple", {}), 280_000)
   assert.equal(resolvePerCompanyTimeoutMs("greenhouse", {}), 60_000)
 })
@@ -117,47 +123,7 @@ test("scaleWorkerConfigForLoops: honors bounded total claim budget override", ()
   assert.equal(capped.claimBatchSize, 14)
 })
 
-const FULL_ADAPTER_LIST = [
-  "greenhouse",
-  "lever",
-  "ashby",
-  "smartrecruiters",
-  "workable",
-  "workday",
-  "recruitee",
-  "teamtailor",
-  "personio",
-  "bamboohr",
-  "jazzhr",
-  "jobvite",
-  "icims",
-  "successfactors",
-  "taleo",
-  "oraclecloud",
-  "usajobs",
-  "infosys",
-  "apple",
-  "eightfold",
-  "netflix",
-  "amazon",
-  "microsoft",
-  "goldman-sachs",
-  "avature",
-  "walmart",
-  "sitemapjsonld",
-  "jsonld",
-  "ibm",
-  "adecco",
-  "kelly",
-  "radancy",
-  "jobs2web",
-  "gem",
-  "pinpoint",
-  "rippling",
-  "breezy",
-  "tiktok",
-  "google",
-]
+const FULL_ADAPTER_LIST = registeredAdapterNames()
 
 test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and shapes rows", async () => {
   const calls: Array<{ text: string; values: unknown[] }> = []
@@ -195,15 +161,15 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   // source array's order, not RESERVED_LOW_CARDINALITY_ADAPTERS's).
   assert.deepEqual(reservedCall.values[2], [
     "infosys",
-    "apple",
-    "netflix",
-    "amazon",
-    "microsoft",
-    "goldman-sachs",
-    "walmart",
     "ibm",
     "adecco",
     "kelly",
+    "apple",
+    "amazon",
+    "walmart",
+    "microsoft",
+    "netflix",
+    "goldman-sachs",
     "tiktok",
     "google",
   ])
@@ -224,6 +190,10 @@ test("claimEligibleCompanies: issues SKIP LOCKED claim with lease params and sha
   assert.match(mainCall.text, /duplicate_of_company_id IS NULL/)
   assert.match(mainCall.text, /jobs\.lever\.co/)
   assert.match(mainCall.text, /jobs\.ashbyhq\.com/)
+  assert.match(mainCall.text, /recruiterbox/)
+  assert.match(mainCall.text, /workforcenow/)
+  assert.match(mainCall.text, /phenompeople/)
+  assert.match(mainCall.text, /dayforcehcm/)
   assert.equal(mainCall.values[0], 25)
   assert.equal(mainCall.values[1], 90)
   assert.deepEqual(mainCall.values[2], FULL_ADAPTER_LIST)
@@ -415,8 +385,8 @@ test("buildAdapterLimits: each registered adapter gets its own limiter using its
   assert.equal(jv!.concurrency, 4)
   // Fallback uses the default
   assert.equal(fallback.concurrency, 8)
-  // All supported adapters have a limiter
-  for (const name of ["greenhouse", "lever", "ashby", "smartrecruiters", "workable", "workday", "recruitee", "teamtailor", "personio", "bamboohr", "jazzhr", "jobvite", "icims", "infosys", "apple"]) {
+  // All registered adapters have a limiter
+  for (const name of registeredAdapterNames()) {
     assert.ok(byAdapter.has(name as "greenhouse"), `missing limiter for ${name}`)
   }
 })

@@ -1,6 +1,6 @@
 import type { Pool } from "pg"
 import pLimit from "p-limit"
-import { adapters, detectAdapter, type AtsName } from "@/lib/harvester/adapters"
+import { adapters, detectAdapter, registeredAdapterNames, type AtsName } from "@/lib/harvester/adapters"
 import {
   runAtsHarvest,
   type AtsHarvestCompany,
@@ -111,7 +111,7 @@ const DEFAULT_PER_COMPANY_TIMEOUT_MS = 60_000
 const PER_COMPANY_TIMEOUT_MIN_MS = 5_000
 const PER_COMPANY_TIMEOUT_BY_ADAPTER: Partial<Record<AtsName, number>> = {
   workday: 60_000,
-  workable: 90_000, // list + a v2 detail-fetch budget for boards that omit the JD
+  workable: 180_000, // 4 list retries at 28s/request + v2 detail-fetch headroom
   smartrecruiters: 45_000,
   ashby: 60_000,
   usajobs: 60_000,
@@ -165,99 +165,12 @@ export function resolvePerCompanyTimeoutMs(
   return Math.max(globalTimeoutMs, adapterDefault)
 }
 
-const SUPPORTED_ATS_TYPES = [
-  "greenhouse",
-  "lever",
-  "ashby",
-  "smartrecruiters",
-  // workable was pulled from the allowlist after apply.workable.com 429'd under
-  // sustained aggregation. Root cause was RATE, not access: probed politely it
-  // returns 200 with full job counts. Re-enabled now that the host is capped in
-  // HARVESTER_HOST_RATE_LIMITS (apply.workable.com=6) — the proactive gate keeps
-  // us under its per-IP threshold so we never earn the 429 in the first place.
-  "workable",
-  "workday",
-  "recruitee",
-  "teamtailor",
-  "personio",
-  "bamboohr",
-  "jazzhr",
-  "jobvite",
-  "icims",
-  "successfactors",
-  "taleo",
-  "oraclecloud",
-  "usajobs",
-  "infosys",
-  "apple",
-  // Purpose-built big-firm adapters: registered + page-deep, but were absent from
-  // the claim allowlist so eightfold/netflix companies were never picked up by the
-  // 15s harvester loop (only the hourly custom crawler, if at all).
-  "eightfold",
-  "netflix",
-  // Amazon (amazon.jobs API) and Microsoft (jobs.careers.microsoft.com) — single-
-  // company custom adapters. The claim-eligibility check runs in SQL against
-  // ats_type/CLAIM_URL_SQL only; adapter-level detectFromUrl (used once a company
-  // is already claimed) never gets a chance to run without these listed here, so
-  // both rows sat unreachable by the automated loop — any freshness they had came
-  // from someone manually running a one-off crawl script, not the fast loop.
-  "amazon",
-  "microsoft",
-  // Goldman Sachs (higher.gs.com private GraphQL gateway). Same trap: registered
-  // adapter, working, but never in the claim allowlist — so the one goldman-sachs
-  // row was never picked up by the fast loop either.
-  "goldman-sachs",
-  // Avature scrapes {slug}.avature.net careers HTML. Same trap as above — it was
-  // registered but not in the claim allowlist, so its ~80 tenants were never
-  // claimed by the fast loop. ats_type='avature' has no careers_url pattern, so
-  // it must be listed here to be picked up.
-  "avature",
-  // Walmart (careers.walmart.com GraphQL). Single-company custom adapter; listed
-  // here so the one walmart row is claimed by the fast loop.
-  "walmart",
-  // Sitemap-driven JSON-LD (UPS and other Phenom-Canvas / custom sites). Enrolled
-  // by ats_type with the sitemap URL — no careers_url pattern — so list it here.
-  "sitemapjsonld",
-  // Generic single-page JSON-LD (schema.org/JobPosting embedded directly on a
-  // company's own careers page — no ATS platform at all). Same trap as every
-  // other ats_type-only adapter above: registered, working, but never in the
-  // claim allowlist. Found via audit: ~5,100 companies tagged ats_type='jsonld'
-  // were completely unreachable by the fast loop — some 7+ days overdue, most
-  // sitting on 20+ consecutive empty crawls that were never actually attempted
-  // by anything capable of running this adapter.
-  "jsonld",
-  // IBM (www-api.ibm.com Elasticsearch). Single-company custom adapter.
-  "ibm",
-  // Adecco (adecco.com jobs API). Single-company custom adapter.
-  "adecco",
-  // Kelly Services (mykelly.com FacetWP API). Single-company custom adapter.
-  "kelly",
-  // Radancy / TalentBrew (careers.*/en/search-jobs/results/ XHR). Registered +
-  // page-deep but was absent from the claim allowlist, so its only enrolled
-  // tenant (L3Harris) was never claimed by the fast loop. Enrolled by ats_type;
-  // slug falls back to careers_url (no canonical URL builder for radancy).
-  "radancy",
-  // Radancy "Jobs2Web" (careers.*/services/jobs/search/ POST JSON API) — a
-  // DIFFERENT Radancy product line than "radancy" above (TalentBrew), found
-  // investigating why Capgemini's only enrolled record found exactly 2 jobs
-  // forever (its careers_url was a marketing landing page, not this API).
-  // Enrolled by ats_type; slug falls back to careers_url.
-  "jobs2web",
-  // Registered + already crawlable, but claimed only opportunistically via
-  // careers_url URL-detection — so many enrolled/reactivated tenants sat
-  // uncrawled (gem/pinpoint barely appeared in crawl_logs). List them here so
-  // the fast loop claims them by ats_type like every other supported adapter.
-  "gem",
-  "pinpoint",
-  "rippling",
-  "breezy",
-  // TikTok careers.tiktok.com / lifeattiktok.com POST API. Single global tenant;
-  // must be listed here because careers.tiktok.com has no URL pattern in CLAIM_URL_SQL.
-  "tiktok",
-  // Google careers (www.google.com/about/careers/applications results-page scrape).
-  // Single global tenant, claimed by ats_type='google' (no careers_url pattern).
-  "google",
-] as const satisfies readonly AtsName[]
+// Every adapter wired into the registry must be claimable by the long-running
+// worker. Previous hand-maintained allowlists drifted: e.g. Recruiterbox/ADP/
+// Phenom rows were treated as harvester-owned by /api/crawl but never claimed
+// here, leaving them outside the daily sweep. Rollout control belongs in
+// HARVESTER_INCLUDE_ADAPTERS / HARVESTER_EXCLUDE_ADAPTERS, not a second list.
+const SUPPORTED_ATS_TYPES = registeredAdapterNames()
 
 export type AdapterClaimFilter = {
   include: AtsName[] | null
@@ -318,6 +231,10 @@ const CLAIM_URL_SQL: Partial<Record<AtsName, string[]>> = {
     "careers_url ~* '^https?://[a-z0-9-]+\\.bamboohr\\.com/'",
     "direct_ats_url ~* '^https?://[a-z0-9-]+\\.bamboohr\\.com/'",
   ],
+  breezy: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.breezy\\.hr/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.breezy\\.hr/'",
+  ],
   jazzhr: [
     "careers_url ~* '^https?://[a-z0-9-]+\\.applytojob\\.com/'",
     "direct_ats_url ~* '^https?://[a-z0-9-]+\\.applytojob\\.com/'",
@@ -325,6 +242,58 @@ const CLAIM_URL_SQL: Partial<Record<AtsName, string[]>> = {
   jobvite: [
     "careers_url ILIKE 'https://jobs.jobvite.com/%'",
     "direct_ats_url ILIKE 'https://jobs.jobvite.com/%'",
+  ],
+  recruiterbox: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.recruiterbox\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.recruiterbox\\.com/'",
+  ],
+  cornerstone: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.csod\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.csod\\.com/'",
+  ],
+  adp: [
+    "careers_url ~* '^https?://([^/]+\\.)?workforcenow\\.adp\\.com/'",
+    "direct_ats_url ~* '^https?://([^/]+\\.)?workforcenow\\.adp\\.com/'",
+  ],
+  ukg: [
+    "careers_url ~* '^https?://recruiting2?\\.ultipro\\.com/'",
+    "careers_url ~* '^https?://[^/]+\\.ukg\\.net/'",
+    "direct_ats_url ~* '^https?://recruiting2?\\.ultipro\\.com/'",
+    "direct_ats_url ~* '^https?://[^/]+\\.ukg\\.net/'",
+  ],
+  phenom: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.phenompeople\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.phenompeople\\.com/'",
+  ],
+  paylocity: [
+    "careers_url ILIKE 'https://recruiting.paylocity.com/%'",
+    "direct_ats_url ILIKE 'https://recruiting.paylocity.com/%'",
+  ],
+  paycom: [
+    "careers_url ~* '^https?://([^/]+\\.)?paycomonline\\.net/'",
+    "careers_url ILIKE 'https://www.paycom.com/careers/%'",
+    "direct_ats_url ~* '^https?://([^/]+\\.)?paycomonline\\.net/'",
+    "direct_ats_url ILIKE 'https://www.paycom.com/careers/%'",
+  ],
+  dayforce: [
+    "careers_url ~* '^https?://([^/]+\\.)?dayforcehcm\\.com/'",
+    "direct_ats_url ~* '^https?://([^/]+\\.)?dayforcehcm\\.com/'",
+  ],
+  zohorecruit: [
+    "careers_url ~* '^https?://[a-z0-9-]+\\.zohorecruit\\.com/'",
+    "direct_ats_url ~* '^https?://[a-z0-9-]+\\.zohorecruit\\.com/'",
+  ],
+  teamworkonline: [
+    "careers_url ~* '^https?://([^/]+\\.)?teamworkonline\\.com/'",
+    "direct_ats_url ~* '^https?://([^/]+\\.)?teamworkonline\\.com/'",
+  ],
+  neogov: [
+    "careers_url ~* '^https?://(www\\.)?(governmentjobs|schooljobs)\\.com/careers/'",
+    "direct_ats_url ~* '^https?://(www\\.)?(governmentjobs|schooljobs)\\.com/careers/'",
+  ],
+  fountain: [
+    "careers_url ~* '^https?://([^/]+\\.)?fountain\\.com/'",
+    "direct_ats_url ~* '^https?://([^/]+\\.)?fountain\\.com/'",
   ],
   infosys: [
     "careers_url ILIKE 'https://digitalcareers.infosys.com/%'",

@@ -109,8 +109,26 @@ function rateForHost(host: string): number {
   return best
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms))
+function abortError(): Error {
+  const err = new Error("aborted")
+  err.name = "AbortError"
+  return err
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(abortError())
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout>
+    const onAbort = () => {
+      clearTimeout(timer)
+      reject(abortError())
+    }
+    timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort)
+      resolve()
+    }, ms)
+    signal?.addEventListener("abort", onAbort, { once: true })
+  })
 }
 
 function makeState(rate: number, ceiling: number, nowMs: number): HostState {
@@ -133,9 +151,14 @@ function makeState(rate: number, ceiling: number, nowMs: number): HostState {
  * for pristine unlisted hosts. Waits out an open circuit. Serializes only within
  * a host's bucket; different hosts are independent.
  */
-export async function gateHostRate(url: string, nowMs = Date.now()): Promise<void> {
+export async function gateHostRate(
+  url: string,
+  nowMs = Date.now(),
+  signal?: AbortSignal
+): Promise<void> {
   const host = hostOf(url)
   if (!host) return
+  if (signal?.aborted) throw abortError()
 
   let b = states.get(host)
   if (!b) {
@@ -147,7 +170,7 @@ export async function gateHostRate(url: string, nowMs = Date.now()): Promise<voi
 
   // Circuit breaker: if open, wait out (a slice of) the cooldown, then probe.
   if (b.openUntilMs > nowMs) {
-    await sleep(Math.min(b.openUntilMs - nowMs, MAX_WAIT_MS))
+    await sleep(Math.min(b.openUntilMs - nowMs, MAX_WAIT_MS), signal)
     nowMs = Date.now()
   }
 
@@ -159,7 +182,7 @@ export async function gateHostRate(url: string, nowMs = Date.now()): Promise<voi
     b.tokens -= 1
     return
   }
-  await sleep(Math.min(((1 - b.tokens) / b.currentRate) * 1000, MAX_WAIT_MS))
+  await sleep(Math.min(((1 - b.tokens) / b.currentRate) * 1000, MAX_WAIT_MS), signal)
   b.tokens = 0
   b.lastRefillMs = Date.now()
 }
