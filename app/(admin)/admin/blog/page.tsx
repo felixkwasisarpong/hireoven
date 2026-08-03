@@ -92,12 +92,17 @@ export default function AdminBlogPage() {
         message?: string
         error?: string
         skipped?: boolean
+        reason?: string
         imageGenerated?: boolean
         imageError?: string | null
       }
       if (!res.ok || !data.ok) throw new Error(data.error ?? "Generation failed")
       if (data.skipped) {
-        setActionResult("No post scheduled today (weekend).")
+        setActionResult(
+          data.reason === "existing_post"
+            ? data.message ?? "Blog post already exists for today."
+            : "No post scheduled today (weekend)."
+        )
       } else if (data.imageGenerated === false) {
         setError(`Draft created, but hero image generation failed${data.imageError ? `: ${data.imageError}` : "."}`)
         setActionResult(data.message ?? "Draft created.")

@@ -14,6 +14,19 @@ export async function POST() {
     return NextResponse.json({ ok: true, skipped: true, message: "No post scheduled today (weekend)" })
   }
 
+  if (result.skippedExisting) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "existing_post",
+      postId: result.postId,
+      title: result.title,
+      imageGenerated: result.imageGenerated,
+      imageError: result.imageError,
+      message: `Blog post already exists for today: "${result.title}" in ${result.categorySlug}`,
+    })
+  }
+
   return NextResponse.json({
     ok: true,
     postId: result.postId,

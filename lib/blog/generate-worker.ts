@@ -1,7 +1,13 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
 import { generateAndStoreBlogImage } from "@/lib/blog/image-generator"
-import { getCategoryForToday, insertDraftPost, updateBlogPostImage } from "@/lib/blog/queries"
+import {
+  getCategoryForToday,
+  getPostForCategoryOnBlogDay,
+  insertDraftPost,
+  recordBlogGenerationRun,
+  updateBlogPostImage,
+} from "@/lib/blog/queries"
 import type { BlogCategory } from "@/types/blog"
 
 let anthropic: Anthropic | null = null
@@ -98,67 +104,123 @@ export interface BlogGenerateResult {
   imageGenerated: boolean
   imageError: string | null
   durationMs: number
+  skippedExisting?: boolean
 }
 
 export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | null> {
   const start = Date.now()
+  let category: BlogCategory | null = null
 
-  const category = await getCategoryForToday()
-  if (!category) {
-    // Weekend — no post scheduled
-    return null
-  }
-
-  const generated = await generateForCategory(category)
-
-  const postId = await insertDraftPost({
-    category_id: category.id,
-    slug: generated.slug,
-    title: generated.title,
-    excerpt: generated.excerpt,
-    body: generated.body,
-    seo_description: generated.seo_description ?? null,
-    image_prompt: generated.image_prompt ?? null,
-    hero_image_alt: generated.hero_image_alt ?? null,
-    reading_time: generated.reading_time ?? null,
-  })
-
-  let imageGenerated = false
-  let imageError: string | null = null
   try {
-    const image = await generateAndStoreBlogImage({
-      postId,
-      category,
+    category = await getCategoryForToday()
+    if (!category) {
+      // Weekend - no post scheduled.
+      await recordBlogGenerationRun({
+        status: "skipped_weekend",
+        duration_ms: Date.now() - start,
+      })
+      return null
+    }
+
+    const existingPost = await getPostForCategoryOnBlogDay(category.id)
+    if (existingPost) {
+      const result: BlogGenerateResult = {
+        categorySlug: category.slug,
+        postId: existingPost.id,
+        title: existingPost.title,
+        imageGenerated: Boolean(existingPost.hero_image_url),
+        imageError: null,
+        durationMs: Date.now() - start,
+        skippedExisting: true,
+      }
+
+      await recordBlogGenerationRun({
+        status: "skipped_existing",
+        category_id: category.id,
+        category_slug: category.slug,
+        blog_post_id: existingPost.id,
+        title: existingPost.title,
+        image_generated: Boolean(existingPost.hero_image_url),
+        duration_ms: result.durationMs,
+      })
+
+      return result
+    }
+
+    const generated = await generateForCategory(category)
+
+    const postId = await insertDraftPost({
+      category_id: category.id,
+      slug: generated.slug,
       title: generated.title,
       excerpt: generated.excerpt,
-      imagePrompt: generated.image_prompt,
-      alt: generated.hero_image_alt,
+      body: generated.body,
+      seo_description: generated.seo_description ?? null,
+      image_prompt: generated.image_prompt ?? null,
+      hero_image_alt: generated.hero_image_alt ?? null,
+      reading_time: generated.reading_time ?? null,
     })
 
-    if (image) {
-      await updateBlogPostImage({
-        id: postId,
-        hero_image_url: image.url,
-        hero_image_key: image.key,
-        hero_image_alt: image.alt,
-        image_prompt: image.prompt,
+    let imageGenerated = false
+    let imageError: string | null = null
+    try {
+      const image = await generateAndStoreBlogImage({
+        postId,
+        category,
+        title: generated.title,
+        excerpt: generated.excerpt,
+        imagePrompt: generated.image_prompt,
+        alt: generated.hero_image_alt,
       })
-      imageGenerated = true
-    }
-  } catch (error) {
-    imageError = error instanceof Error ? error.message : String(error)
-    console.warn("[blog/generate] hero image generation skipped", {
-      postId,
-      message: imageError,
-    })
-  }
 
-  return {
-    categorySlug: category.slug,
-    postId,
-    title: generated.title,
-    imageGenerated,
-    imageError,
-    durationMs: Date.now() - start,
+      if (image) {
+        await updateBlogPostImage({
+          id: postId,
+          hero_image_url: image.url,
+          hero_image_key: image.key,
+          hero_image_alt: image.alt,
+          image_prompt: image.prompt,
+        })
+        imageGenerated = true
+      }
+    } catch (error) {
+      imageError = error instanceof Error ? error.message : String(error)
+      console.warn("[blog/generate] hero image generation skipped", {
+        postId,
+        message: imageError,
+      })
+    }
+
+    const result: BlogGenerateResult = {
+      categorySlug: category.slug,
+      postId,
+      title: generated.title,
+      imageGenerated,
+      imageError,
+      durationMs: Date.now() - start,
+    }
+
+    await recordBlogGenerationRun({
+      status: "success",
+      category_id: category.id,
+      category_slug: category.slug,
+      blog_post_id: postId,
+      title: generated.title,
+      image_generated: imageGenerated,
+      image_error: imageError,
+      duration_ms: result.durationMs,
+    })
+
+    return result
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await recordBlogGenerationRun({
+      status: "failed",
+      category_id: category?.id ?? null,
+      category_slug: category?.slug ?? null,
+      duration_ms: Date.now() - start,
+      error_message: message,
+    })
+    throw error
   }
 }

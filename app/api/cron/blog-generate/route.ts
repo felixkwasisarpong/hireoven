@@ -17,6 +17,20 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ok: true, skipped: true, message: "No blog post scheduled today (weekend)" })
     }
 
+    if (result.skippedExisting) {
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        reason: "existing_post",
+        postId: result.postId,
+        category: result.categorySlug,
+        title: result.title,
+        imageGenerated: result.imageGenerated,
+        durationMs: result.durationMs,
+        message: `Blog post already exists for today: "${result.title}" in ${result.categorySlug}`,
+      })
+    }
+
     return NextResponse.json({
       ok: true,
       postId: result.postId,
@@ -29,6 +43,7 @@ export async function GET(request: NextRequest) {
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+    console.error("[cron/blog-generate] failed", { message })
     return NextResponse.json({ ok: false, error: message }, { status: 500 })
   }
 }
