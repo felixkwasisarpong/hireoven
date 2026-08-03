@@ -495,11 +495,38 @@ async function runOracleCrtshDiscovery(pool: Pool): Promise<number> {
   return staged
 }
 
+async function recordDiscoveryRun(
+  pool: Pool,
+  result: Record<string, number>,
+  startedAt: number,
+  error?: unknown
+): Promise<void> {
+  const enrolled =
+    (result.apply_url ?? 0) +
+    (result.github_seeds ?? 0) +
+    (result.crtsh ?? 0) +
+    (result.workday ?? 0)
+  const held = result.oracle ?? 0
+  const found = enrolled + held
+  const errorMessage = error instanceof Error ? error.message : error ? String(error) : ""
+  await pool
+    .query(
+      `INSERT INTO discovery_runs
+         (channel, candidates_found, candidates_enrolled, candidates_held,
+          candidates_rejected, duration_ms, error_message)
+       VALUES ('cron:discover-companies',$1,$2,$3,0,$4,$5)`,
+      [found, enrolled, held, Date.now() - startedAt, errorMessage]
+    )
+    .catch(() => { /* non-fatal */ })
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function GET(req: NextRequest) {
   const authed = requireCronAuth(req.headers.get("authorization"))
   if (!authed) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+
+  const startedAt = Date.now()
 
   const skipCrtsh = process.env.DISCOVER_SKIP_CRTSH === "true"
   const skipGithub = process.env.DISCOVER_SKIP_GITHUB === "true"
@@ -511,12 +538,19 @@ export async function GET(req: NextRequest) {
   // the stages below can't push the run past the Vercel budget.
   const deadline = Date.now() + 270_000
 
-  result.apply_url    = await runApplyUrlDetection(pool)
-  result.github_seeds = skipGithub ? 0 : await runGithubSeeds(pool, deadline)
-  result.crtsh        = skipCrtsh ? 0 : await runCrtshDiscovery(pool, deadline)
-  result.workday      = skipCrtsh ? 0 : await runWorkdayCrtshDiscovery(pool, deadline)
-  result.oracle       = skipCrtsh ? 0 : await runOracleCrtshDiscovery(pool)
-  result.total        = Object.values(result).reduce((a, b) => a + b, 0) - (result.total ?? 0)
+  try {
+    result.apply_url    = await runApplyUrlDetection(pool)
+    result.github_seeds = skipGithub ? 0 : await runGithubSeeds(pool, deadline)
+    result.crtsh        = skipCrtsh ? 0 : await runCrtshDiscovery(pool, deadline)
+    result.workday      = skipCrtsh ? 0 : await runWorkdayCrtshDiscovery(pool, deadline)
+    result.oracle       = skipCrtsh ? 0 : await runOracleCrtshDiscovery(pool)
+    result.total        = Object.values(result).reduce((a, b) => a + b, 0) - (result.total ?? 0)
 
-  return NextResponse.json({ ok: true, enrolled: result })
+    await recordDiscoveryRun(pool, result, startedAt)
+    return NextResponse.json({ ok: true, enrolled: result })
+  } catch (err) {
+    await recordDiscoveryRun(pool, result, startedAt, err)
+    const message = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ ok: false, error: message, enrolled: result }, { status: 500 })
+  }
 }
