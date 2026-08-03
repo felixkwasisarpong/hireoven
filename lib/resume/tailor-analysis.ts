@@ -1,4 +1,10 @@
 import { extractKeywords, normalizeKeyword } from "@/lib/resume/hub"
+import {
+  canonicalizeLexiconTerm,
+  extractJdTechTerms,
+  lexiconEntryFor,
+  matchEntryInText,
+} from "@/lib/resume/keyword-lexicon"
 import { extractSkillsFromText, skillMatches } from "@/lib/skills/taxonomy"
 import type { Resume } from "@/types"
 import type { ResumeTailoringAnalysis } from "@/types/resume-hub"
@@ -96,20 +102,34 @@ function isExcludedSoftOrNoiseSkill(term: string): boolean {
 }
 
 /**
- * Build posting “skill” list from the canonical tech list + taxonomy (no random JD word extraction).
- * Still allows a **small** set of `extractKeywords` hits that look plausibly technical.
+ * Collapse alias/variant spellings to their canonical lexicon term and dedupe,
+ * preserving first-seen order (which is prominence order for the lexicon slice).
+ */
+function canonicalizeAndDedupe(terms: string[]): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of terms) {
+    const canonical = canonicalizeLexiconTerm(raw) ?? raw.trim()
+    const key = normalizeKeyword(canonical)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(canonical)
+  }
+  return out
+}
+
+/**
+ * Build the posting's "skill" list. Lexicon-first: the alias-aware JD lexicon
+ * (modern GenAI / cloud / data / MLOps / vector tooling) is the primary source of
+ * truth, ordered by how prominently each term appears in the posting. It is then
+ * unioned with the legacy canonical list and the skills taxonomy so nothing the
+ * older path caught is lost. Alias/variant spellings collapse to one canonical term.
  */
 function buildSkillJobTerms(jd: string): string[] {
+  const fromLexicon = extractJdTechTerms(jd, 40)
   const fromCanon = TAILOR_CANON_KEYWORDS.filter((kw) => keywordInText(kw, jd))
   const fromTax = extractSkillsFromText(jd).filter((s) => !isExcludedSoftOrNoiseSkill(s))
-  const merged = Array.from(
-    new Map(
-      [...fromCanon, ...fromTax].map((s) => {
-        const display = s.trim()
-        return [normalizeKeyword(display), display] as const
-      })
-    ).values()
-  )
+  const merged = canonicalizeAndDedupe([...fromLexicon, ...fromCanon, ...fromTax]).slice(0, 40)
   if (merged.length) return merged
 
   const extra = extractKeywords(jd, 24).filter((raw) => {
@@ -346,6 +366,11 @@ function collectResumeBundle(input: BuildLocalTailorInput): string {
 }
 
 function keywordInText(kw: string, text: string): boolean {
+  // Lexicon terms match alias-aware and boundary-aware in BOTH directions: a resume
+  // that says "k8s" satisfies "Kubernetes", "postgres" satisfies "PostgreSQL", and
+  // "Claude" satisfies "Anthropic Claude" — while "RAG" no longer matches "storage".
+  const entry = lexiconEntryFor(kw)
+  if (entry) return matchEntryInText(entry, text)
   const n = normalizeKeyword(kw)
   return text.toLowerCase().includes(n) || new RegExp(`\\b${escapeRe(kw)}\\b`, "i").test(text)
 }

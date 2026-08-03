@@ -7,6 +7,8 @@ import { buildResumeScoreBreakdown, createGeneratedResume } from "@/lib/resume/h
 import { buildResumeRawText } from "@/lib/resume/state"
 import { createClient } from "@/lib/supabase/server"
 import { normalizeSkillsBuckets } from "@/lib/skills/taxonomy"
+import { detectJdDomains, resolveTargetTitle } from "@/lib/resume/jd-context"
+import { extractJdTechTerms } from "@/lib/resume/keyword-lexicon"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
@@ -145,6 +147,28 @@ async function generateResumeWithClaude(input: ResumeGenerationInput, userId: st
     TONE_GUIDANCE[input.tone],
   ].join("\n")
 
+  // Targeting mode: when a JD is provided and tailoring isn't explicitly disabled,
+  // generate a resume aimed at THAT posting instead of a role-generic draft.
+  const hasJd = Boolean(input.jobDescription?.trim())
+  const tailorToJob = hasJd && input.tailorToJob !== false
+  const targetTitle = tailorToJob ? resolveTargetTitle(input.jobDescription, input.targetRole) : null
+  const jdDomains = tailorToJob ? detectJdDomains(input.jobDescription) : []
+  const jdTerms = tailorToJob ? extractJdTechTerms(input.jobDescription, 24) : []
+
+  const targetingGuidance = tailorToJob
+    ? `TARGETING MODE — tailor this resume to the specific job description below.
+- Lead the summary's first sentence with the target title "${targetTitle ?? input.targetRole}" (or the closest truthful variant of the candidate's real role). Do not open with a generic or off-target self-label.
+- Weave the posting's most important technologies into the summary, skills, and bullets — but ONLY where the candidate's source material genuinely supports them. Priority terms from the posting: ${jdTerms.join(", ") || "(derive from the JD)"}.
+- Reframe transferable experience into the posting's language when it truthfully maps (e.g. "core-banking SOAP/XML integration" → "enterprise system integration"). Reframe wording; never invent the underlying work.
+${jdDomains.length ? `- Surface relevant domain adjacency: ${jdDomains.map((d) => d.framingHint).join(" ")}` : ""}
+- You MAY reference the target role/domain generically, but do NOT state the candidate worked at the hiring company unless that appears in their source material.
+- Never claim a tool, metric, employer, or responsibility that is not present in the candidate source. Missing-but-required skills belong in a review note, not fabricated into experience.`
+    : `Important distinction:
+- The optional job description is only context for general role emphasis, keywords, and expected responsibilities.
+- Do NOT make this a tailored-to-one-job resume.
+- Do NOT mention a specific company from the job description unless it exists in the candidate's source material.
+- Do NOT claim direct experience with tools, domains, metrics, or responsibilities unless they appear in the candidate source.`
+
   const message = await anthropic.messages.create({
     model: MODEL,
     max_tokens: 3500,
@@ -164,11 +188,7 @@ async function generateResumeWithClaude(input: ResumeGenerationInput, userId: st
 User-selected generation controls to honor:
 ${selectionGuidance}
 
-Important distinction:
-- The optional job description is only context for general role emphasis, keywords, and expected responsibilities.
-- Do NOT make this a tailored-to-one-job resume.
-- Do NOT mention a specific company from the job description unless it exists in the candidate's source material.
-- Do NOT claim direct experience with tools, domains, metrics, or responsibilities unless they appear in the candidate source.
+${targetingGuidance}
 
 Return ONLY JSON with this exact shape:
 {
@@ -262,6 +282,7 @@ function parseInput(body: Record<string, unknown>): ResumeGenerationInput | null
     jobDescription: asString(body.jobDescription).trim(),
     linkedinSummary: asString(body.linkedinSummary).trim(),
     manualInput: asString(body.manualInput).trim(),
+    tailorToJob: typeof body.tailorToJob === "boolean" ? body.tailorToJob : undefined,
   }
 }
 

@@ -15,6 +15,7 @@ import { SONNET_MODEL } from "@/lib/ai/anthropic-models"
 import type { Resume } from "@/types"
 import type { TailorAnalysisResult } from "@/types/tailor-analysis"
 import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
+import { detectJdDomains, resolveTargetTitle } from "@/lib/resume/jd-context"
 import { normalizeKeyword } from "@/lib/resume/hub"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
@@ -291,6 +292,8 @@ async function generateAtsSummaryRewrite(
   const currentRole = resume.primary_role ?? resume.work_experience?.[0]?.title ?? null
   const topSkills = (resume.top_skills ?? []).slice(0, 6).join(", ")
   const yearsExp = resume.years_of_experience ?? null
+  const targetTitle = resolveTargetTitle(jobDescription, jobTitle)
+  const domains = detectJdDomains(jobDescription)
 
   const prompt = `You are rewriting a professional resume summary to pass through ${profile.name} ATS parsing AND impress the human recruiter who reads it next.
 
@@ -305,9 +308,10 @@ CANDIDATE CONTEXT (do not invent anything not listed here):
 - Existing summary: "${currentSummary || "(empty)"}"
 
 TARGET JOB:
-- Title: ${jobTitle ?? "not specified"}
+- Title to mirror in sentence 1: ${targetTitle ?? jobTitle ?? "not specified"}
 - Company: ${company ?? "not specified"}
 - JD excerpt: ${jobDescription.slice(0, 1500)}
+${domains.length ? `- Domain adjacency to surface if truthful: ${domains.map((d) => d.framingHint).join(" ")}` : ""}
 
 KEYWORDS ALREADY IN RESUME (reinforce these): ${presentKeywords.slice(0, 8).join(", ") || "none"}
 KEYWORDS MISSING FROM RESUME (add only if truthfully applicable): ${missingKeywords.slice(0, 6).join(", ") || "none"}
@@ -317,8 +321,9 @@ RULES:
 2. Never invent job titles, companies, metrics, or technologies not already in the resume
 3. Follow the ATS strategy for ${profile.name} exactly
 4. Maximum 3 sentences
-5. First sentence must contain the target job title or a close variant
-6. Sound like a real person wrote it — no clichés like "results-driven", "passionate", "dynamic"
+5. First sentence must lead with the target job title above (or a close, truthful variant of the candidate's real role) — not a generic or off-target self-label
+6. Where the candidate's real experience maps onto the posting's language or domain, reframe it in the posting's terms (reframe wording only — never invent the underlying work)
+7. Sound like a real person wrote it — no clichés like "results-driven", "passionate", "dynamic"
 
 Return ONLY the rewritten summary text. No commentary, no labels, no quotes.`
 
