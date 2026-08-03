@@ -10,6 +10,7 @@ import {
   normalizeTailorAnalysis,
   pruneSkillNoiseFromAnalysis,
 } from "@/lib/resume/tailor-analysis"
+import { detectJdDomains, resolveTargetTitle } from "@/lib/resume/jd-context"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { isUuid } from "@/lib/resume/hub"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
@@ -93,6 +94,16 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json(sanitizeGeneratedText({ analysis: pruneSkillNoiseFromAnalysis(local) }))
   }
 
+  // Deterministic JD frame that grounds the model: the exact target title to
+  // mirror, the industry adjacencies to surface, and the keyword gaps the lexicon
+  // already found (so the model prioritizes the terms that actually move the match).
+  const targetTitle = resolveTargetTitle(jobDescription, body.jobTitle)
+  const domains = detectJdDomains(jobDescription)
+  const supportedMissing = local.skillSuggestions
+    .filter((s) => s.status === "missing_supported")
+    .map((s) => s.skill)
+  const needsConfirmMissing = local.missingKeywords.filter((k) => !supportedMissing.includes(k))
+
   try {
     const resumeJson = JSON.stringify(
       {
@@ -113,6 +124,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
       max_tokens: 12_000,
       system:
         "You are a resume tailoring engine. You help job seekers align their resume to a job description without fabricating experience. " +
+        "Your job is to make the resume read as if it were written FOR THIS SPECIFIC ROLE, using only facts already true in the candidate's history. " +
+        "TITLE MIRRORING: the summary's first sentence must lead with the target job title (or the closest truthful variant of the candidate's real role), not a generic or off-target self-label. " +
+        "TRANSFERABLE REFRAMING: when the candidate's real work maps onto the posting's language, re-describe it in the posting's terms — e.g. 'core-banking SOAP/XML integration' → 'enterprise system integration'; 'payment microservices' → 'production, event-driven services'. Reframe wording; never invent the underlying work. " +
+        "DOMAIN FIT: when the candidate has adjacent industry experience relevant to the posting's domain, surface that adjacency explicitly rather than leaving it buried. " +
+        "KEYWORD PRIORITY: prioritize the posting's most prominent required technologies. The user message lists the exact keyword gaps already detected — focus your skill and bullet suggestions on those, adding a keyword to skills only when it is truthfully supported. " +
         "Use add_skill only for concrete tools, languages, platforms, frameworks, and domain technologies (e.g. Terraform, TypeScript, Kafka). " +
         "Do NOT use add_skill for traits like 'communication', 'stakeholder management', or generic hiring adjectives. " +
         "Include replace_bullet items for: (1) vague or duty-style lines, (2) short bullets with no impact signal, and (3) lines that omit posting tools that already appear elsewhere in the same work experience. " +
@@ -166,6 +182,13 @@ ${jobDescription.slice(0, 14_000)}
 
 Job title context: ${body.jobTitle ?? ""}
 Company context: ${body.company ?? ""}
+
+DETERMINISTIC JD FRAME (already computed — build on it, do not contradict it):
+- Target title to mirror in the summary: ${targetTitle ?? "(infer from the posting)"}
+- Industry / domain adjacencies to surface if truthful: ${domains.length ? domains.map((d) => d.label).join("; ") : "none detected"}
+- Domain framing hints: ${domains.length ? domains.map((d) => d.framingHint).join(" ") : "n/a"}
+- Keyword gaps WITH resume support (align wording, safe to add): ${supportedMissing.slice(0, 15).join(", ") || "none"}
+- Keyword gaps NEEDING confirmation (only if truthfully applicable, mark requiresConfirmation): ${needsConfirmMissing.slice(0, 20).join(", ") || "none"}
 
 For fixes: include stable ids. experienceId should match a role block like "exp-0" if the bullet is for the first experience in the order above. Use before/after for add_skill. Only suggest skills as missing_supported if resume evidence exists; use missing_needs_confirmation if uncertain. Use not_recommended when the posting asks for a skill with no support.
 

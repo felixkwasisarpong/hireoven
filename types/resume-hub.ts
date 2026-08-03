@@ -119,6 +119,13 @@ export type ResumeGenerationInput = {
   jobDescription: string
   linkedinSummary: string
   manualInput: string
+  /**
+   * When true (and a jobDescription is provided), generate a resume targeted at
+   * that specific posting — mirror its title, inject truthfully-supported keywords,
+   * reframe transferable experience. When false, the JD is only loose context and
+   * the draft stays role-generic. Defaults to true whenever a jobDescription exists.
+   */
+  tailorToJob?: boolean
 }
 
 // ─── Version meta ────────────────────────────────────────────────────────────
