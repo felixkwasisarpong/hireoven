@@ -24,8 +24,14 @@ function fakePool(): Pool {
           ],
         }
       }
-      if (q.includes("from ats_tenants")) {
+      if (q.includes("from ats_tenants") && q.includes("count(*)::int as total")) {
         return { rows: [{ total: 100, enrolled: 40 }] }
+      }
+      if (q.includes("from ats_tenants")) {
+        return { rows: [{ discovered: 0, validated: 0, enrolled: 0, rejected: 0, retry_later: 0 }] }
+      }
+      if (q.includes("from discovery_runs")) {
+        return { rows: [{ enrolled: 0, held: 0, rejected: 0 }] }
       }
       return { rows: [] }
     },

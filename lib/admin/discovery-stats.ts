@@ -94,17 +94,72 @@ export async function buildDiscoveryStats(pool: Pool): Promise<DiscoveryStats> {
   const convEnrolled = convRes.rows[0]?.enrolled ?? 0
   const placeholder_to_tenant_conversion = convTotal > 0 ? round(convEnrolled / convTotal) : 0
 
+  const tenantFlowRes = await pool.query<{
+    discovered: number
+    validated: number
+    enrolled: number
+    rejected: number
+    retry_later: number
+  }>(
+    `SELECT
+       COUNT(*) FILTER (WHERE created_at >= now() - interval '24 hours')::int AS discovered,
+       COUNT(*) FILTER (
+         WHERE status = 'validated'
+           AND updated_at >= now() - interval '24 hours'
+       )::int AS validated,
+       COUNT(*) FILTER (
+         WHERE status = 'enrolled'
+           AND updated_at >= now() - interval '24 hours'
+       )::int AS enrolled,
+       COUNT(*) FILTER (
+         WHERE status = 'rejected'
+           AND updated_at >= now() - interval '24 hours'
+       )::int AS rejected,
+       COUNT(*) FILTER (
+         WHERE status = 'retry_later'
+           AND updated_at >= now() - interval '24 hours'
+       )::int AS retry_later
+     FROM ats_tenants`,
+  )
+  const tenantFlowRow = tenantFlowRes.rows[0]
+  const tenantFlow = {
+    discovered: tenantFlowRow?.discovered ?? 0,
+    validated: tenantFlowRow?.validated ?? 0,
+    enrolled: tenantFlowRow?.enrolled ?? 0,
+    rejected: tenantFlowRow?.rejected ?? 0,
+    retry_later: tenantFlowRow?.retry_later ?? 0,
+  }
+
+  const runFlowRes = await pool.query<{
+    enrolled: number
+    held: number
+    rejected: number
+  }>(
+    `SELECT
+       COALESCE(SUM(candidates_enrolled), 0)::int AS enrolled,
+       COALESCE(SUM(candidates_held), 0)::int AS held,
+       COALESCE(SUM(candidates_rejected), 0)::int AS rejected
+     FROM discovery_runs
+     WHERE ran_at >= now() - interval '24 hours'`,
+  )
+  const runFlowRow = runFlowRes.rows[0]
+  const runFlow = {
+    enrolled: runFlowRow?.enrolled ?? 0,
+    held: runFlowRow?.held ?? 0,
+    rejected: runFlowRow?.rejected ?? 0,
+  }
+
   // ── In-memory 24h flow rates ──
   const attempt = sumCounter(snap, "apply_url.backsolve.attempt")
   const success = sumCounter(snap, "apply_url.backsolve.success")
   const failure = sumCounter(snap, "apply_url.backsolve.failure")
 
   const last24h: DiscoveryStats["last24h"] = {
-    tenants_discovered: sumCounter(snap, "tenant.discovered"),
-    tenants_validated: sumCounter(snap, "tenant.validated"),
-    tenants_enrolled: sumCounter(snap, "tenant.enrolled"),
-    tenants_rejected: sumCounter(snap, "tenant.rejected"),
-    tenants_retry_later: sumCounter(snap, "tenant.retry_later"),
+    tenants_discovered: Math.max(sumCounter(snap, "tenant.discovered"), tenantFlow.discovered),
+    tenants_validated: Math.max(sumCounter(snap, "tenant.validated"), tenantFlow.validated),
+    tenants_enrolled: Math.max(sumCounter(snap, "tenant.enrolled"), tenantFlow.enrolled, runFlow.enrolled),
+    tenants_rejected: Math.max(sumCounter(snap, "tenant.rejected"), tenantFlow.rejected, runFlow.rejected),
+    tenants_retry_later: Math.max(sumCounter(snap, "tenant.retry_later"), tenantFlow.retry_later, runFlow.held),
     backsolve_attempt: attempt,
     backsolve_success: success,
     backsolve_failure: failure,
