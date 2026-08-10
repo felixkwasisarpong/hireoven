@@ -23,6 +23,10 @@ CREATE TABLE companies (
   sponsorship_confidence INTEGER DEFAULT 0, -- 0-100 score
   immigration_profile_summary JSONB,
   hiring_health JSONB,
+  -- Time-to-fill: median days a role stays open, from observed posting lifecycle
+  median_days_open INTEGER,
+  time_to_fill_sample INTEGER DEFAULT 0,
+  time_to_fill_computed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -14,6 +14,7 @@ import {
   Home as HomeIcon,
   MapPin,
   Plane,
+  Timer,
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
 import JobTimingSection from "@/components/jobs/JobTimingSection"
@@ -49,6 +50,7 @@ import {
 } from "@/lib/skills/taxonomy"
 import { isScoreFreshForResume } from "@/lib/matching/score-freshness"
 import { cn } from "@/lib/utils"
+import { fillSpeedLabel } from "@/lib/companies/time-to-fill"
 import ApplyButton from "@/components/jobs/ApplyButton"
 import ReferralDraftButton from "@/components/jobs/ReferralDraftButton"
 import type { Company, Job, JobMatchScore, Skills } from "@/types"
@@ -418,6 +420,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
 
   const visaItems = cleanItems(page.sections.visa.items, { rejectBenefits: true })
   const companyInfoItems = cleanCompanyInfoItems(page.sections.company_info.items)
+  const fillSpeed = fillSpeedLabel(company?.median_days_open, company?.time_to_fill_sample)
 
   const showVisaJdSection =
     visaItems.length > 0 ||
@@ -869,6 +872,24 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                         {companyInfoItems.map((p) => (
                           <p key={p}>{p}</p>
                         ))}
+                      </div>
+                    )}
+                    {fillSpeed && (
+                      <div className="mt-3">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-semibold",
+                            fillSpeed.tone === "fast"
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : fillSpeed.tone === "medium"
+                                ? "border-slate-200 bg-slate-50 text-slate-600"
+                                : "border-amber-200 bg-amber-50 text-amber-700",
+                          )}
+                          title="Median days this company's roles stay open, from observed posting lifecycle"
+                        >
+                          <Timer className="h-3.5 w-3.5" aria-hidden />
+                          {fillSpeed.label}
+                        </span>
                       </div>
                     )}
                     <div className={cn(
