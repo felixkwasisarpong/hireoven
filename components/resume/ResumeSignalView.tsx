@@ -1,11 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { Radar, AlertTriangle, Loader2, Plane } from "lucide-react"
-import type { ResumeSignal, FieldFit } from "@/lib/resume/signal"
+import { Radar, AlertTriangle, Loader2, Plane, Target, ArrowUp, Sparkles } from "lucide-react"
+import type { ResumeSignal, FieldFit, PositioningBrief } from "@/lib/resume/signal"
 
-type ApiResponse = { hasResume: boolean; primaryRole?: string | null; grounded?: boolean; signal?: ResumeSignal }
+type ApiResponse = {
+  hasResume: boolean
+  primaryRole?: string | null
+  grounded?: boolean
+  signal?: ResumeSignal
+  brief?: PositioningBrief | null
+}
 
 function pct(x?: number): number | null {
   return typeof x === "number" ? Math.round(x * 100) : null
@@ -39,10 +45,49 @@ function Bar({ f, top }: { f: FieldFit; top: boolean }) {
   )
 }
 
+const TONES: Record<string, string> = {
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+  amber: "border-amber-200 bg-amber-50 text-amber-800",
+  slate: "border-slate-200 bg-slate-50 text-slate-600",
+}
+
+function BriefBlock({
+  icon,
+  title,
+  hint,
+  items,
+  tone,
+}: {
+  icon: ReactNode
+  title: string
+  hint: string
+  items: string[]
+  tone: keyof typeof TONES
+}) {
+  return (
+    <div>
+      <h3 className="flex items-center gap-1.5 text-[13.5px] font-bold text-slate-900">
+        {icon} {title}
+      </h3>
+      <p className="mt-0.5 text-[12px] text-slate-500">{hint}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.map((s) => (
+          <span key={s} className={`rounded-full border px-2.5 py-1 text-[12px] font-medium capitalize ${TONES[tone]}`}>
+            {s}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ResumeSignalView() {
   const [data, setData] = useState<ApiResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [target, setTarget] = useState<string | null>(null)
+  const [brief, setBrief] = useState<PositioningBrief | null>(null)
+  const [briefLoading, setBriefLoading] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -58,6 +103,17 @@ export default function ResumeSignalView() {
       alive = false
     }
   }, [])
+
+  function pickTarget(key: string) {
+    setTarget(key)
+    setBrief(null)
+    setBriefLoading(true)
+    fetch(`/api/resume/signal?target=${encodeURIComponent(key)}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then((d: ApiResponse) => setBrief(d.brief ?? null))
+      .catch(() => setBrief(null))
+      .finally(() => setBriefLoading(false))
+  }
 
   if (loading) {
     return (
@@ -157,32 +213,101 @@ export default function ResumeSignalView() {
         </div>
       </section>
 
-      {/* Gap toward the runner-up (or primary) — the positioning lever. */}
-      {runnerUp && runnerUp.missing.length > 0 && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="text-[15px] font-bold text-slate-900">
-            To read more as {runnerUp.label}
-          </h2>
-          <p className="mt-1 text-[13px] text-slate-500">
-            These signals for {runnerUp.label} are missing or buried — surface the ones you honestly have to shift how
-            your resume reads.
-          </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {runnerUp.missing.map((m) => (
-              <span
-                key={m}
-                className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[12px] font-medium text-slate-600"
+      {/* Positioning brief — pick a lane, get honest, resume-grounded edits. */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-slate-900">
+          <Target className="h-4 w-4 text-emerald-600" /> Position for a field
+        </h2>
+        <p className="mt-1 text-[13px] text-slate-500">
+          Pick the lane you want to be read as. We&apos;ll show what to lead with, honest signals you have but
+          haven&apos;t surfaced, and the real gaps to close — all from your own resume.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {signal.fields.slice(0, 5).map((f) => {
+            const active = target === f.key
+            const sponsor = pct(f.sponsorshipShare)
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => pickTarget(f.key)}
+                className={`rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                  active
+                    ? "border-emerald-600 bg-emerald-600 text-white"
+                    : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:text-emerald-700"
+                }`}
               >
-                {m}
-              </span>
-            ))}
+                {f.label}
+                {sponsor !== null && (
+                  <span className={`ml-1.5 text-[11px] font-medium ${active ? "text-emerald-100" : "text-indigo-500"}`}>
+                    {sponsor}% sponsor
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+
+        {briefLoading && (
+          <div className="mt-4 flex items-center gap-2 text-[13px] text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Building your positioning brief…
           </div>
-        </section>
-      )}
+        )}
+
+        {brief && !briefLoading && (
+          <div className="mt-5 space-y-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[13px] text-slate-600">
+                As <strong className="text-slate-900">{brief.targetLabel}</strong>, your resume reads at{" "}
+                <strong className="text-slate-900">{brief.score}%</strong> of the field&apos;s demand.
+              </span>
+              {pct(brief.sponsorshipShare) !== null && (
+                <span className="inline-flex items-center gap-1 text-[12px] font-medium text-indigo-600">
+                  <Plane className="h-3.5 w-3.5" /> {pct(brief.sponsorshipShare)}% of these openings sponsor visas
+                </span>
+              )}
+            </div>
+
+            {brief.leadWith.length > 0 && (
+              <BriefBlock
+                icon={<Sparkles className="h-4 w-4 text-emerald-600" />}
+                title="Lead with"
+                hint="You clearly have these — put them up top so the ATS reads them first."
+                items={brief.leadWith}
+                tone="emerald"
+              />
+            )}
+            {brief.surface.length > 0 && (
+              <BriefBlock
+                icon={<ArrowUp className="h-4 w-4 text-amber-600" />}
+                title="Surface these — you have them, but they're buried"
+                hint="Found in your resume text but not in your summary or skills — pull them up."
+                items={brief.surface}
+                tone="amber"
+              />
+            )}
+            {brief.closeGaps.length > 0 && (
+              <BriefBlock
+                icon={<Target className="h-4 w-4 text-slate-500" />}
+                title="Close these gaps"
+                hint="In-demand for this field and not in your resume — add the ones you honestly have."
+                items={brief.closeGaps}
+                tone="slate"
+              />
+            )}
+            {brief.leadWith.length === 0 && brief.surface.length === 0 && (
+              <p className="text-[13px] text-slate-500">
+                Your resume shows little signal for {brief.targetLabel} yet — the gaps above are where to start if this
+                is your target lane.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       <p className="text-[12px] text-slate-400">
         {data.grounded
-          ? "Scored against the skills real jobs in each field are asking for right now, with each field's live visa-sponsorship density. Next: generate a positioned resume variant the matcher uses."
+          ? "Scored against the skills real jobs in each field are asking for right now, with each field's live visa-sponsorship density. Every brief item is drawn from your own resume or the field's real demand — nothing is invented."
           : "v1 heuristic (keyword signatures). Once the field profiles are built from the live job corpus, this switches to scoring against real job demand and shows each field's visa-sponsorship density."}
       </p>
     </div>

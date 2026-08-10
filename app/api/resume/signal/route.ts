@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
-import { detectResumeSignal, scoreResumeAgainstProfiles } from "@/lib/resume/signal"
+import {
+  detectResumeSignal,
+  scoreResumeAgainstProfiles,
+  buildPositioningBrief,
+  fieldSignatureToProfile,
+  FIELDS,
+  type FieldProfile,
+} from "@/lib/resume/signal"
 import { getFieldProfiles } from "@/lib/resume/field-profiles"
 import type { Resume } from "@/types"
 
@@ -9,8 +16,9 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 // What field is the user's resume actually signalling? Runs the signal detector
-// over their primary (parsed) resume.
-export async function GET() {
+// over their primary (parsed) resume. Pass ?target=<field_key> to also get an
+// honest positioning brief for that field.
+export async function GET(request: Request) {
   if (!hasPostgresEnv()) return NextResponse.json({ hasResume: false })
 
   const supabase = await createClient()
@@ -40,8 +48,22 @@ export async function GET() {
   const grounded = profiles.length > 0
   const signal = grounded ? scoreResumeAgainstProfiles(resume, profiles) : detectResumeSignal(resume)
 
+  // Optional positioning brief for a chosen target field. Use the corpus profile
+  // when built, else synthesize one from the field signature so it works today.
+  const target = new URL(request.url).searchParams.get("target")
+  let brief = null
+  if (target) {
+    const profile: FieldProfile | undefined = grounded
+      ? profiles.find((p) => p.key === target)
+      : (() => {
+          const sig = FIELDS.find((f) => f.key === target)
+          return sig ? fieldSignatureToProfile(sig) : undefined
+        })()
+    if (profile) brief = buildPositioningBrief(resume, profile)
+  }
+
   return NextResponse.json(
-    { hasResume: true, primaryRole: resume.primary_role ?? null, grounded, signal },
+    { hasResume: true, primaryRole: resume.primary_role ?? null, grounded, signal, brief },
     { headers: { "Cache-Control": "no-store" } },
   )
 }

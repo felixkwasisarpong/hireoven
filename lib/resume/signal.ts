@@ -150,9 +150,12 @@ export const FIELDS: FieldSignature[] = [
 // Saturation constant: ~this many weighted hits ≈ a strong (~80%) signal.
 const SATURATION = 5
 
-function buildBlob(resume: Pick<Resume,
-  "primary_role" | "top_skills" | "skills" | "work_experience" | "industries" | "summary" | "raw_text"
->): { text: string; tokens: Set<string> } {
+function buildBlob(
+  resume: Pick<Resume,
+    "primary_role" | "top_skills" | "skills" | "work_experience" | "industries" | "summary" | "raw_text"
+  >,
+  opts: { includeRaw?: boolean } = {},
+): { text: string; tokens: Set<string> } {
   const parts: string[] = []
   if (resume.primary_role) parts.push(resume.primary_role)
   if (resume.summary) parts.push(resume.summary)
@@ -164,8 +167,11 @@ function buildBlob(resume: Pick<Resume,
     if (w.description) parts.push(w.description)
     for (const a of w.achievements ?? []) parts.push(a)
   }
-  // raw_text last and capped — it's the fallback, not the primary signal.
-  if (resume.raw_text) parts.push(resume.raw_text.slice(0, 20_000))
+  // raw_text last and capped — it's the fallback, not the primary signal. Skip
+  // it (includeRaw: false) to build a "structured only" blob: a signal that's in
+  // the full blob but not this one is present in the resume text yet buried,
+  // never surfaced in the structured fields — the highest-leverage thing to lift.
+  if (opts.includeRaw !== false && resume.raw_text) parts.push(resume.raw_text.slice(0, 20_000))
 
   const text = ` ${parts.join(" ").toLowerCase()} `
   const tokens = new Set(text.split(/[^a-z0-9+#.]+/).filter(Boolean))
@@ -283,4 +289,79 @@ export function scoreResumeAgainstProfiles(
   const runnerUp = fields[1] ?? null
   const split = Boolean(primary && runnerUp && primary.score > 0 && runnerUp.score / primary.score >= 0.7)
   return { fields, primary, runnerUp, split }
+}
+
+// ── Positioning brief ────────────────────────────────────────────────────────
+// Once the user picks a lane, turn the fit into concrete, honest edits. Every
+// item below comes from what the resume ALREADY contains or from the field's
+// real demand — nothing is invented.
+
+export interface PositioningBrief {
+  targetKey: string
+  targetLabel: string
+  /** Current fit score for this field (0–100). */
+  score: number
+  /** 0–1 sponsorship density of the field, when known (corpus-grounded only). */
+  sponsorshipShare?: number
+  /** Skills the resume clearly has for this field — lead with these. */
+  leadWith: string[]
+  /** Skills present in the resume text but NOT surfaced in the structured
+   *  fields (summary/skills/titles) — pull these up; they're buried. */
+  surface: string[]
+  /** In-demand skills for the field the resume doesn't show — the real gaps. */
+  closeGaps: string[]
+}
+
+/**
+ * Build an honest "how to position for field X" brief from a resume and that
+ * field's profile. `profile.skills` is expected ordered by demand share (as the
+ * corpus builder returns), so leadWith/surface/closeGaps come out most-in-demand
+ * first.
+ */
+export function buildPositioningBrief(
+  resume: Parameters<typeof detectResumeSignal>[0],
+  profile: FieldProfile,
+): PositioningBrief {
+  const full = buildBlob(resume)
+  const structured = buildBlob(resume, { includeRaw: false })
+
+  const leadWith: string[] = []
+  const surface: string[] = []
+  const closeGaps: string[] = []
+  let covered = 0
+  let total = 0
+  for (const { skill, share } of profile.skills) {
+    total += share
+    if (hasSignal(skill, full)) {
+      covered += share
+      if (hasSignal(skill, structured)) leadWith.push(skill)
+      else surface.push(skill)
+    } else {
+      closeGaps.push(skill)
+    }
+  }
+
+  return {
+    targetKey: profile.key,
+    targetLabel: profile.label,
+    score: total > 0 ? Math.round(100 * (covered / total)) : 0,
+    sponsorshipShare: profile.sponsorshipShare,
+    leadWith: leadWith.slice(0, 8),
+    surface: surface.slice(0, 6),
+    closeGaps: closeGaps.slice(0, 6),
+  }
+}
+
+/**
+ * Synthesize a FieldProfile from a curated FieldSignature, so the positioning
+ * brief works before the corpus profiles are built (and as a fallback). Strong
+ * signals get a higher nominal share so they sort first, mirroring how the
+ * corpus builder orders by real demand.
+ */
+export function fieldSignatureToProfile(sig: FieldSignature): FieldProfile {
+  const strong = new Set((sig.strong ?? []).map((s) => s.toLowerCase()))
+  const skills = [...new Set([...(sig.strong ?? []), ...sig.signals])]
+    .map((s) => ({ skill: s, share: strong.has(s.toLowerCase()) ? 1 : 0.6 }))
+    .sort((a, b) => b.share - a.share)
+  return { key: sig.key, label: sig.label, jobCount: 0, skills }
 }
