@@ -79,12 +79,14 @@ export async function GET(request: Request) {
           bridge.transferable,
           bridge.toBuild,
           bridge.bridgeRoles.map((r) => [r.title, r.count]),
+          // Evidence is fed into the reasoning, so it belongs in the cache key.
+          evidence ? [evidence.sampleSize, evidence.medianGapMonths] : null,
         ]),
       ),
     )
     reasoning =
       apexCache.get<BridgeReasoning>(ck) ??
-      (await reasonOverBridge(anthropic, bridge, user.id).catch(() => null))
+      (await reasonOverBridge(anthropic, bridge, evidence, user.id).catch(() => null))
     if (reasoning) apexCache.set(ck, reasoning, CACHE_TTL.STRATEGY)
   }
 
