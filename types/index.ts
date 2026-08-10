@@ -507,6 +507,10 @@ export type Company = {
   health_score?: number | null;
   health_verdict?: HealthVerdict | null;
   glassdoor_rating?: number | null;
+  // Time-to-fill: median days a role stays open (observed posting lifecycle).
+  median_days_open?: number | null;
+  time_to_fill_sample?: number | null;
+  time_to_fill_computed_at?: string | null;
   created_at: string;
   updated_at: string;
 };
