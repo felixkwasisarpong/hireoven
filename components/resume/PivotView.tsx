@@ -25,6 +25,7 @@ type InitResponse = {
   grounded?: boolean
   signal?: ResumeSignal
   from?: string | null
+  suggestedTo?: { toKey: string } | null
   bridge?: BridgePath | null
   evidence?: PivotEvidence | null
   reasoning?: BridgeReasoning | null
@@ -65,6 +66,17 @@ export default function PivotView() {
       alive = false
     }
   }, [])
+
+  // Deep-link / auto-select: /dashboard/pivot?to=<field> (used by the feed pivot
+  // nudge) preselects that target; otherwise fall back to the server's suggested
+  // target so landing here cold shows a concrete pivot, not an empty picker.
+  useEffect(() => {
+    if (!data?.from || to) return
+    const param = new URLSearchParams(window.location.search).get("to")
+    const target = param ?? data.suggestedTo?.toKey ?? null
+    if (target && target !== data.from) pickTarget(target)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
   function pickTarget(key: string) {
     if (!data?.from) return

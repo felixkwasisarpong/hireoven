@@ -5,6 +5,7 @@ import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { detectResumeSignal, scoreResumeAgainstProfiles, type ResumeSignal } from "@/lib/resume/signal"
 import { getFieldProfiles } from "@/lib/resume/field-profiles"
 import { computeBridgePath } from "@/lib/resume/bridge"
+import { suggestPivotTarget } from "@/lib/resume/pivot-suggest"
 import { reasonOverBridge, type BridgeReasoning } from "@/lib/resume/bridge-reasoning"
 import { getPivotEvidence } from "@/lib/career/pivot-evidence"
 import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
@@ -49,6 +50,12 @@ export async function GET(request: Request) {
   const grounded = profiles.length > 0
   const signal: ResumeSignal = grounded ? scoreResumeAgainstProfiles(resume, profiles) : detectResumeSignal(resume)
 
+  // Auto-picked best pivot target — lets the feed nudge and this page surface a
+  // concrete "pivot toward Y" without the user hand-picking a target. Grounded
+  // in the corpus (only present once field profiles are built); null when the
+  // current lane is already the right one.
+  const suggestedTo = suggestPivotTarget(signal, profiles)
+
   const url = new URL(request.url)
   const to = url.searchParams.get("to")
   // Default the origin field to the one the resume reads strongest as.
@@ -91,7 +98,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json(
-    { hasResume: true, grounded, signal, from, bridge, evidence, reasoning },
+    { hasResume: true, grounded, signal, from, suggestedTo, bridge, evidence, reasoning },
     { headers: { "Cache-Control": "no-store" } },
   )
 }
