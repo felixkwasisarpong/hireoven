@@ -4,6 +4,7 @@ import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { companyParam, companySlug, jobsAtPath, salariesPath } from "@/lib/seo/company-seo"
 import { allCollectionSlugs } from "@/lib/jobs/collections"
+import { listTopPaths } from "@/lib/career/paths"
 import { industrySlug } from "@/lib/h1b/leaderboard"
 import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
 import { siteBaseUrl } from "@/lib/seo/site-url"
@@ -67,6 +68,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
       changeFrequency: "daily" as const,
       priority: 0.75,
     })),
+    { url: `${base}/career-paths`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.8 },
     { url: `${base}/h1b-sponsors`, lastModified: new Date(), changeFrequency: "daily", priority: 0.9 },
     { url: `${base}/h1b-sponsors/leaderboard`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
     { url: `${base}/h1b-sponsors/leaderboard/no-recent-layoffs`, lastModified: new Date(), changeFrequency: "daily", priority: 0.7 },
@@ -189,6 +191,13 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
       url: `${base}/jobs/${j.id}`, lastModified: new Date(j.updated_at), changeFrequency: "weekly", priority: 0.6,
     }))
 
+    // Career-path detail pages — only the field pairs meaningful enough to have
+    // crossed the publish threshold, so the sitemap never lists a page that 404s.
+    const careerPaths = await listTopPaths(pool).catch(() => [])
+    const careerPathRoutes: SitemapEntry[] = careerPaths.map((p) => ({
+      url: `${base}/career-paths/${p.slug}`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7,
+    }))
+
     const salaryRoles = await getFeaturedSocRoles().catch(() => [])
     const salaryRoleRoutes: SitemapEntry[] = salaryRoles.flatMap((r) => [
       { url: `${base}/h1b-salaries/by-role/${r.slug}`, lastModified: new Date(), changeFrequency: "weekly" as const, priority: 0.7 },
@@ -200,7 +209,7 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
       })),
     ])
 
-    return { entries: [...staticRoutes, ...blogCategoryRoutes, ...blogPostRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...jobRoutes], ok: true }
+    return { entries: [...staticRoutes, ...blogCategoryRoutes, ...blogPostRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...careerPathRoutes, ...jobRoutes], ok: true }
   } catch {
     // DB unreachable (e.g. cold start). Return static-only but flag NOT ok so the
     // caller refuses to cache it or emit a truncated index — see getSitemapEntries.
