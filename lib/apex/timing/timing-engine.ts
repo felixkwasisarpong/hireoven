@@ -1,6 +1,9 @@
 import { getPostgresPool } from "@/lib/postgres/server"
+import { computeApplyTimingFromPostAge, type TimingRecommendation } from "@/lib/jobs/apply-timing"
 
-export type TimingRecommendation = "apply_now" | "schedule_today" | "schedule_tomorrow" | "low_priority"
+// Re-exported for backwards compatibility — the canonical definition now lives
+// in lib/jobs/apply-timing (shared with the per-card badge).
+export type { TimingRecommendation }
 
 export type JobTimingScore = {
   jobId: string
@@ -82,37 +85,12 @@ export async function computeJobTiming(
   const postedAt = job?.posted_at ?? null
   const resolvedCompanyId = companyId ?? job?.company_id ?? null
 
-  const hoursSincePosted = postedAt
-    ? Math.floor((now.getTime() - new Date(postedAt).getTime()) / 3_600_000)
-    : 9999
-
-  // Post-age scoring
-  let baseRecommendation: TimingRecommendation
-  let baseMultiplier: number
-  let baseReason: string
-
-  if (hoursSincePosted <= 24) {
-    baseRecommendation = "apply_now"
-    baseMultiplier = 3.1
-    baseReason = `Posted ${hoursSincePosted} hour${hoursSincePosted === 1 ? "" : "s"} ago. Applications in the first 24 hours have a 3.1× higher screen rate.`
-  } else if (hoursSincePosted <= 48) {
-    baseRecommendation = "apply_now"
-    baseMultiplier = 2.4
-    baseReason = "Still in the early window. Apply before day 3 for best results."
-  } else if (hoursSincePosted <= 72) {
-    baseRecommendation = "schedule_today"
-    baseMultiplier = 1.8
-    baseReason = "Past the peak window. Still worth applying today."
-  } else if (hoursSincePosted <= 168) {
-    baseRecommendation = "schedule_tomorrow"
-    baseMultiplier = 1.0
-    baseReason = "Post is a few days old. Schedule for the best time slot."
-  } else {
-    baseRecommendation = "low_priority"
-    baseMultiplier = 0.7
-    const days = Math.floor(hoursSincePosted / 24)
-    baseReason = `Post is ${days} day${days === 1 ? "" : "s"} old. Focus on fresher postings first.`
-  }
+  // Post-age scoring — shared with the per-card badge (lib/jobs/apply-timing).
+  const base = computeApplyTimingFromPostAge(postedAt, now)
+  const hoursSincePosted = base.hoursSincePosted
+  const baseRecommendation = base.recommendation
+  const baseMultiplier = base.screenRateMultiplier
+  const baseReason = base.reason
 
   // Fetch timing signals: company-specific first, fall back to global
   let signals: SignalRow[] = []
