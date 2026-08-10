@@ -12,6 +12,7 @@ import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import ResumeNudgeBanner from "@/components/dashboard/ResumeNudgeBanner"
+import FeedPivotNudge from "@/components/dashboard/FeedPivotNudge"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import NewSinceBanner from "@/components/dashboard/NewSinceBanner"
 import dynamic from "next/dynamic"
@@ -242,6 +243,11 @@ export default function DashboardHomeClient({
                 {/* New users see empty match rings with no explanation — tell
                     them the fix. Gone the moment any resume exists. */}
                 {!resumeLoading && !hasResume && <ResumeNudgeBanner />}
+
+                {/* Has a resume → surface the single best career pivot (adjacent
+                    field with more openings / a real visa edge) inline in the
+                    feed. Renders nothing unless there's a concrete upside. */}
+                {!resumeLoading && hasResume && <FeedPivotNudge />}
 
                 <JobFeed
                   filters={filters}
