@@ -85,6 +85,7 @@ run_many() {
 # nightly-maintenance 30 8 * * *       run pipeline-cleanup -> job-retention -> refresh-title-suggestions
 # purge-dead-crawled-companies 45 8 * * * run api/cron/purge-dead-crawled-companies  # mark dead boards status='dead' so the harvester stops crawling them
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
+# refresh-field-profiles 0 23 * * 0     run api/cron/refresh-field-profiles  # weekly (Sun 23:00 UTC): rebuild data-derived field skill profiles for resume positioning
 # daily-report       55 23 * * *       run api/cron/daily-report  # captures the full UTC day for the public /report snapshot
 # daily-jobs-email    0 12 * * *        run api/cron/daily-jobs-email  # morning "fresh jobs overnight" broadcast to marketing subscribers
 # weekly-digest       0 14 * * 1        run api/alerts/weekly  # Monday 2pm UTC — personalized weekly digest to registered users (weekly_digest pref)
@@ -114,6 +115,7 @@ case "${1:-}" in
   purge-dead-crawled-companies) run "api/cron/purge-dead-crawled-companies?minEmptyCrawls=${PURGE_DEAD_MIN_EMPTY_CRAWLS:-20}&mode=${PURGE_DEAD_MODE:-dead}&maxBatches=${PURGE_DEAD_MAX_BATCHES:-20}" ;;
   pipeline-cleanup)  run "api/cron/pipeline-cleanup?days=${PIPELINE_CLEANUP_DAYS:-7}" ;;
   refresh-title-suggestions) run api/cron/refresh-title-suggestions ;;
+  refresh-field-profiles) run api/cron/refresh-field-profiles ;;
   instant-notify)    run api/cron/instant-notify ;;
   interview-reminders) run api/cron/interview-reminders ;;
   ghost-scan)        run api/cron/ghost-scan ;;
@@ -202,6 +204,7 @@ case "${1:-}" in
     run api/cron/daily-report
     run api/cron/daily-jobs-email
     run api/alerts/weekly
+    run api/cron/refresh-field-profiles
     run_many "fresh-job-ingest" api/cron/waas-ingest api/cron/dice-ingest api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run_many "aggregator-job-ingest" api/cron/remotive-ingest api/cron/themuse-ingest api/cron/remoteok-ingest api/cron/arbeitnow-ingest api/cron/careerjet-ingest api/cron/jooble-ingest
@@ -220,7 +223,7 @@ case "${1:-}" in
     echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
-    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  nightly-maintenance"
+    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  nightly-maintenance"
     echo "  fresh-job-ingest  dice-ingest  adzuna-ingest  jsearch-ingest  waas-ingest"
     echo "  aggregator-job-ingest  remotive-ingest  themuse-ingest  remoteok-ingest  arbeitnow-ingest  careerjet-ingest  jooble-ingest"
     echo "  discover-companies  discover-tenants  discover-from-domains  careers-url-discovery  ats-discovery-sweep  glassdoor-discovery  signal-api-webhooks"

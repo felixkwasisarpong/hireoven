@@ -15,6 +15,7 @@
 import type { Pool } from "pg"
 import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
+import { sqlJobSponsors } from "@/lib/jobs/sponsorship-sql"
 import type { PublicJobRow } from "@/lib/jobs/format"
 
 export type CollectionKind = "role" | "remote" | "location" | "ats" | "visa"
@@ -76,11 +77,7 @@ const NEW_GRAD = `(
   OR j.title ILIKE '%recent graduate%'
 )`
 
-const HAS_SPONSORSHIP = `(
-  j.sponsors_h1b = true
-  OR c.sponsors_h1b = true
-  OR COALESCE(c.h1b_sponsor_count_1yr, 0) > 0
-)`
+const HAS_SPONSORSHIP = sqlJobSponsors("j", { companyAlias: "c" })
 
 // Texas / California by free-text location. State abbreviation as a word,
 // full state name, or a major city. CA excludes anything tagged Canada so the

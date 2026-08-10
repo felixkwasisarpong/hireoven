@@ -54,6 +54,16 @@ DATABASE_URL=REPLACE_ME
   0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
   0 8 * * 1-5      cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
   0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
+# ── Growth / marketing / positioning (app-worker routes, same box) ───────────────
+# daily-jobs-email: morning "fresh jobs overnight" broadcast to marketing subscribers.
+# daily-report: 23:55 captures the full UTC day for the public /report snapshot.
+# weekly-digest: Mon 14:00 UTC personalized weekly digest to registered users.
+# refresh-field-profiles: Sun 23:00 UTC rebuild of data-derived field skill profiles
+#   for resume positioning (needs the field_skill_profiles migration applied first).
+  0 12 * * *       cd $HIREOVEN_REPO && bash scripts/crons.sh daily-jobs-email   >>/var/log/hireoven/daily-jobs-email.log 2>&1
+ 55 23 * * *       cd $HIREOVEN_REPO && bash scripts/crons.sh daily-report       >>/var/log/hireoven/daily-report.log 2>&1
+  0 14 * * 1       cd $HIREOVEN_REPO && bash scripts/crons.sh weekly-digest      >>/var/log/hireoven/weekly-digest.log 2>&1
+  0 23 * * 0       cd $HIREOVEN_REPO && bash scripts/crons.sh refresh-field-profiles >>/var/log/hireoven/refresh-field-profiles.log 2>&1
 # ── Spec 08 email engine (host-side tsx; reuses the RESEND_* env already set here) ──
 # Reads env from the repo .env via loadEnvConfig. Snapshot must run for ≥2 weeks
 # before the weekly digest shows real movers. Webhook stays on the web box.
