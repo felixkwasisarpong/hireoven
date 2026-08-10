@@ -35,19 +35,22 @@ export function classifyTitleToField(text: string): string | null {
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
 
-/** Best-effort {year, month} from a messy résumé date string. */
-function parseYM(s: string | null | undefined): { y: number; m: number } | null {
-  if (!s) return null
-  const ym = /\b(19|20)\d{2}\b/.exec(s)
+/** Best-effort {year, month} from a messy résumé date string. Résumé JSON is
+ * not always well-typed — start_date can arrive as a number/Date — so coerce
+ * before string ops (a non-string here used to throw and 500 the whole cron). */
+function parseYM(s: unknown): { y: number; m: number } | null {
+  if (s == null) return null
+  const str = String(s)
+  const ym = /\b(19|20)\d{2}\b/.exec(str)
   if (!ym) return null
   const y = parseInt(ym[0], 10)
   let m = 1
-  const lower = s.toLowerCase()
+  const lower = str.toLowerCase()
   const mi = MONTHS.findIndex((mm) => lower.includes(mm))
   if (mi >= 0) {
     m = mi + 1
   } else {
-    const dash = /\b(?:19|20)\d{2}[-/](\d{1,2})\b/.exec(s)
+    const dash = /\b(?:19|20)\d{2}[-/](\d{1,2})\b/.exec(str)
     if (dash) m = Math.min(12, Math.max(1, parseInt(dash[1], 10)))
   }
   return { y, m }
@@ -82,8 +85,8 @@ type Edge = {
   year: number
 }
 
-function norm(title: string): string {
-  return title.trim().toLowerCase().replace(/\s+/g, " ").slice(0, 200)
+function norm(title: unknown): string {
+  return String(title ?? "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 200)
 }
 
 function buildEdge(
