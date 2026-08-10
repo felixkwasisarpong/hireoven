@@ -2,9 +2,21 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
-import { GitBranch, ArrowRight, Plane, Loader2, Sparkles, Building2, Wrench } from "lucide-react"
+import {
+  GitBranch,
+  ArrowRight,
+  Plane,
+  Loader2,
+  Sparkles,
+  Building2,
+  Wrench,
+  Brain,
+  Lightbulb,
+  AlertTriangle,
+} from "lucide-react"
 import { FIELDS, type ResumeSignal } from "@/lib/resume/signal"
 import type { BridgePath } from "@/lib/resume/bridge"
+import type { BridgeReasoning } from "@/lib/resume/bridge-reasoning"
 
 type InitResponse = {
   hasResume: boolean
@@ -12,6 +24,7 @@ type InitResponse = {
   signal?: ResumeSignal
   from?: string | null
   bridge?: BridgePath | null
+  reasoning?: BridgeReasoning | null
 }
 
 function pct(x?: number): number | null {
@@ -31,6 +44,8 @@ export default function PivotView() {
   const [to, setTo] = useState<string | null>(null)
   const [bridge, setBridge] = useState<BridgePath | null>(null)
   const [bridgeLoading, setBridgeLoading] = useState(false)
+  const [reasoning, setReasoning] = useState<BridgeReasoning | null>(null)
+  const [reasoningLoading, setReasoningLoading] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -51,12 +66,23 @@ export default function PivotView() {
     if (!data?.from) return
     setTo(key)
     setBridge(null)
+    setReasoning(null)
     setBridgeLoading(true)
     fetch(`/api/resume/bridge?to=${encodeURIComponent(key)}&from=${encodeURIComponent(data.from)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
       .then((d: InitResponse) => setBridge(d.bridge ?? null))
       .catch(() => setBridge(null))
       .finally(() => setBridgeLoading(false))
+  }
+
+  function getPlan() {
+    if (!data?.from || !to) return
+    setReasoningLoading(true)
+    fetch(`/api/resume/bridge?to=${encodeURIComponent(to)}&from=${encodeURIComponent(data.from)}&reason=1`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then((d: InitResponse) => setReasoning(d.reasoning ?? null))
+      .catch(() => setReasoning(null))
+      .finally(() => setReasoningLoading(false))
   }
 
   if (loading) {
@@ -241,9 +267,90 @@ export default function PivotView() {
             )}
           </section>
 
+          {/* AI reasoning over the facts above — opt-in, grounded, honest. */}
+          <section className="rounded-2xl border border-indigo-200 bg-indigo-50/40 p-5 shadow-sm">
+            <h2 className="flex items-center gap-1.5 text-[15px] font-bold text-slate-900">
+              <Brain className="h-4 w-4 text-indigo-600" /> AI pivot plan
+            </h2>
+            <p className="mt-1 text-[13px] text-slate-500">
+              Claude reasons over the numbers above — your transferable skills, the gaps, and the real bridge roles — to
+              sequence the move. It only works from these facts.
+            </p>
+
+            {!reasoning && !reasoningLoading && (
+              <button
+                type="button"
+                onClick={getPlan}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-indigo-700"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Build my pivot plan
+              </button>
+            )}
+
+            {reasoningLoading && (
+              <div className="mt-3 flex items-center gap-2 text-[13px] text-slate-500">
+                <Loader2 className="h-4 w-4 animate-spin" /> Reasoning over your bridge…
+              </div>
+            )}
+
+            {reasoning && (
+              <div className="mt-4 space-y-4">
+                <p className="text-[14px] font-medium text-slate-800">{reasoning.summary}</p>
+
+                {reasoning.steps.length > 0 && (
+                  <ol className="space-y-2.5">
+                    {reasoning.steps.map((s, i) => (
+                      <li key={i} className="flex gap-3">
+                        <span className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-indigo-600 text-[11px] font-bold text-white">
+                          {i + 1}
+                        </span>
+                        <div>
+                          <p className="text-[13.5px] font-semibold text-slate-900">{s.title}</p>
+                          {s.detail && <p className="text-[13px] text-slate-600">{s.detail}</p>}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
+                {reasoning.positioning && (
+                  <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                      How to position
+                    </p>
+                    <p className="mt-1 text-[13px] text-slate-700">{reasoning.positioning}</p>
+                  </div>
+                )}
+
+                {reasoning.firstMove && (
+                  <div className="flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+                    <Lightbulb className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                        Start here
+                      </p>
+                      <p className="mt-0.5 text-[13px] font-medium text-emerald-900">{reasoning.firstMove}</p>
+                    </div>
+                  </div>
+                )}
+
+                {reasoning.risks.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none text-amber-600" />
+                    <ul className="space-y-1 text-[13px] text-amber-900">
+                      {reasoning.risks.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+
           <p className="text-[12px] text-slate-400">
             Overlap and skills come from what real {bridge.toLabel} jobs ask for; bridge roles are aggregated from the
-            live job index. Nothing is invented.
+            live job index. The AI plan only reasons over those facts — nothing is invented.
           </p>
         </div>
       )}

@@ -76,6 +76,7 @@ export const AI_TIMEOUTS = {
   resume_generate:       25_000,
   resume_ai_write:       12_000,
   resume_tailor_analyze: 12_000,
+  resume_bridge_reasoning: 16_000, // reasoning/synthesis over the computed bridge
   cover_letter:          18_000,
   cover_letter_extension:18_000,
   interview_prep:        12_000,
