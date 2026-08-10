@@ -112,6 +112,7 @@ export async function POST(request: Request) {
         resume,
         job,
         profile: profileData as Profile,
+        targetField: resume.target_field,
       })
       const deepScore = mapAnalysisToDeepScore(
         resume,

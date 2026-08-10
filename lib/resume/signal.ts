@@ -150,6 +150,12 @@ export const FIELDS: FieldSignature[] = [
 // Saturation constant: ~this many weighted hits ≈ a strong (~80%) signal.
 const SATURATION = 5
 
+function blobFromParts(parts: string[]): { text: string; tokens: Set<string> } {
+  const text = ` ${parts.join(" ").toLowerCase()} `
+  const tokens = new Set(text.split(/[^a-z0-9+#.]+/).filter(Boolean))
+  return { text, tokens }
+}
+
 function buildBlob(
   resume: Pick<Resume,
     "primary_role" | "top_skills" | "skills" | "work_experience" | "industries" | "summary" | "raw_text"
@@ -173,9 +179,34 @@ function buildBlob(
   // never surfaced in the structured fields — the highest-leverage thing to lift.
   if (opts.includeRaw !== false && resume.raw_text) parts.push(resume.raw_text.slice(0, 20_000))
 
-  const text = ` ${parts.join(" ").toLowerCase()} `
-  const tokens = new Set(text.split(/[^a-z0-9+#.]+/).filter(Boolean))
-  return { text, tokens }
+  return blobFromParts(parts)
+}
+
+/** True if `key` is a real field key. */
+export function isFieldKey(key: string | null | undefined): boolean {
+  return !!key && FIELDS.some((f) => f.key === key)
+}
+
+// Saturation for classifying a single job (short text) into a field — lower than
+// the resume SATURATION because a job lists far fewer terms; 2–3 signature hits
+// should already read as strong field affinity.
+const JOB_FIELD_SATURATION = 2.5
+
+/**
+ * How strongly an arbitrary piece of text (e.g. a job's title + skills) belongs
+ * to a career field, 0–1. Pure and signature-based (no DB), so it's safe to call
+ * from the matcher. Used to nudge a chosen target field up the feed.
+ */
+export function fieldAffinity(fieldKey: string, text: string): number {
+  const sig = FIELDS.find((f) => f.key === fieldKey)
+  if (!sig || !text) return 0
+  const blob = blobFromParts([text])
+  const strong = new Set((sig.strong ?? []).map((s) => s.toLowerCase()))
+  let weighted = 0
+  for (const s of [...new Set([...(sig.strong ?? []), ...sig.signals])]) {
+    if (hasSignal(s, blob)) weighted += strong.has(s.toLowerCase()) ? 2 : 1
+  }
+  return weighted > 0 ? 1 - Math.exp(-weighted / JOB_FIELD_SATURATION) : 0
 }
 
 function hasSignal(signal: string, blob: { text: string; tokens: Set<string> }): boolean {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import Link from "next/link"
-import { Radar, AlertTriangle, Loader2, Plane, Target, ArrowUp, Sparkles } from "lucide-react"
+import { Radar, AlertTriangle, Loader2, Plane, Target, ArrowUp, Sparkles, Check } from "lucide-react"
 import type { ResumeSignal, FieldFit, PositioningBrief } from "@/lib/resume/signal"
 
 type ApiResponse = {
@@ -11,6 +11,7 @@ type ApiResponse = {
   grounded?: boolean
   signal?: ResumeSignal
   brief?: PositioningBrief | null
+  targetField?: string | null
 }
 
 function pct(x?: number): number | null {
@@ -88,6 +89,8 @@ export default function ResumeSignalView() {
   const [target, setTarget] = useState<string | null>(null)
   const [brief, setBrief] = useState<PositioningBrief | null>(null)
   const [briefLoading, setBriefLoading] = useState(false)
+  const [savedTarget, setSavedTarget] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -96,7 +99,11 @@ export default function ResumeSignalView() {
         if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error ?? `Failed (${r.status})`)
         return r.json()
       })
-      .then((d: ApiResponse) => alive && setData(d))
+      .then((d: ApiResponse) => {
+        if (!alive) return
+        setData(d)
+        setSavedTarget(d.targetField ?? null)
+      })
       .catch((e: Error) => alive && setError(e.message))
       .finally(() => alive && setLoading(false))
     return () => {
@@ -113,6 +120,21 @@ export default function ResumeSignalView() {
       .then((d: ApiResponse) => setBrief(d.brief ?? null))
       .catch(() => setBrief(null))
       .finally(() => setBriefLoading(false))
+  }
+
+  // Save (or clear) the chosen lane. This bumps the resume's updated_at server-
+  // side, so the matcher re-scores the feed with the new positioning.
+  function saveTarget(key: string | null) {
+    setSaving(true)
+    fetch("/api/resume/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: key }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then(() => setSavedTarget(key))
+      .catch(() => {})
+      .finally(() => setSaving(false))
   }
 
   if (loading) {
@@ -231,12 +253,15 @@ export default function ResumeSignalView() {
                 key={f.key}
                 type="button"
                 onClick={() => pickTarget(f.key)}
-                className={`rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
+                className={`inline-flex items-center rounded-full border px-3.5 py-1.5 text-[13px] font-semibold transition ${
                   active
                     ? "border-emerald-600 bg-emerald-600 text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:text-emerald-700"
                 }`}
               >
+                {savedTarget === f.key && (
+                  <Check className={`mr-1 h-3.5 w-3.5 ${active ? "text-white" : "text-emerald-600"}`} />
+                )}
                 {f.label}
                 {sponsor !== null && (
                   <span className={`ml-1.5 text-[11px] font-medium ${active ? "text-emerald-100" : "text-indigo-500"}`}>
@@ -265,6 +290,41 @@ export default function ResumeSignalView() {
                 <span className="inline-flex items-center gap-1 text-[12px] font-medium text-indigo-600">
                   <Plane className="h-3.5 w-3.5" /> {pct(brief.sponsorshipShare)}% of these openings sponsor visas
                 </span>
+              )}
+            </div>
+
+            {/* Make the matcher use this lane. Persists the field and re-scores
+                the feed toward it. */}
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2">
+              {savedTarget === brief.targetKey ? (
+                <>
+                  <span className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-700">
+                    <Check className="h-4 w-4" /> Matching your feed as {brief.targetLabel}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => saveTarget(null)}
+                    disabled={saving}
+                    className="ml-auto text-[12px] font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700 disabled:opacity-50"
+                  >
+                    {saving ? "Saving…" : "Clear"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span className="text-[13px] text-emerald-900">
+                    Match my feed as <strong>{brief.targetLabel}</strong> — boosts jobs in this lane the next time your
+                    matches refresh.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => saveTarget(brief.targetKey)}
+                    disabled={saving}
+                    className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-3.5 py-1.5 text-[12px] font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Target className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Use this lane"}
+                  </button>
+                </>
               )}
             </div>
 

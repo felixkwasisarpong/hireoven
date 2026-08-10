@@ -207,6 +207,7 @@ CREATE TABLE IF NOT EXISTS resumes (
   resume_score INTEGER,
   ats_score INTEGER,
   raw_text TEXT,
+  target_field TEXT,  -- chosen matching lane (a FIELDS key from lib/resume/signal)
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

@@ -1192,6 +1192,9 @@ export type Resume = {
   tailored_for_job_id?: string | null;
   tailored_for_company?: string | null;
   tailored_for_role?: string | null;
+  // Career field the user chose to be matched as (a FIELDS key from
+  // lib/resume/signal). When set, the matcher boosts jobs in this field.
+  target_field?: string | null;
   created_at: string;
   updated_at: string;
 };
