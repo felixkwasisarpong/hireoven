@@ -122,7 +122,7 @@ function edgesFromWorkExperience(we: WorkExperience[]): Edge[] {
     const gapMonths = prevEnd
       ? Math.max(0, next.start.y * 12 + next.start.m - (prevEnd.y * 12 + prevEnd.m))
       : null
-    edges.push(buildEdge(prev, next, next.start.y, gapMonths))
+    edges.push(buildEdge(prev, next.w, next.start.y, gapMonths))
   }
   return edges
 }
