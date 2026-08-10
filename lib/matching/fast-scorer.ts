@@ -1726,6 +1726,23 @@ export function computeFastScore({
     if (targetFieldBoost > 0) overall = overall + targetFieldBoost
   }
 
+  // Sponsorship-first ranking (opt-in by profile). A visa-needing user should see
+  // employers that will actually sponsor rank above those that won't. Folded into
+  // overall_score ONLY when profile.needs_sponsorship — for everyone else
+  // getSponsorshipScore returns {100, compatible} so the delta is 0 and scoring
+  // is byte-for-byte unchanged. Bounded; the explicit "must already be
+  // authorized" dead-end is pushed down hard.
+  let sponsorshipRankDelta = 0
+  if (profile.needs_sponsorship) {
+    if (sponsorship.compatible) {
+      sponsorshipRankDelta = sponsorship.score >= 100 ? 8 : sponsorship.score >= 80 ? 5 : sponsorship.score >= 60 ? 2 : 0
+    } else {
+      // score 0 == requires_authorization (a dead end); >0 == just no sponsorship signal.
+      sponsorshipRankDelta = sponsorship.score === 0 ? -18 : -6
+    }
+    overall = overall + sponsorshipRankDelta
+  }
+
   overall = clamp(overall, 0, 100)
 
   const now = new Date().toISOString()
@@ -1798,6 +1815,13 @@ export function computeFastScore({
           : []),
         ...(topBandPromotion ? [topBandPromotion] : []),
         ...(targetFieldBoost > 0 ? [`Positioned toward ${targetField}: +${targetFieldBoost} pts`] : []),
+        ...(sponsorshipRankDelta !== 0
+          ? [
+              `Sponsorship ranking: ${sponsorshipRankDelta > 0 ? "+" : ""}${sponsorshipRankDelta} pts (${
+                sponsorship.compatible ? "sponsors" : "no sponsorship"
+              })`,
+            ]
+          : []),
         ...(jobSeniority.ignoredStoredLevel
           ? [`Unsupported stored seniority (${jobSeniority.ignoredStoredLevel}) ignored for scoring.`]
           : []),
