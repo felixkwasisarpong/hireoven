@@ -6,6 +6,7 @@ import { detectResumeSignal, scoreResumeAgainstProfiles, type ResumeSignal } fro
 import { getFieldProfiles } from "@/lib/resume/field-profiles"
 import { computeBridgePath } from "@/lib/resume/bridge"
 import { reasonOverBridge, type BridgeReasoning } from "@/lib/resume/bridge-reasoning"
+import { getPivotEvidence } from "@/lib/career/pivot-evidence"
 import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
 import type { Resume } from "@/types"
 
@@ -56,6 +57,11 @@ export async function GET(request: Request) {
 
   const bridge = to && from ? await computeBridgePath(pool, resume, from, to).catch(() => null) : null
 
+  // Evidence from the accumulated transition graph — a cheap aggregate, no LLM.
+  // Returns null (shows nothing) until enough people have really made this move.
+  const evidence =
+    bridge && from && to ? await getPivotEvidence(pool, from, to).catch(() => null) : null
+
   // AI reasoning is opt-in (?reason=1) so picking a target stays instant and free;
   // the LLM only runs when the user explicitly asks for the plan. Grounded strictly
   // in the computed bridge facts, cached per user + field pair + facts hash.
@@ -83,7 +89,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json(
-    { hasResume: true, grounded, signal, from, bridge, reasoning },
+    { hasResume: true, grounded, signal, from, bridge, evidence, reasoning },
     { headers: { "Cache-Control": "no-store" } },
   )
 }
