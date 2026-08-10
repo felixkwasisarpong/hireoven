@@ -204,6 +204,7 @@ case "${1:-}" in
     run api/cron/daily-report
     run api/cron/daily-jobs-email
     run api/alerts/weekly
+    run api/cron/refresh-field-profiles
     run_many "fresh-job-ingest" api/cron/waas-ingest api/cron/dice-ingest api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run_many "aggregator-job-ingest" api/cron/remotive-ingest api/cron/themuse-ingest api/cron/remoteok-ingest api/cron/arbeitnow-ingest api/cron/careerjet-ingest api/cron/jooble-ingest
@@ -222,7 +223,7 @@ case "${1:-}" in
     echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
-    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  nightly-maintenance"
+    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  nightly-maintenance"
     echo "  fresh-job-ingest  dice-ingest  adzuna-ingest  jsearch-ingest  waas-ingest"
     echo "  aggregator-job-ingest  remotive-ingest  themuse-ingest  remoteok-ingest  arbeitnow-ingest  careerjet-ingest  jooble-ingest"
     echo "  discover-companies  discover-tenants  discover-from-domains  careers-url-discovery  ats-discovery-sweep  glassdoor-discovery  signal-api-webhooks"
