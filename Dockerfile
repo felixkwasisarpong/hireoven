@@ -59,7 +59,17 @@ RUN mkdir -p $PLAYWRIGHT_BROWSERS_PATH \
   && node node_modules/playwright/cli.js install --with-deps chromium \
   && chmod -R go+rX $PLAYWRIGHT_BROWSERS_PATH
 
+# DB migrations, applied idempotently on startup (see scripts/apply-migrations.mjs).
+# Bundled explicitly because the Next standalone output ships only server.js +
+# traced node_modules, not the scripts/ tree. `pg` is a static app dependency so
+# it's already traced into ./node_modules.
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/apply-migrations.mjs ./scripts/apply-migrations.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/migrations ./scripts/migrations
+
 USER nextjs
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Apply any pending migrations, then start the server. A migration failure is
+# logged loudly but does NOT block startup — a degraded feature beats an outage,
+# and the advisory lock in the runner serializes concurrent container starts.
+CMD ["sh", "-c", "node scripts/apply-migrations.mjs || echo '[migrate] one or more migrations failed — see logs above'; exec node server.js"]

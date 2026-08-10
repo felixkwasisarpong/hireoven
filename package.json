@@ -7,6 +7,8 @@
     "dev:fast": "next dev --turbo",
     "build": "next build",
     "start": "next start",
+    "migrate": "node scripts/apply-migrations.mjs",
+    "migrate:baseline": "MIGRATE_BASELINE=1 node scripts/apply-migrations.mjs",
     "start:standalone": "node .next/standalone/server.js",
     "lint": "next lint",
     "test": "find lib -name '*.test.ts' -print0 | xargs -0 tsx --test --test-reporter=spec",
