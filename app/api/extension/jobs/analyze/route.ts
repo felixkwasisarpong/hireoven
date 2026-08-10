@@ -501,6 +501,7 @@ async function computeSkillMatch(args: {
     job: scoreJob,
     profile: context.profile,
     resumeContext,
+    targetField: context.resume.target_field,
   })
 
   const breakdown = fastScore.score_breakdown

@@ -307,6 +307,7 @@ export async function scoreJobsForUser(userId: string, jobIds: string[]) {
       job,
       profile: context.profile,
       resumeContext,
+      targetField: context.resume.target_field,
     })
   )
 
@@ -373,6 +374,7 @@ export async function scoreNewJobForAllUsers(job: Job) {
           resume,
           job,
           profile,
+          targetField: resume.target_field,
         })
       })
     )

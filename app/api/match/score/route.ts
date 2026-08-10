@@ -57,7 +57,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Compute fresh, upsert, return
-    const scoreInsert = computeFastScore({ resume: context.resume, job, profile: context.profile })
+    const scoreInsert = computeFastScore({
+      resume: context.resume,
+      job,
+      profile: context.profile,
+      targetField: context.resume.target_field,
+    })
     const [saved] = await upsertMatchScores([scoreInsert])
 
     // Attach score_breakdown (not in DB schema) so callers get skill pills

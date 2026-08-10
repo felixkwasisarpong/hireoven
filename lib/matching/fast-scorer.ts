@@ -31,12 +31,20 @@ import {
   normalizeSkillList,
 } from "@/lib/skills/taxonomy"
 import { inferSeniorityLevel } from "@/lib/jobs/metadata"
+import { fieldAffinity } from "@/lib/resume/signal"
 
 export interface FastScoreInput {
   resume: Resume
   job: Job
   profile: Profile
   resumeContext?: FastScoreResumeContext
+  /**
+   * Optional career field the user has chosen to be matched as (a FIELDS key
+   * from lib/resume/signal). When set, jobs that belong to that field get a
+   * small, bounded positioning boost so the user's chosen lane rises up the
+   * feed. Omitted/null ⇒ scoring is byte-for-byte unchanged.
+   */
+  targetField?: string | null
 }
 
 type ResumeExperienceSnapshot = {
@@ -86,6 +94,11 @@ const W = {
   semantic:   0.06,
   roleFamily: 0.14,
 } as const
+
+// Max points a chosen target field can add to a NON-blocked match, scaled by the
+// job's affinity to that field (0–1). Small on purpose: it re-ranks the user's
+// chosen lane within their good matches, it does not resurrect gated ones.
+const TARGET_FIELD_BOOST_MAX = 8
 
 // ─── Primitive helpers ────────────────────────────────────────────────────────
 
@@ -1502,6 +1515,7 @@ export function computeFastScore({
   job,
   profile,
   resumeContext,
+  targetField,
 }: FastScoreInput): JobMatchScoreInsert {
   const context = resumeContext ?? buildFastScoreResumeContext(resume)
   const jobSeniority = resolveJobSeniorityForScoring(job)
@@ -1698,6 +1712,20 @@ export function computeFastScore({
     }
   }
 
+  // Target-field positioning boost (opt-in). When the user has chosen a lane to
+  // be matched as, nudge jobs that belong to that field up their feed — scaled by
+  // how strongly the job belongs to it. Applied only to non-blocked matches so it
+  // re-ranks within good matches rather than reviving a gated (bad) one.
+  let targetFieldBoost = 0
+  if (targetField && !hasTopBandBlockingGate) {
+    const affinity = fieldAffinity(
+      targetField,
+      `${job.title} ${(job.skills ?? []).join(" ")} ${job.description ?? ""}`.slice(0, 4000),
+    )
+    targetFieldBoost = Math.round(TARGET_FIELD_BOOST_MAX * affinity)
+    if (targetFieldBoost > 0) overall = overall + targetFieldBoost
+  }
+
   overall = clamp(overall, 0, 100)
 
   const now = new Date().toISOString()
@@ -1769,6 +1797,7 @@ export function computeFastScore({
           ? ["Sparse job-skill extraction; role-family evidence carried more weight."]
           : []),
         ...(topBandPromotion ? [topBandPromotion] : []),
+        ...(targetFieldBoost > 0 ? [`Positioned toward ${targetField}: +${targetFieldBoost} pts`] : []),
         ...(jobSeniority.ignoredStoredLevel
           ? [`Unsupported stored seniority (${jobSeniority.ignoredStoredLevel}) ignored for scoring.`]
           : []),

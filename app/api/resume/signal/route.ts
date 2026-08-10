@@ -6,6 +6,7 @@ import {
   scoreResumeAgainstProfiles,
   buildPositioningBrief,
   fieldSignatureToProfile,
+  isFieldKey,
   FIELDS,
   type FieldProfile,
 } from "@/lib/resume/signal"
@@ -29,9 +30,12 @@ export async function GET(request: Request) {
 
   const pool = getPostgresPool()
   const { rows } = await pool.query<
-    Pick<Resume, "primary_role" | "top_skills" | "skills" | "work_experience" | "industries" | "summary" | "raw_text">
+    Pick<
+      Resume,
+      "primary_role" | "top_skills" | "skills" | "work_experience" | "industries" | "summary" | "raw_text" | "target_field"
+    >
   >(
-    `SELECT primary_role, top_skills, skills, work_experience, industries, summary, raw_text
+    `SELECT primary_role, top_skills, skills, work_experience, industries, summary, raw_text, target_field
        FROM resumes
       WHERE user_id = $1 AND archived_at IS NULL AND parse_status = 'complete'
       ORDER BY is_primary DESC, updated_at DESC
@@ -63,7 +67,52 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json(
-    { hasResume: true, primaryRole: resume.primary_role ?? null, grounded, signal, brief },
+    {
+      hasResume: true,
+      primaryRole: resume.primary_role ?? null,
+      grounded,
+      signal,
+      brief,
+      targetField: resume.target_field ?? null,
+    },
     { headers: { "Cache-Control": "no-store" } },
   )
+}
+
+// Save (or clear) the user's chosen matching lane. Writing target_field also
+// touches updated_at, which bumps the score-cache resume_version so cached
+// matches recompute with the new positioning. Body: { target: string | null }.
+export async function POST(request: Request) {
+  if (!hasPostgresEnv()) return NextResponse.json({ error: "Unavailable" }, { status: 503 })
+
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const body = (await request.json().catch(() => ({}))) as { target?: unknown }
+  const raw = body.target
+  const target = raw === null || raw === "" ? null : typeof raw === "string" ? raw : undefined
+  if (target === undefined || (target !== null && !isFieldKey(target))) {
+    return NextResponse.json({ error: "Invalid target field" }, { status: 400 })
+  }
+
+  const pool = getPostgresPool()
+  // Prefer the primary resume; fall back to the most recent parsed one — matches
+  // how the scorer resolves the resume it scores against.
+  const { rowCount } = await pool.query(
+    `UPDATE resumes
+        SET target_field = $2, updated_at = now()
+      WHERE id = (
+        SELECT id FROM resumes
+         WHERE user_id = $1 AND archived_at IS NULL AND parse_status = 'complete'
+         ORDER BY is_primary DESC, updated_at DESC
+         LIMIT 1
+      )`,
+    [user.id, target],
+  )
+  if (!rowCount) return NextResponse.json({ error: "No parsed resume to position" }, { status: 404 })
+
+  return NextResponse.json({ ok: true, targetField: target }, { headers: { "Cache-Control": "no-store" } })
 }
