@@ -15,6 +15,7 @@ import {
   MessageCircle,
   Mic,
   Plane,
+  Radar,
   Send,
   Settings,
   ShieldAlert,
@@ -79,6 +80,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
 
   // ── Documents ────────────────────────────────────────────────────────────────
   { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "Documents", gate: "resume_upload", subtitle: "Build & tailor resumes" },
+  { label: "Positioning",    href: "/dashboard/positioning",              icon: Radar,           group: "Documents", subtitle: "What field your resume signals" },
   { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "Documents", gate: "cover_letter", subtitle: "Generate cover letters" },
 
   // ── Grow ─────────────────────────────────────────────────────────────────────
