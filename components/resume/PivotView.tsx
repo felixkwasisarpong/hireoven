@@ -13,10 +13,12 @@ import {
   Brain,
   Lightbulb,
   AlertTriangle,
+  Users,
 } from "lucide-react"
 import { FIELDS, type ResumeSignal } from "@/lib/resume/signal"
 import type { BridgePath } from "@/lib/resume/bridge"
 import type { BridgeReasoning } from "@/lib/resume/bridge-reasoning"
+import type { PivotEvidence } from "@/lib/career/pivot-evidence"
 
 type InitResponse = {
   hasResume: boolean
@@ -24,6 +26,7 @@ type InitResponse = {
   signal?: ResumeSignal
   from?: string | null
   bridge?: BridgePath | null
+  evidence?: PivotEvidence | null
   reasoning?: BridgeReasoning | null
 }
 
@@ -43,6 +46,7 @@ export default function PivotView() {
   const [error, setError] = useState<string | null>(null)
   const [to, setTo] = useState<string | null>(null)
   const [bridge, setBridge] = useState<BridgePath | null>(null)
+  const [evidence, setEvidence] = useState<PivotEvidence | null>(null)
   const [bridgeLoading, setBridgeLoading] = useState(false)
   const [reasoning, setReasoning] = useState<BridgeReasoning | null>(null)
   const [reasoningLoading, setReasoningLoading] = useState(false)
@@ -66,12 +70,19 @@ export default function PivotView() {
     if (!data?.from) return
     setTo(key)
     setBridge(null)
+    setEvidence(null)
     setReasoning(null)
     setBridgeLoading(true)
     fetch(`/api/resume/bridge?to=${encodeURIComponent(key)}&from=${encodeURIComponent(data.from)}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
-      .then((d: InitResponse) => setBridge(d.bridge ?? null))
-      .catch(() => setBridge(null))
+      .then((d: InitResponse) => {
+        setBridge(d.bridge ?? null)
+        setEvidence(d.evidence ?? null)
+      })
+      .catch(() => {
+        setBridge(null)
+        setEvidence(null)
+      })
       .finally(() => setBridgeLoading(false))
   }
 
@@ -185,6 +196,35 @@ export default function PivotView() {
                 </span>
               )}
             </div>
+
+            {/* Evidence from the transition graph — only when it's real. */}
+            {evidence && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+                <Users className="mt-0.5 h-4 w-4 flex-none text-emerald-600" />
+                <p className="text-[13px] text-emerald-900">
+                  <strong className="font-semibold">{evidence.sampleSize} people</strong> we&apos;ve tracked made the{" "}
+                  {bridge.fromLabel} → {bridge.toLabel} move
+                  {evidence.medianGapMonths !== null ? (
+                    <>
+                      {" "}
+                      — it typically took about{" "}
+                      <strong className="font-semibold">
+                        {evidence.medianGapMonths} month{evidence.medianGapMonths === 1 ? "" : "s"}
+                      </strong>
+                      .
+                    </>
+                  ) : (
+                    "."
+                  )}
+                  {pct(evidence.hiredOutcomeShare)! > 0 && (
+                    <span className="text-emerald-700">
+                      {" "}
+                      {pct(evidence.hiredOutcomeShare)}% of those we followed all the way to a hire.
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
           </section>
 
           {bridge.transferable.length > 0 && (
