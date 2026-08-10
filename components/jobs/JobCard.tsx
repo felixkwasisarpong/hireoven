@@ -11,6 +11,7 @@ import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useH1BPrediction } from "@/lib/context/H1BPredictionContext"
 import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
 import { isSoftSkill } from "@/lib/skills/taxonomy"
+import { applyTimingBadge } from "@/lib/jobs/apply-timing"
 import {
   effectiveEmployerSponsorshipScore,
   employerLikelySponsorsH1b,
@@ -146,6 +147,7 @@ export default function JobCard({
   } = useH1BPrediction(job.id)
   const now = nowProp ?? Date.now()
   const freshness = formatFreshness(job.first_detected_at, now)
+  const timingBadge = applyTimingBadge(job.first_detected_at, new Date(now))
   const router = useRouter()
   const { primaryResume } = useResumeContext()
   const showResumeSignal = typeof hasPrimaryResume === "boolean" ? hasPrimaryResume : Boolean(primaryResume)
@@ -364,6 +366,23 @@ export default function JobCard({
                   <Clock className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
                   Posted {freshness.label}
                 </span>
+                {timingBadge && (
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold",
+                      timingBadge.tone === "hot"
+                        ? "bg-emerald-600 text-white"
+                        : timingBadge.tone === "warm"
+                          ? "border border-amber-300 bg-amber-50 text-amber-800"
+                          : "border border-slate-200 bg-slate-50 text-slate-600",
+                    )}
+                    title={`${timingBadge.label} — ${timingBadge.detail}`}
+                  >
+                    <Zap className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                    {timingBadge.label}
+                    <span className="font-medium opacity-80">· {timingBadge.detail}</span>
+                  </span>
+                )}
                 {isBestMatch && (
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-amber-900">
                     <span className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-white">
