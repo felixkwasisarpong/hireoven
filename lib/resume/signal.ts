@@ -34,6 +34,12 @@ export interface FieldFit {
   matched: string[]
   /** Notable signature signals NOT found (the positioning gap). */
   missing: string[]
+  /**
+   * 0–1 fraction of this field's live US jobs at a sponsoring employer — the
+   * "visa edge". Only present for corpus-grounded scoring; undefined for the
+   * keyword fallback.
+   */
+  sponsorshipShare?: number
 }
 
 export interface ResumeSignal {
@@ -227,6 +233,8 @@ export interface FieldProfile {
   key: string
   label: string
   jobCount: number
+  /** 0–1 fraction of the field's jobs at a sponsoring employer (the visa edge). */
+  sponsorshipShare?: number
   skills: Array<{ skill: string; share: number }>
 }
 
@@ -259,7 +267,14 @@ export function scoreResumeAgainstProfiles(
         }
       }
       const score = total > 0 ? Math.round(100 * (covered / total)) : 0
-      return { key: p.key, label: p.label, score, matched: matched.slice(0, 12), missing: missing.slice(0, 6) }
+      return {
+        key: p.key,
+        label: p.label,
+        score,
+        matched: matched.slice(0, 12),
+        missing: missing.slice(0, 6),
+        sponsorshipShare: p.sponsorshipShare,
+      }
     })
     .filter((f) => f.score > 0)
     .sort((a, b) => b.score - a.score)

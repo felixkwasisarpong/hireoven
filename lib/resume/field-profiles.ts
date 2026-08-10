@@ -14,6 +14,7 @@ import type { Pool } from "pg"
 import { FIELDS, type FieldProfile } from "@/lib/resume/signal"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
+import { sqlJobSponsors } from "@/lib/jobs/sponsorship-sql"
 
 // A field needs at least this many matched jobs for its profile to be trusted;
 // below it we skip storing and the detector falls back to keyword signatures.
@@ -23,8 +24,8 @@ const TOP_SKILLS = 30
 
 export async function buildAndStoreFieldProfiles(
   pool: Pool,
-): Promise<Array<{ field: string; jobCount: number; skills: number; stored: boolean }>> {
-  const results: Array<{ field: string; jobCount: number; skills: number; stored: boolean }> = []
+): Promise<Array<{ field: string; jobCount: number; sponsorShare: number; skills: number; stored: boolean }>> {
+  const results: Array<{ field: string; jobCount: number; sponsorShare: number; skills: number; stored: boolean }> = []
 
   for (const f of FIELDS) {
     const seeds = [...new Set([...(f.strong ?? []), ...f.signals])].map((s) => `%${s.toLowerCase()}%`)
@@ -43,10 +44,21 @@ export async function buildAndStoreFieldProfiles(
       )
     `
 
-    const cnt = await pool.query<{ n: number }>(`SELECT COUNT(*)::int AS n FROM jobs j WHERE ${where}`, [seeds])
+    // Count the field's jobs and, of those, how many are at a sponsoring
+    // employer. The LEFT JOIN doesn't change the job count (one company per job).
+    const cnt = await pool.query<{ n: number; sponsors: number }>(
+      `SELECT COUNT(*)::int AS n,
+              COUNT(*) FILTER (WHERE ${sqlJobSponsors("j", { companyAlias: "c" })})::int AS sponsors
+         FROM jobs j
+         LEFT JOIN companies c ON c.id = j.company_id
+        WHERE ${where}`,
+      [seeds],
+    )
     const jobCount = cnt.rows[0]?.n ?? 0
+    const sponsorCount = cnt.rows[0]?.sponsors ?? 0
+    const sponsorShare = jobCount > 0 ? Math.min(1, sponsorCount / jobCount) : 0
     if (jobCount < MIN_JOBS) {
-      results.push({ field: f.key, jobCount, skills: 0, stored: false })
+      results.push({ field: f.key, jobCount, sponsorShare, skills: 0, stored: false })
       continue
     }
 
@@ -62,14 +74,17 @@ export async function buildAndStoreFieldProfiles(
     const skills = sk.rows.map((r) => ({ skill: r.skill, share: Math.min(1, r.n / jobCount) }))
 
     await pool.query(
-      `INSERT INTO field_skill_profiles (field_key, label, job_count, skills, generated_at)
-       VALUES ($1, $2, $3, $4::jsonb, now())
+      `INSERT INTO field_skill_profiles
+         (field_key, label, job_count, sponsor_job_count, sponsorship_share, skills, generated_at)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, now())
        ON CONFLICT (field_key)
        DO UPDATE SET label = EXCLUDED.label, job_count = EXCLUDED.job_count,
+                     sponsor_job_count = EXCLUDED.sponsor_job_count,
+                     sponsorship_share = EXCLUDED.sponsorship_share,
                      skills = EXCLUDED.skills, generated_at = now()`,
-      [f.key, f.label, jobCount, JSON.stringify(skills)],
+      [f.key, f.label, jobCount, sponsorCount, sponsorShare, JSON.stringify(skills)],
     )
-    results.push({ field: f.key, jobCount, skills: skills.length, stored: true })
+    results.push({ field: f.key, jobCount, sponsorShare, skills: skills.length, stored: true })
   }
 
   return results
@@ -77,13 +92,18 @@ export async function buildAndStoreFieldProfiles(
 
 /** Read stored field profiles for corpus-grounded scoring. Empty ⇒ fall back. */
 export async function getFieldProfiles(pool: Pool): Promise<FieldProfile[]> {
-  const { rows } = await pool.query<{ field_key: string; label: string; job_count: number; skills: unknown }>(
-    `SELECT field_key, label, job_count, skills FROM field_skill_profiles`,
-  )
+  const { rows } = await pool.query<{
+    field_key: string
+    label: string
+    job_count: number
+    sponsorship_share: number | null
+    skills: unknown
+  }>(`SELECT field_key, label, job_count, sponsorship_share, skills FROM field_skill_profiles`)
   return rows.map((r) => ({
     key: r.field_key,
     label: r.label,
     jobCount: r.job_count,
+    sponsorshipShare: r.sponsorship_share ?? 0,
     skills: Array.isArray(r.skills) ? (r.skills as Array<{ skill: string; share: number }>) : [],
   }))
 }
