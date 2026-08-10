@@ -87,6 +87,7 @@ run_many() {
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
 # refresh-field-profiles 0 23 * * 0     run api/cron/refresh-field-profiles  # weekly (Sun 23:00 UTC): rebuild data-derived field skill profiles for resume positioning
 # company-time-to-fill 30 4 * * 1       run api/cron/company-time-to-fill  # weekly (Mon 04:30 UTC): median days-open per company from posting lifecycle
+# mine-transitions   45 4 * * *         run api/cron/mine-transitions  # daily (04:45 UTC): accumulate the career transition graph from resumes + hire outcomes
 # daily-report       55 23 * * *       run api/cron/daily-report  # captures the full UTC day for the public /report snapshot
 # daily-jobs-email    0 12 * * *        run api/cron/daily-jobs-email  # morning "fresh jobs overnight" broadcast to marketing subscribers
 # weekly-digest       0 14 * * 1        run api/alerts/weekly  # Monday 2pm UTC — personalized weekly digest to registered users (weekly_digest pref)
@@ -118,6 +119,7 @@ case "${1:-}" in
   refresh-title-suggestions) run api/cron/refresh-title-suggestions ;;
   refresh-field-profiles) run api/cron/refresh-field-profiles ;;
   company-time-to-fill) run api/cron/company-time-to-fill ;;
+  mine-transitions)  run api/cron/mine-transitions ;;
   instant-notify)    run api/cron/instant-notify ;;
   interview-reminders) run api/cron/interview-reminders ;;
   ghost-scan)        run api/cron/ghost-scan ;;
@@ -208,6 +210,7 @@ case "${1:-}" in
     run api/alerts/weekly
     run api/cron/refresh-field-profiles
     run api/cron/company-time-to-fill
+    run api/cron/mine-transitions
     run_many "fresh-job-ingest" api/cron/waas-ingest api/cron/dice-ingest api/cron/adzuna-ingest
     run api/cron/jsearch-ingest
     run_many "aggregator-job-ingest" api/cron/remotive-ingest api/cron/themuse-ingest api/cron/remoteok-ingest api/cron/arbeitnow-ingest api/cron/careerjet-ingest api/cron/jooble-ingest
@@ -226,7 +229,7 @@ case "${1:-}" in
     echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
     echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
-    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  company-time-to-fill  nightly-maintenance"
+    echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  company-time-to-fill  mine-transitions  nightly-maintenance"
     echo "  fresh-job-ingest  dice-ingest  adzuna-ingest  jsearch-ingest  waas-ingest"
     echo "  aggregator-job-ingest  remotive-ingest  themuse-ingest  remoteok-ingest  arbeitnow-ingest  careerjet-ingest  jooble-ingest"
     echo "  discover-companies  discover-tenants  discover-from-domains  careers-url-discovery  ats-discovery-sweep  glassdoor-discovery  signal-api-webhooks"
