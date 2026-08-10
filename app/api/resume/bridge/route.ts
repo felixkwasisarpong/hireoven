@@ -1,10 +1,17 @@
+import Anthropic from "@anthropic-ai/sdk"
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { detectResumeSignal, scoreResumeAgainstProfiles, type ResumeSignal } from "@/lib/resume/signal"
 import { getFieldProfiles } from "@/lib/resume/field-profiles"
 import { computeBridgePath } from "@/lib/resume/bridge"
+import { reasonOverBridge, type BridgeReasoning } from "@/lib/resume/bridge-reasoning"
+import { apexCache, CACHE_TTL, cacheKey, stableHash } from "@/lib/apex/budget/cache"
 import type { Resume } from "@/types"
+
+const anthropic = process.env.ANTHROPIC_API_KEY
+  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  : null
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -45,11 +52,38 @@ export async function GET(request: Request) {
   const to = url.searchParams.get("to")
   // Default the origin field to the one the resume reads strongest as.
   const from = url.searchParams.get("from") ?? signal.primary?.key ?? null
+  const wantReason = url.searchParams.get("reason") === "1"
 
   const bridge = to && from ? await computeBridgePath(pool, resume, from, to).catch(() => null) : null
 
+  // AI reasoning is opt-in (?reason=1) so picking a target stays instant and free;
+  // the LLM only runs when the user explicitly asks for the plan. Grounded strictly
+  // in the computed bridge facts, cached per user + field pair + facts hash.
+  let reasoning: BridgeReasoning | null = null
+  if (wantReason && bridge && anthropic) {
+    const ck = cacheKey(
+      "bridge-reason",
+      user.id,
+      from,
+      to,
+      stableHash(
+        JSON.stringify([
+          bridge.overlapPct,
+          bridge.targetFit,
+          bridge.transferable,
+          bridge.toBuild,
+          bridge.bridgeRoles.map((r) => [r.title, r.count]),
+        ]),
+      ),
+    )
+    reasoning =
+      apexCache.get<BridgeReasoning>(ck) ??
+      (await reasonOverBridge(anthropic, bridge, user.id).catch(() => null))
+    if (reasoning) apexCache.set(ck, reasoning, CACHE_TTL.STRATEGY)
+  }
+
   return NextResponse.json(
-    { hasResume: true, grounded, signal, from, bridge },
+    { hasResume: true, grounded, signal, from, bridge, reasoning },
     { headers: { "Cache-Control": "no-store" } },
   )
 }
