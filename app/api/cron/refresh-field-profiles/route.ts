@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic"
 
 // Rebuilds the data-derived field skill profiles from the live job corpus.
 // Fields change slowly, so weekly is plenty (harvester crontab):
-//   0 4 * * 1   bash scripts/crons.sh refresh-field-profiles
+//   0 23 * * 0   bash scripts/crons.sh refresh-field-profiles   (Sun 23:00 UTC)
 
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
