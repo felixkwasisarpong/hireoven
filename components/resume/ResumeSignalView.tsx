@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Radar, AlertTriangle, Loader2 } from "lucide-react"
 import type { ResumeSignal, FieldFit } from "@/lib/resume/signal"
 
-type ApiResponse = { hasResume: boolean; primaryRole?: string | null; signal?: ResumeSignal }
+type ApiResponse = { hasResume: boolean; primaryRole?: string | null; grounded?: boolean; signal?: ResumeSignal }
 
 function Bar({ f, top }: { f: FieldFit; top: boolean }) {
   const color = top ? "#059669" : f.score >= 50 ? "#f59e0b" : "#94a3b8"
@@ -137,8 +137,9 @@ export default function ResumeSignalView() {
       )}
 
       <p className="text-[12px] text-slate-400">
-        Prototype · v1 uses a transparent keyword signature per field. Next: score against real jobs in each field and
-        generate a positioned resume variant.
+        {data.grounded
+          ? "Scored against the skills real jobs in each field are asking for right now. Next: weight by sponsorship density and generate a positioned resume variant."
+          : "v1 heuristic (keyword signatures). Once the field profiles are built from the live job corpus, this switches to scoring against real job demand."}
       </p>
     </div>
   )

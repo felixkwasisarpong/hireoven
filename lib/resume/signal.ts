@@ -52,8 +52,9 @@ export interface ResumeSignal {
 
 // ── Field signatures ────────────────────────────────────────────────────────
 // Tech specialisations first (where "diverse resume" ambiguity bites hardest),
-// then broader domains so non-tech resumes still classify.
-const FIELDS: FieldSignature[] = [
+// then broader domains so non-tech resumes still classify. Exported so the
+// corpus profiler can reuse these as seeds to select each field's real jobs.
+export const FIELDS: FieldSignature[] = [
   {
     key: "ai_ml",
     label: "AI / Machine Learning",
@@ -215,5 +216,56 @@ export function detectResumeSignal(
   // Split signal when the runner-up is ≥70% as strong as the primary.
   const split = Boolean(primary && runnerUp && primary.score > 0 && runnerUp.score / primary.score >= 0.7)
 
+  return { fields, primary, runnerUp, split }
+}
+
+// ── Corpus-grounded scoring ─────────────────────────────────────────────────
+// A field's real skill demand, derived from actual jobs (see
+// lib/resume/field-profiles.ts). `share` is the fraction of that field's jobs
+// that list the skill — so common asks weigh more than niche ones.
+export interface FieldProfile {
+  key: string
+  label: string
+  jobCount: number
+  skills: Array<{ skill: string; share: number }>
+}
+
+/**
+ * Score a resume against data-derived field profiles instead of curated
+ * keywords. A field's score is the resume's *share-weighted coverage* of what
+ * that field's jobs actually ask for — i.e. "you have X% of the demand,
+ * weighted by how common each skill is." `missing` becomes the most in-demand
+ * skills the resume lacks (the real positioning gap).
+ */
+export function scoreResumeAgainstProfiles(
+  resume: Parameters<typeof detectResumeSignal>[0],
+  profiles: FieldProfile[],
+): ResumeSignal {
+  const blob = buildBlob(resume)
+
+  const fields: FieldFit[] = profiles
+    .map((p) => {
+      let covered = 0
+      let total = 0
+      const matched: string[] = []
+      const missing: string[] = []
+      for (const { skill, share } of p.skills) {
+        total += share
+        if (hasSignal(skill, blob)) {
+          covered += share
+          matched.push(skill)
+        } else {
+          missing.push(skill)
+        }
+      }
+      const score = total > 0 ? Math.round(100 * (covered / total)) : 0
+      return { key: p.key, label: p.label, score, matched: matched.slice(0, 12), missing: missing.slice(0, 6) }
+    })
+    .filter((f) => f.score > 0)
+    .sort((a, b) => b.score - a.score)
+
+  const primary = fields[0] ?? null
+  const runnerUp = fields[1] ?? null
+  const split = Boolean(primary && runnerUp && primary.score > 0 && runnerUp.score / primary.score >= 0.7)
   return { fields, primary, runnerUp, split }
 }

@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
-import { detectResumeSignal } from "@/lib/resume/signal"
+import { detectResumeSignal, scoreResumeAgainstProfiles } from "@/lib/resume/signal"
+import { getFieldProfiles } from "@/lib/resume/field-profiles"
 import type { Resume } from "@/types"
 
 export const runtime = "nodejs"
@@ -33,9 +34,14 @@ export async function GET() {
   const resume = rows[0]
   if (!resume) return NextResponse.json({ hasResume: false })
 
-  const signal = detectResumeSignal(resume)
+  // Prefer corpus-grounded scoring (against what real jobs in each field ask
+  // for); fall back to the keyword signatures until profiles are built.
+  const profiles = await getFieldProfiles(pool).catch(() => [])
+  const grounded = profiles.length > 0
+  const signal = grounded ? scoreResumeAgainstProfiles(resume, profiles) : detectResumeSignal(resume)
+
   return NextResponse.json(
-    { hasResume: true, primaryRole: resume.primary_role ?? null, signal },
+    { hasResume: true, primaryRole: resume.primary_role ?? null, grounded, signal },
     { headers: { "Cache-Control": "no-store" } },
   )
 }

@@ -85,6 +85,7 @@ run_many() {
 # nightly-maintenance 30 8 * * *       run pipeline-cleanup -> job-retention -> refresh-title-suggestions
 # purge-dead-crawled-companies 45 8 * * * run api/cron/purge-dead-crawled-companies  # mark dead boards status='dead' so the harvester stops crawling them
 # blog-generate      0 8 * * 1-5       run api/cron/blog-generate
+# refresh-field-profiles 0 4 * * 1      run api/cron/refresh-field-profiles  # weekly: rebuild data-derived field skill profiles for resume positioning
 # daily-report       55 23 * * *       run api/cron/daily-report  # captures the full UTC day for the public /report snapshot
 # daily-jobs-email    0 12 * * *        run api/cron/daily-jobs-email  # morning "fresh jobs overnight" broadcast to marketing subscribers
 # weekly-digest       0 14 * * 1        run api/alerts/weekly  # Monday 2pm UTC — personalized weekly digest to registered users (weekly_digest pref)
@@ -114,6 +115,7 @@ case "${1:-}" in
   purge-dead-crawled-companies) run "api/cron/purge-dead-crawled-companies?minEmptyCrawls=${PURGE_DEAD_MIN_EMPTY_CRAWLS:-20}&mode=${PURGE_DEAD_MODE:-dead}&maxBatches=${PURGE_DEAD_MAX_BATCHES:-20}" ;;
   pipeline-cleanup)  run "api/cron/pipeline-cleanup?days=${PIPELINE_CLEANUP_DAYS:-7}" ;;
   refresh-title-suggestions) run api/cron/refresh-title-suggestions ;;
+  refresh-field-profiles) run api/cron/refresh-field-profiles ;;
   instant-notify)    run api/cron/instant-notify ;;
   interview-reminders) run api/cron/interview-reminders ;;
   ghost-scan)        run api/cron/ghost-scan ;;
