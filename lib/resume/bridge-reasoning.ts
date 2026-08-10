@@ -11,6 +11,10 @@
  *   - Claude may only reference skills, roles, counts, and percentages that
  *     appear in the provided BridgePath. It is told, explicitly, not to invent
  *     statistics, timelines, company names, or salary figures.
+ *   - When real transition evidence is available (PivotEvidence from the graph),
+ *     it is passed in as FACTS.pastMoves and Claude may cite it ("N people we've
+ *     tracked made this move"). Absent that, the model is told to reference no
+ *     prior movers or timelines at all — the evidence is never fabricated.
  *   - If the model is unavailable, the budget cap is tripped, or it times out,
  *     `deterministicReasoning()` returns a plan assembled straight from the same
  *     facts — so the user always gets an honest answer, never a fabricated one.
@@ -20,6 +24,7 @@
 
 import type Anthropic from "@anthropic-ai/sdk"
 import type { BridgePath } from "@/lib/resume/bridge"
+import type { PivotEvidence } from "@/lib/career/pivot-evidence"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
 import { withAICall } from "@/lib/apex/budget/ai-call"
 import { AI_TIMEOUTS } from "@/lib/apex/budget/router"
@@ -57,6 +62,7 @@ Hard rules — non-negotiable:
 - Be specific and grounded: reference the actual transferable skills, the actual gap skills, and the actual bridge-role titles by name.
 - Reflect the difficulty honestly. Low overlapPct or targetFit means a hard pivot; say so.
 - Reflect sponsorship density only if sponsorshipShare is present, and describe it as the share of these roles at sponsoring employers — nothing more.
+- If FACTS.pastMoves is present, it is real: the number of people HireOven has actually tracked making this exact move, and (when given) the median months it took them. You MAY cite it as encouragement and grounding. Describe it exactly — "N people we've tracked made this move" — and only mention a duration if medianMonths is present. If FACTS.pastMoves is absent, do NOT reference any prior movers or timelines at all.
 
 Return ONLY a JSON object, no prose around it, matching exactly:
 {
@@ -67,7 +73,7 @@ Return ONLY a JSON object, no prose around it, matching exactly:
   "firstMove": string           // the single most concrete next action
 }`
 
-function factsFor(bridge: BridgePath): string {
+function factsFor(bridge: BridgePath, evidence?: PivotEvidence | null): string {
   return JSON.stringify(
     {
       from: bridge.fromLabel,
@@ -83,6 +89,11 @@ function factsFor(bridge: BridgePath): string {
       })),
       sponsorshipSharePct:
         typeof bridge.sponsorshipShare === "number" ? Math.round(bridge.sponsorshipShare * 100) : null,
+      // Only included once the transition graph holds enough real moves to say
+      // anything honest — absent otherwise, so the model can't cite prior movers.
+      pastMoves: evidence
+        ? { people: evidence.sampleSize, medianMonths: evidence.medianGapMonths }
+        : undefined,
     },
     null,
     2,
@@ -134,7 +145,7 @@ function parseReasoning(text: string): BridgeReasoning | null {
  * Assemble an honest plan directly from the computed facts — no LLM. Used as the
  * fallback so the feature degrades to grounded-but-plain rather than to nothing.
  */
-export function deterministicReasoning(bridge: BridgePath): BridgeReasoning {
+export function deterministicReasoning(bridge: BridgePath, evidence?: PivotEvidence | null): BridgeReasoning {
   const distance =
     bridge.overlapPct >= 45 ? "a short bridge" : bridge.overlapPct >= 25 ? "a moderate bridge" : "a longer pivot"
   const transfer = bridge.transferable.slice(0, 4)
@@ -178,8 +189,17 @@ export function deterministicReasoning(bridge: BridgePath): BridgeReasoning {
         ? `Start building ${build[0]}, the highest-leverage ${bridge.toLabel} skill you're missing.`
         : `Sharpen how your resume frames ${transfer[0] ?? "your strongest skill"} toward ${bridge.toLabel}.`
 
+  // Only cite prior movers when the graph actually holds them.
+  const evidenceSentence = evidence
+    ? ` ${evidence.sampleSize} people we've tracked have made this move${
+        evidence.medianGapMonths !== null
+          ? `, typically over about ${evidence.medianGapMonths} month${evidence.medianGapMonths === 1 ? "" : "s"}`
+          : ""
+      }.`
+    : ""
+
   return {
-    summary: `Moving from ${bridge.fromLabel} to ${bridge.toLabel} is ${distance}: your resume already reads at ${bridge.targetFit}% of ${bridge.toLabel} demand.`,
+    summary: `Moving from ${bridge.fromLabel} to ${bridge.toLabel} is ${distance}: your resume already reads at ${bridge.targetFit}% of ${bridge.toLabel} demand.${evidenceSentence}`,
     steps,
     positioning:
       transfer.length > 0
@@ -198,6 +218,7 @@ export function deterministicReasoning(bridge: BridgePath): BridgeReasoning {
 export async function reasonOverBridge(
   anthropic: Anthropic,
   bridge: BridgePath,
+  evidence?: PivotEvidence | null,
   userId?: string,
 ): Promise<BridgeReasoning> {
   const { value } = await withAICall<BridgeReasoning | null>({
@@ -208,12 +229,12 @@ export async function reasonOverBridge(
       model: MODEL,
       max_tokens: 1200,
       system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: `FACTS:\n${factsFor(bridge)}` }],
+      messages: [{ role: "user", content: `FACTS:\n${factsFor(bridge, evidence)}` }],
     },
     parse: parseReasoning,
     fallback: () => null,
     userId,
   })
 
-  return value ?? deterministicReasoning(bridge)
+  return value ?? deterministicReasoning(bridge, evidence)
 }
