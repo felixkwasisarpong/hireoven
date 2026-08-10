@@ -16,6 +16,7 @@ import {
   Plane,
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
+import JobTimingSection from "@/components/jobs/JobTimingSection"
 import NotificationClickPing from "@/components/notifications/NotificationClickPing"
 import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
@@ -965,6 +966,9 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
               sponsorsConfirmed={sponsorsConfirmed}
               sponsorshipPill={sponsorshipPill}
             />
+            <div className="mt-4">
+              <JobTimingSection jobId={canonicalJobId} applyUrl={page.apply_url} jobTitle={displayTitle} />
+            </div>
           </aside>
         </div>
       </div>
