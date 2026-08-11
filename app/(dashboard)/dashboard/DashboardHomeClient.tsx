@@ -12,7 +12,6 @@ import DashboardSidebarNav from "@/components/dashboard/DashboardSidebarNav"
 import DashboardSpotlightColumn from "@/components/dashboard/DashboardSpotlightColumn"
 import JobFeed from "@/components/jobs/JobFeed"
 import ResumeNudgeBanner from "@/components/dashboard/ResumeNudgeBanner"
-import FeedPivotNudge from "@/components/dashboard/FeedPivotNudge"
 import PushNotificationSetup from "@/components/notifications/PushNotificationSetup"
 import NewSinceBanner from "@/components/dashboard/NewSinceBanner"
 import dynamic from "next/dynamic"
@@ -244,16 +243,15 @@ export default function DashboardHomeClient({
                     them the fix. Gone the moment any resume exists. */}
                 {!resumeLoading && !hasResume && <ResumeNudgeBanner />}
 
-                {/* Has a resume → surface the single best career pivot (adjacent
-                    field with more openings / a real visa edge) inline in the
-                    feed. Renders nothing unless there's a concrete upside. */}
-                {!resumeLoading && hasResume && <FeedPivotNudge />}
-
+                {/* Grounded intelligence cards (pivot, skills-you-have, sharpen
+                    your lane) are woven into the feed itself — see JobFeed's
+                    enableInsights. Nothing shows unless it's genuinely useful. */}
                 <JobFeed
                   filters={filters}
                   searchQuery={searchQuery}
                   onMetaChange={setFeedMeta}
                   hasPrimaryResume={primaryResumeReady}
+                  enableInsights
                 />
               </section>
             </div>
