@@ -43,13 +43,41 @@ export interface PivotSuggestion {
 }
 
 // A pivot only surfaces when the upside is real and the field is reachable.
-const MIN_PRIMARY_FIT = 40 // resume must send a clear enough signal to reason from
-const MIN_TARGET_FIT = 45 // target must be credibly adjacent (already partway there)
-const MAX_TARGET_FIT = 92 // above this the "target" is really a co-primary, not a pivot
+const MIN_PRIMARY_FIT = 35 // resume must send a clear enough signal to reason from
+// Corpus-grounded fit scores are compressed — a focused resume tops out around
+// 40–55, a generalist lower — so "credibly adjacent" is judged RELATIVE to the
+// user's own strongest field, not on an absolute scale.
+const ADJ_REL = 0.7 // target fit must be ≥ 70% of the primary field's fit
+const ADJ_FLOOR = 22 // ...but never below this, so a weak primary can't drag it down
 const MIN_JOB_MULTIPLE = 1.25 // demand-driven pivot needs meaningfully more openings
 const MIN_SPONSOR_DELTA_PTS = 8 // sponsorship-driven pivot needs a real visa edge
 const MIN_TARGET_JOBS = 2000 // don't steer anyone into a thin field
 const MIN_SHRINK_GUARD = 0.5 // never send someone to a field <half the size for sponsorship alone
+
+// Generic JD boilerplate that leaks into the corpus skill lists. Never present
+// these as a "skill to add to cross over" — they're noise, not a bridge.
+const SOFT_SKILL_STOPWORDS = new Set([
+  "communication",
+  "leadership",
+  "teamwork",
+  "collaboration",
+  "problem solving",
+  "problem-solving",
+  "time management",
+  "recruiting",
+  "mentoring",
+  "mentorship",
+  "interpersonal",
+  "organization",
+  "adaptability",
+  "creativity",
+  "critical thinking",
+  "attention to detail",
+  "work ethic",
+  "self-motivated",
+  "detail oriented",
+  "detail-oriented",
+])
 
 function round1(x: number): number {
   return Math.round(x * 10) / 10
@@ -70,18 +98,25 @@ export function suggestPivotTarget(
 
   const jobCountByKey = new Map(profiles.map((p) => [p.key, p.jobCount]))
   const currentJobCount = jobCountByKey.get(primary.key) ?? 0
+  // Adjacency bar, relative to how strong the user's own strongest read is.
+  const minTargetFit = Math.max(ADJ_FLOOR, primary.score * ADJ_REL)
 
   type Scored = { s: PivotSuggestion; rank: number }
   let best: Scored | null = null
 
   for (const field of signal!.fields) {
     if (field.key === primary.key) continue
-    if (field.score < MIN_TARGET_FIT || field.score > MAX_TARGET_FIT) continue
+    // Fields are sorted by fit desc, so the target is always ≤ primary; it just
+    // has to be close enough to be a credible next step.
+    if (field.score < minTargetFit) continue
 
     const targetJobCount = jobCountByKey.get(field.key) ?? 0
     if (targetJobCount < MIN_TARGET_JOBS) continue
 
-    const bridgeSkills = field.missing.slice(0, 3)
+    // Real technical skills the resume lacks — never JD boilerplate.
+    const bridgeSkills = field.missing
+      .filter((s) => !SOFT_SKILL_STOPWORDS.has(s.toLowerCase().trim()))
+      .slice(0, 3)
     if (bridgeSkills.length === 0) continue // nothing concrete to cross with
 
     const jobMultiple = currentJobCount > 0 ? targetJobCount / currentJobCount : 0
