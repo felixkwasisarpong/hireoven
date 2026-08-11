@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react"
 import { ArrowUp, LayoutGrid, List, Sparkles } from "lucide-react"
 import JobCardV2 from "@/components/jobs/JobCardV2"
 import JobListRow from "@/components/jobs/JobListRow"
+import FeedInsightCard from "@/components/feed/FeedInsightCard"
+import { useFeedInsights } from "@/components/feed/useFeedInsights"
 import { cn } from "@/lib/utils"
 
 type JobFeedView = "grid" | "list"
@@ -23,7 +25,14 @@ interface JobFeedProps {
   hasPrimaryResume?: boolean
   /** Force a specific view — hides the view toggle when set */
   defaultView?: JobFeedView
+  /** Weave grounded intelligence cards (pivot, skills, sharpen) into the feed. */
+  enableInsights?: boolean
 }
+
+// Interleave an insight card after the 3rd job, then every 5 jobs — frequent
+// enough to be noticed while scrolling, sparse enough to never crowd the feed.
+const INSIGHT_FIRST_AFTER = 3
+const INSIGHT_EVERY = 5
 
 function JobRowSkeleton() {
   return (
@@ -69,9 +78,13 @@ export default function JobFeed({
   searchQuery,
   onMetaChange,
   hasPrimaryResume = false,
+  enableInsights = false,
   defaultView,
 }: JobFeedProps) {
   const personalized = hasPrimaryResume
+  const { activeCards: insightCards, dismiss: dismissInsight, affirmSkills } = useFeedInsights(
+    enableInsights && hasPrimaryResume,
+  )
   const {
     jobs,
     isLoading,
@@ -264,12 +277,12 @@ export default function JobFeed({
 
       {jobs.length > 0 && (
         <div className={cn(view === "list" ? "space-y-1.5" : "space-y-3", "animate-fade-in")}>
-          {visibleJobs.map((job, i) => {
+          {visibleJobs.flatMap((job, i) => {
             const matchScore = job.match_score ?? getScore(job.id)
             const isMatchScoreLoading =
               hasPrimaryResume && !job.match_score && scoresLoading && !getScore(job.id)
-            if (view === "list") {
-              return (
+            const jobNode =
+              view === "list" ? (
                 <JobListRow
                   key={job.id}
                   job={job}
@@ -279,22 +292,41 @@ export default function JobFeed({
                   matchScore={matchScore}
                   isMatchScoreLoading={isMatchScoreLoading}
                 />
+              ) : (
+                <JobCardV2
+                  key={job.id}
+                  job={job}
+                  hasPrimaryResume={hasPrimaryResume}
+                  enableHoverEffects={canHover}
+                  analysisIndex={i}
+                  isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
+                  now={now}
+                  priorityLogo={i < 6}
+                  matchScore={matchScore}
+                  isMatchScoreLoading={isMatchScoreLoading}
+                />
               )
-            }
-            return (
-              <JobCardV2
-                key={job.id}
-                job={job}
-                hasPrimaryResume={hasPrimaryResume}
-                enableHoverEffects={canHover}
-                analysisIndex={i}
-                isBestMatch={Boolean(bestMatchJobId && job.id === bestMatchJobId)}
-                now={now}
-                priorityLogo={i < 6}
-                matchScore={matchScore}
-                isMatchScoreLoading={isMatchScoreLoading}
-              />
-            )
+
+            // Interleave the next grounded insight card into the stream.
+            const pos = i + 1
+            const isSlot =
+              insightCards.length > 0 &&
+              pos >= INSIGHT_FIRST_AFTER &&
+              (pos - INSIGHT_FIRST_AFTER) % INSIGHT_EVERY === 0
+            const slotIdx = isSlot ? (pos - INSIGHT_FIRST_AFTER) / INSIGHT_EVERY : -1
+            const card = slotIdx >= 0 && slotIdx < insightCards.length ? insightCards[slotIdx] : null
+
+            return card
+              ? [
+                  jobNode,
+                  <FeedInsightCard
+                    key={`insight-${card.id}`}
+                    card={card}
+                    onDismiss={dismissInsight}
+                    onAffirm={affirmSkills}
+                  />,
+                ]
+              : [jobNode]
           })}
         </div>
       )}
