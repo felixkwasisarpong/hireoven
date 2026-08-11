@@ -11,7 +11,7 @@
  */
 
 import type { Pool } from "pg"
-import { FIELDS, type FieldProfile } from "@/lib/resume/signal"
+import { FIELDS, SOFT_SKILL_STOPWORDS, type FieldProfile } from "@/lib/resume/signal"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { sqlJobSponsors } from "@/lib/jobs/sponsorship-sql"
@@ -62,14 +62,18 @@ export async function buildAndStoreFieldProfiles(
       continue
     }
 
+    // Exclude generic behavioral boilerplate (communication, leadership, …) so
+    // the top-N are real, buildable skills rather than terms every posting lists.
+    const stopwords = [...SOFT_SKILL_STOPWORDS]
     const sk = await pool.query<{ skill: string; n: number }>(
       `SELECT lower(btrim(skill)) AS skill, COUNT(*)::int AS n
          FROM jobs j, unnest(j.skills) AS skill
         WHERE ${where} AND btrim(skill) <> ''
+          AND lower(btrim(skill)) <> ALL($2::text[])
         GROUP BY 1
         ORDER BY n DESC
         LIMIT ${TOP_SKILLS}`,
-      [seeds],
+      [seeds, stopwords],
     )
     const skills = sk.rows.map((r) => ({ skill: r.skill, share: Math.min(1, r.n / jobCount) }))
 

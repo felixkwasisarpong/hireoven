@@ -15,7 +15,7 @@
  * Pure: takes the already-computed signal + profiles, does no I/O.
  */
 
-import type { FieldProfile, ResumeSignal } from "@/lib/resume/signal"
+import { isSoftSkill, type FieldProfile, type ResumeSignal } from "@/lib/resume/signal"
 
 export interface PivotSuggestion {
   fromKey: string
@@ -54,31 +54,6 @@ const MIN_SPONSOR_DELTA_PTS = 8 // sponsorship-driven pivot needs a real visa ed
 const MIN_TARGET_JOBS = 2000 // don't steer anyone into a thin field
 const MIN_SHRINK_GUARD = 0.5 // never send someone to a field <half the size for sponsorship alone
 
-// Generic JD boilerplate that leaks into the corpus skill lists. Never present
-// these as a "skill to add to cross over" — they're noise, not a bridge.
-const SOFT_SKILL_STOPWORDS = new Set([
-  "communication",
-  "leadership",
-  "teamwork",
-  "collaboration",
-  "problem solving",
-  "problem-solving",
-  "time management",
-  "recruiting",
-  "mentoring",
-  "mentorship",
-  "interpersonal",
-  "organization",
-  "adaptability",
-  "creativity",
-  "critical thinking",
-  "attention to detail",
-  "work ethic",
-  "self-motivated",
-  "detail oriented",
-  "detail-oriented",
-])
-
 function round1(x: number): number {
   return Math.round(x * 10) / 10
 }
@@ -114,9 +89,7 @@ export function suggestPivotTarget(
     if (targetJobCount < MIN_TARGET_JOBS) continue
 
     // Real technical skills the resume lacks — never JD boilerplate.
-    const bridgeSkills = field.missing
-      .filter((s) => !SOFT_SKILL_STOPWORDS.has(s.toLowerCase().trim()))
-      .slice(0, 3)
+    const bridgeSkills = field.missing.filter((s) => !isSoftSkill(s)).slice(0, 3)
     if (bridgeSkills.length === 0) continue // nothing concrete to cross with
 
     const jobMultiple = currentJobCount > 0 ? targetJobCount / currentJobCount : 0

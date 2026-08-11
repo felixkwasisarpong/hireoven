@@ -187,6 +187,49 @@ export function isFieldKey(key: string | null | undefined): boolean {
   return !!key && FIELDS.some((f) => f.key === key)
 }
 
+/**
+ * Generic behavioral / JD-boilerplate tokens that leak into the corpus skill
+ * lists and rank high simply because nearly every posting lists them (verified:
+ * `communication`, `leadership`, `collaboration` appear in all 14 fields). They
+ * are not a "skill to build to cross into a field", so we exclude them both when
+ * BUILDING the corpus profiles (field-profiles.ts) and when picking bridge skills
+ * (pivot-suggest.ts). Kept deliberately conservative — only unambiguous soft
+ * skills, never cross-cutting technical ones (sql/python/aws stay).
+ */
+export const SOFT_SKILL_STOPWORDS: ReadonlySet<string> = new Set([
+  "communication",
+  "leadership",
+  "collaboration",
+  "teamwork",
+  "problem solving",
+  "problem-solving",
+  "mentoring",
+  "mentorship",
+  "public speaking",
+  "presentation",
+  "presentations",
+  "interpersonal",
+  "time management",
+  "organization",
+  "organizational",
+  "adaptability",
+  "flexibility",
+  "creativity",
+  "critical thinking",
+  "attention to detail",
+  "detail oriented",
+  "detail-oriented",
+  "work ethic",
+  "self-motivated",
+  "self motivated",
+  "recruiting",
+])
+
+/** True for a generic behavioral token that shouldn't count as a real skill. */
+export function isSoftSkill(skill: string): boolean {
+  return SOFT_SKILL_STOPWORDS.has(skill.toLowerCase().trim())
+}
+
 // Saturation for classifying a single job (short text) into a field — lower than
 // the resume SATURATION because a job lists far fewer terms; 2–3 signature hits
 // should already read as strong field affinity.
