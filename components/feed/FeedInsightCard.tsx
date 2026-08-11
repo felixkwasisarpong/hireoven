@@ -6,9 +6,8 @@ import { ArrowRight, X, Check, Plus } from "lucide-react"
 import type { InsightCard } from "@/components/feed/useFeedInsights"
 
 /**
- * Renders one interleaved feed intelligence card. Deliberately plain — white
- * card, thin border, neutral text — so it reads as a quiet, useful note in the
- * feed rather than an ad. A thin dispatcher over the card union; each sub-card
+ * Renders one interleaved feed intelligence card. Deliberately plain — no card chrome, just a small muted label and neutral text,
+ * so it reads as a quiet, useful note in the feed rather than a boxed-in ad. A thin dispatcher over the card union; each sub-card
  * is grounded (see lib/feed/insights.ts) and dismissible.
  */
 export default function FeedInsightCard({
@@ -44,9 +43,11 @@ function Shell({
   children: React.ReactNode
   onDismiss: () => void
 }) {
+  // No card chrome — a plain block that sits in the feed flow, set apart only by
+  // a small muted label and a little breathing room, not a bordered box.
   return (
-    <div className="rounded-xl border border-[#E5E7EB] bg-white px-4 py-3">
-      <div className="mb-1.5 flex items-center justify-between">
+    <div className="px-1 py-1.5">
+      <div className="mb-1 flex items-center justify-between">
         <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">{label}</span>
         <button
           type="button"
