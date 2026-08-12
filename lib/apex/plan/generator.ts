@@ -174,17 +174,10 @@ function adaptiveTwinItems(
     })
   }
 
-  const twinFocus = twin.recommendedFocus[0]
-  if (twinFocus) {
-    items.push({
-      id: "twin:focus",
-      eyebrow: "Twin Focus",
-      title: twinFocus,
-      detail: "This is the top operating focus the current Twin model wants Apex to enforce today.",
-      impact: "Turns the user model into an explicit daily priority instead of leaving it buried in diagnostics.",
-      query: `Turn this Career Twin focus into an action plan: ${twinFocus}`,
-    })
-  }
+  // Welcome review #3: the top recommended-focus line is already surfaced by the
+  // Career Twin card ("Recommended Focus"). Don't also inject it here as a "Twin
+  // Focus" plan item — it made the same sentence appear twice, both below the
+  // fold. Stated once, in the card.
 
   return {
     items,
