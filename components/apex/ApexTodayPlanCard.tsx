@@ -218,10 +218,12 @@ export function ApexTodayPlanCard({
                   </p>
                   <p className="mt-1 truncate text-sm font-semibold text-slate-900">{item.title}</p>
                 </div>
+                {/* Secondary — per-item run. Only "Run top move" is the primary
+                    (welcome review #1: one obvious next action). */}
                 <button
                   type="button"
                   onClick={() => handleRun(item)}
-                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-slate-900 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:border-blue-700 hover:bg-blue-700"
+                  className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 >
                   Run
                   <ArrowRight className="h-3.5 w-3.5" />
@@ -243,10 +245,11 @@ export function ApexTodayPlanCard({
             </button>
           )}
           {leadItem && onActionClick && (
+            // The one primary action on the screen (welcome review #1).
             <button
               type="button"
               onClick={() => handleRun(leadItem)}
-              className="inline-flex items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100"
+              className="inline-flex items-center gap-1.5 rounded-full border border-slate-900 bg-slate-900 px-3.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700"
             >
               Run top move
               <ArrowRight className="h-3.5 w-3.5" />
@@ -380,10 +383,11 @@ export function ApexTodayPlanCard({
                     </div>
                   )}
                 </div>
+                {/* Secondary — inside an expanded item; primary stays "Run top move". */}
                 <button
                   type="button"
                   onClick={() => handleRun(item)}
-                  className="group inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-slate-950 px-3 py-1.5 text-[11px] font-semibold text-white transition hover:bg-blue-700"
+                  className="group inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
                 >
                   Run with Apex
                   <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
