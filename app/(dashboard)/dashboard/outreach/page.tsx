@@ -7,7 +7,7 @@ const OutreachSequences = dynamicImport(() => import("@/components/outreach/Outr
 
 export default function OutreachPage() {
   return (
-    <>
+    <main>
       <DashboardPageHeader
         kicker="Search & Apply"
         title="Outreach"
@@ -15,6 +15,6 @@ export default function OutreachPage() {
         className="rounded-none border-x-0 border-t-0"
       />
       <OutreachSequences />
-    </>
+    </main>
   )
 }
