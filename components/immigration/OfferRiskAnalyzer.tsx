@@ -220,9 +220,9 @@ export default function OfferRiskAnalyzer() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-600">
                   Offer Intelligence
                 </p>
-                <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
                   Offer Risk Analyzer
-                </h2>
+                </h1>
               </div>
             </div>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
