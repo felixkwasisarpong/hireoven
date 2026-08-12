@@ -444,7 +444,7 @@ function buildBurnoutRiskScore(state: Awaited<ReturnType<typeof classifyBurnoutS
 
   return {
     key: "burnout_risk_score",
-    label: "Burnout risk score",
+    label: "Search intensity",
     category: "risk",
     direction: score >= 55 ? "risk" : "neutral",
     score,
@@ -852,7 +852,7 @@ export async function buildCareerTwinSnapshot(
     sectorDimension,
     burnoutDimension: dimensions.find((dimension) => dimension.key === "burnout_risk_score") ?? {
       key: "burnout_risk_score",
-      label: "Burnout risk score",
+      label: "Search intensity",
       category: "risk",
       direction: "neutral",
       score: 20,

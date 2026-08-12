@@ -109,14 +109,18 @@ function adaptiveTwinItems(
 
   if (burnoutRisk !== null && burnoutRisk >= 65) {
     activeLimit = 2
-    contextNote = "Pace reduced by Career Twin because Apex sees elevated burnout risk."
+    // Welcome-review #6: frame this as a deliberate pacing choice, not a clinical
+    // "burnout risk" inference. No unearned psychology, no throughput silently
+    // taken away — a smaller, higher-conviction batch is the recommendation, and
+    // the user can always ask for more.
+    contextNote = "Today's plan is deliberately small — a focused, high-conviction batch."
     items.push({
       id: "twin:pace",
       eyebrow: "Pace",
       title: "Operate in a smaller, higher-conviction batch",
-      detail: "Apex sees elevated burnout risk, so today should stay narrow and controlled rather than broad and reactive.",
+      detail: "A tighter plan today keeps decision quality high — better to move a few strong-fit roles forward than spread thin across a long queue. Want more? Just ask.",
       impact: "Protects decision quality and keeps progress moving without pushing the search into a lower-signal grind.",
-      query: "Show only the highest-conviction roles and next steps I should focus on today",
+      query: "Show me more roles and next steps for today",
     })
   }
 
