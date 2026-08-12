@@ -268,6 +268,9 @@ export function ApexOverviewTab({
 
   return (
     <div className="space-y-6">
+      {/* Receipts lead the screen — what Apex did while you were away (#8/#11) */}
+      <ApexReceipts />
+
       {/* Page header */}
       <section className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -300,9 +303,6 @@ export function ApexOverviewTab({
           </button>
         </div>
       </section>
-
-      {/* Receipts — proof of what Apex did while you were away (review #8) */}
-      <ApexReceipts />
 
       {/* Command row */}
       <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
