@@ -34,9 +34,11 @@ import {
 import type { JobCardViewModel } from "@/lib/jobs/normalization/types"
 import {
   employerLikelySponsorsH1b,
+  effectiveEmployerSponsorshipScore,
   resolveH1BSponsorshipDisplay,
   type SponsorshipVisaCardLabel,
 } from "@/lib/jobs/sponsorship-employer-signal"
+import { isNonUsWorksite } from "@/lib/jobs/location-filter"
 import {
   isStaffingIntermediaryListing,
   readHiringEntitySignalFromRawData,
@@ -458,9 +460,17 @@ export default function JobCardV2({
   // H1B / company sponsorship data — Company type has these as direct fields
   const h1bCount1yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_1yr ?? 0
   const h1bCount3yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_3yr ?? 0
-  const sponsorConfidence = staffingIntermediary ? 0 : job.company?.sponsorship_confidence ?? 0
+  // T1-03: show the same normalized, blended score the summary badge uses
+  // (max of job.sponsorship_score & company.sponsorship_confidence, coerced to
+  // 0–100) so the panel's "Confidence X%" can't disagree with the badge.
+  const sponsorConfidence = staffingIntermediary ? 0 : effectiveEmployerSponsorshipScore(job)
   const companySponsorsH1b = !staffingIntermediary && job.company?.sponsors_h1b === true
-  const hasH1bData = companySponsorsH1b || h1bCount1yr > 0 || job.sponsors_h1b === true
+  // T1-05: H-1B is a US visa — never attach its badge/intel to a worksite that
+  // is unambiguously outside the US (e.g. "Toronto, ON, CAN"). Conservative:
+  // ambiguous/remote/US locations are unaffected.
+  const nonUsWorksite = isNonUsWorksite({ location: job.location, workMode })
+  const hasH1bData =
+    !nonUsWorksite && (companySponsorsH1b || h1bCount1yr > 0 || job.sponsors_h1b === true)
 
   // Stay: the role's estimated H-1B wage level → single-draw odds under the 2026
   // weighted lottery. Salary-only estimate; the full Stay Score lives on /stay.
@@ -830,7 +840,7 @@ export default function JobCardV2({
               )}
 
               {/* Sponsorship row — factual data, JD negative language always wins */}
-              {sponsorshipDisplay && (
+              {sponsorshipDisplay && !nonUsWorksite && (
                 <div className="mt-2.5 flex items-center gap-2">
                   <span className={cn(
                     "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold text-white",

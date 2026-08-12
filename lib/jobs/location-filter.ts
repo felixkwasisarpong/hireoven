@@ -123,6 +123,38 @@ export function isExplicitlyForeign(input: {
   return false
 }
 
+/**
+ * True only when the worksite is UNAMBIGUOUSLY outside the US — an explicit
+ * foreign country, or a Canadian province/name — with no offsetting US signal.
+ *
+ * Used to gate US-only UI such as H-1B badges. Deliberately conservative: a
+ * strong US signal always wins, and ambiguous or bare-"Remote" locations return
+ * false, so we never hide H-1B intel on a real US role (only clear non-US ones).
+ */
+export function isNonUsWorksite(input: {
+  location?: string | null
+  workMode?: string | null
+}): boolean {
+  const haystack = buildHaystack(input)
+  if (!haystack) return false
+  const lower = haystack.toLowerCase()
+  const tokens = extractRegionCodeTokens(haystack)
+
+  // A strong US signal is decisive — never suppress.
+  if (US_NAME_RE.test(haystack)) return false
+  for (const name of US_STATES) if (lower.includes(name)) return false
+  for (const t of tokens) if (US_STATE_ABBR.has(t)) return false
+
+  // Otherwise: an explicit foreign country/city, or a Canadian signal, marks it
+  // non-US. (US_STATE_ABBR and CA_PROVINCE_ABBR do not overlap.)
+  if (isExplicitlyForeign(input)) return true
+  if (CANADA_NAME_RE.test(haystack)) return true
+  for (const name of CA_PROVINCES) if (lower.includes(name)) return true
+  for (const t of tokens) if (CA_PROVINCE_ABBR.has(t)) return true
+
+  return false
+}
+
 export function isAllowedLocation(input: {
   location?: string | null
   workMode?: string | null
