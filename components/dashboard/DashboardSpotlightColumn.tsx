@@ -14,8 +14,17 @@ import {
   Zap,
 } from "lucide-react"
 import CompanyLogo from "@/components/ui/CompanyLogo"
+import { useSubscription } from "@/lib/hooks/useSubscription"
 import type { WatchlistWithCompany } from "@/types"
 import type { ActivePromo } from "@/app/api/promos/active/route"
+
+// A promo whose CTA is an upgrade/checkout flow shouldn't be shown to a user who
+// already pays (T1-07: a Pro Max account was being upsold "20% off Pro Max").
+function isUpgradePromo(promo: ActivePromo): boolean {
+  return /checkout=|[?&]promo=|\/dashboard\/upgrade\b|\/dashboard\/billing\?checkout/i.test(
+    promo.cta_url ?? "",
+  )
+}
 
 type DashboardSpotlightColumnProps = {
   initialWatchlist: WatchlistWithCompany[]
@@ -181,6 +190,9 @@ export default function DashboardSpotlightColumn({
   const visibleWatchlist = initialWatchlist.slice(0, 4)
   const remainingWatchlistCount = Math.max(0, initialWatchlistCount - visibleWatchlist.length)
   const [promo, setPromo] = useState<ActivePromo | null>(null)
+  const { isPro } = useSubscription()
+  // Paying users never see upgrade/checkout promos.
+  const visiblePromo = promo && !(isPro && isUpgradePromo(promo)) ? promo : null
 
   useEffect(() => {
     fetch("/api/promos/active")
@@ -270,8 +282,9 @@ export default function DashboardSpotlightColumn({
         )}
       </section>
 
-      {/* Active promo — only rendered when one exists */}
-      {promo && <PromoCard promo={promo} />}
+      {/* Active promo — only when one exists and it isn't an upsell to a plan
+          the user already holds */}
+      {visiblePromo && <PromoCard promo={visiblePromo} />}
     </aside>
   )
 }
