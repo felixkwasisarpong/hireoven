@@ -70,7 +70,11 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // Alerts (saved searches) moved into notification settings — reach them from
   // Settings -> Job alerts (D6). Route remains at /dashboard/alerts.
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
-  { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "One-click applications" },
+  // D8: this route IS the profile (personal info, work auth, experience, EEO) —
+  // relabel to "Profile". Route stays /dashboard/autofill because the shipped
+  // Chrome extension hard-codes that path (chrome.tabs.create, easy-apply);
+  // /dashboard/profile redirects here for the intuitive URL.
+  { label: "Profile",        href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "Your details for one-click applications" },
   { label: "Outreach",       href: "/dashboard/outreach",                 icon: Send,          group: "Search & Apply", gate: "apex_strategy", subtitle: "Reach recruiters & hiring managers" },
 
   // ── Documents ────────────────────────────────────────────────────────────────
