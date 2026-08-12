@@ -558,7 +558,7 @@ export default function ResumeWorkspaceSection() {
               Autofill profile
             </Link>
             <Link
-              href="/dashboard/cover-letters"
+              href="/dashboard/resume/cover-letters"
               className="inline-flex items-center rounded-sm border border-slate-200/90 bg-white px-3 py-1.5 text-xs font-medium text-slate-800 transition hover:bg-slate-50"
             >
               Cover letters

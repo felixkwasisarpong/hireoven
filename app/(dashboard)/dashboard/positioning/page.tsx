@@ -1,16 +1,7 @@
-import type { Metadata } from "next"
-import ResumeSignalView from "@/components/resume/ResumeSignalView"
+import { permanentRedirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
-
-export const metadata: Metadata = {
-  title: "Resume positioning — Hireoven",
-}
-
-export default function PositioningPage() {
-  return (
-    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <ResumeSignalView />
-    </main>
-  )
+// D4: positioning now lives as a tab in the Resume hub. Permanent redirect keeps
+// old links/bookmarks working.
+export default function PositioningRedirect() {
+  permanentRedirect("/dashboard/resume/positioning")
 }

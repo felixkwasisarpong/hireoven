@@ -29,10 +29,9 @@ interface JobFeedProps {
   enableInsights?: boolean
 }
 
-// Interleave an insight card after the 3rd job, then every 5 jobs — frequent
-// enough to be noticed while scrolling, sparse enough to never crowd the feed.
+// Interleave a single rotating insight card after the 3rd job — noticed while
+// scrolling, never crowding the feed (D5).
 const INSIGHT_FIRST_AFTER = 3
-const INSIGHT_EVERY = 5
 
 function JobRowSkeleton() {
   return (
@@ -82,7 +81,7 @@ export default function JobFeed({
   defaultView,
 }: JobFeedProps) {
   const personalized = hasPrimaryResume
-  const { activeCards: insightCards, dismiss: dismissInsight, affirmSkills } = useFeedInsights(
+  const { card: insightCard, dismiss: dismissInsight, affirmSkills } = useFeedInsights(
     enableInsights && hasPrimaryResume,
   )
   const {
@@ -307,21 +306,15 @@ export default function JobFeed({
                 />
               )
 
-            // Interleave the next grounded insight card into the stream.
-            const pos = i + 1
-            const isSlot =
-              insightCards.length > 0 &&
-              pos >= INSIGHT_FIRST_AFTER &&
-              (pos - INSIGHT_FIRST_AFTER) % INSIGHT_EVERY === 0
-            const slotIdx = isSlot ? (pos - INSIGHT_FIRST_AFTER) / INSIGHT_EVERY : -1
-            const card = slotIdx >= 0 && slotIdx < insightCards.length ? insightCards[slotIdx] : null
+            // D5: interleave a SINGLE rotating insight card, once, after the 3rd job.
+            const showInsightHere = insightCard && i + 1 === INSIGHT_FIRST_AFTER
 
-            return card
+            return showInsightHere
               ? [
                   jobNode,
                   <FeedInsightCard
-                    key={`insight-${card.id}`}
-                    card={card}
+                    key={`insight-${insightCard.id}`}
+                    card={insightCard}
                     onDismiss={dismissInsight}
                     onAffirm={affirmSkills}
                   />,

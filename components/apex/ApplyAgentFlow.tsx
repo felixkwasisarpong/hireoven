@@ -1133,7 +1133,7 @@ export function ApplyAgentFlow({
     return applyTailoredSignalsToResume(primaryResumeSnapshot, reviewJob)
   }, [primaryResumeSnapshot, reviewJob])
   const reviewCoverLetterUrl = reviewJob?.prepResult?.coverLetterId
-    ? `/dashboard/cover-letters?highlight=${encodeURIComponent(reviewJob.prepResult.coverLetterId)}`
+    ? `/dashboard/resume/cover-letters?highlight=${encodeURIComponent(reviewJob.prepResult.coverLetterId)}`
     : null
   const tailoredN   = jobs.filter(j => j.tailored).length
   const reviewedN   = jobs.filter(j => j.resumeQaApproved).length

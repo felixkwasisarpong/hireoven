@@ -41,7 +41,7 @@ export function BulkReviewDrawer({ job, onClose, onAdvance, onOpenApp, onMarkSub
   })
 
   const coverLetterUrl = job.artifacts.coverLetterId
-    ? `/dashboard/cover-letters?highlight=${job.artifacts.coverLetterId}`
+    ? `/dashboard/resume/cover-letters?highlight=${job.artifacts.coverLetterId}`
     : undefined
   const resumeTailorUrl = job.artifacts.resumeTailorJobId
     ? `/dashboard/resume/tailor?analysisId=${job.artifacts.resumeTailorJobId}`

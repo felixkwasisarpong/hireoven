@@ -6,6 +6,10 @@ import {
   LayoutDashboard,
   Library,
   Sparkles,
+  Radar,
+  GitBranch,
+  GraduationCap,
+  Mails,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -33,6 +37,26 @@ const TABS: Tab[] = [
     label: "Studio",
     href: "/dashboard/resume/studio",
     icon: Sparkles,
+  },
+  {
+    label: "Positioning",
+    href: "/dashboard/resume/positioning",
+    icon: Radar,
+  },
+  {
+    label: "Career Pivot",
+    href: "/dashboard/resume/pivot",
+    icon: GitBranch,
+  },
+  {
+    label: "Skill Gaps",
+    href: "/dashboard/resume/skills",
+    icon: GraduationCap,
+  },
+  {
+    label: "Cover Letters",
+    href: "/dashboard/resume/cover-letters",
+    icon: Mails,
   },
 ]
 

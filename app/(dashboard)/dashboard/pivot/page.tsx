@@ -1,16 +1,12 @@
-import type { Metadata } from "next"
-import PivotView from "@/components/resume/PivotView"
+import { permanentRedirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
-
-export const metadata: Metadata = {
-  title: "Career pivot — Hireoven",
-}
-
-export default function PivotPage() {
-  return (
-    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <PivotView />
-    </main>
-  )
+// D4: career pivot now lives as a tab in the Resume hub. Preserve the ?to=<field>
+// deep-link that the feed's pivot cards rely on.
+export default function PivotRedirect({
+  searchParams,
+}: {
+  searchParams: { to?: string }
+}) {
+  const to = typeof searchParams.to === "string" ? searchParams.to : null
+  permanentRedirect(`/dashboard/resume/pivot${to ? `?to=${encodeURIComponent(to)}` : ""}`)
 }
