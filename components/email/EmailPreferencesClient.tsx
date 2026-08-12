@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
+import { Bell, ChevronRight } from "lucide-react"
 import type { UserEmailPreferences } from "@/lib/email/preferences"
 
 const TYPES: { key: keyof UserEmailPreferences; title: string; desc: string }[] = [
@@ -78,6 +80,31 @@ export function EmailPreferencesClient({
 
   return (
     <div>
+      {/* D6: job alerts (saved searches) are the source of new-match
+          notifications, so they live here in notification settings. */}
+      <Card>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+              <Bell className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">Job alerts</p>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Saved searches that notify you the moment a matching role is posted.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/dashboard/alerts"
+            className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Manage alerts
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        </div>
+      </Card>
+
       <Card>
         <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">What we send</h2>
         <div className="mt-3 divide-y divide-slate-100">

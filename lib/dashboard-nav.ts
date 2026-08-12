@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react"
 import {
-  Bell,
   BookmarkCheck,
   Briefcase,
   ClipboardList,
@@ -68,7 +67,8 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
 
   // ── Search & Apply ───────────────────────────────────────────────────────────
   { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, group: "Search & Apply", subtitle: "Companies you're tracking" },
-  { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell,          group: "Search & Apply", subtitle: "New-match notifications" },
+  // Alerts (saved searches) moved into notification settings — reach them from
+  // Settings -> Job alerts (D6). Route remains at /dashboard/alerts.
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
   { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "One-click applications" },
   { label: "Outreach",       href: "/dashboard/outreach",                 icon: Send,          group: "Search & Apply", gate: "apex_strategy", subtitle: "Reach recruiters & hiring managers" },
