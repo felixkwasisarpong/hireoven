@@ -151,13 +151,14 @@ export function IdleMode({
     return () => clearTimeout(t)
   }, [])
 
+  // Welcome review #4: three presets, not six — find, sharpen, and the
+  // differentiator. (Dropped the duplicate "high-fit" rank and the
+  // compare/workflow steps that presuppose ranking has already run.)
   const quickActions = hasData
     ? [
-        { title: "Run today's attack plan", query: "Run autonomous hunt for today", hint: "Apex ranks the live queue for you" },
-        { title: "Find high-fit roles", query: "Show jobs worth my time and rank them by fit", hint: "Freshness, fit, and urgency" },
-        { title: "Compare saved jobs", query: "Compare my top saved jobs and pick the best one", hint: "Choose the best next bet" },
-        { title: "Tailor my resume", query: "Tailor my resume for my strongest match", hint: "Targeted edits and positioning" },
-        { title: "Run application workflow", query: "Build my application workflow for this week", hint: "Structure the next few moves" },
+        { title: "Rank my live queue", query: "Show jobs worth my time and rank them by fit", hint: "Freshness, fit, and urgency" },
+        { title: "Tailor my resume", query: "Tailor my resume for my strongest match", hint: "Targeted edits for the best-fit role" },
+        { title: "Find sponsor-friendly roles", query: "Find sponsorship-friendly roles matching my profile", hint: "Explicit immigration openness" },
       ]
     : [
         { title: "Run today's attack plan", query: "Run autonomous hunt for today", hint: "Apex builds your starting queue" },
