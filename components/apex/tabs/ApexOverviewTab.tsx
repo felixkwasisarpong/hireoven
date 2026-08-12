@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { useRef } from "react"
 import { ApexMessageBubble } from "@/components/apex/ApexMessageBubble"
+import ApexReceipts from "@/components/apex/ApexReceipts"
 import { useUpgradeModal } from "@/lib/context/UpgradeModalContext"
 import type { ApexResponse, ApexStrategyBoard } from "@/lib/apex/types"
 import type { ApexNudge } from "@/lib/apex/nudges"
@@ -300,6 +301,8 @@ export function ApexOverviewTab({
         </div>
       </section>
 
+      {/* Receipts — proof of what Apex did while you were away (review #8) */}
+      <ApexReceipts />
 
       {/* Command row */}
       <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
