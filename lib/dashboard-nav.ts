@@ -73,7 +73,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Apex",          href: "/dashboard/apex",                    icon: Triangle,   gate: "apex_actions", subtitle: "Your AI job-search copilot" },
 
   // ── Search & Apply ───────────────────────────────────────────────────────────
-  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, group: "Search & Apply", subtitle: "Jobs you've saved" },
+  { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, group: "Search & Apply", subtitle: "Companies you're tracking" },
   { label: "Alerts",         href: "/dashboard/alerts",                   icon: Bell,          group: "Search & Apply", subtitle: "New-match notifications" },
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
   { label: "Autofill",       href: "/dashboard/autofill",                 icon: Wand2,         group: "Search & Apply", gate: "autofill", subtitle: "One-click applications" },
