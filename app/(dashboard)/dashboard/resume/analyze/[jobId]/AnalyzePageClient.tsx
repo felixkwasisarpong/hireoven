@@ -228,7 +228,7 @@ function FullAnalysisView({ analysis, job }: { analysis: ResumeAnalysis; job: Jo
             Tailor resume
           </button>
           <Link
-            href={`/dashboard/cover-letters/${job.id}`}
+            href={`/dashboard/cover-letter/${job.id}`}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-[13px] font-medium text-slate-700 transition hover:bg-slate-50"
           >
             Cover letter
