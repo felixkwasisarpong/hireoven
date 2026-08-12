@@ -545,7 +545,7 @@ export default function BillingPageClient({
         : "Renews"
 
   return (
-    <div className="app-page">
+    <main className="app-page">
       {launchState === "loading" && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white/90 backdrop-blur-sm">
           <Loader2 className="h-7 w-7 animate-spin text-[#FF5C18]" />
@@ -1211,7 +1211,7 @@ export default function BillingPageClient({
           onBuy={buyInterviewCredits}
         />
       )}
-    </div>
+    </main>
   )
 }
 

@@ -27,7 +27,7 @@ export default function GrowPageShell({
   className,
 }: GrowPageShellProps) {
   return (
-    <div className={cn("min-h-full bg-slate-50/70", className)}>
+    <main className={cn("min-h-full bg-slate-50/70", className)}>
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
@@ -71,6 +71,6 @@ export default function GrowPageShell({
       <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
         {children}
       </div>
-    </div>
+    </main>
   )
 }

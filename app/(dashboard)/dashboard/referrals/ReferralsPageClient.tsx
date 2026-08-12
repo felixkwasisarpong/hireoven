@@ -113,7 +113,7 @@ export default function ReferralsPageClient() {
   const daysEarned = data?.daysEarned ?? 0
 
   return (
-    <div className="min-h-full bg-slate-50/60">
+    <main className="min-h-full bg-slate-50/60">
 
       {/* ── Hero banner ──────────────────────────────────────────────────── */}
       <div
@@ -309,6 +309,6 @@ export default function ReferralsPageClient() {
           Rewards are capped at {MAX_REFERRALS} referrals per account · Referee reward fires on sign-up · Referrer reward fires after 7 days
         </p>
       </div>
-    </div>
+    </main>
   )
 }
