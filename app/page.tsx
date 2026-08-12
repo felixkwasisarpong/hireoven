@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
+import { PLAN_DATA } from "@/lib/pricing"
 import type { LucideIcon } from "lucide-react"
 import {
   ArrowRight,
@@ -824,7 +825,7 @@ function ApexSection() {
           <div className="mt-9 w-full max-w-[34rem]">
             <EmailCapture />
           </div>
-          <p className="term-label mt-4">{"free plan available // paid plans start at $19/month"}</p>
+          <p className="term-label mt-4">{`free plan available // paid plans start at $${PLAN_DATA.pro.monthly}/month`}</p>
         </div>
 
         <div className="term-panel p-5">
