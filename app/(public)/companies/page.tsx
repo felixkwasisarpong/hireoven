@@ -38,17 +38,33 @@ function SponsorsH1BBadge({ confidence }: { confidence: number }) {
 
 export default async function PublicCompaniesPage() {
   let companies: Company[] = []
+  // Real totals across ALL active companies — NOT companies.length, which is
+  // capped at the LIMIT below and made the header read a bogus "500 active
+  // companies" that also disagreed with the homepage (T1-09).
+  let totals = { companyCount: 0, roleCount: 0 }
   if (hasPostgresEnv()) {
     try {
       const pool = getPostgresPool()
-      const { rows } = await pool.query<Company>(
-        `SELECT id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence
-         FROM companies
-         WHERE is_active = true AND job_count > 0
-         ORDER BY job_count DESC
-         LIMIT 500`
-      )
+      const [{ rows }, { rows: aggRows }] = await Promise.all([
+        pool.query<Company>(
+          `SELECT id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence
+           FROM companies
+           WHERE is_active = true AND job_count > 0
+           ORDER BY job_count DESC
+           LIMIT 500`
+        ),
+        pool.query<{ company_count: number; role_count: number }>(
+          `SELECT COUNT(*)::int AS company_count,
+                  COALESCE(SUM(job_count), 0)::int AS role_count
+             FROM companies
+            WHERE is_active = true AND job_count > 0`
+        ),
+      ])
       companies = rows
+      totals = {
+        companyCount: aggRows[0]?.company_count ?? 0,
+        roleCount: aggRows[0]?.role_count ?? 0,
+      }
     } catch {
       companies = []
     }
@@ -61,7 +77,6 @@ export default async function PublicCompaniesPage() {
     return acc
   }, {})
 
-  const totalJobs = companies.reduce((sum, c) => sum + (c.job_count ?? 0), 0)
   const groupedEntries = Object.entries(grouped)
     .map(([industry, industryCompanies]) => ({
       industry,
@@ -94,8 +109,8 @@ export default async function PublicCompaniesPage() {
         </div>
         <div className="grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)]">
           {[
-            { value: companies.length.toLocaleString(), label: "active companies", Icon: COMPANY_STAT_ICONS.companies },
-            { value: totalJobs.toLocaleString(), label: "open roles", Icon: COMPANY_STAT_ICONS.roles },
+            { value: totals.companyCount.toLocaleString(), label: "active companies", Icon: COMPANY_STAT_ICONS.companies },
+            { value: totals.roleCount.toLocaleString(), label: "open roles", Icon: COMPANY_STAT_ICONS.roles },
             { value: "H-1B", label: "sponsor proof", Icon: COMPANY_STAT_ICONS.sponsor },
           ].map(({ value, label, Icon }) => (
             <div key={label} className="flex items-center gap-4 bg-[#0e1411] p-4">

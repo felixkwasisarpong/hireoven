@@ -217,10 +217,16 @@ export default function CreditsDropdown() {
           />
         </span>
 
-        {/* Live credits pill */}
+        {/* Live interview-session credits — distinct from the AI credits above.
+            Labeled via the video icon + title/aria-label here; both currencies
+            are spelled out in the dropdown (T1-12). */}
         <>
           <span className="text-slate-300">·</span>
-          <span className="inline-flex items-center gap-1">
+          <span
+            className="inline-flex items-center gap-1"
+            title="Live interview sessions remaining"
+            aria-label="Live interview sessions remaining"
+          >
             <Video className="h-3 w-3 shrink-0" />
             <span className={cn("tabular-nums", liveEmpty ? "text-rose-600" : "")}>
               {liveLoading || credits === null ? "—" : credits.balance}
