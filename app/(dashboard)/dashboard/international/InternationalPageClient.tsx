@@ -8,6 +8,7 @@ import {
   BookmarkCheck,
   Clock3,
   Database,
+  Trophy,
   Plane,
   Search,
   ShieldAlert,
@@ -44,6 +45,14 @@ const TOOLS = [
     icon: Database,
     accent: "bg-emerald-50 text-emerald-600 ring-emerald-100",
     hover: "hover:border-emerald-200 hover:bg-emerald-50/40",
+  },
+  {
+    href: "/dashboard/international/h1b-sponsors",
+    title: "Sponsor Leaderboard",
+    copy: "Top U.S. H-1B sponsors, ranked by filings",
+    icon: Trophy,
+    accent: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+    hover: "hover:border-indigo-200 hover:bg-indigo-50/40",
   },
 ]
 

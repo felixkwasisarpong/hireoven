@@ -14,9 +14,7 @@ import {
   Plane,
   Send,
   Settings,
-  ShieldAlert,
   Triangle,
-  Trophy,
   TrendingUp,
   Wand2,
 } from "lucide-react"
@@ -96,10 +94,10 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
 
   // ── International ────────────────────────────────────────────────────────────
   // No gate — pages enforce the profile check (is_international / visa_status)
-  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers", exact: true },
-  { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Globe,         group: "International", subtitle: "Visa sponsorship data" },
-  { label: "H-1B Sponsors",  href: "/dashboard/international/h1b-sponsors", icon: Trophy,          group: "International", subtitle: "Top sponsors leaderboard" },
-  { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
+  // D2: sponsorship is one feature, not a section. Collapse to a single
+  // "International" entry — the hub page surfaces LCA Explorer, Offer Risk, the
+  // Sponsor Leaderboard and OPT Survival as tiles. Sub-routes are unchanged.
+  { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Visa & sponsorship tools", exact: true },
   // Hidden for now — page/routes remain at /dashboard/international/services.
   // { label: "Immigration Services", href: "/dashboard/international/services", icon: Scale,    group: "International", subtitle: "Book vetted attorneys & doc prep" },
 
