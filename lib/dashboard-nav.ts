@@ -97,7 +97,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // No gate — pages enforce the profile check (is_international / visa_status)
   { label: "International",  href: "/dashboard/international",            icon: Plane,           group: "International", subtitle: "Tools for visa seekers", exact: true },
   { label: "H-1B Intel",     href: "/dashboard/international/h1b-explorer", icon: Globe,         group: "International", subtitle: "Visa sponsorship data" },
-  { label: "H-1B Sponsors",  href: "/h1b-sponsors/leaderboard",           icon: Trophy,          group: "International", subtitle: "Public sponsor leaderboard" },
+  { label: "H-1B Sponsors",  href: "/dashboard/international/h1b-sponsors", icon: Trophy,          group: "International", subtitle: "Top sponsors leaderboard" },
   { label: "Offer Risk",     href: "/dashboard/international/offer-risk", icon: ShieldAlert,     group: "International", subtitle: "Vet an offer's stability" },
   // Hidden for now — page/routes remain at /dashboard/international/services.
   // { label: "Immigration Services", href: "/dashboard/international/services", icon: Scale,    group: "International", subtitle: "Book vetted attorneys & doc prep" },
