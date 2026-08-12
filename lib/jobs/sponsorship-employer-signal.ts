@@ -108,7 +108,13 @@ export function resolveH1BSponsorshipDisplay(
     : Math.max(0, Number(job.company?.h1b_sponsor_count_3yr ?? 0))
   const score = effectiveEmployerSponsorshipScore(job)
   const hasJobTextSignal = resolvedVisaLabel === "Sponsors" || resolvedVisaLabel === "Historical sponsorship signal"
-  const hasSponsorSignal = employerLikelySponsorsH1b(job) || hasJobTextSignal || count1yr > 0 || count3yr > 0 || score >= 50
+  // T1-04: a bare employer score alone must clear a real floor (65) before it
+  // earns a badge — a mid-range score with no corroborating signal (petition
+  // history, job-text, sponsors flag) isn't strong enough evidence, and this is
+  // what suppressed the leaked constant-60 "moderate" badges. Real signals
+  // (counts / job text / sponsors flag) still render regardless of score.
+  const hasSponsorSignal =
+    employerLikelySponsorsH1b(job) || hasJobTextSignal || count1yr > 0 || count3yr > 0 || score >= 65
   if (!hasSponsorSignal) return null
 
   const strongByCount = count1yr >= 25 || count3yr >= 80

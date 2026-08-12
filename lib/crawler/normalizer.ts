@@ -31,7 +31,8 @@ export interface VisaAnalysis {
   sponsors_h1b: boolean | null
   requires_authorization: boolean
   visa_language_detected: string | null
-  sponsorship_score: number
+  /** 0–100, or null when no usable score (never a constant fallback — T1-04). */
+  sponsorship_score: number | null
 }
 
 export async function detectVisaLanguage(description: string): Promise<VisaAnalysis> {
@@ -86,11 +87,14 @@ Return ONLY valid JSON.`,
       sponsors_h1b: parsed.sponsors_h1b ?? null,
       requires_authorization: parsed.requires_authorization ?? null,
       visa_language_detected: parsed.visa_language_detected ?? null,
+      // T1-04: when the model didn't return a usable score, store null — NOT a
+      // constant 60. A hard-coded 60 was persisting and rendering as a real
+      // "60% confidence · moderate" badge across unrelated hourly roles.
       sponsorship_score: typeof parsed.sponsorship_score === 'number'
         ? Math.min(100, Math.max(0, parsed.sponsorship_score))
-        : 60,
+        : null,
     }
   } catch {
-    return { sponsors_h1b: null, requires_authorization: false, visa_language_detected: null, sponsorship_score: 60 }
+    return { sponsors_h1b: null, requires_authorization: false, visa_language_detected: null, sponsorship_score: null }
   }
 }
