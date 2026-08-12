@@ -341,6 +341,35 @@ function DefaultNavGroup({
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 
+// D1 — Apex is the product: lift it out of the plain nav into a prominent hero
+// entry at the very top of the sidebar (pages are all kept below, unchanged).
+function ApexHero({ item }: { item: DashboardNavItem }) {
+  const pathname = usePathname()
+  const active = isDashboardNavActive(pathname, item.href)
+  const Icon = item.icon
+  return (
+    <Link
+      href={item.href}
+      data-tour="nav-apex"
+      className={cn(
+        "group mb-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-white shadow-sm transition-colors",
+        active ? "bg-slate-900" : "bg-slate-900/95 hover:bg-slate-900"
+      )}
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
+        <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold leading-tight">{item.label}</span>
+        {item.subtitle && (
+          <span className="block truncate text-[11px] text-white/60">{item.subtitle}</span>
+        )}
+      </span>
+      <ChevronRight className="h-4 w-4 shrink-0 text-white/40 transition-transform group-hover:translate-x-0.5" aria-hidden />
+    </Link>
+  )
+}
+
 export default function DashboardSidebarNav({
   applicationCount,
   variant = "light",
@@ -354,7 +383,9 @@ export default function DashboardSidebarNav({
 
   const allItems = DASHBOARD_NAV_ITEMS.filter((i) => !i.footer)
   const footerItems = DASHBOARD_NAV_ITEMS.filter((i) => i.footer)
-  const topLevel = allItems.filter((i) => !i.group)
+  // Apex leads as the hero; the remaining ungrouped item (Feed) renders normally.
+  const apexItem = allItems.find((i) => i.href === "/dashboard/apex")
+  const topLevel = allItems.filter((i) => !i.group && i.href !== "/dashboard/apex")
   const groupKeys = Object.keys(NAV_GROUPS)
   const grouped = groupKeys.map((key) => ({
     key,
@@ -365,6 +396,7 @@ export default function DashboardSidebarNav({
     return (
       <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard" data-tour="dashboard-sidebar">
         <div className="space-y-0.5">
+          {apexItem && <ApexHero item={apexItem} />}
           {topLevel.map((item) => (
             <FeedNavItem key={item.label} item={item} applicationCount={applicationCount} />
           ))}
@@ -387,6 +419,7 @@ export default function DashboardSidebarNav({
   return (
     <nav className="flex h-full min-h-full flex-col" aria-label="Dashboard" data-tour="dashboard-sidebar">
       <div className="space-y-1">
+        {apexItem && <ApexHero item={apexItem} />}
         {topLevel.map((item) => (
           <DefaultNavItem key={item.label} item={item} applicationCount={applicationCount} variant={variant} />
         ))}
