@@ -605,7 +605,9 @@ export function ApexWorkspaceShell() {
   }, [searchParams])
 
   const fullName  = profile?.full_name ?? user?.user_metadata?.full_name ?? null
-  const firstName = fullName?.split(" ")[0] ?? "there"
+  // Capitalize — profiles often store the name lowercased, and "Good morning,
+  // felix" reads as a bug (welcome-screen review #9).
+  const firstName = fullName?.split(" ")[0]?.replace(/^\p{L}/u, (c) => c.toUpperCase()) ?? "there"
   // Compute greeting client-side only — server UTC hour differs from client local
   // hour causing a text content hydration mismatch.
   const [greeting, setGreeting] = useState("Good morning")
