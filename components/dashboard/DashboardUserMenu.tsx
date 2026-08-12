@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, CreditCard, LogOut, UserRound } from "lucide-react"
+import { ChevronDown, CreditCard, LogOut, Settings, UserRound } from "lucide-react"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
@@ -87,13 +87,22 @@ export default function DashboardUserMenu() {
 
           <div className="p-1.5">
             <Link
-              href="/dashboard/onboarding"
+              href="/dashboard/autofill"
               role="menuitem"
               className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-strong transition-colors hover:bg-cyan-50/65"
               onClick={() => setOpen(false)}
             >
               <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
               Profile
+            </Link>
+            <Link
+              href="/dashboard/email-preferences"
+              role="menuitem"
+              className="mt-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-strong transition-colors hover:bg-cyan-50/65"
+              onClick={() => setOpen(false)}
+            >
+              <Settings className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+              Settings
             </Link>
             <Link
               href={isPro ? "/dashboard/billing" : "/dashboard/upgrade"}
