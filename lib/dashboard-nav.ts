@@ -7,16 +7,12 @@ import {
   FileText,
   Gauge,
   Gift,
-  GitBranch,
   Globe,
-  GraduationCap,
   LayoutGrid,
   LifeBuoy,
-  Mails,
   MessageCircle,
   Mic,
   Plane,
-  Radar,
   Send,
   Settings,
   ShieldAlert,
@@ -78,14 +74,12 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   { label: "Outreach",       href: "/dashboard/outreach",                 icon: Send,          group: "Search & Apply", gate: "apex_strategy", subtitle: "Reach recruiters & hiring managers" },
 
   // ── Documents ────────────────────────────────────────────────────────────────
-  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "Documents", gate: "resume_upload", subtitle: "Build & tailor resumes" },
-  { label: "Positioning",    href: "/dashboard/positioning",              icon: Radar,           group: "Documents", subtitle: "What field your resume signals" },
-  { label: "Career pivot",   href: "/dashboard/pivot",                    icon: GitBranch,       group: "Documents", subtitle: "Bridge to a new field" },
-  { label: "Cover letters",  href: "/dashboard/cover-letters",            icon: Mails,           group: "Documents", gate: "cover_letter", subtitle: "Generate cover letters" },
+  // Positioning, Career pivot, Cover letters and Skill Gaps are now tabs inside
+  // the Resume hub (D3); old routes 301-redirect (D4). One sidebar entry.
+  { label: "Resume",         href: "/dashboard/resume",                   icon: FileText,        group: "Documents", gate: "resume_upload", subtitle: "Build, tailor, position & pivot" },
 
   // ── Grow ─────────────────────────────────────────────────────────────────────
   { label: "Interview",      href: "/dashboard/interview",                icon: Mic,            group: "Grow", subtitle: "Practice & prep with AI" },
-  { label: "Skill Gaps",     href: "/dashboard/grow/skills",              icon: GraduationCap,  group: "Grow", subtitle: "Learn what unlocks more roles" },
   { label: "Scorecard",      href: "/dashboard/scorecard",                icon: Gauge,          group: "Grow", subtitle: "Your sponsorability score" },
   // Parked (D7) — Cohorts / Brand / Fair Chance are built and functional but are
   // arguably separate products; removed from the sidebar to reduce sprawl. Routes

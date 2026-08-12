@@ -93,6 +93,21 @@ export function useFeedInsights(enabled: boolean) {
     }
   }, [])
 
+  // D5: the feed shows ONE rotating insight card, not several. Rotate which card
+  // appears across loads (persisted counter) so it isn't always the same type,
+  // and cap it to a single card in the stream.
+  const [rotation] = useState(() => {
+    if (typeof window === "undefined") return 0
+    const n = Number(window.localStorage.getItem("feed-insights-rotation") ?? "0")
+    try {
+      window.localStorage.setItem("feed-insights-rotation", String(n + 1))
+    } catch {
+      /* ignore */
+    }
+    return n
+  })
+
   const activeCards = cards.filter((c) => !dismissed.has(c.id))
-  return { activeCards, dismiss, affirmSkills }
+  const card = activeCards.length > 0 ? activeCards[rotation % activeCards.length] : null
+  return { card, dismiss, affirmSkills }
 }

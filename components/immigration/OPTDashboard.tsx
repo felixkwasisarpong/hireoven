@@ -81,7 +81,7 @@ const QUICK_ACTIONS = [
   { icon: Shield,           label: "E-Verify / STEM OPT employers", href: "/dashboard/international#companies" },
   { icon: GraduationCap,    label: "Cap-exempt jobs",               href: "/dashboard/international?cap_exempt=true" },
   { icon: Search,           label: "Search LCA database",           href: "/dashboard/international/h1b-explorer" },
-  { icon: MessageSquarePlus,label: "Recruiter outreach message",    href: "/dashboard/cover-letters" },
+  { icon: MessageSquarePlus,label: "Recruiter outreach message",    href: "/dashboard/resume/cover-letters" },
 ]
 
 // ─── Settings form ────────────────────────────────────────────

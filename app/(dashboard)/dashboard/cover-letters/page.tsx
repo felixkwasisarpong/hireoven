@@ -1,50 +1,18 @@
-import { getSessionUser } from "@/lib/auth/session-user"
-import { getPostgresPool } from "@/lib/postgres/server"
-import type { CoverLetter } from "@/types"
-import CoverLettersPageClient from "./CoverLettersPageClient"
+import { permanentRedirect } from "next/navigation"
 
-export const dynamic = "force-dynamic"
-
-type CoverLettersInitialData = {
-  initialLetters: CoverLetter[]
-  initialLoaded: boolean
-}
-
-async function getCoverLettersInitialData(): Promise<CoverLettersInitialData> {
-  const fallback: CoverLettersInitialData = {
-    initialLetters: [],
-    initialLoaded: false,
+// D4: the cover-letter archive now lives as a tab in the Resume hub. The per-job
+// editor stays at /dashboard/cover-letter/[jobId]. Preserve any query (e.g.
+// ?highlight=<id>) so deep links keep working.
+export default function CoverLettersRedirect({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>
+}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(searchParams)) {
+    if (typeof v === "string") qs.set(k, v)
+    else if (Array.isArray(v) && v[0]) qs.set(k, v[0])
   }
-
-  const session = await getSessionUser()
-  if (!session?.sub) return fallback
-
-  try {
-    const pool = getPostgresPool()
-    const result = await pool.query<CoverLetter>(
-      `SELECT *
-       FROM cover_letters
-       WHERE user_id = $1::uuid
-       ORDER BY created_at DESC`,
-      [session.sub],
-    )
-
-    return {
-      initialLetters: result.rows,
-      initialLoaded: true,
-    }
-  } catch {
-    return fallback
-  }
-}
-
-export default async function CoverLettersPage() {
-  const { initialLetters, initialLoaded } = await getCoverLettersInitialData()
-
-  return (
-    <CoverLettersPageClient
-      initialLetters={initialLetters}
-      initialLoaded={initialLoaded}
-    />
-  )
+  const q = qs.toString()
+  permanentRedirect(`/dashboard/resume/cover-letters${q ? `?${q}` : ""}`)
 }

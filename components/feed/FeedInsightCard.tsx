@@ -101,7 +101,7 @@ function PivotBody({ card }: { card: Extract<InsightCard, { type: "pivot" }> }) 
       {bridge.length > 0 && (
         <p className="mt-1 text-[12px] text-slate-500">Cross over by adding: {bridge.join(", ")}</p>
       )}
-      <CardLink href={`/dashboard/pivot?to=${encodeURIComponent(p.toKey)}`}>
+      <CardLink href={`/dashboard/resume/pivot?to=${encodeURIComponent(p.toKey)}`}>
         See your {p.toLabel} pivot plan
       </CardLink>
     </div>
@@ -116,7 +116,7 @@ function SharpenBody({ card }: { card: Extract<InsightCard, { type: "sharpen" }>
         and <span className="font-medium text-slate-900">{card.runnerUpLabel}</span>. Picking one and sharpening
         toward it scores you higher in that field&rsquo;s matches; a split signal costs you in both.
       </p>
-      <CardLink href="/dashboard/positioning">Sharpen your positioning</CardLink>
+      <CardLink href="/dashboard/resume/positioning">Sharpen your positioning</CardLink>
     </div>
   )
 }
