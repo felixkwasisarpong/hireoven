@@ -544,23 +544,26 @@ function buildRemoteConversionStrength(apps: TwinApplicationRow[]): CareerTwinDi
 }
 
 function buildStrengthsAndRisks(dimensions: CareerTwinDimension[]) {
+  // Clean metric name for prose — the raw labels end in "score"/"level", which
+  // reads awkwardly inline ("Targeting alignment score is a current strength").
+  const name = (d: CareerTwinDimension) => d.label.replace(/\s+(score|level)$/i, "")
   const strengthDims = dimensions
     .filter((dimension) => dimension.direction === "strength")
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
-    .map((dimension) => `${dimension.label} is a current strength (${dimension.score}/100).`)
+    .map((dimension) => `${name(dimension)} is a current strength (${dimension.score}/100).`)
 
   const riskDims = dimensions
     .filter((dimension) => dimension.direction === "risk")
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
-    .map((dimension) => `${dimension.label} is a current drag (${dimension.score}/100).`)
+    .map((dimension) => `${name(dimension)} is a current drag (${dimension.score}/100).`)
 
   const constraintDims = dimensions
     .filter((dimension) => dimension.direction === "constraint")
     .sort((a, b) => b.score - a.score)
     .slice(0, 2)
-    .map((dimension) => `${dimension.label} is shaping the search (${dimension.score}/100).`)
+    .map((dimension) => `${name(dimension)} is shaping the search (${dimension.score}/100).`)
 
   return { strengthDims, riskDims, constraintDims }
 }
