@@ -3,8 +3,7 @@
 import type { ReactNode } from "react"
 import { Zap, Sparkles } from "lucide-react"
 import { ApexIcon } from "@/components/apex/ApexIcon"
-import { ApexCareerTwinCard } from "@/components/apex/ApexCareerTwinCard"
-import { ApexTodayPlanCard } from "@/components/apex/ApexTodayPlanCard"
+import ApexReceipts from "@/components/apex/ApexReceipts"
 import { ApexSuggestedCommands } from "./ApexSuggestedCommands"
 import type { ApexNudge } from "@/lib/apex/nudges"
 import type { CareerTwinSnapshot } from "@/lib/apex/career-twin/types"
@@ -32,20 +31,17 @@ type Props = {
   onPlanStateCommitted?: () => void
 }
 
+// Three presets, not six (welcome review #4): find, sharpen, differentiator.
 const SUGGESTIONS_WITH_DATA = [
-  { label: "Run today's attack plan",               hint: "Apex ranks the live queue for you",         query: "Run autonomous hunt for today" },
-  { label: "Show me high-fit roles right now",          hint: "Rank by match score and freshness",       query: "Show jobs worth my time and rank them by fit" },
-  { label: "Find sponsorship-friendly companies",        hint: "Recent H-1B activity, strong signal",      query: "Find sponsorship-friendly roles matching my profile" },
-  { label: "Compare my top saved jobs",                  hint: "Side-by-side recommendation",              query: "Compare my top saved jobs and pick the best one" },
-  { label: "Tailor my resume for the strongest match",   hint: "Targeted edits + cover letter",            query: "Tailor my resume for my strongest match" },
-  { label: "1-click apply to my top matches",            hint: "Pre-approve a batch, Apex handles the rest", query: "Set up 1-click apply for my top matches" },
+  { label: "Rank my live queue",                         hint: "By match score and freshness",             query: "Show jobs worth my time and rank them by fit" },
+  { label: "Tailor my resume",                           hint: "Targeted edits for the best-fit role",     query: "Tailor my resume for my strongest match" },
+  { label: "Find sponsor-friendly roles",                hint: "Recent H-1B activity, strong signal",      query: "Find sponsorship-friendly roles matching my profile" },
 ]
 
 const SUGGESTIONS_FRESH = [
-  { label: "Run today's attack plan",               hint: "Apex builds your starting queue",            query: "Run autonomous hunt for today" },
   { label: "Build my search plan",                       hint: "Practical, tailored to my profile",        query: "Create a practical search plan for me" },
-  { label: "Find sponsorship-friendly roles",            hint: "Filter for visa-friendly employers",       query: "Find sponsorship-friendly roles matching my profile" },
-  { label: "1-click apply to my top matches",            hint: "Pre-approve once, Apex applies for you",   query: "Set up 1-click apply for my top matches" },
+  { label: "Rank my live queue",                         hint: "By match score and freshness",             query: "Show jobs worth my time and rank them by fit" },
+  { label: "Find sponsor-friendly roles",                hint: "Filter for visa-friendly employers",       query: "Find sponsorship-friendly roles matching my profile" },
 ]
 
 export function ApexWelcomeScene({
@@ -92,7 +88,6 @@ export function ApexWelcomeScene({
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-[0.24em] text-slate-600">Apex</span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">Career Operator</span>
               </div>
               <h1 className="mt-3 max-w-3xl text-[2rem] font-semibold leading-[1.08] tracking-tight text-slate-950 sm:text-[2.45rem] motion-safe:animate-[apexFadeUp_0.6s_ease-out_60ms_both]">
                 {greeting}, {firstName}. Start from the highest-leverage move.
@@ -125,6 +120,11 @@ export function ApexWelcomeScene({
           </div>
         </div>
 
+        {/* Receipts — proof of what Apex did while you were away (#8) */}
+        <div className="mt-6 motion-safe:animate-[apexFadeUp_0.6s_ease-out_160ms_both]">
+          <ApexReceipts />
+        </div>
+
         {commandSlot && (
           <div className="mt-6 w-full motion-safe:animate-[apexFadeUp_0.6s_ease-out_180ms_both]">
             {commandSlot}
@@ -144,30 +144,9 @@ export function ApexWelcomeScene({
         </div>
       </div>
 
-      <div className="mt-5 grid w-full gap-4 text-left motion-safe:animate-[apexFadeUp_0.6s_ease-out_260ms_both] lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
-        <ApexTodayPlanCard
-          board={strategyBoard}
-          nudges={nudges}
-          isLoading={strategyLoading}
-          hasData={hasData}
-          onActionClick={onRunCommand}
-          onOpenHistory={onOpenPlanHistory}
-          onPlanStateCommitted={onPlanStateCommitted}
-          twin={careerTwin}
-          history={careerTwinHistory}
-          variant="summary"
-        />
-        <ApexCareerTwinCard
-          twin={careerTwin}
-          history={careerTwinHistory}
-          isLoading={careerTwinLoading}
-          isRefreshing={careerTwinRefreshing}
-          error={careerTwinError}
-          onRefresh={onRefreshCareerTwin}
-          onRunFocus={onRunCommand}
-          variant="summary"
-        />
-      </div>
+      {/* Lean, chat-first landing: Today's Plan and the Career Twin read are no
+          longer stacked on the landing — they're a click away in the workspace
+          tabs. The landing stays the ask box + a few launch shortcuts. */}
 
       {/* Keyboard hint */}
       <p className="mt-4 text-center text-[11px] text-slate-500/80 motion-safe:animate-[apexFadeUp_0.6s_ease-out_320ms_both]">
