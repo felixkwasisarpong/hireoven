@@ -953,6 +953,17 @@ export type MatchScoreBreakdown = {
   roleFamilyScore?: number | null;
   roleFamily?: string | null;
   candidateRoleFamilies?: string[] | null;
+  careerFit?: {
+    atsScreenScore: number | null;
+    careerFitScore: number | null;
+    relevantYears: number | null;
+    totalYears: number | null;
+    requiredYears: number | null;
+    relevantYearsRatio: number | null;
+    label: 'ats_ready' | 'tailor_resume' | 'bridge_first' | 'career_pivot';
+    recommendation: string;
+    evidence: string[];
+  } | null;
   domainScore?: number | null;
   semanticScore?: number | null;
   certificationScore?: number | null;

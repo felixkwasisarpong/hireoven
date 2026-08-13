@@ -4,11 +4,10 @@
  * Bump FAST_SCORE_CACHE_EPOCH_ISO whenever fast scoring logic changes in a way
  * that should invalidate historical rows.
  */
-// 2026-06-23: experience shortfall now penalized convexly + tiered cap; top
-// band reaches 98 for near-perfect fits; ungated scores spread around a 70
-// pivot; skill extraction drops company/mission/collaboration false positives
-// (e.g. "palo alto"→Firewall, "cybersecurity partner"→Cybersecurity).
-export const FAST_SCORE_CACHE_EPOCH_ISO = "2026-06-23T11:30:00.000Z"
+// 2026-08-13: match scoring now includes relevant-experience/career-fit
+// signals so keyword/skill overlap cannot make a cross-domain resume look
+// ATS-ready without recent role evidence.
+export const FAST_SCORE_CACHE_EPOCH_ISO = "2026-08-13T00:00:00.000Z"
 export const FAST_SCORE_CACHE_EPOCH_MS = Date.parse(FAST_SCORE_CACHE_EPOCH_ISO)
 
 if (!Number.isFinite(FAST_SCORE_CACHE_EPOCH_MS)) {

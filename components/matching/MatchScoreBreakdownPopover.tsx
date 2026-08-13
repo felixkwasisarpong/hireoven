@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { createPortal } from "react-dom"
-import { AlertTriangle, Check, X } from "lucide-react"
+import { AlertTriangle, Briefcase, Check, ScanSearch, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getMatchVerdict } from "@/lib/jobs/match-score-display"
 import { resolveSkillsFactorValue, type ScoreFactorComputationState } from "@/lib/matching/score-factor-state"
@@ -87,6 +87,10 @@ function formatConcern(raw: string): string {
     return "Well below the stated minimum years of experience"
   if (raw.startsWith("Gate: below_preferred_experience"))
     return "Somewhat under the preferred years of experience"
+  if (raw.startsWith("Gate: insufficient_relevant_experience"))
+    return "Not enough recent experience in this role family"
+  if (raw.startsWith("Gate: limited_relevant_experience"))
+    return "Enough total years, but limited directly relevant years"
   if (raw.startsWith("Gate: extreme_seniority_mismatch")) return "Seniority is far from the role"
   if (raw.startsWith("Gate: seniority_mismatch")) return "Seniority level differs from the role"
   if (raw.startsWith("Gate: same_family_low_title_fit"))
@@ -97,6 +101,19 @@ function formatConcern(raw: string): string {
     return "Career family mismatch with your recent roles"
   }
   return raw.replace(/^Gate:\s*/, "")
+}
+
+function formatCareerFitLabel(label: string | null | undefined): string {
+  if (label === "ats_ready") return "ATS ready"
+  if (label === "tailor_resume") return "Tailor resume"
+  if (label === "bridge_first") return "Bridge first"
+  if (label === "career_pivot") return "Career pivot"
+  return "Career fit"
+}
+
+function formatYears(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "0"
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1)
 }
 
 function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelProps) {
@@ -122,6 +139,7 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
   const concerns = (breakdown?.concerns ?? []).map(formatConcern).filter(Boolean)
   const matchedCount = score.matching_skills_count ?? matched.length
   const requiredCount = score.total_required_skills ?? 0
+  const careerFit = breakdown?.careerFit ?? null
 
   return (
     <div
@@ -159,6 +177,51 @@ function BreakdownPanel({ score, onClose, onSeeFullAnalysis }: BreakdownPanelPro
           <X className="h-4 w-4" />
         </button>
       </header>
+
+      {careerFit && (
+        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <Briefcase className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+              <span className="truncate text-[12px] font-semibold text-slate-800">
+                {formatCareerFitLabel(careerFit.label)}
+              </span>
+            </div>
+            {careerFit.requiredYears && careerFit.requiredYears > 0 ? (
+              <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
+                {formatYears(careerFit.relevantYears)}/{formatYears(careerFit.requiredYears)} relevant yrs
+              </span>
+            ) : (
+              <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
+                {formatYears(careerFit.relevantYears)} relevant yrs
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md bg-white px-2 py-1.5">
+              <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                <ScanSearch className="h-3 w-3" /> ATS screen
+              </div>
+              <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
+                {careerFit.atsScreenScore ?? "N/A"}
+              </div>
+            </div>
+            <div className="rounded-md bg-white px-2 py-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                Career fit
+              </div>
+              <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">
+                {careerFit.careerFitScore ?? "N/A"}
+              </div>
+            </div>
+          </div>
+          {careerFit.recommendation && (
+            <p className="mt-2 text-[11px] leading-snug text-slate-600">
+              {careerFit.recommendation}
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="mt-4 space-y-2.5">
         {dimensions.map((dim) => (

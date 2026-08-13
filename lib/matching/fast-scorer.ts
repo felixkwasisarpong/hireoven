@@ -5,11 +5,15 @@
  *   skills 0.36 · experience 0.14 · seniority 0.06 · title 0.10 · education 0.09
  *   role-family 0.14 · semantic 0.06 · domain 0.03 · certs 0.02
  *
+ * Experience is relevant-experience aware: total years still matter, but years
+ * earned outside the role/domain are discounted so skill-list overlap alone
+ * cannot make a career-pivot look like a direct ATS-ready fit.
+ *
  * Hard gates applied after aggregation:
- *   missing-required-cert (≥5 required)  → –15 pts, floor 45
- *   >60 % required skills missing (≥5)   → cap at 55
- *   relevant-years < 40 % required       → cap at 55
- *   hard disqualifier                    → cap at 25
+ *   missing-required-cert                -> -15 pts, floor 45
+ *   >75% required skills missing (>=5)   -> cap at 65
+ *   total/relevant years shortfall       -> cap below strong-match band
+ *   incompatible role family             -> cap at 55
  */
 
 import type {
@@ -52,8 +56,11 @@ type ResumeExperienceSnapshot = {
   titleTokens: Set<string>
   seniorityTier: number
   descriptionLower: string
+  skillKeys: Set<string>
+  roleFamily: RoleFamily
   is_current: boolean
   endYear: number | null
+  years: number
 }
 
 export interface FastScoreResumeContext {
@@ -297,11 +304,35 @@ type SkillsScoreResult = {
   missing: string[]
   hardMissing: string[]
   hardMatchedCount: number
+  hardSkills: string[]
   /** Each required skill graded 0–1; consumed by score_breakdown.skillScores. */
   perSkill: PerSkillScore[]
   evidence: string
   certGate: boolean
   requiredCount: number
+}
+
+type RelevantExperienceResult = {
+  score: number
+  ratio: number | null
+  relevantYears: number
+  totalYears: number
+  requiredYears: number
+  evidence: string
+}
+
+type CareerFitLabel = "ats_ready" | "tailor_resume" | "bridge_first" | "career_pivot"
+
+type CareerFitResult = {
+  atsScreenScore: number
+  careerFitScore: number
+  relevantYears: number
+  totalYears: number
+  requiredYears: number
+  relevantYearsRatio: number | null
+  label: CareerFitLabel
+  recommendation: string
+  evidence: string[]
 }
 
 function inferLastUsedYear(
@@ -381,6 +412,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
       missing: [],
       hardMissing: [],
       hardMatchedCount: 0,
+      hardSkills: [],
       perSkill: [],
       evidence:
         "No reliable skills detected in this posting; applied a conservative score.",
@@ -497,6 +529,7 @@ function scoreSkills(resumeContext: FastScoreResumeContext, job: Job): SkillsSco
     missing,
     hardMissing,
     hardMatchedCount: hardMatched.length,
+    hardSkills,
     perSkill,
     evidence,
     certGate: false,
@@ -982,6 +1015,194 @@ function scoreRoleFamilyFit(
   }
 }
 
+function roleFamilyBaseline(candidate: RoleFamily, job: RoleFamily): number {
+  if (candidate === "unknown" || job === "unknown") return 0.45
+  if (candidate === job) return 0.45
+  if (isRoleFamilyCompatible(candidate, job)) return 0.3
+  return 0.08
+}
+
+function experienceRecencyMultiplier(exp: ResumeExperienceSnapshot): number {
+  if (exp.is_current) return 1
+  if (!exp.endYear) return 0.65
+  const age = CURRENT_YEAR - exp.endYear
+  if (age <= 2) return 0.9
+  if (age <= 5) return 0.75
+  if (age <= 8) return 0.55
+  return 0.35
+}
+
+function hardSkillCoverageForExperience(
+  exp: ResumeExperienceSnapshot,
+  hardSkills: string[]
+): number {
+  if (hardSkills.length === 0) return 0
+
+  let hits = 0
+  for (const skill of hardSkills) {
+    const key = normalizeSkillKey(canonicalizeSkill(skill))
+    const literal = skill.toLowerCase()
+    if (exp.skillKeys.has(key) || (literal.length > 2 && exp.descriptionLower.includes(literal))) {
+      hits++
+    }
+  }
+  return hits / hardSkills.length
+}
+
+function relevanceFactorForExperience(
+  exp: ResumeExperienceSnapshot,
+  job: Job,
+  jobFamily: RoleFamily,
+  hardSkills: string[]
+): number {
+  const titleSim = titleSimilarity(titleTokens(job.title), exp.titleTokens)
+  const titleFactor =
+    titleSim >= 0.8 ? 0.95 :
+    titleSim >= 0.45 ? 0.75 :
+    titleSim >= 0.25 ? 0.55 :
+    0
+  const skillCoverage = hardSkillCoverageForExperience(exp, hardSkills)
+  const skillFactor =
+    skillCoverage >= 0.65 ? 0.95 :
+    skillCoverage >= 0.4 ? 0.8 :
+    skillCoverage >= 0.2 ? 0.6 :
+    skillCoverage > 0 ? 0.4 :
+    0
+  const familyFactor = roleFamilyBaseline(exp.roleFamily, jobFamily)
+  let factor = Math.max(familyFactor, titleFactor, skillFactor)
+
+  // A broad family match alone is not enough. "Pharmacist" and "RN" are both
+  // healthcare, but the relevant-years credit should depend on title or skill
+  // evidence that proves the same lane, not the family label by itself.
+  if (
+    exp.roleFamily === jobFamily &&
+    jobFamily !== "unknown" &&
+    titleFactor === 0 &&
+    skillFactor < 0.6
+  ) {
+    factor = Math.min(factor, 0.35)
+  }
+
+  if (!isRoleFamilyCompatible(exp.roleFamily, jobFamily) && skillFactor < 0.8 && titleFactor < 0.8) {
+    factor = Math.min(factor, 0.35)
+  }
+
+  return factor * experienceRecencyMultiplier(exp)
+}
+
+function scoreRelevantExperience(
+  resumeContext: FastScoreResumeContext,
+  job: Job,
+  hardSkills: string[],
+  roleFamily: ReturnType<typeof scoreRoleFamilyFit>,
+  totalExperience: ReturnType<typeof scoreExperience>
+): RelevantExperienceResult {
+  const requiredYears = totalExperience.required
+  let relevantYears = 0
+  let bestFactor = 0
+
+  for (const exp of resumeContext.experienceByRecency) {
+    const factor = relevanceFactorForExperience(exp, job, roleFamily.jobFamily, hardSkills)
+    bestFactor = Math.max(bestFactor, factor)
+    relevantYears += exp.years * factor
+  }
+
+  // Some parses provide total years but incomplete role dates. Avoid treating
+  // a clear same-lane resume as zero relevant years just because dates failed.
+  if (relevantYears === 0 && resumeContext.years > 0 && bestFactor > 0) {
+    relevantYears = resumeContext.years * bestFactor
+  }
+
+  relevantYears = Math.min(resumeContext.years, relevantYears)
+  const ratio = requiredYears > 0 ? relevantYears / requiredYears : null
+  const score =
+    requiredYears <= 0
+      ? clamp(bestFactor > 0 ? bestFactor : 0.55)
+      : ratio !== null && ratio >= 1
+        ? 1
+        : clamp(Math.pow(ratio ?? 0, 1.35))
+
+  const evidence =
+    requiredYears > 0
+      ? `${relevantYears.toFixed(1)} relevant years toward ${requiredYears} required.`
+      : `${relevantYears.toFixed(1)} relevant years detected; no minimum stated.`
+
+  return {
+    score,
+    ratio,
+    relevantYears,
+    totalYears: resumeContext.years,
+    requiredYears,
+    evidence,
+  }
+}
+
+function buildCareerFit(
+  skills: SkillsScoreResult,
+  experience: RelevantExperienceResult,
+  seniority: ReturnType<typeof scoreSeniorityAlignment>,
+  title: ReturnType<typeof scoreTitle>,
+  domain: ReturnType<typeof scoreDomain>,
+  semantic: ReturnType<typeof scoreSemanticOverlap>,
+  certs: ReturnType<typeof scoreCerts>,
+  roleFamily: ReturnType<typeof scoreRoleFamilyFit>
+): CareerFitResult {
+  const atsScreenScore = Math.round(clamp(
+    skills.score * 0.55 +
+    semantic.score * 0.2 +
+    title.score * 0.15 +
+    certs.score * 0.1
+  ) * 100)
+
+  const careerFitScore = Math.round(clamp(
+    experience.score * 0.45 +
+    roleFamily.score * 0.25 +
+    domain.score * 0.15 +
+    seniority.score * 0.1 +
+    title.score * 0.05
+  ) * 100)
+
+  const label: CareerFitLabel =
+    careerFitScore >= 80 && atsScreenScore >= 75
+      ? "ats_ready"
+      : atsScreenScore >= 70 && careerFitScore >= 60
+        ? "tailor_resume"
+        : atsScreenScore >= 60
+          ? "bridge_first"
+          : "career_pivot"
+
+  const recommendation =
+    label === "ats_ready"
+      ? "Apply with light tailoring; the resume already shows role-specific evidence."
+      : label === "tailor_resume"
+        ? "Tailor the resume around recent role-specific proof before applying."
+        : label === "bridge_first"
+          ? "Build or foreground recent role-specific evidence before spending many applications here."
+          : "Treat this as a pivot; target adjacent stepping-stone roles or add proof in the missing domain first."
+
+  const requiredLabel =
+    experience.requiredYears > 0
+      ? ` of ${experience.requiredYears} required`
+      : ""
+
+  return {
+    atsScreenScore,
+    careerFitScore,
+    relevantYears: Number(experience.relevantYears.toFixed(1)),
+    totalYears: Number(experience.totalYears.toFixed(1)),
+    requiredYears: experience.requiredYears,
+    relevantYearsRatio:
+      experience.ratio == null ? null : Number(experience.ratio.toFixed(3)),
+    label,
+    recommendation,
+    evidence: [
+      `${experience.relevantYears.toFixed(1)} relevant${requiredLabel} years; ${experience.totalYears.toFixed(1)} total years.`,
+      roleFamily.evidence,
+      domain.evidence,
+    ],
+  }
+}
+
 function fieldRelevance(field: string, job: Job): number {
   const jobText = `${job.title} ${job.description ?? ""}`.toLowerCase()
   const f = (field ?? "").toLowerCase().trim()
@@ -1423,13 +1644,29 @@ export function getResumeVersion(resume: Resume): number {
 }
 
 function toResumeExperienceSnapshot(exp: WorkExperience): ResumeExperienceSnapshot {
+  const title = exp.title ?? ""
+  const description = exp.description ?? ""
+  const evidenceText = [
+    title,
+    description,
+    ...(exp.achievements ?? []),
+  ].join(" ")
+  const skillKeys = new Set(
+    normalizeSkillList(extractSkillsFromText(evidenceText), 24).map((skill) =>
+      normalizeSkillKey(canonicalizeSkill(skill))
+    )
+  )
+
   return {
-    title: exp.title,
-    titleTokens: titleTokens(exp.title),
-    seniorityTier: seniorityTier(exp.title),
-    descriptionLower: exp.description.toLowerCase(),
+    title,
+    titleTokens: titleTokens(title),
+    seniorityTier: seniorityTier(title),
+    descriptionLower: description.toLowerCase(),
+    skillKeys,
+    roleFamily: classifyRoleFamily(title, description),
     is_current: exp.is_current,
     endYear: extractYear(exp.end_date),
+    years: roleYears(exp),
   }
 }
 
@@ -1489,7 +1726,7 @@ export function buildFastScoreResumeContext(resume: Resume): FastScoreResumeCont
   // doesn't keep the candidate eligible for everything.
   const recentRoleFamilies = experienceByRecency
     .slice(0, 3)
-    .map((exp) => classifyRoleFamily(exp.title, exp.descriptionLower))
+    .map((exp) => exp.roleFamily)
 
   return {
     candidateSkillKeys,
@@ -1531,13 +1768,30 @@ export function computeFastScore({
   const certs      = scoreCerts(context, job)
   const semantic   = scoreSemanticOverlap(context, job)
   const roleFamily = scoreRoleFamilyFit(context, resume, job)
+  const relevantExperience = scoreRelevantExperience(
+    context,
+    jobForScoring,
+    skills.hardSkills,
+    roleFamily,
+    experience
+  )
+  const careerFit = buildCareerFit(
+    skills,
+    relevantExperience,
+    seniority,
+    title,
+    domain,
+    semantic,
+    certs,
+    roleFamily
+  )
   const sponsorship = getSponsorshipScore(profile, job)
   const seniorityGap = seniority.gap
 
   // Weighted sum → 0–100
   let overall = Math.round(
     skills.score     * W.skills     * 100 +
-    experience.score * W.experience * 100 +
+    relevantExperience.score * W.experience * 100 +
     seniority.score  * W.seniority  * 100 +
     title.score      * W.title      * 100 +
     education.score  * W.education  * 100 +
@@ -1574,7 +1828,7 @@ export function computeFastScore({
     const strongSameFamilyEvidence =
       hasLowSignalSkillSupport &&
       roleFamily.score >= 1 &&
-      experience.score >= 0.7 &&
+      relevantExperience.score >= 0.7 &&
       title.score >= 0.65 &&
       education.score >= 0.55
     const cap = strongSameFamilyEvidence ? 78 : 65
@@ -1597,7 +1851,7 @@ export function computeFastScore({
   }
 
   // Experience gate — tiered by how far under the stated requirement the
-  // candidate is, using the raw years ratio (candidate_years / required_years).
+  // candidate is, using raw total years first (candidate_years / required_years).
   // A real shortfall must keep a role out of the great-match band: a 5-year
   // candidate on an "8–10 years" role (ratio 0.62) is a "good", not "great",
   // fit no matter how well the other dimensions line up.
@@ -1610,6 +1864,19 @@ export function computeFastScore({
       // Meaningfully under the requirement — cap below the strong-match band.
       overall = Math.min(overall, 80)
       gatesTriggered.push("below_preferred_experience")
+    }
+  }
+
+  // Relevant-experience gate — catches the higher-value failure mode: the
+  // candidate has enough years overall and maybe enough keywords, but those
+  // years are not in or near the role's actual lane.
+  if (relevantExperience.requiredYears > 0 && relevantExperience.ratio != null) {
+    if (relevantExperience.ratio < 0.5) {
+      overall = Math.min(overall, 65)
+      gatesTriggered.push("insufficient_relevant_experience")
+    } else if (relevantExperience.ratio < 0.75) {
+      overall = Math.min(overall, 78)
+      gatesTriggered.push("limited_relevant_experience")
     }
   }
 
@@ -1675,6 +1942,8 @@ export function computeFastScore({
     gate === "missing_required_cert" ||
     gate === "missing_required_skills_gt75pct" ||
     gate === "insufficient_experience" ||
+    gate === "insufficient_relevant_experience" ||
+    gate === "limited_relevant_experience" ||
     gate === "extreme_seniority_mismatch" ||
     gate.startsWith("seniority_mismatch:") ||
     gate === "same_family_low_title_fit" ||
@@ -1690,7 +1959,7 @@ export function computeFastScore({
     !hasTopBandBlockingGate &&
     roleFamily.score >= 1 &&
     title.score >= 0.9 &&
-    experience.score >= 0.7 &&
+    relevantExperience.score >= 0.7 &&
     seniority.score >= 0.7 &&
     education.score >= 0.5 &&
     hasUsableSkillEvidence
@@ -1699,7 +1968,7 @@ export function computeFastScore({
     // Near-perfect evidence reaches into the 96–98 band so a truly exceptional
     // fit is visibly distinct from a merely strong one (which tops out ~92–95).
     const target =
-      skills.score >= 0.9 && experience.score >= 0.95 && title.score >= 0.9 && seniority.score >= 0.85
+      skills.score >= 0.9 && relevantExperience.score >= 0.95 && title.score >= 0.9 && seniority.score >= 0.85
         ? 98
         : skills.score >= 0.8
           ? 95
@@ -1746,9 +2015,11 @@ export function computeFastScore({
   overall = clamp(overall, 0, 100)
 
   const now = new Date().toISOString()
-  const confidence = skills.hardMissing.length === 0 && experience.score >= 0.8
+  const confidence = skills.hardMissing.length === 0 && relevantExperience.score >= 0.8 && careerFit.careerFitScore >= 75
     ? "high" as const
     : totalRequired === 0
+      ? "low" as const
+    : careerFit.careerFitScore < 50
       ? "low" as const
     : skills.hardMissing.length / Math.max(1, totalRequired) > 0.5
       ? "low" as const
@@ -1784,11 +2055,12 @@ export function computeFastScore({
     score_breakdown: {
       overallScore:        overall,
       skillsScore:         Math.round(skills.score * 100),
-      experienceScore:     Math.round(experience.score * 100),
+      experienceScore:     Math.round(relevantExperience.score * 100),
       seniorityScore:      Math.round(seniority.score * 100),
       roleFamilyScore:     Math.round(roleFamily.score * 100),
       roleFamily:          roleFamily.jobFamily,
       candidateRoleFamilies: roleFamily.candidateFamilies,
+      careerFit,
       domainScore:         Math.round(domain.score * 100),
       semanticScore:       Math.round(semantic.score * 100),
       certificationScore:  Math.round(certs.score * 100),
@@ -1809,6 +2081,9 @@ export function computeFastScore({
           : []),
         ...(skills.hardMissing.length > 0
           ? [`Missing ${skills.hardMissing.length} required skill${skills.hardMissing.length !== 1 ? "s" : ""}`]
+          : []),
+        ...(relevantExperience.requiredYears > 0 && relevantExperience.ratio != null && relevantExperience.ratio < 0.75
+          ? [careerFit.recommendation]
           : []),
         ...(roleFamily.score >= 1 && totalRequired > 0 && totalRequired < 5
           ? ["Sparse job-skill extraction; role-family evidence carried more weight."]
