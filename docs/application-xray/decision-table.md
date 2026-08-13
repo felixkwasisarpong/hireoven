@@ -729,7 +729,7 @@ Derivation, in order:
 5. No declaration; readable data searched, not found → `NOT_FOUND`.
 6. Data unreadable, or the requirement itself unparsed → `UNKNOWN`.
 
-The current branch contains `resolveRequirementPresence()` in
+**Implemented** as `resolveRequirementPresence()` in
 `lib/candidates/credential-declarations.ts`. The pure X-Ray milestone does not
 import the database-backed helper; it accepts evaluated requirement/declaration
 facts as input and applies the hard-skip gate in
@@ -769,12 +769,12 @@ cissp, ceh, ccna, ccnp, azure certified\*, google certified\*); it says nothing
 about how long any of them takes to obtain. So:
 
 - `credential_catalog` is unreachable in v0.
-- `candidate_declared` is the only reachable non-unknown source. The current
-  branch contains `scripts/migrations/add-candidate-credential-declarations.sql`
-  and `lib/candidates/credential-declarations.ts`, but this milestone does not
-  apply the migration or require the table. Pure fixtures may pass explicit
-  candidate-declared acquisition facts; production persistence is outside this
-  milestone.
+- `candidate_declared` is the only reachable non-unknown source, and it is now
+  backed by a real store: `candidate_credential_declarations`
+  (`scripts/migrations/add-candidate-credential-declarations.sql`), read through
+  `lib/candidates/credential-declarations.ts`. `expected_at` on a `held = false`
+  row is the sanctioned origin of `estimatedDays`, via
+  `declaredAcquisitionDays()`.
 - Everything else is `unknown`, and `RE4` therefore cannot fire without a
   candidate declaration.
 - **An LLM may not populate `estimatedDays` under any provenance.**

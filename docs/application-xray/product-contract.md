@@ -57,21 +57,21 @@ memory.
 | --- | --- | --- |
 | `lib/applications/statuses.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed | Present as an untracked file when this design work began; not authored here. Committed as `53868c61`, merged to `main` via PR #496, and confirmed present in `origin/main`. |
 | The `last_seen_at` fix in `lib/harvester/persist-bulk.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed and deployed | Present as an uncommitted diff when this work began; not authored here. Merged via #496 and verified running on both boxes. |
-| `scripts/migrations/add-candidate-credential-declarations.sql` | **BRANCH_PRESENT_NOT_APPLIED_BY_XRAY_CORE** | Present in the current branch. This milestone did not create or apply it. The pure X-Ray core accepts already-loaded declarations and does not depend on this table. |
-| `candidate_credential_declarations` (the table) | **MIGRATION_PRESENT_RUNTIME_STATE_NOT_ASSUMED** | The migration file exists in this branch, but this milestone performed no DB inspection or migration application. Production reachability must be feature-gated until deployment applies the migration. |
-| `lib/candidates/credential-declarations.ts` | **BRANCH_PRESENT_NOT_IMPORTED_BY_XRAY_CORE** | Present in the current branch. X-Ray mirrors the decision semantics through `lib/application-xray/requirements.ts` and receives evaluated declarations as input fixtures. |
-| `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO` | **BRANCH_PRESENT_UPSTREAM_INPUT_ONLY** | Present in the current branch. X-Ray does not import it; it receives `lastSeenAtTrustworthy` and `lastSeenEpochIso` as explicit structured input. |
+| `scripts/migrations/add-candidate-credential-declarations.sql` | **REPO_PRESENT_NOT_APPLIED_BY_XRAY_CORE** | Present after the prerequisite merge. The pure X-Ray core accepts already-loaded declarations and does not depend on this table. Runtime availability still depends on the deployment applying the migration. |
+| `candidate_credential_declarations` (the table) | **MIGRATION_PRESENT_RUNTIME_STATE_NOT_ASSUMED** | The migration file exists, but this milestone performed no DB inspection or manual migration application. Production reachability must be feature-gated until deployment applies the migration. |
+| `lib/candidates/credential-declarations.ts` | **REPO_PRESENT_NOT_IMPORTED_BY_XRAY_CORE** | Present after the prerequisite merge. X-Ray mirrors the decision semantics through `lib/application-xray/requirements.ts` and receives evaluated declarations as input fixtures. |
+| `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO` | **REPO_PRESENT_UPSTREAM_INPUT_ONLY** | Present after the prerequisite merge. X-Ray does not import it; it receives `lastSeenAtTrustworthy` and `lastSeenEpochIso` as explicit structured input. |
 | `lib/matching/fast-scorer.ts`, `lib/jobs/metadata.ts`, `lib/jobs/ghost-job-risk.ts`, `lib/health/score-computer.ts`, `lib/networking/job-contact-finder.ts`, `app/api/jobs/[id]/ghost-risk/route.ts` and every other module cited as evidence | **VERIFIED_EXISTING_BEFORE_THIS_DESIGN** | Read directly; unmodified by this work. |
 
 **Disclosure.** The original brief said not to implement production code. That
 held through the design passes. This document has since been updated during the
-pure-core implementation milestone. Production application surfaces, API
-routes, background jobs and migrations remain untouched; new implementation
-code is isolated under `lib/application-xray/`.
+pure-core, authenticated API, and job-detail UI implementation milestones. The
+pure core remains isolated under `lib/application-xray/`; production integration
+surfaces load and render it without moving database access into the core.
 
 **Consequence for implementation.** Application X-Ray may accept declaration
-facts as structured input. It must not require the declaration table at runtime
-until a later integration milestone verifies the migration is deployed.
+facts as structured input. It must not require direct declaration-table access
+inside the pure core.
 
 ---
 
@@ -625,11 +625,10 @@ a projection of the same object, never an independent computation.
 2. Claim-level evidence verification (needs a claim ↔ source-span table).
 3. JD-change detection and true repost cycles (needs a JD-history table).
 4. **A credential acquirability catalog.** Until one exists, acquirability is
-   `unknown` unless the candidate declares it. The current branch contains the
-   declaration migration and helper module, but this milestone neither applies
-   the migration nor depends on the table. `RE4` is contract-representable and
-   reachable in pure fixtures through explicit candidate input; production
-   persistence is a later integration task.
+   `unknown` unless the candidate declares it. The declaration path *is* built
+   (`candidate_credential_declarations` +
+   `lib/candidates/credential-declarations.ts`), so `RE4` is reachable — but
+   only through an explicit candidate answer, never an estimate of ours.
 5. Cross-employer or cohort benchmarking ("candidates like you").
 6. Salary negotiation guidance. LCA wages are a legal floor, not a market rate;
    salary is displayed context only.
