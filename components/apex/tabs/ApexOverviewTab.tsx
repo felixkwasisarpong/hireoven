@@ -264,7 +264,6 @@ export function ApexOverviewTab({
   const { showUpgrade } = useUpgradeModal()
   const inputRef = useRef<HTMLInputElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
-  const topNudges = nudges.slice(0, 3)
 
   return (
     <div className="space-y-6">
@@ -421,28 +420,10 @@ export function ApexOverviewTab({
         </section>
       )}
 
-      {/* Top nudges */}
-      {!hasConversation && !isLoading && topNudges.length > 0 && (
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-400">Top Nudges</p>
-              <p className="mt-0.5 text-xs text-slate-500">Small moves Apex thinks are worth your attention.</p>
-            </div>
-            <button type="button" className="text-[11px] font-bold text-orange-600 hover:underline">
-              View all
-            </button>
-          </div>
-          <TopNudgesGrid nudges={topNudges} />
-        </section>
-      )}
-
-      {/* Next moves */}
-      {!isLoading && (
-        <section>
-          <NextMovesRow board={strategyBoard} isLoading={strategyLoading} />
-        </section>
-      )}
+      {/* Lean landing: Top Nudges and Next Moves were extra boxes on the agent
+          screen. Next Moves lives in the Strategy tab; nudges are reachable from
+          there too. Keeping the landing chat-first (ask box + conversation +
+          receipts). */}
     </div>
   )
 }
