@@ -40,8 +40,20 @@
  *
  * Leave it `null` until then. Null means every row is untrusted, which costs
  * signal but cannot produce a false "this job is gone".
+ *
+ * ─── SET 2026-08-13 ──────────────────────────────────────────────────────────
+ *
+ * Deploy verified on both boxes, not merely assumed from a merge:
+ *   - PR #496 squash-merged to main at 15:03:22Z (commit 3f7466a7).
+ *   - Web box 5.161.53.248, container up 15:20:45Z. The fix is present in the
+ *     running bundle at /app/.next/server/app/api/crawl/route.js.
+ *   - Harvester box 178.156.192.2, image built 15:11:57Z, container up
+ *     15:23:28Z. The fix is present in the running
+ *     /app/lib/harvester/persist-bulk.ts.
+ *
+ * Later of the two is the harvester at 15:23:28Z, rounded up to the next hour.
  */
-export const HARVESTER_LAST_SEEN_EPOCH_ISO: string | null = null
+export const HARVESTER_LAST_SEEN_EPOCH_ISO: string | null = "2026-08-13T16:00:00.000Z"
 
 export const HARVESTER_LAST_SEEN_EPOCH_MS: number | null =
   HARVESTER_LAST_SEEN_EPOCH_ISO === null ? null : Date.parse(HARVESTER_LAST_SEEN_EPOCH_ISO)
