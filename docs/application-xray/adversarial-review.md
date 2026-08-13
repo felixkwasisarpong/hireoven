@@ -708,7 +708,7 @@ arbitrariness, not hidden arbitrariness.
 | 17 | `FAST_SCORE_CACHE_EPOCH_ISO` folded into `inputsHash` | Yes |
 | 18 | Static check: no diversity-column reads; no `calculateApplicationVerdict` import | Yes |
 | 19 | Every `SKIP` carries ≥1 forward action (§12.1) | Yes |
-| 20 | Declaration store is per-credential and reversible (§13.1, §13.2) | Yes |
+| 20 | ~~Declaration store is per-credential and reversible~~ — **built**: `scripts/migrations/add-candidate-credential-declarations.sql` + `lib/candidates/credential-declarations.ts` (§13.1, §13.2) | Done |
 | 21 | `probeApplyUrl` 401/403 reclassified as `unknown` | No — X-Ray's caveat covers it; fix separately |
 | 22 | `must possess valid work authorization` pattern tightened in `lib/jobs/metadata.ts` | No — X-Ray re-derives; fix separately |
 | 23 | Remaining status-vocabulary consumers migrated; `application_timing_signals` recomputed | No — not a v0 decision input |

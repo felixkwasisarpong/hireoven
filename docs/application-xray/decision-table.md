@@ -592,6 +592,14 @@ Derivation, in order:
 5. No declaration; readable data searched, not found → `NOT_FOUND`.
 6. Data unreadable, or the requirement itself unparsed → `UNKNOWN`.
 
+**Implemented** as `resolveRequirementPresence()` in
+`lib/candidates/credential-declarations.ts`, with `supportsHardSkip()` as the
+single gate `RC3` reads. One asymmetry the implementation encodes and step 2
+above glosses: a declaration of "I hold it" against a résumé that omits it is
+`PRESENT`, not `CONTRADICTED` — silence is not a competing claim. Only a
+declaration of "I do **not** hold it" against positive document evidence is a
+contradiction.
+
 `supportsHardSkip` is true only for `ABSENT_CONFIRMED`, or `CONTRADICTED` at
 `declaration_vs_structured_field` reliability. `NOT_FOUND` and `UNKNOWN` can
 never make it true. This is the correction: a résumé that omits a CPA is not
@@ -622,7 +630,12 @@ cissp, ceh, ccna, ccnp, azure certified\*, google certified\*); it says nothing
 about how long any of them takes to obtain. So:
 
 - `credential_catalog` is unreachable in v0.
-- `candidate_declared` is the only reachable non-unknown source.
+- `candidate_declared` is the only reachable non-unknown source, and it is now
+  backed by a real store: `candidate_credential_declarations`
+  (`scripts/migrations/add-candidate-credential-declarations.sql`), read through
+  `lib/candidates/credential-declarations.ts`. `expected_at` on a `held = false`
+  row is the sanctioned origin of `estimatedDays`, via
+  `declaredAcquisitionDays()`.
 - Everything else is `unknown`, and `RE4` therefore cannot fire without a
   candidate declaration.
 - **An LLM may not populate `estimatedDays` under any provenance.**

@@ -552,8 +552,10 @@ a projection of the same object, never an independent computation.
 2. Claim-level evidence verification (needs a claim ↔ source-span table).
 3. JD-change detection and true repost cycles (needs a JD-history table).
 4. **A credential acquirability catalog.** Until one exists, acquirability is
-   `unknown` unless the candidate declares it, and `RE4` is effectively
-   unreachable.
+   `unknown` unless the candidate declares it. The declaration path *is* built
+   (`candidate_credential_declarations` +
+   `lib/candidates/credential-declarations.ts`), so `RE4` is reachable — but
+   only through an explicit candidate answer, never an estimate of ours.
 5. Cross-employer or cohort benchmarking ("candidates like you").
 6. Salary negotiation guidance. LCA wages are a legal floor, not a market rate;
    salary is displayed context only.
