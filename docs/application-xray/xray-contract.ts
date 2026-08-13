@@ -1,73 +1,88 @@
 /**
- * Application X-Ray — PROPOSED type contract (design document, not production).
- * Revision 2. Supersedes revision 1 in full.
+ * Application X-Ray — PROPOSED TypeScript contract.
+ * Revision 2, final correction pass. Supersedes all earlier revisions.
  *
- * This file is a proposal. It does NOT modify `types/index.ts`. It is type-only
- * so it compiles under the repo's `tsc --noEmit` (tsconfig includes `**\/*.ts`)
- * without adding runtime surface area.
+ * STATUS: design document. This file is not wired into the application and does
+ * not modify `types/index.ts`. It is deliberately SELF-CONTAINED — it imports
+ * nothing, so it compiles in isolation under `tsc --noEmit --strict`, and a
+ * reviewer can read it without the rest of the repository. The handful of types
+ * mirrored from `types/index.ts` are marked as such and must be kept in step if
+ * this is ever promoted into the app.
  *
- * ─── What changed in revision 2 ────────────────────────────────────────────
+ * ─── Corrections applied in this pass ──────────────────────────────────────
  *
- *  R2-1  Duplicate resolution moved OUT of the decision table and INTO
- *        preprocessing (`CanonicalResolution`). A duplicate can never itself
- *        return an action.
- *  R2-2  Boolean `candidateHas` replaced by `RequirementPresence`
- *        (PRESENT | ABSENT_CONFIRMED | NOT_FOUND | CONTRADICTED | UNKNOWN).
- *        Only ABSENT_CONFIRMED, or CONTRADICTED at high reliability, may
- *        support a requirement-based SKIP.
- *  R2-3  Requirement strength is tri-state + provenance-aware
- *        (`RequirementStrength` × `RequirementStrengthProvenance`). An LLM
- *        extraction alone can never establish MANDATORY_EXPLICIT.
- *  R2-4  Acquirability requires a source (`AcquirabilitySource`). No credential
- *        catalog exists in this repository, so v0 resolves to UNKNOWN unless
- *        the candidate declares it. An LLM may not estimate acquisition time.
- *  R2-5  `ActionableAccessRoute` replaces statistical referral gating. FIND_ACCESS
- *        fires only on a route with a named person or concrete channel.
- *        Referral-rate statistics are advisory only.
- *  R2-6  Eligibility bands are observational, never legal
- *        (`EligibilityObservationBand`).
- *  R2-7  Candidate work authorization is a TIMELINE
- *        (`CandidateAuthorizationTimeline`), and posting language is
- *        categorized (`PostingAuthorizationLanguageCategory`). "On OPT" no
- *        longer implies "needs sponsorship now".
- *  R2-8  Evidence separates not-found / confirmed-absent / contradicted /
- *        unreadable (`EvidenceAbsenceKind`), and evidence absence can never
- *        establish capability absence.
- *  R2-9  Precedence stages renamed to A–I to match the prose exactly.
+ *  C2  Generic no-sponsorship language no longer implies "current only".
+ *      Without temporal wording it is SPONSORSHIP_SCOPE_AMBIGUOUS.
+ *  C3  Authorization is expressed against the TARGET EMPLOYER, not as a
+ *      candidate attribute: canWorkForTargetEmployerWithoutNewImmigrationAction.
+ *  C4  A single futureActionType is replaced by an ordered
+ *      futureEmployerActions[], each with its own status, source and gaps.
+ *  C5  E-Verify participation is four-state; "not found in source" is not
+ *      "not enrolled".
+ *  C6  The duplicated NO_CURRENT_SPONSORSHIP mapping is dissolved by C2.
+ *  C7  Unreadable résumé + unconfirmed requirement resolves to one information
+ *      state carrying both unblock actions.
  *
- * ─── Invariants encoded here ───────────────────────────────────────────────
+ * ─── Invariants encoded structurally ──────────────────────────────────────
  *
  *  1. Every finding declares `basis` and `confidence`. There is no default.
- *  2. `UNKNOWN` / `NOT_FOUND` are first-class and never become negative facts.
- *  3. Capability, Evidence, Eligibility, Positioning and Hiring Reality never
- *     read each other's raw scores.
- *  4. ATS screen fit lives in Positioning; career fit lives in Capability.
- *  5. Observed posting language is structurally separate from probabilistic
- *     employer history. Only the former can produce a conflict band.
- *  6. No numeric interview/offer probability exists anywhere in this contract.
- *  7. `decisionTrace` must be sufficient to replay the action from bands and
- *     gates alone, with no I/O and no model call.
+ *  2. UNKNOWN / NOT_FOUND are first-class and never become negative facts.
+ *  3. The five dimensions never read each other's raw scores.
+ *  4. ATS screen fit is Positioning; career fit is Capability.
+ *  5. Observed posting language is separate from probabilistic employer
+ *     history. Only the former can produce a conflict band.
+ *  6. No numeric interview/offer probability is representable.
+ *  7. `decisionTrace` alone must be sufficient to replay the action.
  */
 
-import type {
-  ApplicationStatus,
-  AtsType,
-  CapExemptSignal,
-  IntelligenceConfidence,
-  IntelligenceRiskLevel,
-  VisaStatus,
-  WorkAuthorization,
-} from "@/types"
+// ═══════════════════════════════════════════════════════════════════════════
+// 0. Types mirrored from types/index.ts
+//    Duplicated deliberately so this file stands alone. If promoted, delete
+//    these and import from "@/types" instead.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type IntelligenceConfidence = "high" | "medium" | "low" | "unknown"
+export type IntelligenceRiskLevel = "low" | "medium" | "high" | "unknown"
+
+export type AtsType =
+  | "greenhouse" | "lever" | "ashby" | "workday" | "icims" | "smartrecruiters"
+  | "bamboohr" | "jobvite" | "taleo" | "successfactors" | "recruitee"
+  | "teamtailor" | "workable" | "rippling" | "custom" | "unknown"
+
+export type ApplicationStatus =
+  | "saved" | "applied" | "phone_screen" | "interview"
+  | "final_round" | "offer" | "rejected" | "withdrawn"
+
+/** `profiles.visa_status`. Note it has 'citizen' and no 'tn_visa'. */
+export type VisaStatus = "opt" | "stem_opt" | "h1b" | "citizen" | "green_card" | "other"
+
+/** `autofill_profiles.work_authorization`. Note it has 'us_citizen' and
+ *  'tn_visa' — the two vocabularies genuinely disagree and must be normalized. */
+export type WorkAuthorization =
+  | "us_citizen" | "green_card" | "h1b" | "opt" | "stem_opt"
+  | "tn_visa" | "other" | "require_sponsorship"
+
+export type CapExemptCategory =
+  | "higher_education" | "nonprofit_research" | "government_research"
+  | "affiliated_nonprofit" | "academic_medical_center" | "national_laboratory"
+  | "unknown"
+
+export type CapExemptSignal = {
+  isLikelyCapExempt: boolean | null
+  category: CapExemptCategory
+  confidence: IntelligenceConfidence
+  evidence: string[]
+  summary: string | null
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 1. Primitives
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The five terminal states. `INSUFFICIENT_DATA` is a deliberate addition to the
+ * The five terminal states. INSUFFICIENT_DATA is a deliberate addition to the
  * four required actions: without it, "we do not know" must masquerade as a
- * judgment. It maps to the existing `ApplicationVerdict.verdict` value
- * `"Unknown"` for backwards compatibility.
+ * judgment. It maps to the existing ApplicationVerdict value "Unknown".
  */
 export type XRayFinalAction =
   | "APPLY_NOW"
@@ -76,45 +91,45 @@ export type XRayFinalAction =
   | "SKIP"
   | "INSUFFICIENT_DATA"
 
-/** Structurally identical to `IntelligenceConfidence`, aliased so X-Ray reads
- *  standalone and a future divergence is a one-line change. */
-export type XRayConfidence = IntelligenceConfidence // 'high' | 'medium' | 'low' | 'unknown'
+export type XRayConfidence = IntelligenceConfidence
 
-/** What kind of statement a finding is. Governs the verbs the UI may use.
- *  `recommendation` deliberately does not appear on `XRaySourceFact` — that is
- *  the circularity guard: a recommendation can never become evidence. */
+/**
+ * What kind of statement a finding is; governs the verbs the UI may use.
+ * There is deliberately no `recommendation` member — that is the circularity
+ * guard, and it is enforced by the type rather than by review.
+ */
 export type XRayBasis = "fact" | "inference" | "prediction"
 
-/** Where a fact physically came from. Names the reader, not the topic. */
 export type XRaySourceKind =
-  | "job_row"                 // jobs.*
-  | "job_description_text"    // literal span of jobs.description
-  | "job_normalization"       // raw_data.normalized / structured_job / view
-  | "ats_metadata"            // raw_data.raw from the adapter
-  | "company_row"             // companies.*
-  | "company_health"          // company_health_scores
-  | "company_layoffs"         // company_layoff_summary / company_news_signals
-  | "crawl_signal"            // crawl_logs, companies.last_crawled_at, freshness tiers
-  | "ghost_score_cache"       // ghost_job_scores
-  | "url_probe"               // probeApplyUrl — CAVEAT: maps 401/403 to "dead"
-  | "match_score_cache"       // job_match_scores.score_breakdown
-  | "resume_row"              // resumes.*
-  | "resume_parse"            // parsed structures from parseResume
-  | "resume_raw_text"         // resumes.raw_text
-  | "tailor_analysis"         // buildLocalTailorAnalysis / resume_tailoring_analyses
-  | "positioning_brief"       // buildPositioningBrief / field_skill_profiles
-  | "candidate_profile"       // profiles.*
-  | "autofill_profile"        // autofill_profiles.*
-  | "candidate_declaration"   // an explicit answer the candidate gave X-Ray
-  | "credential_catalog"      // a curated acquirability catalog — DOES NOT EXIST YET
-  | "networking_contacts"     // lib/networking/job-contact-finder.ts
-  | "lca_history"             // LCA / H1B tables
-  | "h1b_prediction"          // predictForJob / predictH1BApproval
-  | "rejection_reports"       // rejection_patterns — advisory only in v0
-  | "application_history"     // job_applications (this user)
-  | "timing_signals"          // application_timing_signals
-  | "llm_extraction"          // model-extracted requirement or phrasing
-  | "system_default"          // an engine constant, not observed data
+  | "job_row"
+  | "job_description_text"
+  | "job_normalization"
+  | "ats_metadata"
+  | "company_row"
+  | "company_health"
+  | "company_layoffs"
+  | "crawl_signal"
+  | "ghost_score_cache"
+  | "url_probe"
+  | "match_score_cache"
+  | "resume_row"
+  | "resume_parse"
+  | "resume_raw_text"
+  | "tailor_analysis"
+  | "positioning_brief"
+  | "candidate_profile"
+  | "autofill_profile"
+  | "candidate_declaration"
+  | "credential_catalog"
+  | "networking_contacts"
+  | "everify_source"
+  | "lca_history"
+  | "h1b_prediction"
+  | "rejection_reports"
+  | "application_history"
+  | "timing_signals"
+  | "llm_extraction"
+  | "system_default"
 
 export type XRayDimensionKey =
   | "hiringReality"
@@ -123,51 +138,29 @@ export type XRayDimensionKey =
   | "eligibility"
   | "positioning"
 
-/**
- * One provenance record. Findings do not embed values; they point at these by
- * `id`, so an observation used by two dimensions is stored once and is
- * auditable for double-counting.
- */
 export type XRaySourceFact = {
   id: string
   kind: XRaySourceKind
   basis: XRayBasis
   confidence: XRayConfidence
-
-  /** Machine label, e.g. "job.is_active", "careerFit.relevantYears". */
   key: string
-  /** Value as stored. `null` means observed-as-null, not "missing" — a missing
-   *  input produces no fact at all, only an `XRayDataGap`. */
   value: string | number | boolean | null
-  /** Literal source span when `kind` is a text reader. Never paraphrased.
-   *  REQUIRED when this fact backs a `PostingAuthorizationRequirement` or a
-   *  `MANDATORY_EXPLICIT` requirement. */
+  /** Literal source span. REQUIRED when this fact backs a
+   *  PostingAuthorizationRequirement or a MANDATORY_EXPLICIT requirement. */
   excerpt?: string | null
-
   observedAt: string | null
   computedAt: string | null
-
-  /** REQUIRED when `basis === "prediction"`. A prediction without a sample is
+  /** REQUIRED when basis === "prediction". A prediction without a sample is
    *  dropped, not downgraded. */
   sampleSize?: number | null
   sampleWindow?: string | null
-
   explanation: string
-  /** Dimensions permitted to consume this fact. The engine rejects a finding
-   *  citing a fact outside its own dimension — the double-count guard. */
+  /** Dimensions permitted to consume this fact — the double-count guard. */
   usableBy: XRayDimensionKey[]
-
-  /** Known reliability caveat, rendered on expand. */
   caveat?: string | null
 }
 
-export type XRayGapSeverity =
-  /** Blocks a whole dimension → that dimension is UNKNOWN. */
-  | "dimension_blocking"
-  /** Would likely change the action if known. Caps overall confidence. */
-  | "decision_relevant"
-  /** Reduces detail only. */
-  | "cosmetic"
+export type XRayGapSeverity = "dimension_blocking" | "decision_relevant" | "cosmetic"
 
 export type XRayDataGap = {
   id: string
@@ -175,8 +168,8 @@ export type XRayDataGap = {
   severity: XRayGapSeverity
   label: string
   missingField: string
-  /** Why we cannot substitute a default. Must explicitly rule out the
-   *  "unknown became false" trap where the column has a non-null default. */
+  /** Must explicitly rule out the "unknown became false" trap where the
+   *  underlying column has a non-null default. */
   whyNotDefaulted: string
   resolution?: {
     actor: "candidate" | "hireoven" | "employer"
@@ -189,7 +182,7 @@ export type XRayFinding = {
   statement: string
   basis: XRayBasis
   confidence: XRayConfidence
-  /** Direction within the dimension. UNKNOWN is NOT `limiting`. */
+  /** UNKNOWN is not `limiting`. */
   impact: "supporting" | "limiting" | "neutral" | "unknown"
   sourceFactIds: string[]
   explanation: string
@@ -204,47 +197,33 @@ export type XRayDimension<TBand extends string> = {
   dataGaps: XRayDataGap[]
   oldestInputObservedAt: string | null
   computedAt: string
-  /** True when a staleness threshold widened the band toward uncertainty
-   *  rather than trusting the stale input. Never widens toward the negative. */
+  /** True when staleness widened the band toward uncertainty. Never widens
+   *  toward the negative end. */
   staleInputsDowngraded: boolean
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 2. Stage A — canonical resolution (PREPROCESSING, not a decision)
+// 2. Stage A — canonical resolution (preprocessing, never selects an action)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * R2-1. A duplicate row is resolved to its canonical job BEFORE any dimension
- * is computed. The entire X-Ray then runs against the canonical job. A
- * duplicate can never independently produce APPLY_NOW — it produces the
- * canonical job's answer, whatever that is (including SKIP).
- *
- * If the canonical row cannot be resolved (dangling `duplicate_of_id`, or the
- * canonical is itself hidden/invalid), the engine does NOT fall back to the
- * duplicate. It reports `unresolved` and Hiring Reality becomes UNKNOWN.
- */
 export type CanonicalResolutionOutcome =
-  | "not_a_duplicate"        // requestedJobId is canonical
-  | "resolved"               // followed duplicate_of_id to a usable canonical row
-  | "unresolved_dangling"    // duplicate_of_id points at a missing row
-  | "unresolved_chain_limit" // duplicate chain exceeded the hop limit
-  | "unresolved_canonical_invalid" // canonical is hidden_invalid / not readable
+  | "not_a_duplicate"
+  | "resolved"
+  | "unresolved_dangling"
+  | "unresolved_chain_limit"
+  | "unresolved_canonical_invalid"
 
 export type CanonicalResolution = {
   requestedJobId: string
-  /** The job every dimension was actually computed against. Equals
-   *  `requestedJobId` when `outcome === "not_a_duplicate"`. */
+  /** The job every dimension was computed against. */
   evaluatedJobId: string | null
   outcome: CanonicalResolutionOutcome
-  /** Hops followed through `jobs.duplicate_of_id`. Bounded (recommend 3). */
   hops: number
-  /** Set when the apply URL the user should use differs from the one on the
-   *  requested row — drives the `apply_to_canonical_posting` action. */
   canonicalApplyUrl: string | null
   requestedApplyUrl: string | null
   applyUrlDiffers: boolean
   sourceFactIds: string[]
-  /** User-facing note, required whenever `outcome !== "not_a_duplicate"`. */
+  /** Required whenever outcome !== "not_a_duplicate". */
   note: string | null
 }
 
@@ -253,86 +232,46 @@ export type CanonicalResolution = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * R2-2. What we know about whether the candidate has a requirement.
- *
- * The critical distinction is NOT_FOUND vs ABSENT_CONFIRMED. Not finding a
- * credential on a resume is a statement about the DOCUMENT, not the person.
- * Résumés omit credentials constantly, and `resumes.skills.certifications`
- * is only as complete as the parse.
+ * NOT_FOUND is a statement about a document; ABSENT_CONFIRMED is a statement
+ * about a person. Only the second may drive a negative decision.
  */
 export type RequirementPresence =
-  /** Observed in the resume, a parsed field, or a candidate declaration. */
   | "PRESENT"
-  /** The candidate explicitly told us they do not have it. */
   | "ABSENT_CONFIRMED"
-  /** We looked and did not find it. NOT evidence of absence. */
   | "NOT_FOUND"
-  /** Two candidate-sourced statements conflict (e.g. a declaration says absent
-   *  while the resume lists it). Requires both spans. */
   | "CONTRADICTED"
-  /** We could not look — resume unreadable, or the requirement is unparsed. */
   | "UNKNOWN"
 
-/** How a CONTRADICTED state was reached, and whether it is decision-grade. */
 export type ContradictionReliability =
-  /** Candidate declaration vs. a parsed structured field. Decision-grade. */
   | "declaration_vs_structured_field"
-  /** Candidate declaration vs. free-text mention only. Not decision-grade. */
   | "declaration_vs_free_text"
-  /** Two free-text mentions disagree. Never decision-grade. */
   | "free_text_internal"
 
-/**
- * R2-3. How firmly the posting states the requirement.
- * `INFERRED` covers anything we derived rather than read as an explicit
- * "required" / "must have" / "minimum" statement.
- */
 export type RequirementStrength =
   | "MANDATORY_EXPLICIT"
   | "PREFERRED_EXPLICIT"
   | "INFERRED"
   | "UNKNOWN"
 
-/**
- * Where the strength classification came from. An LLM extraction alone can
- * NEVER establish MANDATORY_EXPLICIT — `llm_only` caps strength at INFERRED.
- * Deterministic patterns in the repo that qualify as `deterministic_pattern`:
- * `CERT_REQUIRED_RE` (which requires "required|must have|minimum" before the
- * credential token) and the requirements-section extractor in
- * `extractRequirementsText`.
- */
+/** `llm_only` caps strength at INFERRED, always. */
 export type RequirementStrengthProvenance =
-  /** Matched a deterministic pattern anchored on explicit requirement wording. */
   | "deterministic_pattern"
-  /** Read from a structured ATS field that names it as required. */
   | "structured_ats_field"
-  /** Appeared under a requirements-section header with mandatory phrasing. */
   | "section_header_plus_pattern"
-  /** Model extraction only. Caps strength at INFERRED. */
   | "llm_only"
-  /** Nothing established it. */
   | "none"
 
 /**
- * R2-4. Whether the candidate could obtain a missing credential in time, and
- * on whose authority.
- *
- * THIS REPOSITORY HAS NO CREDENTIAL CATALOG. `CERT_REQUIRED_RE` in
- * `lib/matching/fast-scorer.ts` is an extraction regex over a closed token set
- * (aws certified*, cka, ckad, cks, pmp, cissp, ceh, ccna, ccnp, azure
- * certified*, google certified*); it says nothing about how long any of them
- * takes to obtain. So `catalog` is unreachable until such a table exists, and
- * v0 resolves to `unknown` unless the candidate declares a date.
- *
- * An LLM may not populate this field under any provenance.
+ * No credential catalog exists in this repository, so `credential_catalog` is
+ * unreachable in v0 and `candidate_declared` is the only non-unknown source.
+ * A model may never populate this.
  */
 export type AcquirabilitySource = "candidate_declared" | "credential_catalog" | "unknown"
 
 export type RequirementAcquirability = {
   source: AcquirabilitySource
-  /** Only meaningful when `source !== "unknown"`. Never model-estimated. */
+  /** Only meaningful when source !== "unknown". Never model-estimated. */
   estimatedDays: number | null
-  /** Free-text detail from the candidate, when they declared it. */
   candidateNote: string | null
   sourceFactIds: string[]
 }
@@ -347,11 +286,11 @@ export type RequirementKind =
   | "language"
   | "other"
 
-/**
- * One posting requirement, evaluated against the candidate. The three axes —
- * strength (posting side), presence (candidate side), acquirability (repair
- * side) — are independent and must never be collapsed into a boolean.
- */
+export type CredentialSearchLocation =
+  | "structured_field"
+  | "raw_text"
+  | "candidate_declaration"
+
 export type EvaluatedRequirement = {
   id: string
   kind: RequirementKind
@@ -359,14 +298,13 @@ export type EvaluatedRequirement = {
 
   strength: RequirementStrength
   strengthProvenance: RequirementStrengthProvenance
-  /** Literal posting span. REQUIRED when strength is MANDATORY_EXPLICIT. */
+  /** REQUIRED when strength is MANDATORY_EXPLICIT. */
   strengthExcerpt: string | null
 
   presence: RequirementPresence
-  /** Set only when `presence === "CONTRADICTED"`. */
+  /** Set only when presence === "CONTRADICTED". */
   contradictionReliability: ContradictionReliability | null
-  /** Where in the candidate's data we looked, so the UI can say what it read. */
-  searchedIn: Array<"structured_field" | "raw_text" | "candidate_declaration">
+  searchedIn: CredentialSearchLocation[]
 
   acquirability: RequirementAcquirability
 
@@ -374,14 +312,11 @@ export type EvaluatedRequirement = {
   confidence: XRayConfidence
 
   /**
-   * Derived, and the ONLY field the decision table reads for a hard skip.
-   * True requires ALL of:
-   *   strength === "MANDATORY_EXPLICIT"
-   *   strengthProvenance !== "llm_only"
-   *   presence === "ABSENT_CONFIRMED"
-   *     OR (presence === "CONTRADICTED"
-   *         AND contradictionReliability === "declaration_vs_structured_field")
-   *   acquirability.source !== "candidate_declared" with estimatedDays inside window
+   * The ONLY field the decision table reads for a requirement-based SKIP.
+   * True requires ALL of: MANDATORY_EXPLICIT strength; provenance that is
+   * neither llm_only nor none; presence ABSENT_CONFIRMED, or CONTRADICTED at
+   * declaration_vs_structured_field reliability; and no candidate-declared
+   * acquisition inside the opportunity window.
    * NOT_FOUND and UNKNOWN can never make this true.
    */
   supportsHardSkip: boolean
@@ -392,72 +327,62 @@ export type EvaluatedRequirement = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export type HiringRealityBand =
-  | "LIVE"           // definitive: active, published, board checked recently
-  | "LIKELY_LIVE"    // active + published, verification indirect or stale
-  | "UNCERTAIN"      // conflicting signals
-  | "LIKELY_CLOSED"  // strong but non-definitive closure signals
-  | "CLOSED"         // definitive: is_active=false + closed_at, or hidden_expired
+  | "LIVE"
+  | "LIKELY_LIVE"
+  | "UNCERTAIN"
+  | "LIKELY_CLOSED"
+  | "CLOSED"
   | "UNKNOWN"
 
 export type JobIngestionPath = "harvester" | "legacy_crawler" | "aggregator" | "unknown"
+
+export type ApplyUrlProbeStatus = "ok" | "dead" | "redirect" | "unknown"
 
 export type JobAvailabilityEvidence = {
   isActive: boolean | null
   publicationStatus: string | null
   closedAt: string | null
-  /**
-   * False for `legacy_crawler` rows: `lib/crawler/persist.ts` sets
-   * is_active=false without reliably setting closed_at or publication_status,
-   * so a null closed_at there does not mean "still open".
-   */
+  /** False for legacy_crawler rows, which deactivate without reliably setting
+   *  closed_at or publication_status. */
   closedAtReliable: boolean
 
-  /** jobs.first_detected_at. There is no jobs.first_seen_at column. */
   firstDetectedAt: string | null
   ageDays: number | null
 
   lastSeenAt: string | null
-  /**
-   * `persistJobsBulk` historically updated rows only when content_hash changed,
-   * so an unchanged live harvester job kept a stale last_seen_at. A working-tree
-   * fix now also writes when `jobs.last_seen_at < EXCLUDED.last_seen_at`, but it
-   * is FORWARD-ONLY: rows not re-harvested since the fix still carry pre-fix
-   * values. Trust requires `last_seen_at >= lastSeenEpochIso`.
-   */
+  /** Requires lastSeenAt >= lastSeenEpochIso for harvester-path rows. */
   lastSeenAtTrustworthy: boolean
   lastSeenEpochIso: string | null
   ingestionPath: JobIngestionPath
 
-  /** companies.last_crawled_at — the board-level "we checked" proxy. */
   boardLastCheckedAt: string | null
-  /** A stale board check caps the band at LIKELY_LIVE. It can never push
-   *  toward LIKELY_CLOSED: not-checked is not evidence of closure. */
+  /** Caps the band at LIKELY_LIVE. Can never push toward LIKELY_CLOSED —
+   *  not-checked is not evidence of closure. */
   boardCheckIsStale: boolean
 
-  /** CAVEAT: probeApplyUrl maps HTTP 401 and 403 to "dead", and 403 is the
-   *  routine answer many ATS give a bot HEAD request. Inference, never fact. */
-  applyUrlStatus: "ok" | "dead" | "redirect" | "unknown"
+  /** CAVEAT: the probe maps HTTP 401/403 to "dead", and 403 is the routine
+   *  answer many ATS give a bot HEAD request. Inference, never fact. */
+  applyUrlStatus: ApplyUrlProbeStatus
   applyUrlProbedAt: string | null
 }
 
+export type GhostRiskContributingSignal =
+  | "age"
+  | "apply_url"
+  | "similar_active_postings"
+  | "location_spread"
+  | "description_quality"
+  | "salary_disclosure"
+  | "link_source"
+  | "ats_reliability"
+  | "hiring_freeze"
+
 export type GhostRiskAssessment = {
-  band: IntelligenceRiskLevel // 'low' | 'medium' | 'high' | 'unknown'
-  contributingSignals: Array<
-    | "age"
-    | "apply_url"
-    | "similar_active_postings"
-    | "location_spread"
-    | "description_quality"
-    | "salary_disclosure"
-    | "link_source"
-    | "ats_reliability"
-    | "hiring_freeze"
-  >
-  /**
-   * NOT a repost count. `queryRepostCount` counts other ACTIVE similar-title
-   * jobs at the same company within 90 days — concurrent openings, not posting
-   * cycles. Named honestly so no surface can print "reposted N times".
-   */
+  band: IntelligenceRiskLevel
+  contributingSignals: GhostRiskContributingSignal[]
+  /** NOT a repost count — the underlying query counts other ACTIVE
+   *  similar-title jobs at the same company. Named honestly so no surface can
+   *  print "reposted N times". */
   concurrentSimilarOpenings: number | null
   /** True until a durable posting-cycle history table exists. */
   repostHistoryUnavailable: true
@@ -465,14 +390,13 @@ export type GhostRiskAssessment = {
   cacheAgeHours: number | null
 }
 
+export type EmployerHealthVerdict = "strong" | "healthy" | "caution" | "critical" | "unknown"
+
 export type EmployerCapacitySignal = {
-  healthVerdict: "strong" | "healthy" | "caution" | "critical" | "unknown"
-  /**
-   * `computeHealthScore` uses neutral defaults for absent data (funding 10,
-   * layoff 25, glassdoor 12, headcount 12 = 59 → "healthy"), so a company with
-   * NO data renders as healthy. The verdict is usable only when sub-scores had
-   * real observations.
-   */
+  healthVerdict: EmployerHealthVerdict
+  /** The health computer uses neutral defaults for absent data, so a company
+   *  with NO observations totals into "healthy". The verdict is usable only
+   *  when sub-scores had real observations. */
   observedSubScoreCount: number
   healthUsable: boolean
   healthComputedAt: string | null
@@ -480,8 +404,7 @@ export type EmployerCapacitySignal = {
   hiringFreeze: {
     detected: boolean | null
     confidence: "confirmed" | "likely" | "possible" | null
-    /** True when this freeze already moved the ghost band; prevents the same
-     *  layoff observation being scored twice. */
+    /** True when this freeze already moved the ghost band. */
     alreadyCountedInGhostRisk: boolean
   }
 
@@ -493,8 +416,7 @@ export type HiringRealityAssessment = XRayDimension<HiringRealityBand> & {
   availability: JobAvailabilityEvidence
   ghostRisk: GhostRiskAssessment
   employerCapacity: EmployerCapacitySignal
-  /** Populated when availability and soft signals disagree. Forces UNCERTAIN
-   *  rather than letting the louder score win. */
+  /** Forces UNCERTAIN rather than letting the louder score win. */
   conflictingSignals: Array<{ a: string; b: string; resolution: string }>
 }
 
@@ -505,49 +427,48 @@ export type HiringRealityAssessment = XRayDimension<HiringRealityBand> & {
 export type CapabilityBand =
   | "EXCEEDS"
   | "MEETS"
-  | "NEAR_MISS"   // short of a stated bar but in-lane
-  | "STRETCH"     // adjacent lane, real but unproven transfer
-  | "MISMATCH"    // different lane, no credible transfer path
+  | "NEAR_MISS"
+  | "STRETCH"
+  | "MISMATCH"
   | "UNKNOWN"
 
+export type CareerFitLabel = "ats_ready" | "tailor_resume" | "bridge_first" | "career_pivot"
+
+/**
+ * The closed list of things that may corroborate a capability mismatch.
+ * Keyword coverage is deliberately absent, and so is anything sourced from
+ * evidence absence.
+ */
+export type MismatchCorroboration =
+  | "role_family_incompatible"
+  | "severe_years_shortfall"
+  | "career_fit_below_floor"
+  | "mandatory_absent_confirmed"
+
 export type CapabilityAssessment = XRayDimension<CapabilityBand> & {
-  /**
-   * From MatchScoreBreakdown.careerFit ONLY.
-   * `job_match_scores.overall_score` is FORBIDDEN here: `computeFastScore`
-   * folds a sponsorship rank delta (+8/+5/+2 or −6/−18) into `overall` when
-   * `profile.needs_sponsorship`, which would double-count work authorization
-   * against Eligibility and penalize sponsorship-needing candidates twice.
-   */
+  /** From careerFit ONLY. `overall_score` is forbidden here: it folds a
+   *  sponsorship rank delta, which would double-count work authorization. */
   careerFitScore: number | null
-  careerFitLabel: "ats_ready" | "tailor_resume" | "bridge_first" | "career_pivot" | null
+  careerFitLabel: CareerFitLabel | null
 
   relevantYears: number | null
   totalYears: number | null
-  /** From `extractMinYears`. When `requiredYearsStated` is false this is null
-   *  and NO shortfall may be computed — "not stated" is not "zero required". */
+  /** Null when not stated. "Not stated" is not "zero required", and no
+   *  shortfall may be computed against it. */
   requiredYears: number | null
   requiredYearsStated: boolean
   relevantYearsRatio: number | null
 
   roleFamily: string | null
   candidateRoleFamilies: string[]
-  /** `classifyRoleFamily` mis-fires on multidisciplinary roles — the reason
-   *  `computeFastScore` relaxed its own gate to 55. Never decisive alone. */
+  /** The classifier mis-fires on multidisciplinary roles. Never decisive
+   *  alone. */
   roleFamilyCompatible: boolean | "unknown"
 
-  /** All posting requirements, each carrying the three independent axes. */
   requirements: EvaluatedRequirement[]
 
-  /**
-   * R2-8. Capability absence must be established by capability evidence
-   * (years, role family, an ABSENT_CONFIRMED mandatory requirement) — never by
-   * the mere absence of resume text. True only when at least one non-evidence
-   * signal supports the mismatch.
-   */
   mismatchCorroborationCount: number
-  mismatchCorroborations: Array<
-    "role_family_incompatible" | "severe_years_shortfall" | "career_fit_below_floor" | "mandatory_absent_confirmed"
-  >
+  mismatchCorroborations: MismatchCorroboration[]
 
   overqualification: {
     detected: boolean
@@ -560,51 +481,40 @@ export type CapabilityAssessment = XRayDimension<CapabilityBand> & {
 // 6. Evidence Strength
 // ═══════════════════════════════════════════════════════════════════════════
 
-export type EvidenceBand =
-  | "STRONG"
-  | "ADEQUATE"
-  | "BURIED"        // capability is real but not locatable in structured fields
-  | "THIN"          // job terms have no supporting context we could find
-  | "UNREADABLE"    // resume absent or unparsed — we could not look
+export type EvidenceBand = "STRONG" | "ADEQUATE" | "BURIED" | "THIN" | "UNREADABLE"
 
-/**
- * R2-8. Why a piece of evidence is not present. This is the evidence-side
- * mirror of `RequirementPresence`, and it exists so that "we did not find it"
- * can never be rendered, scored, or reasoned about as "the candidate lacks it".
- */
+/** The evidence-side mirror of RequirementPresence. Exists so "we did not find
+ *  it" can never be rendered or reasoned about as "they lack it". */
 export type EvidenceAbsenceKind =
-  /** We searched readable candidate data and found nothing. */
   | "NOT_FOUND_IN_READABLE_DATA"
-  /** The candidate told us they do not have it. */
   | "CANDIDATE_CONFIRMED_ABSENT"
-  /** Candidate-sourced statements conflict. */
   | "EXPLICIT_CONTRADICTION"
-  /** We could not read the data at all. */
   | "UNREADABLE_DATA"
 
-/** Mirrors `TailorSkillSuggestion["status"]` in lib/resume/tailor-analysis.ts
- *  so the two never drift. */
+/** Mirrors TailorSkillSuggestion["status"] so the two never drift. */
 export type EvidenceSupportStatus =
   | "present"
-  | "missing_supported"           // related context exists (hasIndirectEvidence)
-  | "missing_needs_confirmation"  // nothing found; NEVER auto-suggest adding
+  | "missing_supported"
+  | "missing_needs_confirmation"
   | "not_recommended"
+
+export type EvidenceLocatedIn = "structured_fields" | "raw_text_only" | "not_found"
+
+export type ResumeParseState = "pending" | "processing" | "complete" | "failed" | "absent"
 
 export type EvidenceStrengthAssessment = XRayDimension<EvidenceBand> & {
   /** Always "inferred" in v0. There is no claim-level evidence table, so
-   *  "verified" is not representable and must not be added without one. */
+   *  "verified" is not representable. */
   verificationLevel: "inferred"
 
   requirementSupport: Array<{
     requirement: string
     status: EvidenceSupportStatus
-    /** Set for every non-`present` status. The field that prevents an absence
-     *  from being read as a negative fact. */
+    /** Set for every non-`present` status. */
     absenceKind: EvidenceAbsenceKind | null
-    /** The related-context string from `hasIndirectEvidence`. A WORDING hint,
-     *  not proof of the skill. */
+    /** A WORDING hint, not proof of the skill. */
     supportingContext: string | null
-    locatedIn: "structured_fields" | "raw_text_only" | "not_found"
+    locatedIn: EvidenceLocatedIn
     sourceFactIds: string[]
   }>
 
@@ -614,25 +524,22 @@ export type EvidenceStrengthAssessment = XRayDimension<EvidenceBand> & {
     supportedCount: number
     notFoundCount: number
     confirmedAbsentCount: number
-    /** presentCount / requiredTermCount. NULL when requiredTermCount is 0 — a
-     *  sparse JD must not read as 0% or 100% coverage. */
+    /** Null when requiredTermCount is 0 — a sparse JD must not read as 0% or
+     *  100% coverage. */
     presentRatio: number | null
   }
 
-  /** From `buildPositioningBrief().surface`: in raw_text, absent from
-   *  summary/skills/titles. The strongest available burial signal. */
+  /** In raw_text, absent from structured fields. The burial signal. */
   buriedEvidence: string[]
 
   legibility: {
-    parseStatus: "pending" | "processing" | "complete" | "failed" | "absent"
+    parseStatus: ResumeParseState
     parseError: string | null
     datedRoleCount: number
     hasRawText: boolean
     blocksAssessment: boolean
   }
 
-  /** Internal-consistency observations phrased for the candidate. Never an
-   *  accusation, never shared outward, never a SKIP reason. */
   consistencyNotes: Array<{
     observation: string
     resumeSpanA: string
@@ -640,66 +547,58 @@ export type EvidenceStrengthAssessment = XRayDimension<EvidenceBand> & {
     confidence: XRayConfidence
   }>
 
-  /**
-   * Hard invariant, asserted in tests: evidence absence never establishes
-   * capability absence. Always false in v0; the field exists so any future
-   * change is an explicit, reviewable contract change.
-   */
+  /** Literal false, so changing it is a reviewable contract change. */
   mayEstablishCapabilityAbsence: false
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 7. Eligibility — observational only
+// 7. Eligibility — observational, target-employer-relative
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * R2-6. Observational bands. These describe what the POSTING says relative to
- * what the CANDIDATE told us. They never describe legal standing, and the UI
- * may never render them as "eligible" / "ineligible".
- */
+/** Observations about a posting relative to what a candidate told us. Never
+ *  conclusions about legal standing, and never rendered as "eligible". */
 export type EligibilityObservationBand =
-  /** Posting language was readable and nothing in it conflicts with what the
-   *  candidate told us. */
   | "NO_EXPLICIT_CONFLICT_FOUND"
-  /** No conflict now, but the posting or the candidate's timeline implies the
-   *  employer would have to act at some point. */
   | "EMPLOYER_ACTION_MAY_BE_NEEDED"
-  /** Something is ambiguous — the posting wording, the candidate's data, or
-   *  the interaction between them. */
   | "NEEDS_CLARIFICATION"
-  /** The posting states a requirement that conflicts with what the candidate
-   *  told us. Requires a literal excerpt and KNOWN candidate data. */
   | "EXPLICIT_REQUIREMENT_CONFLICT"
-  /** We could not read the posting language, or the candidate never told us. */
   | "UNKNOWN"
 
 /**
- * R2-7. What the posting language is actually about. The repository currently
- * collapses all of these into one boolean (`jobs.requires_authorization`,
- * `boolean DEFAULT false`) via `AUTH_REQUIRED_PATTERNS`, and then
- * `createVisaIntelligenceFallback` labels every hit
- * `requires_unrestricted_work_authorization`. These categories must be
- * re-derived, because they imply different candidate situations and different
- * copy.
+ * C2. What the posting language is actually about.
+ *
+ * SPONSORSHIP_SCOPE_AMBIGUOUS is the default for a bare no-sponsorship
+ * statement. "We are unable to provide visa sponsorship for this position"
+ * does NOT establish that only *current* sponsorship is barred — it is simply
+ * silent on scope. Only explicit temporal wording ("currently", "at this
+ * time", "now", "in the future", "now or in the future") moves a statement
+ * into one of the scoped categories.
  */
 export type PostingAuthorizationLanguageCategory =
-  /** "we cannot sponsor for this role" — about sponsorship starting now. */
+  /** Bare no-sponsorship language with no temporal qualifier. */
+  | "SPONSORSHIP_SCOPE_AMBIGUOUS"
+  /** Explicitly scoped to now: "we cannot sponsor at this time". */
   | "NO_CURRENT_SPONSORSHIP"
-  /** "will not sponsor in the future" / "no future sponsorship". */
+  /** Explicitly scoped to later: "will not sponsor in the future". */
   | "NO_FUTURE_SPONSORSHIP"
-  /** "requires sponsorship now or in the future — will not be considered". */
+  /** Explicitly both: "requires sponsorship now or in the future". */
   | "NO_CURRENT_OR_FUTURE_SPONSORSHIP"
-  /** "must possess valid and UNRESTRICTED work authorization", or an explicit
-   *  exclusion list naming F-1/OPT/STEM/H-1B/TN. Note: bare "must be authorized
-   *  to work" is NOT this category — OPT and H-1B holders are authorized. */
+  /** "unrestricted" work authorization, or a named visa exclusion list.
+   *  A bare "must be authorized to work" is NOT this category. */
   | "UNRESTRICTED_AUTHORIZATION_REQUIRED"
   | "CITIZENSHIP_REQUIRED"
   | "CLEARANCE_REQUIRED"
-  /** Wording exists but does not resolve to a category, e.g. a bare
-   *  "must be authorized to work in the US". Never a conflict on its own. */
+  /** Wording exists but bars nobody, e.g. "must be authorized to work". */
   | "AMBIGUOUS_GENERAL"
-  /** Explicitly offers sponsorship (`AUTH_NOT_REQUIRED_PATTERNS`). */
   | "SPONSORSHIP_OFFERED"
+
+export type TemporalScopeMarker =
+  | "currently"
+  | "at_this_time"
+  | "now"
+  | "in_the_future"
+  | "now_or_in_the_future"
+  | "none_present"
 
 export type PostingAuthorizationRequirement = {
   category: PostingAuthorizationLanguageCategory
@@ -708,58 +607,122 @@ export type PostingAuthorizationRequirement = {
   excerpt: string
   sourceFactId: string
   confidence: XRayConfidence
-  /** True when a deterministic pattern family matched; false when only an LLM
-   *  extraction produced it (which can never reach EXPLICIT_REQUIREMENT_CONFLICT). */
+  /** False when only an LLM extraction produced it, which can never reach
+   *  EXPLICIT_REQUIREMENT_CONFLICT. */
   deterministicMatch: boolean
-  /** Whether the excerpt also names specific visa categories, which upgrades
+  /** Which temporal marker, if any, disambiguated the scope. `none_present`
+   *  is what forces SPONSORSHIP_SCOPE_AMBIGUOUS. */
+  temporalScope: TemporalScopeMarker
+  /** Named visa categories in the excerpt; upgrades
    *  UNRESTRICTED_AUTHORIZATION_REQUIRED from inferred to explicit. */
   namesVisaCategories: string[]
 }
 
-/** What kind of employer action a candidate's timeline may require. */
+/**
+ * C3. Whether the candidate can begin work FOR THIS EMPLOYER without a new
+ * immigration action. This is not "does the candidate hold some status".
+ *
+ *   citizen / green card        YES
+ *   OPT EAD, role related       YES  (subject to the role-relation test)
+ *   STEM OPT                    YES only if the target employer can satisfy
+ *                                    the E-Verify and I-983 requirements
+ *   H-1B employed elsewhere     NEEDS_EMPLOYER_ACTION — a transfer petition is
+ *                                    required before work can begin here
+ *   requires sponsorship        NO
+ *   status unknown              UNKNOWN
+ */
+export type TargetEmployerWorkAuthorization =
+  | "YES"
+  | "NO"
+  | "NEEDS_EMPLOYER_ACTION"
+  | "UNKNOWN"
+
+/** C4. Paths a candidate's situation may require. Initial OPT does NOT imply
+ *  H-1B is next; STEM OPT availability depends on candidate data we may not
+ *  have. */
 export type FutureEmployerActionType =
-  | "h1b_petition"
-  | "stem_opt_everify_participation"
-  | "green_card_sponsorship"
-  | "visa_transfer"
-  | "other"
+  | "STEM_OPT_EVERIFY_PARTICIPATION"
+  | "STEM_OPT_I983"
+  | "H1B_PETITION"
+  | "H1B_TRANSFER"
+  | "OTHER"
+  | "UNKNOWN"
+
+export type FutureEmployerActionStatus = "REQUIRED" | "POSSIBLE" | "UNKNOWN"
+
+export type FutureEmployerActionSource =
+  | "candidate_declaration"
+  | "candidate_profile"
+  | "posting_text"
+  | "employer_record"
+  | "everify_source"
+  | "derived_from_status"
   | "unknown"
 
+export type FutureEmployerAction = {
+  type: FutureEmployerActionType
+  /** Days until the action becomes necessary, when derivable. */
+  horizonDays: number | null
+  /** What the horizon was computed from, e.g. "profiles.opt_end_date". Null
+   *  when horizonDays is null. */
+  horizonBasis: string | null
+  /**
+   * REQUIRED — this action must happen for employment to continue.
+   * POSSIBLE  — one of several viable paths; not established as necessary.
+   * UNKNOWN   — we cannot tell, typically for missing candidate data such as
+   *             STEM-degree eligibility.
+   */
+  status: FutureEmployerActionStatus
+  source: FutureEmployerActionSource
+  confidence: XRayConfidence
+  /** Ids of XRayDataGap entries that keep this from being resolved. */
+  dataGapIds: string[]
+  /** User-facing sentence, phrased about the employer's action, not the
+   *  candidate's standing. */
+  explanation: string
+}
+
 /**
- * R2-7. Work authorization as a TIMELINE, not a boolean.
- *
- * A candidate on OPT is CURRENTLY AUTHORIZED and may need NO employer action
- * for months or years — while still likely needing action later. Equating
- * "on OPT" with "needs sponsorship now" is the error this type exists to
- * prevent.
- *
- * NOTE ON DEFAULTS: `autofill_profiles.authorized_to_work DEFAULT true`,
- * `requires_sponsorship DEFAULT false`, `profiles.needs_sponsorship DEFAULT false`,
- * `profiles.is_international DEFAULT false`. An empty profile therefore looks
- * exactly like a US citizen. `derivedFromDefaultsOnly` is what stops that.
+ * C5. E-Verify participation. "Not found in an incomplete source" is NOT
+ * "confirmed not enrolled", and only the latter is a substantive signal.
  */
+export type EVerifyParticipation =
+  | "CONFIRMED_PARTICIPATING"
+  | "CONFIRMED_NOT_ENROLLED"
+  | "NOT_FOUND_IN_SOURCE"
+  | "UNKNOWN"
+
+export type EVerifySignal = {
+  participation: EVerifyParticipation
+  /** Which dataset was consulted, and how complete it is known to be. Required
+   *  whenever participation is NOT_FOUND_IN_SOURCE, so coverage is disclosed. */
+  sourceName: string | null
+  sourceCoverageNote: string | null
+  observedAt: string | null
+  confidence: XRayConfidence
+}
+
 export type CandidateAuthorizationTimeline = {
-  /** Is the candidate authorized to work for this employer TODAY? */
-  currentlyAuthorized: boolean | "unknown"
-  currentAuthorizationType: WorkAuthorization | VisaStatus | null
-  /** e.g. profiles.opt_end_date. Null when unbounded (citizen, green card) or
-   *  unknown — the two are distinguished by `currentAuthorizationType`. */
+  /** C3. The target-employer question, not a candidate attribute. */
+  canWorkForTargetEmployerWithoutNewImmigrationAction: TargetEmployerWorkAuthorization
+  /** Why that value, in the candidate's terms. */
+  targetEmployerAuthorizationExplanation: string
+
+  declaredVisaStatus: VisaStatus | null
+  declaredWorkAuthorization: WorkAuthorization | null
+  /** e.g. profiles.opt_end_date. Null when unbounded OR unknown; the two are
+   *  distinguished by the declared status fields. */
   authorizationEndDate: string | null
 
-  /** Will the employer likely need to act at some point for this candidate to
-   *  keep working? Distinct from `currentlyAuthorized`. */
-  futureEmployerActionLikely: boolean | "unknown"
-  futureActionType: FutureEmployerActionType
-  /** Approximate horizon in days before action becomes necessary, from
-   *  `authorizationEndDate`. Context for phrasing and ordering ONLY — it may
-   *  never change a band or the final action. */
-  futureActionHorizonDays: number | null
+  /** C4. Ordered most-imminent first. Empty means none identified, which is
+   *  only meaningful when the status fields are known. */
+  futureEmployerActions: FutureEmployerAction[]
 
-  /** Which field(s) produced this. The two vocabularies disagree:
-   *  `Profile.visa_status` has 'citizen' and no tn_visa;
-   *  `AutofillProfile.work_authorization` has 'us_citizen' and 'tn_visa'. */
-  readFrom: Array<"profiles.visa_status" | "autofill_profiles.work_authorization" | "candidate_declaration">
-  /** True when only schema defaults were available — the trap case. */
+  readFrom: Array<
+    "profiles.visa_status" | "autofill_profiles.work_authorization" | "candidate_declaration"
+  >
+  /** True when only schema defaults were available. Forces every field to the
+   *  unknown branch. */
   derivedFromDefaultsOnly: boolean
 }
 
@@ -769,9 +732,8 @@ export type CandidateAuthorizationTimeline = {
  * produce NO_EXPLICIT_CONFLICT_FOUND.
  */
 export type SponsorshipHistorySignal = {
-  /** Tri-state, NOT `companies.sponsors_h1b` directly: that column is
-   *  `boolean DEFAULT false`, so false + zero counts + zero confidence is
-   *  UNKNOWN, not "does not sponsor". */
+  /** Tri-state. The underlying column defaults to false, so false + zero
+   *  counts + zero confidence is UNKNOWN, not "does not sponsor". */
   employerHasSponsored: boolean | "unknown"
   recentPetitionCount: number | null
   totalLcaCount: number | null
@@ -782,54 +744,50 @@ export type SponsorshipHistorySignal = {
   dataStale: boolean
 
   capExempt: CapExemptSignal | null
-  eVerify: "participates" | "not_found" | "unknown"
+  eVerify: EVerifySignal
 
-  /** Required disclaimer the UI must render adjacent to this block. */
   notARolePromise: true
 }
 
-/**
- * The candidate-timeline × posting-language decision. Computed deterministically
- * from a documented matrix (see decision-table.md §5.3); no model involvement.
- */
+export type AuthorizationConflictOutcome =
+  | "conflict_now"
+  | "conflict_future"
+  | "no_conflict"
+  | "needs_clarification"
+  | "unknown"
+
 export type AuthorizationConflictEvaluation = {
   requirement: PostingAuthorizationRequirement
-  /** Whether this requirement conflicts with the candidate's timeline. */
-  outcome:
-    | "conflict_now"           // candidate is not currently authorized as required
-    | "conflict_future"        // candidate is authorized now; the posting bars the future action
-    | "no_conflict"
-    | "needs_clarification"    // ambiguous posting wording, or unknown candidate data
-    | "unknown"
-  /** Plain-language, posting-directed explanation. */
+  outcome: AuthorizationConflictOutcome
   explanation: string
   confidence: XRayConfidence
   /** True when the candidate's data was known well enough to evaluate. */
   candidateDataSufficient: boolean
 }
 
+export type OtherConstraintKind =
+  | "location"
+  | "work_mode"
+  | "employment_type"
+  | "licensure"
+  | "other"
+
 export type EligibilityAssessment = XRayDimension<EligibilityObservationBand> & {
   candidate: CandidateAuthorizationTimeline
-  /** Every authorization-related requirement found in the posting. Empty means
-   *  "none found", which is only meaningful when `descriptionWasReadable`. */
   postingRequirements: PostingAuthorizationRequirement[]
   descriptionWasReadable: boolean
-  /** One evaluation per posting requirement. */
   conflicts: AuthorizationConflictEvaluation[]
 
-  /** Structurally separate; never merged into `conflicts`. */
   sponsorshipHistory: SponsorshipHistorySignal | null
 
-  /** Non-authorization constraints, kept distinct so copy and severity differ. */
   otherConstraints: Array<{
-    kind: "location" | "work_mode" | "employment_type" | "licensure" | "other"
+    kind: OtherConstraintKind
     statement: string
     sourceFactId: string
     candidateConflict: boolean | "unknown"
   }>
 
-  /** Literal type so the renderer cannot omit the disclaimer without a type
-   *  error. */
+  /** Literal type so the renderer cannot omit the disclaimer. */
   disclaimerRequired: true
 }
 
@@ -840,9 +798,7 @@ export type EligibilityAssessment = XRayDimension<EligibilityObservationBand> & 
 export type PositioningBand = "ALIGNED" | "TUNABLE" | "MISALIGNED" | "UNKNOWN"
 
 export type PositioningAssessment = XRayDimension<PositioningBand> & {
-  /** careerFit.atsScreenScore — screen strength, deliberately NOT capability. */
   atsScreenScore: number | null
-  /** calculateAtsReadability — format parseability, distinct from keywords. */
   atsReadabilityScore: number | null
   targetAts: AtsType | null
   atsProfileApplied: string | null
@@ -853,9 +809,9 @@ export type PositioningAssessment = XRayDimension<PositioningBand> & {
     mirrorsJobTitle: boolean | "unknown"
   }
 
-  /** Only `supportedMissing` may become an actionable edit. */
+  /** Only these may become actionable edits. */
   supportedMissing: string[]
-  /** Display-only, always framed "only if true", never one-click applicable. */
+  /** Display-only, always framed "only if true". */
   unsupportedMissing: string[]
   presentKeywords: string[]
 
@@ -863,16 +819,14 @@ export type PositioningAssessment = XRayDimension<PositioningBand> & {
   surfaceFromRawText: string[]
   closeGaps: string[]
 
-  /** Corpus-grounded field context. Absent before the refresh cron has run —
-   *  must degrade to UNKNOWN, never to a zero score. */
   fieldContext: {
     targetFieldKey: string | null
     fieldFitScore: number | null
+    /** False before the corpus refresh has run. Degrades to UNKNOWN, never to
+     *  a zero score. */
     corpusAvailable: boolean
   } | null
 
-  /** Used ONLY by the repair-window test. Derived from counts of supported
-   *  edits; never model-estimated. */
   repairEstimate: {
     supportedEditCount: number
     estimatedMinutes: number | null
@@ -884,78 +838,42 @@ export type PositioningAssessment = XRayDimension<PositioningBand> & {
 // 9. Actionable access
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * R2-5. Route types this repository can actually produce, via
- * `getJobNetworkingContacts` in lib/networking/job-contact-finder.ts
- * (exposed at app/api/jobs/[id]/networking/route.ts).
- */
 export type AccessRouteType =
-  /** linkedin_connections, degree 1. */
   | "direct_connection"
-  /** linkedin_connections, degree 2–3, with mutuals. */
   | "second_degree_connection"
-  /** cohort_members at the target company (layoff-cohort alumni). */
   | "company_alumni"
-  /** cohort_members reachable through a shared cohort. */
   | "cohort_peer"
-  /** employer_cohort_requests.contact_email — a real recruiter address. */
   | "employer_recruiter_contact"
-  /** A contact the candidate entered themselves. */
   | "candidate_supplied_contact"
 
-/** How the candidate can actually reach the person. At least one concrete
- *  channel is mandatory — a name with no channel is not a route. */
+/** At least one concrete channel is mandatory — a name with no channel is not
+ *  a route. */
 export type AccessRouteChannel =
   | { kind: "linkedin_profile"; url: string }
   | { kind: "email"; address: string }
   | { kind: "internal_referral_form"; url: string }
   | { kind: "cohort_thread"; cohortId: string }
 
-/**
- * A route is only actionable when a real person or channel exists AND the
- * candidate can act on it today. Statistical referral advantage is NOT a route
- * and can never populate this type.
- */
 export type ActionableAccessRoute = {
   id: string
   routeType: AccessRouteType
-
-  /** Display name of the person, or the concrete channel's owner. Anonymized
-   *  cohort names ("Jane D.") are permitted ONLY when a channel still exists;
-   *  `job-contact-finder` nulls `linkedinUrl` for non-members, which makes
-   *  those contacts non-actionable and therefore not routes. */
   personName: string | null
   personRole: string | null
   personTeam: string | null
-
   /** MANDATORY. A route without a reachable channel is invalid output. */
   channel: AccessRouteChannel
-
-  /** Why this person is reachable — the candidate's actual relationship or
-   *  the concrete context, e.g. "1st-degree connection, 12 mutuals" or
-   *  "posted a hiring request for this company 26 days ago". */
   relationshipContext: string
-
-  /** Exactly what the candidate should do next, in one imperative sentence. */
+  /** One imperative sentence the candidate can act on today. */
   nextStep: string
-
   sourceFactIds: string[]
-  /** When the underlying contact record was captured
-   *  (linkedin_connections.scraped_at, employer_cohort_requests.created_at,
-   *  cohort_members.joined_at). */
   observedAt: string | null
   freshnessDays: number | null
-  /** Routes past their type's freshness horizon are dropped, not downgraded. */
+  /** Routes past their type's horizon are dropped, not downgraded. */
   stale: boolean
-
   confidence: XRayConfidence
 }
 
-/**
- * R2-12. Referral-rate statistics are ADVISORY ONLY. They never gate
- * FIND_ACCESS, they never create a route, and they may only be displayed when
- * they clear `MIN_SUBMISSIONS` and the staleness horizon.
- */
+/** Advisory only. Never gates an action, never creates a route. */
 export type ReferralAdvantageAdvisory = {
   companyId: string
   normalizedTitle: string
@@ -964,10 +882,9 @@ export type ReferralAdvantageAdvisory = {
   coldApplyScreenRate: number | null
   deltaPercentagePoints: number | null
   lastComputedAt: string | null
-  /** False below MIN_SUBMISSIONS (10) or past the staleness horizon. When
-   *  false the advisory must be dropped entirely, not shown at low confidence. */
+  /** False below the sample threshold or past the staleness horizon; then the
+   *  advisory is dropped entirely, not shown at low confidence. */
   displayable: boolean
-  /** Literal type: this can never gate an action. */
   gatesFinalAction: false
 }
 
@@ -984,24 +901,27 @@ export type RejectionRiskKind =
   | "seniority_mismatch"
   | "overqualification"
   | "authorization_language"
+  | "future_authorization_policy_unknown"
   | "location_or_work_mode"
   | "posting_may_be_closed"
   | "employer_capacity"
   | "cold_apply_disadvantage"
   | "resume_legibility"
 
+export type RejectionRiskSeverity = "critical" | "high" | "moderate" | "low"
+
 export type RejectionRisk = {
   id: string
   kind: RejectionRiskKind
   /** Ordering only. Deliberately not a probability. */
-  severity: "critical" | "high" | "moderate" | "low"
+  severity: RejectionRiskSeverity
   likelihoodBasis: XRayBasis
   statement: string
   dimension: XRayDimensionKey
   sourceFactIds: string[]
   confidence: XRayConfidence
-  /** Required when derived from community data. Below MIN_SUBMISSIONS the risk
-   *  is dropped, not shown at low confidence. */
+  /** Required when derived from community data; below threshold the risk is
+   *  dropped, not shown at low confidence. */
   sampleSize?: number | null
   addressableByActionId: string | null
 }
@@ -1013,14 +933,22 @@ export type RecommendedActionKind =
   | "rewrite_title_or_summary"
   | "add_supported_keywords"
   | "reframe_transferable_experience"
-  | "confirm_requirement_status"      // ask the candidate: do you hold X?
+  | "confirm_requirement_status"
   | "acquire_missing_requirement"
   | "confirm_authorization_timeline"
-  | "contact_named_route"             // requires an ActionableAccessRoute
-  | "consider_referral_generally"     // advisory only; never the final action
+  /** C2. Ask the employer whether the sponsorship bar extends beyond today. */
+  | "confirm_future_sponsorship_policy"
+  /** C5. Ask the employer whether it participates in E-Verify. */
+  | "confirm_everify_participation"
+  /** C5. Ask the candidate whether STEM OPT is required for this role. */
+  | "confirm_stem_opt_requirement"
+  | "contact_named_route"
+  | "consider_referral_generally"
   | "complete_profile"
   | "upload_or_reparse_resume"
   | "choose_different_target"
+
+export type RecommendedActionEffort = "minutes" | "hours" | "days" | "weeks_or_more"
 
 export type RecommendedAction = {
   id: string
@@ -1029,17 +957,15 @@ export type RecommendedAction = {
   rationale: string
   addresses: XRayDimensionKey[]
   addressesRiskIds: string[]
-  effort: "minutes" | "hours" | "days" | "weeks_or_more"
-  /** True only when every input it needs already exists. False for anything
-   *  requiring new experience or a credential we cannot price. */
+  effort: RecommendedActionEffort
   doableNow: boolean
-  /** True for anything touching a `missing_needs_confirmation` term or a
-   *  NOT_FOUND requirement. Such actions are never auto-applicable. */
+  /** True for anything touching an unsupported term or a NOT_FOUND
+   *  requirement. Such actions are never auto-applicable. */
   requiresCandidateConfirmation: boolean
-  /** Set when this action is a confirmation prompt that would change the
-   *  decision if answered. Drives the "prominent confirmation" presentation. */
+  /** True when answering would change the decision — drives the prominent
+   *  presentation and, at stage D, the INSUFFICIENT_DATA outcome. */
   isDecisionBlockingConfirmation: boolean
-  /** Set only for `contact_named_route`. */
+  /** Set only for contact_named_route. */
   routeId?: string | null
   sourceFactIds: string[]
   target?: { surface: string; params?: Record<string, string> } | null
@@ -1049,7 +975,6 @@ export type RecommendedAction = {
 // 11. Decision trace
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** R2-9. Stages A–I, matching decision-table.md §4 exactly. */
 export type XRayDecisionStage =
   | "A_canonical_resolution"
   | "B_definitive_closure"
@@ -1061,18 +986,21 @@ export type XRayDecisionStage =
   | "H_actionable_access"
   | "I_apply"
 
+export type XRayStageOutcome =
+  | "passed_through"
+  | "selected_action"
+  | "skipped_insufficient_input"
+
 export type XRayDecisionTrace = {
   engineVersion: string
   evaluated: Array<{
     stage: XRayDecisionStage
     firedRuleId: string | null
-    outcome: "passed_through" | "selected_action" | "skipped_insufficient_input"
-    /** The gate/band values the stage read, so the decision is auditable. */
+    outcome: XRayStageOutcome
     inputs: Record<string, string | number | boolean | null>
   }>
   selectedStage: XRayDecisionStage
   selectedRuleId: string
-  /** Rules that also matched but lost to precedence. */
   suppressedRuleIds: string[]
   tieBreak: { competingRuleIds: string[]; resolvedBy: string } | null
 }
@@ -1092,21 +1020,35 @@ export type XRaySummary = {
     positioning: PositioningBand
   }
   topRiskId: string | null
-  /** True when the evaluated job differs from the requested one. */
   resolvedFromDuplicate: boolean
   computedAt: string
 }
 
+export type LegacyVerdictLabel =
+  | "Apply Today"
+  | "Apply, But Customize Resume"
+  | "Maybe"
+  | "Skip"
+  | "High Risk"
+  | "Unknown"
+
+export type LegacyVerdictRecommendation =
+  | "apply_now"
+  | "apply_with_tweaks"
+  | "stretch_role"
+  | "skip"
+  | "watch"
+  | "avoid"
+  | "unknown"
+
 export type ApplicationXRay = {
-  schemaVersion: "xray-2026-08-13.r2"
+  schemaVersion: "xray-2026-08-13.r2-final"
   computedAt: string
-  /** Hash of (evaluatedJobId, resumeId, resumeVersion, job content_hash,
-   *  engineVersion, fastScoreCacheEpoch). Deterministic invalidation. */
+  /** Hash of evaluatedJobId, resumeId, resumeVersion, job content_hash,
+   *  engineVersion and the fast-score cache epoch. */
   inputsHash: string
 
-  /** Stage A output. Always present, even when not a duplicate. */
   canonical: CanonicalResolution
-  /** The job every dimension was computed against. */
   evaluatedJobId: string | null
   requestedJobId: string
   companyId: string | null
@@ -1120,9 +1062,8 @@ export type ApplicationXRay = {
   eligibility: EligibilityAssessment
   positioning: PositioningAssessment
 
-  /** Zero or more. FIND_ACCESS is unreachable when this array is empty. */
+  /** FIND_ACCESS is unreachable when this is empty. */
   accessRoutes: ActionableAccessRoute[]
-  /** Advisory only; never gates an action. */
   referralAdvisory: ReferralAdvantageAdvisory | null
 
   rejectionRisks: RejectionRisk[]
@@ -1138,14 +1079,10 @@ export type ApplicationXRay = {
 
   summary: XRaySummary
 
-  /**
-   * Compatibility shim. Written by a one-way adapter so surfaces reading
-   * `job_applications.application_verdict` / `JobIntelligence.applicationVerdict`
-   * keep working. X-Ray must NEVER read this back as an input.
-   */
+  /** Write-only compatibility shim. X-Ray must never read this back. */
   legacyVerdictProjection?: {
-    verdict: "Apply Today" | "Apply, But Customize Resume" | "Maybe" | "Skip" | "High Risk" | "Unknown"
-    recommendation: "apply_now" | "apply_with_tweaks" | "stretch_role" | "skip" | "watch" | "avoid" | "unknown"
+    verdict: LegacyVerdictLabel
+    recommendation: LegacyVerdictRecommendation
     derivedFrom: "application_xray"
   } | null
 }
@@ -1154,28 +1091,24 @@ export type ApplicationXRay = {
 // 13. Internal-only (never serialized to a client)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Raw sub-scores stay server-side. Exposing them invites optimizing a number
- *  instead of reading the finding, and invites us to average them — which is
- *  exactly the failure mode of `calculateApplicationVerdict`. */
 export type XRayInternalScores = {
-  ghostRiskScore: number | null         // calculateGhostJobRisk 0–100
-  visaFitScore: number | null           // calculateVisaFitScore 0–100
-  companyHealthTotal: number | null     // computeHealthScore 0–100
-  matchOverallScore: number | null      // job_match_scores.overall_score — feed rank ONLY
+  ghostRiskScore: number | null
+  visaFitScore: number | null
+  companyHealthTotal: number | null
+  /** Feed ranking only. Contains a sponsorship delta and must never reach
+   *  Capability. */
+  matchOverallScore: number | null
   atsScreenScore: number | null
   careerFitScore: number | null
   fastScoreGatesTriggered: string[]
-  llmVerdict: string | null             // ResumeAnalysis.verdict — display-only
-  llmApplyRecommendation: string | null // ResumeAnalysis.apply_recommendation — display-only
+  llmVerdict: string | null
+  llmApplyRecommendation: string | null
 }
 
-/** Post-apply linkage. Read-only in v0. */
 export type XRayOutcomeLink = {
   applicationId: string | null
   statusAtSnapshot: ApplicationStatus | null
   snapshotFrozenAt: string | null
-  /** The status-vocabulary fix has landed in the working tree
-   *  (lib/applications/statuses.ts), but a coverage audit has not yet run, so
-   *  outcome data is still not decision-usable. */
+  /** Outcome data is not decision-usable until a coverage audit passes. */
   outcomeDataUsable: false
 }

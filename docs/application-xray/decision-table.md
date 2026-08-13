@@ -136,7 +136,7 @@ first rule whose condition holds selects; later matches go to
 | | `RD2` | `G_BLOCKING_CONFIRMATION` | `INSUFFICIENT_DATA` | any |
 | **E** | `RE1` | `G_MISMATCH_CORROBORATED` | `SKIP` | `medium` |
 | | `RE2` | `capability.band = STRETCH` and `G_YEARS = severe` | `STRENGTHEN_FIRST` if `repairFitsWindow`, else `APPLY_NOW` with a deferred repair | `medium` |
-| | `RE3` | `G_REQ_UNCONFIRMED` | `STRENGTHEN_FIRST` with a `confirm_requirement_status` action (`requiresCandidateConfirmation = true`) | `medium` |
+| | `RE3` | `G_REQ_UNCONFIRMED` **and** `G_SUFFICIENT` (an unreadable résumé routes to `RD1` instead — §6.1.1) | `STRENGTHEN_FIRST` with a `confirm_requirement_status` action (`requiresCandidateConfirmation = true`) | `medium` |
 | | `RE4` | ≥1 requirement `ABSENT_CONFIRMED` with `acquirability.source ≠ unknown` and `estimatedDays` inside the window | `STRENGTHEN_FIRST`, kind `acquire_missing_requirement` | `medium` |
 | **F** | `RF1` | `evidence.band = UNREADABLE` | `STRENGTHEN_FIRST`, kind `upload_or_reparse_resume` | any |
 | | `RF2` | `evidence.band = BURIED` | `STRENGTHEN_FIRST` if `repairFitsWindow`, else `APPLY_NOW` with a deferred repair | `medium` |
@@ -192,28 +192,68 @@ eligible". Permitted copy is in `product-contract.md` §6.
 
 ### 5.2 Candidate authorization is a timeline, not a boolean
 
-`CandidateAuthorizationTimeline` carries `currentlyAuthorized`,
-`currentAuthorizationType`, `authorizationEndDate`,
-`futureEmployerActionLikely`, `futureActionType`.
+`CandidateAuthorizationTimeline` carries
+`canWorkForTargetEmployerWithoutNewImmigrationAction`, the declared status
+fields, `authorizationEndDate`, and an ordered `futureEmployerActions[]`.
 
 **Being on OPT does not mean "needs sponsorship now."** An F-1 OPT holder is
 authorized to work today; the employer need do nothing until the EAD expires.
 Revision 1 collapsed this into a single `needsSponsorship` flag, which produced
 `SKIP` on postings that only bar *current* sponsorship.
 
-Derivation:
+#### 5.2.1 The question is about the target employer
 
-| `currentAuthorizationType` | `currentlyAuthorized` | `futureEmployerActionLikely` | `futureActionType` |
-| --- | --- | --- | --- |
-| `citizen` / `us_citizen` | true | false | — |
-| `green_card` | true | false | — |
-| `opt` | true (until `opt_end_date`) | true | `h1b_petition` |
-| `stem_opt` | true (until `opt_end_date`) | true | `h1b_petition` |
-| `h1b` | true | true | `visa_transfer` |
-| `tn_visa` | true | `unknown` | `unknown` |
-| `require_sponsorship` | **false** | true | `h1b_petition` |
-| `other` | `unknown` | `unknown` | `unknown` |
-| nothing set | `unknown` | `unknown` | `unknown` |
+The field is
+`canWorkForTargetEmployerWithoutNewImmigrationAction`, and the long name is the
+point. It is **not** "does the candidate hold some current status". A person can
+be lawfully in H-1B status today and still be unable to start at *this* employer
+tomorrow, because a change of employer requires a petition.
+
+Values: `YES` · `NO` · `NEEDS_EMPLOYER_ACTION` · `UNKNOWN`.
+
+| Declared status | Target-employer authorization | Reasoning |
+| --- | --- | --- |
+| `citizen` / `us_citizen` | `YES` | No employer action at any point |
+| `green_card` | `YES` | As above |
+| `opt` | `YES` *(subject to role relation)* | An unexpired OPT EAD authorizes work for a new employer, provided the role relates to the degree. If relation is unestablished, `UNKNOWN` |
+| `stem_opt` | `NEEDS_EMPLOYER_ACTION` | Only `YES` once the target employer is known to satisfy E-Verify enrolment **and** I-983 completion. Absent both, this is employer action, not a settled yes |
+| `h1b` | `NEEDS_EMPLOYER_ACTION` | **Employed elsewhere.** A transfer petition must be filed before work can begin here. Never `YES` |
+| `tn_visa` | `NEEDS_EMPLOYER_ACTION` | TN is employer-specific; a new employer requires new documentation |
+| `require_sponsorship` | `NO` | Explicitly declared |
+| `other` | `UNKNOWN` | Not derivable |
+| nothing set | `UNKNOWN` | The defaults trap below |
+
+**The H-1B row is the correction.** Treating "currently in H-1B status" as
+"currently authorized" would let a posting that bars sponsorship *and transfer*
+read as no-conflict, and would tell an H-1B holder they can simply start.
+
+#### 5.2.2 Future employer actions are a list, not a field
+
+`futureEmployerActions: FutureEmployerAction[]`, ordered most-imminent first.
+Each carries `type`, `horizonDays` + `horizonBasis`, `status`, `source`,
+`confidence` and `dataGapIds`.
+
+`status` is `REQUIRED` (must happen for employment to continue), `POSSIBLE`
+(one viable path among several, not established as necessary), or `UNKNOWN`.
+
+**Initial OPT does not imply H-1B is next.** A candidate on initial OPT may
+extend via STEM OPT, may go to H-1B, may do neither. Which paths are open
+depends on candidate facts we frequently lack — above all whether the degree is
+STEM-eligible. Missing STEM eligibility stays `UNKNOWN`; it is never resolved by
+assumption.
+
+| Declared status | Actions emitted |
+| --- | --- |
+| `citizen`, `green_card` | *(empty)* |
+| `opt` | `STEM_OPT_EVERIFY_PARTICIPATION` `POSSIBLE`; `STEM_OPT_I983` `POSSIBLE`; `H1B_PETITION` `POSSIBLE`. All three `UNKNOWN` when STEM-degree eligibility is unrecorded, with a data gap naming it |
+| `stem_opt` | `STEM_OPT_EVERIFY_PARTICIPATION` `REQUIRED`; `STEM_OPT_I983` `REQUIRED`; `H1B_PETITION` `POSSIBLE` at the EAD horizon |
+| `h1b` | `H1B_TRANSFER` `REQUIRED`, horizon 0 — needed before work begins |
+| `tn_visa` | `OTHER` `REQUIRED` |
+| `require_sponsorship` | `H1B_PETITION` `POSSIBLE`; `OTHER` `POSSIBLE` |
+| `other`, nothing set | `UNKNOWN` `UNKNOWN` |
+
+`horizonDays` derives from `authorizationEndDate` and is context for phrasing
+and ordering **only** — it may never move a band or the final action.
 
 **The defaults trap.** `autofill_profiles.authorized_to_work DEFAULT true`,
 `requires_sponsorship DEFAULT false`, `profiles.needs_sponsorship DEFAULT false`,
@@ -225,26 +265,49 @@ a citizen's. `derivedFromDefaultsOnly = true` forces every field to `unknown`.
 Rows: posting language category. Columns: candidate timeline state. Every cell
 is deterministic; no model participates.
 
-| Posting category | Currently authorized, no future action | Currently authorized, future action likely | Not currently authorized | Timeline unknown |
-| --- | --- | --- | --- | --- |
-| `NO_CURRENT_SPONSORSHIP` | no_conflict | **no_conflict** | conflict_now | needs_clarification |
-| `NO_FUTURE_SPONSORSHIP` | no_conflict | **conflict_future** | conflict_now | needs_clarification |
-| `NO_CURRENT_OR_FUTURE_SPONSORSHIP` | no_conflict | **conflict_future** | conflict_now | needs_clarification |
-| `UNRESTRICTED_AUTHORIZATION_REQUIRED` | no_conflict | conflict_now | conflict_now | needs_clarification |
-| `CITIZENSHIP_REQUIRED` | no_conflict *(citizen only)* | conflict_now | conflict_now | needs_clarification |
-| `CLEARANCE_REQUIRED` | needs_clarification *(unless clearance declared)* | needs_clarification | needs_clarification | needs_clarification |
-| `AMBIGUOUS_GENERAL` | no_conflict | needs_clarification | needs_clarification | needs_clarification |
-| `SPONSORSHIP_OFFERED` | no_conflict | no_conflict | no_conflict | no_conflict |
+Columns are `canWorkForTargetEmployerWithoutNewImmigrationAction`. All nine
+posting categories appear exactly once — the duplicated `NO_CURRENT_SPONSORSHIP`
+mapping from the previous revision is gone, dissolved by §5.4.
 
-The three bold cells are the correction. An OPT candidate against a posting that
-says only "we cannot sponsor **for this role right now**" is **not** a conflict
-today, and revision 1 got that wrong.
+| Posting category | `YES`, no future actions | `YES`, future actions exist | `NEEDS_EMPLOYER_ACTION` | `NO` | `UNKNOWN` |
+| --- | --- | --- | --- | --- | --- |
+| `SPONSORSHIP_SCOPE_AMBIGUOUS` | no_conflict | **needs_clarification** | **needs_clarification** | conflict_now | needs_clarification |
+| `NO_CURRENT_SPONSORSHIP` | no_conflict | no_conflict | **conflict_now** | conflict_now | needs_clarification |
+| `NO_FUTURE_SPONSORSHIP` | no_conflict | conflict_future | conflict_future | conflict_now | needs_clarification |
+| `NO_CURRENT_OR_FUTURE_SPONSORSHIP` | no_conflict | conflict_future | conflict_now | conflict_now | needs_clarification |
+| `UNRESTRICTED_AUTHORIZATION_REQUIRED` | no_conflict | conflict_now | conflict_now | conflict_now | needs_clarification |
+| `CITIZENSHIP_REQUIRED` | no_conflict *(citizen only)* | conflict_now | conflict_now | conflict_now | needs_clarification |
+| `CLEARANCE_REQUIRED` | needs_clarification *(unless clearance declared)* | needs_clarification | needs_clarification | needs_clarification | needs_clarification |
+| `AMBIGUOUS_GENERAL` | no_conflict | needs_clarification | needs_clarification | needs_clarification | needs_clarification |
+| `SPONSORSHIP_OFFERED` | no_conflict | no_conflict | no_conflict | no_conflict | no_conflict |
+
+Three cells carry this pass's corrections:
+
+- **`SPONSORSHIP_SCOPE_AMBIGUOUS` × `YES` + future actions → `needs_clarification`.**
+  A bare "we are unable to provide visa sponsorship for this position" does not
+  say whether the bar extends past today. The previous revision read it as
+  current-only and returned `no_conflict`, which understates a real risk. It is
+  equally wrong to read it as a lifetime bar and skip. The honest output names
+  the open question.
+- **`SPONSORSHIP_SCOPE_AMBIGUOUS` × `NEEDS_EMPLOYER_ACTION` → `needs_clarification`.**
+  Same reasoning, and it now catches the H-1B-elsewhere candidate too.
+- **`NO_CURRENT_SPONSORSHIP` × `NEEDS_EMPLOYER_ACTION` → `conflict_now`.**
+  An explicitly current bar does conflict with a candidate who needs an action
+  *now* — an H-1B transfer, or STEM OPT enrolment the employer has not agreed to.
 
 Band mapping: any `conflict_now` or `conflict_future` →
 `EXPLICIT_REQUIREMENT_CONFLICT`. Otherwise any `needs_clarification` →
-`NEEDS_CLARIFICATION`. Otherwise `futureEmployerActionLikely = true` →
-`EMPLOYER_ACTION_MAY_BE_NEEDED`. Otherwise `NO_EXPLICIT_CONFLICT_FOUND`.
-Posting unreadable or timeline unknown with no requirement found → `UNKNOWN`.
+`NEEDS_CLARIFICATION`. Otherwise a non-empty `futureEmployerActions` containing
+any `REQUIRED` or `POSSIBLE` entry → `EMPLOYER_ACTION_MAY_BE_NEEDED`. Otherwise
+`NO_EXPLICIT_CONFLICT_FOUND`. Posting unreadable, or timeline `UNKNOWN` with no
+requirement found → `UNKNOWN`.
+
+**`SPONSORSHIP_SCOPE_AMBIGUOUS` can never reach `EXPLICIT_REQUIREMENT_CONFLICT`
+for a candidate who is authorized today**, and therefore can never produce
+`SKIP` via `RC1`/`RC2` in that case. It resolves to `NEEDS_CLARIFICATION`,
+which — unless another rule fires — continues to `APPLY_NOW` at `low` confidence
+carrying a prominent `confirm_future_sponsorship_policy` action. It is
+decision-blocking (`RD2`) only when the *candidate's* timeline is unknown.
 
 Note on `CITIZENSHIP_REQUIRED`: green-card holders and citizens differ here, so
 the first column is conditioned on `currentAuthorizationType = citizen`. A
@@ -263,11 +326,25 @@ which merges all categories into one bit that
 `createVisaIntelligenceFallback` then labels
 `requires_unrestricted_work_authorization` regardless of cause.
 
+**Scope is established by temporal wording, never assumed.** A no-sponsorship
+statement is classified in two steps: match the sponsorship-bar family, then
+look for a temporal marker in the same sentence. Only these markers move a
+statement out of `SPONSORSHIP_SCOPE_AMBIGUOUS`:
+
+| Marker | Scopes to |
+| --- | --- |
+| "currently", "at this time", "at present", "right now", "for this position/role" | `NO_CURRENT_SPONSORSHIP` |
+| "in the future", "future sponsorship" | `NO_FUTURE_SPONSORSHIP` |
+| "now or in the future", "either now or in the future" | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
+| *(none present)* | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
+
+`PostingAuthorizationRequirement.temporalScope` records which marker fired, so
+the classification is auditable rather than asserted.
+
 | Pattern (from `AUTH_REQUIRED_PATTERNS`) | Category |
 | --- | --- |
-| `sponsorship ... not available/provided/offered` | `NO_CURRENT_SPONSORSHIP` |
-| `do(es) not / will not / cannot ... sponsor` | `NO_CURRENT_SPONSORSHIP` |
-| `without (current\|future) sponsorship` with "future" present | `NO_FUTURE_SPONSORSHIP` |
+| any sponsorship-bar phrasing — `sponsorship ... not available/provided/offered`, `do(es) not / will not / cannot ... sponsor` — **with no temporal marker** | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
+| the same phrasings **plus** a temporal marker | scoped per the table above |
 | `requires sponsorship ... now or in the future ... will not be considered` | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
 | `temporary visas ... will not be considered` | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
 | `must possess ... **unrestricted** work authorization`, **or** the excerpt names F-1/OPT/CPT/STEM/H-1B/TN | `UNRESTRICTED_AUTHORIZATION_REQUIRED` |
@@ -275,6 +352,13 @@ which merges all categories into one bit that
 | citizenship patterns | `CITIZENSHIP_REQUIRED` |
 | `CLEARANCE_REQUIRED_PATTERNS` | `CLEARANCE_REQUIRED` |
 | `AUTH_NOT_REQUIRED_PATTERNS` | `SPONSORSHIP_OFFERED` |
+
+The first two rows replace the previous revision's **two separate rows both
+mapping to `NO_CURRENT_SPONSORSHIP`** — the duplication correction 6 identifies.
+Those two phrasings were never evidence of current-only scope; they were simply
+the two commonest ways of saying nothing about scope at all. Collapsing them
+into one scope-ambiguous row removes the duplicate and fixes the reading in the
+same move.
 
 The second-to-last row is a correction to a live repository behavior. The
 `must ... possess ... (valid|current|unrestricted|valid and unrestricted)?
@@ -321,6 +405,48 @@ False when any of:
 | Stage A returned any `unresolved_*` outcome | We do not know which job this is |
 | ≥3 of the 5 dimensions `UNKNOWN` | Too little to adjudicate |
 | ≥2 `dimension_blocking` gaps in different dimensions | Same |
+
+For the count, `evidence.band = UNREADABLE` **counts as `UNKNOWN`**. It is a
+distinct band because it prescribes a distinct action, but for sufficiency it
+means the same thing: we could not look.
+
+### 6.1.1 Unreadable résumé plus an unconfirmed requirement — correction 7
+
+The previous revision let these two collide. An unreadable résumé makes
+`parse_status ≠ 'complete'` **and** empties `raw_text`, which fails
+`G_SUFFICIENT` outright — yet fixture A6a claimed `RE3` fired at stage E, which
+sits *after* stage D. Both could not be true.
+
+**Resolved deliberately in favour of stage D.** When the résumé is unreadable,
+every requirement is `UNKNOWN` rather than `NOT_FOUND` — we did not look, so we
+did not fail to find anything. Emitting `STRENGTHEN_FIRST` there would be
+answering a question we never asked, and would present an information problem as
+document work.
+
+So the two conditions produce **one** information state:
+
+```
+finalAction = INSUFFICIENT_DATA   (RD1)
+actions     = [ upload_or_reparse_resume,          isDecisionBlockingConfirmation = true
+                confirm_requirement_status × n ]   isDecisionBlockingConfirmation = true
+```
+
+Both unblock paths are surfaced together, because either one alone leaves the
+decision unresolved: a readable résumé still would not tell us about a
+credential it omits, and a credential answer still would not let us assess
+capability. The `confirm_requirement_status` prompts are capped at 3 per X-Ray
+(see `adversarial-review.md` §13.1) and are ordered by requirement severity.
+
+The boundary against `RF1` is the parse state, and it is intentional:
+
+| Résumé state | `G_SUFFICIENT` | Rule | Why |
+| --- | --- | --- | --- |
+| `parse_status = 'failed'`, no `raw_text` | false | `RD1` | We cannot read the candidate at all |
+| `parse_status = 'complete'`, `raw_text` present, no dated roles | true | `RF1` | We can read it; it is thin, and re-parsing may fix it |
+| `parse_status = 'complete'`, readable, requirement not found | true | `RE3` | We looked and did not find — a question worth asking |
+
+Fixtures D3 (`RD1`), D4 (`RF1`) and A6 (`RE3`) sit on either side of both
+boundaries, and A6a is the combined case.
 
 ### 6.2 `G_BLOCKING_CONFIRMATION` — correction 10
 
@@ -811,7 +937,12 @@ gate reads an LLM estimate.
 | `deterministic_pattern`, `structured_ats_field`, `section_header_plus_pattern`, `llm_only`, `none` | `RequirementStrengthProvenance` |
 | `candidate_declared`, `credential_catalog`, `unknown` | `AcquirabilitySource` |
 | `declaration_vs_structured_field`, `declaration_vs_free_text`, `free_text_internal` | `ContradictionReliability` |
-| `NO_CURRENT_SPONSORSHIP`, `NO_FUTURE_SPONSORSHIP`, `NO_CURRENT_OR_FUTURE_SPONSORSHIP`, `UNRESTRICTED_AUTHORIZATION_REQUIRED`, `CITIZENSHIP_REQUIRED`, `CLEARANCE_REQUIRED`, `AMBIGUOUS_GENERAL`, `SPONSORSHIP_OFFERED` | `PostingAuthorizationLanguageCategory` |
+| `SPONSORSHIP_SCOPE_AMBIGUOUS`, `NO_CURRENT_SPONSORSHIP`, `NO_FUTURE_SPONSORSHIP`, `NO_CURRENT_OR_FUTURE_SPONSORSHIP`, `UNRESTRICTED_AUTHORIZATION_REQUIRED`, `CITIZENSHIP_REQUIRED`, `CLEARANCE_REQUIRED`, `AMBIGUOUS_GENERAL`, `SPONSORSHIP_OFFERED` | `PostingAuthorizationLanguageCategory` |
+| `YES`, `NO`, `NEEDS_EMPLOYER_ACTION`, `UNKNOWN` | `TargetEmployerWorkAuthorization` |
+| `STEM_OPT_EVERIFY_PARTICIPATION`, `STEM_OPT_I983`, `H1B_PETITION`, `H1B_TRANSFER`, `OTHER`, `UNKNOWN` | `FutureEmployerActionType` |
+| `REQUIRED`, `POSSIBLE`, `UNKNOWN` | `FutureEmployerActionStatus` |
+| `CONFIRMED_PARTICIPATING`, `CONFIRMED_NOT_ENROLLED`, `NOT_FOUND_IN_SOURCE`, `UNKNOWN` | `EVerifyParticipation` |
+| `currently`, `at_this_time`, `now`, `in_the_future`, `now_or_in_the_future`, `none_present` | `TemporalScopeMarker` |
 | `conflict_now`, `conflict_future`, `no_conflict`, `needs_clarification`, `unknown` | `AuthorizationConflictEvaluation["outcome"]` |
 | `NOT_FOUND_IN_READABLE_DATA`, `CANDIDATE_CONFIRMED_ABSENT`, `EXPLICIT_CONTRADICTION`, `UNREADABLE_DATA` | `EvidenceAbsenceKind` |
 | `direct_connection`, `second_degree_connection`, `company_alumni`, `cohort_peer`, `employer_recruiter_contact`, `candidate_supplied_contact` | `AccessRouteType` |
@@ -830,16 +961,16 @@ No enum value appears in this document that is absent from the contract.
 | Rule | Positive (rule fires) | Suppression (a higher-precedence rule wins, or the rule correctly does not fire) |
 | --- | --- | --- |
 | `RB1` | C1 | C2, C5a, E8 |
-| `RC1` | B1, B5, B7a, B8, C7a, D2 | B6, B7, B3b |
+| `RC1` | B1, B5, B7a, B8, C7a, D2 | B6, B7, B3a, B3b, B4c |
 | `RC2` | B3c, B5a | B3, B3a |
 | `RC3` | A6b, D5a | A6, A7, D5b |
-| `RD1` | C7c, C11, D1, D3, E7 | D2, D4 |
-| `RD2` | B3b, B9, D2a | B4, B7, B9a, B12b |
+| `RD1` | A6a, C7c, C11, D1, D3, E7 | D2, D4 |
+| `RD2` | B3b, B9, D2a | B4, B4a, B4b, B7, B9a, B12b |
 | `RE1` | A5, C7b | A5a, A8, A10 |
 | `RE2` | A2, A8, A10 | A9, D8 |
-| `RE3` | A6, A6a, A7a, D5b | A6b |
+| `RE3` | A6, A7a, D5b | A6a, A6b |
 | `RE4` | A7 | A6, A7a |
-| `RF1` | D4 | D1, D3 |
+| `RF1` | D4 | D1, D3, A6a |
 | `RF2` | A3 | A3a |
 | `RF3` | A5c | A5a, A5 |
 | `RF4` | D7a | A5, A5c |
@@ -848,7 +979,7 @@ No enum value appears in this document that is absent from the contract.
 | `RG3` | A5b, D7a | D8 |
 | `RH1` | E1a, E3a, E5, E6 | E1, E2, E3, E3b, E4 |
 | `RI1` | C2, C3, C4, C5a, C8, C9, E8 | C1 |
-| `RI2` | A1, A3a, A5a, A5b, A9, A11, A12, B3, B3a, B4, B4a, B6, B7, B9a, B10, B11, B12, B12b, C6, C7, C10, D6, D7, D7a, E1, E2, E3b, E4 | every `SKIP` and `INSUFFICIENT_DATA` fixture |
+| `RI2` | A1, A3a, A5a, A5b, A9, A11, A12, B3, B3a, B4, B4a, B4b, B6, B7, B9a, B10, B11, B12, B12b, C6, C7, C10, D6, D7, D7a, E1, E2, E3b, E4 | every `SKIP` and `INSUFFICIENT_DATA` fixture |
 
 ### 15.5 No prose exception contradicts rule ordering
 
@@ -951,3 +1082,28 @@ gates at all, so this constraint is now structural rather than procedural.
 
 Per repository convention these live at `lib/application-xray/*.test.ts` and run
 under `find lib -name '*.test.ts' -print0 | xargs -0 tsx --test`.
+
+---
+
+## 18. Consistency matrix re-run — final correction pass
+
+Executed mechanically against the four files, not asserted. Each check is
+reproducible from the repository.
+
+| # | Check | Method | Result |
+| --- | --- | --- | --- |
+| 1 | Every contract-type enum value referenced in this document exists in `xray-contract.ts` | Extract all `` `UPPER_SNAKE` `` tokens from tables; exclude decision gates (`G_*`), rule ids (`R[B-I][0-9]`) and repository regex constants (`*_PATTERNS`, `*_RE`), which are not contract types; assert the remainder appear as string-literal members | **PASS** — 60 of 60 |
+| 2 | All posting-language categories appear in the conflict matrix | Extract the nine members of `PostingAuthorizationLanguageCategory` from the contract; assert each has a matrix row | **PASS** — 9 of 9 |
+| 2b | No duplicated matrix row *(correction 6)* | Assert matrix row labels are unique | **PASS** — 0 duplicates |
+| 3 | All target-employer authorization states defined and used | Assert `YES` / `NO` / `NEEDS_EMPLOYER_ACTION` / `UNKNOWN` exist in `TargetEmployerWorkAuthorization` **and** appear as matrix columns | **PASS** |
+| 4 | Every rule has a positive **and** a suppression fixture | Parse the §15.4 map; assert both cells are non-empty for all 20 rules | **PASS** — 20 of 20 |
+| 5 | `NOT_FOUND` never becomes confirmed absence | Assert the `supportsHardSkip` contract comment carries the literal exclusion, and that `RC3` reads only that field | **PASS** |
+| 6 | Ambiguous sponsorship scope never becomes an explicit conflict for a candidate authorized today | Read the `SPONSORSHIP_SCOPE_AMBIGUOUS` row: `YES`→`no_conflict`, `YES`+future→`needs_clarification`, `NEEDS_EMPLOYER_ACTION`→`needs_clarification` | **PASS** |
+| 7 | Every fixture id referenced by the rule map exists | Cross-check §15.4 against `^### <id>.` headings in `test-fixtures.md` | **PASS** — 0 dangling |
+| 8 | `xray-contract.ts` compiles in isolation | `tsc --noEmit --strict --target es2017 --moduleResolution node xray-contract.ts` in an empty directory, no `tsconfig`, no imports | **PASS** — exit 0 |
+| 9 | No production code modified during this pass | `git status --short` limited to `docs/application-xray/` | **PASS** |
+
+Two figures were corrected rather than carried forward: the fixture count is
+**84**, not the 51 claimed previously (verified by unique-id extraction), and
+`PostingAuthorizationLanguageCategory` has **nine** members, not eight, since
+`SPONSORSHIP_SCOPE_AMBIGUOUS` was added.
