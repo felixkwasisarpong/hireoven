@@ -585,3 +585,79 @@ test("sparse same-family postings with no skill support stay below strong match"
     "expected low-signal gate to be surfaced"
   )
 })
+
+test("skill overlap alone cannot make a cross-domain resume ATS-ready", () => {
+  const resume = makeHealthcareResume({
+    id: "resume-marketing-to-software-1",
+    file_name: "marketing-with-tech-skills.pdf",
+    name: "Marketing Candidate",
+    summary: "Marketing manager who completed Python, React, TypeScript, AWS, and API projects.",
+    work_experience: [
+      {
+        company: "Growth Co",
+        title: "Marketing Manager",
+        start_date: "2018",
+        end_date: null,
+        is_current: true,
+        description: "Led campaigns, lifecycle messaging, customer segmentation, content strategy, and partner launches.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Business Administration",
+        field: "Marketing",
+        start_date: "2010",
+        end_date: "2014",
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["Python", "React", "TypeScript", "AWS", "API Development"],
+      soft: ["Communication"],
+      languages: [],
+      certifications: [],
+    },
+    projects: [
+      {
+        name: "Portfolio API",
+        description: "Built a React and TypeScript frontend backed by Python APIs on AWS.",
+        url: null,
+        technologies: ["Python", "React", "TypeScript", "AWS"],
+      },
+    ],
+    seniority_level: "senior",
+    years_of_experience: 8,
+    primary_role: "Marketing Manager",
+    industries: ["Marketing"],
+    top_skills: ["Python", "React", "TypeScript", "AWS", "API Development"],
+    raw_text: "Python React TypeScript AWS API Development marketing campaigns lifecycle messaging",
+  })
+  const job = makeJob({
+    id: "job-software-cross-domain-1",
+    title: "Senior Software Engineer",
+    description: "Requirements: 5+ years of software experience. Python, React, TypeScript, AWS, and API development.",
+    skills: ["Python", "React", "TypeScript", "AWS", "API Development"],
+    seniority_level: "senior",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok((score.skills_score ?? 0) >= 90, `expected strong visible skill match, got ${score.skills_score}`)
+  assert.ok(score.overall_score <= 65, `expected relevant-experience cap, got ${score.overall_score}`)
+  assert.equal(score.score_breakdown?.careerFit?.label, "bridge_first")
+  assert.ok(
+    (score.score_breakdown?.careerFit?.relevantYears ?? 99) < 5,
+    "expected fewer relevant years than the software requirement"
+  )
+  assert.ok(
+    score.score_breakdown?.concerns.some((concern) => concern.includes("insufficient_relevant_experience")),
+    "expected relevant-experience gate to be surfaced"
+  )
+})
