@@ -362,7 +362,7 @@ DO UPDATE SET
   visa_language_detected = EXCLUDED.visa_language_detected,
   publication_status     = EXCLUDED.publication_status,
   is_active              = true,
-  last_seen_at           = EXCLUDED.last_seen_at,
+  last_seen_at           = GREATEST(COALESCE(jobs.last_seen_at, EXCLUDED.last_seen_at), EXCLUDED.last_seen_at),
   posted_at              = COALESCE(EXCLUDED.posted_at, jobs.posted_at),
   content_hash           = EXCLUDED.content_hash,
   source_ats             = EXCLUDED.source_ats,
@@ -371,6 +371,10 @@ DO UPDATE SET
   closed_at              = NULL,
   updated_at             = EXCLUDED.updated_at
 WHERE jobs.content_hash IS DISTINCT FROM EXCLUDED.content_hash
+   OR jobs.last_seen_at IS NULL
+   OR jobs.last_seen_at < EXCLUDED.last_seen_at
+   OR jobs.is_active IS DISTINCT FROM true
+   OR jobs.closed_at IS NOT NULL
 RETURNING id, (xmax = 0) AS inserted
 `
 
