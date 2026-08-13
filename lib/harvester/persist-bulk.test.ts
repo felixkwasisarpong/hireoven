@@ -41,9 +41,13 @@ function makeJob(overrides: Partial<HarvestedJob> = {}): HarvestedJob {
   }
 }
 
-test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit", async () => {
+test("persistJobsBulk: single ON CONFLICT upsert records observations and content changes", async () => {
   const { pool, captured } = makeFakePool([
-    [{ id: "11111111-1111-1111-1111-111111111111", inserted: true }, { id: "22222222-2222-2222-2222-222222222222", inserted: false }],
+    [
+      { id: "11111111-1111-1111-1111-111111111111", inserted: true },
+      { id: "22222222-2222-2222-2222-222222222222", inserted: false },
+      { id: "33333333-3333-3333-3333-333333333333", inserted: false },
+    ],
     [],
     [],
   ])
@@ -77,6 +81,8 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   assert.match(upsert.text, /INSERT INTO jobs/)
   assert.match(upsert.text, /ON CONFLICT \(company_id, external_id\)/)
   assert.match(upsert.text, /WHERE jobs\.content_hash IS DISTINCT FROM EXCLUDED\.content_hash/)
+  assert.match(upsert.text, /last_seen_at\s*=\s*GREATEST\(COALESCE\(jobs\.last_seen_at,\s*EXCLUDED\.last_seen_at\),\s*EXCLUDED\.last_seen_at\)/)
+  assert.match(upsert.text, /OR jobs\.last_seen_at < EXCLUDED\.last_seen_at/)
   assert.match(
     upsert.text,
     /description\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.description,\s*''\),\s*jobs\.description\)/
@@ -93,12 +99,12 @@ test("persistJobsBulk: single ON CONFLICT upsert with content_hash short-circuit
   assert.equal(payload[0].content_hash, "0123456789abcdef0123456789abcdef")
   assert.ok(payload[0].raw_data)
 
-  // 2 returned rows (one insert, one update), 3 input → 1 unchanged.
+  // 3 returned rows (one insert, one content update, one observation-only update).
   assert.equal(outcome.inserted, 1)
-  assert.equal(outcome.updated, 1)
-  assert.equal(outcome.unchanged, 1)
+  assert.equal(outcome.updated, 2)
+  assert.equal(outcome.unchanged, 0)
   assert.deepEqual(outcome.insertedJobIds, ["11111111-1111-1111-1111-111111111111"])
-  assert.equal(outcome.written, 2)
+  assert.equal(outcome.written, 3)
   assert.equal(outcome.inputCount, 3)
   assert.equal(outcome.filteredOut, 0)
 
