@@ -18,7 +18,7 @@ list, and §15 proves they match.
 | --- | --- | --- | --- |
 | **A** | Resolve canonical job | Preprocessing. Not a decision stage. | nothing |
 | **B** | Definitive closure | The requisition demonstrably no longer exists | `SKIP` |
-| **C** | Explicit candidate-specific requirement conflict, **when candidate data is known** | The posting states a requirement that conflicts with what the candidate told us | `SKIP` |
+| **C** | Explicit candidate-specific requirement conflict, **when candidate data is known**, or confirmed required employer-action refusal | The posting or employer states a requirement/action refusal that conflicts with what the candidate told us | `SKIP` |
 | **D** | Sufficiency gate | We cannot responsibly judge | `INSUFFICIENT_DATA` |
 | **E** | Capability | Can they do the work | `SKIP`, `STRENGTHEN_FIRST` |
 | **F** | Evidence | Can a reader find the proof | `STRENGTHEN_FIRST`, `INSUFFICIENT_DATA` |
@@ -96,6 +96,7 @@ neither are not permitted (proved in §15.2).
 | `G_CLOSED` | bool | `is_active = false` **and** (`closed_at` non-null **or** `publication_status ∈ {hidden_expired, hidden_invalid}`) | `jobs` |
 | `G_CONFLICT` | `none` \| `now` \| `future` \| `needs_clarification` | worst outcome across `eligibility.conflicts[]`, per the §5.3 matrix | posting text + candidate declaration |
 | `G_CONFLICT_DECISIVE` | bool | `G_CONFLICT ∈ {now, future}` **and** the driving requirement has `deterministicMatch = true` **and** `confidence ≥ medium` **and** `candidateDataSufficient = true` | as above |
+| `G_REQUIRED_EMPLOYER_ACTION_REFUSED` | bool | candidate explicitly confirms an employer action is required for this job **and** employer explicitly refuses that action **and** both facts are cited **and** confidence ≥ medium | candidate declaration + direct employer statement |
 | `G_HARD_REQ_ABSENT` | bool | ≥1 `EvaluatedRequirement` with `supportsHardSkip = true` | posting text + candidate declaration |
 | `G_REQ_UNCONFIRMED` | bool | ≥1 requirement with `strength = MANDATORY_EXPLICIT` and `presence ∈ {NOT_FOUND, UNKNOWN}` | as above |
 | `G_YEARS` | `none` \| `moderate` \| `severe` | from `relevantYearsRatio`, **only when `requiredYearsStated`** | `careerFit` |
@@ -132,6 +133,7 @@ first rule whose condition holds selects; later matches go to
 | **C** | `RC1` | `G_CONFLICT_DECISIVE` and `G_CONFLICT = now` | `SKIP` | `medium` |
 | | `RC2` | `G_CONFLICT_DECISIVE` and `G_CONFLICT = future` | `SKIP` | `medium` |
 | | `RC3` | `G_HARD_REQ_ABSENT` | `SKIP` | `medium` |
+| | `RC4` | `G_REQUIRED_EMPLOYER_ACTION_REFUSED` | `SKIP` | `medium` |
 | **D** | `RD1` | `G_SUFFICIENT = false` | `INSUFFICIENT_DATA` | any |
 | | `RD2` | `G_BLOCKING_CONFIRMATION` | `INSUFFICIENT_DATA` | any |
 | **E** | `RE1` | `G_MISMATCH_CORROBORATED` | `SKIP` | `medium` |
@@ -200,6 +202,12 @@ fields, `authorizationEndDate`, and an ordered `futureEmployerActions[]`.
 authorized to work today; the employer need do nothing until the EAD expires.
 Revision 1 collapsed this into a single `needsSponsorship` flag, which produced
 `SKIP` on postings that only bar *current* sponsorship.
+
+A future continuation problem must not rewrite present authorization. When a
+candidate can work for the target employer today on an unexpired OPT EAD,
+`canWorkForTargetEmployerWithoutNewImmigrationAction` remains `YES`; a required
+future STEM OPT/E-Verify action is represented in `futureEmployerActions[]` and,
+if refused, can skip only through `G_REQUIRED_EMPLOYER_ACTION_REFUSED` / `RC4`.
 
 #### 5.2.1 The question is about the target employer
 
@@ -326,14 +334,16 @@ which merges all categories into one bit that
 `createVisaIntelligenceFallback` then labels
 `requires_unrestricted_work_authorization` regardless of cause.
 
-**Scope is established by temporal wording, never assumed.** A no-sponsorship
-statement is classified in two steps: match the sponsorship-bar family, then
-look for a temporal marker in the same sentence. Only these markers move a
-statement out of `SPONSORSHIP_SCOPE_AMBIGUOUS`:
+**Scope is established by explicit start/future wording, never assumed.** A
+no-sponsorship statement is classified in two steps: match the sponsorship-bar
+family, then look for a scope marker in the same sentence. "Currently", "at
+this time", "at present", "right now", "for this position" and "for this role"
+do **not** establish current-only sponsorship scope; they remain
+`SPONSORSHIP_SCOPE_AMBIGUOUS` unless stronger wording appears.
 
 | Marker | Scopes to |
 | --- | --- |
-| "currently", "at this time", "at present", "right now", "for this position/role" | `NO_CURRENT_SPONSORSHIP` |
+| "must be able to begin/start/commence employment without sponsorship"; "no sponsorship is available for initial work authorization" | `NO_CURRENT_SPONSORSHIP` |
 | "in the future", "future sponsorship" | `NO_FUTURE_SPONSORSHIP` |
 | "now or in the future", "either now or in the future" | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
 | *(none present)* | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
@@ -343,8 +353,9 @@ the classification is auditable rather than asserted.
 
 | Pattern (from `AUTH_REQUIRED_PATTERNS`) | Category |
 | --- | --- |
-| any sponsorship-bar phrasing — `sponsorship ... not available/provided/offered`, `do(es) not / will not / cannot ... sponsor` — **with no temporal marker** | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
-| the same phrasings **plus** a temporal marker | scoped per the table above |
+| any sponsorship-bar phrasing — `sponsorship ... not available/provided/offered`, `do(es) not / will not / cannot ... sponsor` — **with no start/future scope marker** | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
+| the same phrasings **plus only** "currently", "at this time", "at present", "right now", "for this position" or "for this role" | `SPONSORSHIP_SCOPE_AMBIGUOUS` |
+| begin/start/commence-employment or initial-work-authorization sponsorship bar | `NO_CURRENT_SPONSORSHIP` |
 | `requires sponsorship ... now or in the future ... will not be considered` | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
 | `temporary visas ... will not be considered` | `NO_CURRENT_OR_FUTURE_SPONSORSHIP` |
 | `must possess ... **unrestricted** work authorization`, **or** the excerpt names F-1/OPT/CPT/STEM/H-1B/TN | `UNRESTRICTED_AUTHORIZATION_REQUIRED` |
@@ -718,10 +729,12 @@ Derivation, in order:
 5. No declaration; readable data searched, not found → `NOT_FOUND`.
 6. Data unreadable, or the requirement itself unparsed → `UNKNOWN`.
 
-**Implemented** as `resolveRequirementPresence()` in
-`lib/candidates/credential-declarations.ts`, with `supportsHardSkip()` as the
-single gate `RC3` reads. One asymmetry the implementation encodes and step 2
-above glosses: a declaration of "I hold it" against a résumé that omits it is
+The current branch contains `resolveRequirementPresence()` in
+`lib/candidates/credential-declarations.ts`. The pure X-Ray milestone does not
+import the database-backed helper; it accepts evaluated requirement/declaration
+facts as input and applies the hard-skip gate in
+`lib/application-xray/requirements.ts`. One asymmetry the helper encodes and
+step 2 above glosses: a declaration of "I hold it" against a résumé that omits it is
 `PRESENT`, not `CONTRADICTED` — silence is not a competing claim. Only a
 declaration of "I do **not** hold it" against positive document evidence is a
 contradiction.
@@ -756,12 +769,12 @@ cissp, ceh, ccna, ccnp, azure certified\*, google certified\*); it says nothing
 about how long any of them takes to obtain. So:
 
 - `credential_catalog` is unreachable in v0.
-- `candidate_declared` is the only reachable non-unknown source, and it is now
-  backed by a real store: `candidate_credential_declarations`
-  (`scripts/migrations/add-candidate-credential-declarations.sql`), read through
-  `lib/candidates/credential-declarations.ts`. `expected_at` on a `held = false`
-  row is the sanctioned origin of `estimatedDays`, via
-  `declaredAcquisitionDays()`.
+- `candidate_declared` is the only reachable non-unknown source. The current
+  branch contains `scripts/migrations/add-candidate-credential-declarations.sql`
+  and `lib/candidates/credential-declarations.ts`, but this milestone does not
+  apply the migration or require the table. Pure fixtures may pass explicit
+  candidate-declared acquisition facts; production persistence is outside this
+  milestone.
 - Everything else is `unknown`, and `RE4` therefore cannot fire without a
   candidate declaration.
 - **An LLM may not populate `estimatedDays` under any provenance.**
@@ -942,7 +955,8 @@ gate reads an LLM estimate.
 | `STEM_OPT_EVERIFY_PARTICIPATION`, `STEM_OPT_I983`, `H1B_PETITION`, `H1B_TRANSFER`, `OTHER`, `UNKNOWN` | `FutureEmployerActionType` |
 | `REQUIRED`, `POSSIBLE`, `UNKNOWN` | `FutureEmployerActionStatus` |
 | `CONFIRMED_PARTICIPATING`, `CONFIRMED_NOT_ENROLLED`, `NOT_FOUND_IN_SOURCE`, `UNKNOWN` | `EVerifyParticipation` |
-| `currently`, `at_this_time`, `now`, `in_the_future`, `now_or_in_the_future`, `none_present` | `TemporalScopeMarker` |
+| `AVAILABLE`, `REFUSED_CONFIRMED`, `NOT_FOUND`, `UNKNOWN` | `EmployerActionFeasibilityStatus` |
+| `start_employment`, `initial_work_authorization`, `in_the_future`, `now_or_in_the_future`, `none_present` | `TemporalScopeMarker` |
 | `conflict_now`, `conflict_future`, `no_conflict`, `needs_clarification`, `unknown` | `AuthorizationConflictEvaluation["outcome"]` |
 | `NOT_FOUND_IN_READABLE_DATA`, `CANDIDATE_CONFIRMED_ABSENT`, `EXPLICIT_CONTRADICTION`, `UNREADABLE_DATA` | `EvidenceAbsenceKind` |
 | `direct_connection`, `second_degree_connection`, `company_alumni`, `cohort_peer`, `employer_recruiter_contact`, `candidate_supplied_contact` | `AccessRouteType` |
@@ -964,6 +978,7 @@ No enum value appears in this document that is absent from the contract.
 | `RC1` | B1, B5, B7a, B8, C7a, D2 | B6, B7, B3a, B3b, B4c |
 | `RC2` | B3c, B5a | B3, B3a |
 | `RC3` | A6b, D5a | A6, A7, D5b |
+| `RC4` | B4c | B4, B4a, B4b |
 | `RD1` | A6a, C7c, C11, D1, D3, E7 | D2, D4 |
 | `RD2` | B3b, B9, D2a | B4, B4a, B4b, B7, B9a, B12b |
 | `RE1` | A5, C7b | A5a, A8, A10 |
@@ -1077,8 +1092,8 @@ gates at all, so this constraint is now structural rather than procedural.
     rule ids, differing only in `canonical` and the extra action.
 12. `NOT_FOUND` never sets `supportsHardSkip`; property-tested across all
     `RequirementPresence` × `RequirementStrength` combinations.
-13. The §5.3 matrix is asserted cell by cell (8 categories × 4 timeline states =
-    32 assertions).
+13. The §5.3 matrix is asserted cell by cell (9 categories × 5 timeline states =
+    45 assertions).
 
 Per repository convention these live at `lib/application-xray/*.test.ts` and run
 under `find lib -name '*.test.ts' -print0 | xargs -0 tsx --test`.

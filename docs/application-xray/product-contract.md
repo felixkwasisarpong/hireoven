@@ -57,25 +57,21 @@ memory.
 | --- | --- | --- |
 | `lib/applications/statuses.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed | Present as an untracked file when this design work began; not authored here. Committed as `53868c61`, merged to `main` via PR #496, and confirmed present in `origin/main`. |
 | The `last_seen_at` fix in `lib/harvester/persist-bulk.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed and deployed | Present as an uncommitted diff when this work began; not authored here. Merged via #496 and verified running on both boxes. |
-| `scripts/migrations/add-candidate-credential-declarations.sql` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed **absent from `origin/main`**; sits in open PR #497. |
-| `candidate_credential_declarations` (the table) | **PROPOSED_NOT_IMPLEMENTED** | The migration is not in `main`, and the startup runner only applies migrations present in the deployed image, so the table cannot exist in any environment. No manual application was performed. |
-| `lib/candidates/credential-declarations.ts` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed absent from `origin/main`; in open PR #497. |
-| `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed absent from `origin/main`; in open PR #497. |
+| `scripts/migrations/add-candidate-credential-declarations.sql` | **BRANCH_PRESENT_NOT_APPLIED_BY_XRAY_CORE** | Present in the current branch. This milestone did not create or apply it. The pure X-Ray core accepts already-loaded declarations and does not depend on this table. |
+| `candidate_credential_declarations` (the table) | **MIGRATION_PRESENT_RUNTIME_STATE_NOT_ASSUMED** | The migration file exists in this branch, but this milestone performed no DB inspection or migration application. Production reachability must be feature-gated until deployment applies the migration. |
+| `lib/candidates/credential-declarations.ts` | **BRANCH_PRESENT_NOT_IMPORTED_BY_XRAY_CORE** | Present in the current branch. X-Ray mirrors the decision semantics through `lib/application-xray/requirements.ts` and receives evaluated declarations as input fixtures. |
+| `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO` | **BRANCH_PRESENT_UPSTREAM_INPUT_ONLY** | Present in the current branch. X-Ray does not import it; it receives `lastSeenAtTrustworthy` and `lastSeenEpochIso` as explicit structured input. |
 | `lib/matching/fast-scorer.ts`, `lib/jobs/metadata.ts`, `lib/jobs/ghost-job-risk.ts`, `lib/health/score-computer.ts`, `lib/networking/job-contact-finder.ts`, `app/api/jobs/[id]/ghost-risk/route.ts` and every other module cited as evidence | **VERIFIED_EXISTING_BEFORE_THIS_DESIGN** | Read directly; unmodified by this work. |
 
 **Disclosure.** The original brief said not to implement production code. That
-held through the design passes. It was then set aside at explicit user
-direction in later turns — the user asked for the uncommitted work to be
-committed and pushed, and for the epoch constant to be determined and set. The
-four files marked *file authored* above are the result. They are additive, they
-are behind an unmerged PR, and no pre-existing production behaviour was altered
-by them. **No production code was created or modified during this final
-correction pass.**
+held through the design passes. This document has since been updated during the
+pure-core implementation milestone. Production application surfaces, API
+routes, background jobs and migrations remain untouched; new implementation
+code is isolated under `lib/application-xray/`.
 
-**Consequence for implementation.** Anything Codex builds against the
-declaration store depends on PR #497 merging first. Branching from `main` today
-gives a repository where `RC3`, `RE4` and the resolution path of `RD2` have no
-backing store.
+**Consequence for implementation.** Application X-Ray may accept declaration
+facts as structured input. It must not require the declaration table at runtime
+until a later integration milestone verifies the migration is deployed.
 
 ---
 
@@ -365,6 +361,12 @@ with the source named and its coverage disclosed. Only `CONFIRMED_NOT_ENROLLED`
 is substantive, and even then it constrains a *future* path rather than present
 work.
 
+A refused future STEM OPT / E-Verify step does not rewrite present target
+employer authorization. If current OPT employment is otherwise valid,
+`canWorkForTargetEmployerWithoutNewImmigrationAction` remains `YES`; the
+decisioning fact is the cited future employer-action refusal, handled only by
+`G_REQUIRED_EMPLOYER_ACTION_REFUSED` / `RC4`.
+
 **Posting side is categorized, not booleanized.**
 `SPONSORSHIP_SCOPE_AMBIGUOUS` · `NO_CURRENT_SPONSORSHIP` · `NO_FUTURE_SPONSORSHIP` ·
 `NO_CURRENT_OR_FUTURE_SPONSORSHIP` · `UNRESTRICTED_AUTHORIZATION_REQUIRED` ·
@@ -372,10 +374,13 @@ work.
 `SPONSORSHIP_OFFERED`.
 
 **Scope is read, never assumed.** "We are unable to provide visa sponsorship for
-this position" says nothing about whether the bar extends past today. Absent a
-temporal marker — "currently", "at this time", "now", "in the future", "now or
-in the future" — the category is `SPONSORSHIP_SCOPE_AMBIGUOUS`. For a candidate
-authorized today who will need employer action later, that yields
+this position" says nothing about whether the bar extends past today.
+"Currently", "at this time", "at present", "right now", "for this role" and
+"for this position" likewise describe employer policy or identify the role;
+they do not establish current-only sponsorship scope. `NO_CURRENT_SPONSORSHIP`
+requires explicit begin-employment or initial-work-authorization language.
+Explicit future categories require future wording. For a candidate authorized
+today who will need employer action later, generic no-sponsorship language yields
 `NEEDS_CLARIFICATION` — not `NO_EXPLICIT_CONFLICT_FOUND`, and not an automatic
 skip. It continues to `APPLY_NOW` at low confidence with a prominent
 `confirm_future_sponsorship_policy` action, unless another rule fires.
@@ -620,10 +625,11 @@ a projection of the same object, never an independent computation.
 2. Claim-level evidence verification (needs a claim ↔ source-span table).
 3. JD-change detection and true repost cycles (needs a JD-history table).
 4. **A credential acquirability catalog.** Until one exists, acquirability is
-   `unknown` unless the candidate declares it. The declaration path *is* built
-   (`candidate_credential_declarations` +
-   `lib/candidates/credential-declarations.ts`), so `RE4` is reachable — but
-   only through an explicit candidate answer, never an estimate of ours.
+   `unknown` unless the candidate declares it. The current branch contains the
+   declaration migration and helper module, but this milestone neither applies
+   the migration nor depends on the table. `RE4` is contract-representable and
+   reachable in pure fixtures through explicit candidate input; production
+   persistence is a later integration task.
 5. Cross-employer or cohort benchmarking ("candidates like you").
 6. Salary negotiation guidance. LCA wages are a legal floor, not a market rate;
    salary is displayed context only.

@@ -22,12 +22,11 @@ reader can tell inspected fact from proposal. Full table and disclosure in
 | --- | --- |
 | **VERIFIED_EXISTING_BEFORE_THIS_DESIGN** | Every module cited as evidence below — `fast-scorer.ts`, `metadata.ts`, `ghost-job-risk.ts`, `score-computer.ts`, `job-contact-finder.ts`, `visa-fit-score.ts`, `application-verdict.ts`, `persist-bulk.ts`, the ghost-risk route, and the schema defaults. Read directly; unmodified. |
 | **OBSERVED_UNCOMMITTED_CHANGE** *(present in the working tree when this work began; not authored here; since committed and merged)* | `lib/applications/statuses.ts`; the `last_seen_at` fix in `lib/harvester/persist-bulk.ts`. |
-| **PROPOSED_NOT_IMPLEMENTED** *(authored during this engagement, unmerged in PR #497)* | `scripts/migrations/add-candidate-credential-declarations.sql`; the `candidate_credential_declarations` table, which exists in **no** environment; `lib/candidates/credential-declarations.ts`; `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO`. |
+| **BRANCH_PRESENT_NOT_APPLIED_BY_XRAY_CORE** | `scripts/migrations/add-candidate-credential-declarations.sql`; `candidate_credential_declarations` persistence is not assumed because this milestone did not apply migrations. |
+| **BRANCH_PRESENT_NOT_IMPORTED_BY_XRAY_CORE** | `lib/candidates/credential-declarations.ts`; `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO`. X-Ray receives their semantics as explicit structured input. |
 
-Every "fixed" marker in §1–§13 below refers to a fix **in the design**, not to
-shipped behaviour, except the two OBSERVED items, which are merged and deployed.
-
-**No production code was created or modified during this final correction pass.**
+Every "fixed" marker in §1–§13 below refers to a fix in the design or pure
+`lib/application-xray/` core, not to UI/API/database integration.
 
 ---
 
@@ -724,7 +723,9 @@ extension at *this* employer.
 **Mitigations.**
 1. `B4c` requires **two** confirmations from the two parties who own the facts —
    the candidate that STEM OPT is the path they need, the employer that it will
-   neither participate nor enrol. Neither alone fires.
+   neither participate nor enrol. Neither alone fires, and the candidate's
+   current target-employer work authorization remains `YES` when the unexpired
+   OPT EAD otherwise permits work today.
 2. Confidence is capped at `medium`, never `high`, because either confirmation
    can be revised.
 3. The copy describes an arrangement that cannot be made, never a status:
@@ -757,7 +758,7 @@ claiming a stage-E rule fired while the stage-D gate was failing.
 | 3 | Tri-state derivation for `companies.sponsors_h1b` | Yes |
 | 4 | `healthUsable` gates on `observedSubScoreCount` | Yes |
 | 5 | Posting-language categories re-derived with excerpts; `requires_authorization` demoted to a hint | Yes |
-| 6 | The §5.3 matrix implemented cell-by-cell and asserted (32 cells) | Yes |
+| 6 | The §5.3 matrix implemented cell-by-cell and asserted (45 cells) | Yes |
 | 7 | `RequirementPresence` implemented; `NOT_FOUND` can never set `supportsHardSkip` | Yes |
 | 8 | `llm_only` provenance caps strength at `INFERRED` | Yes |
 | 9 | Acquirability requires a source; no model estimates | Yes |
@@ -771,7 +772,7 @@ claiming a stage-E rule fired while the stage-D gate was failing.
 | 17 | `FAST_SCORE_CACHE_EPOCH_ISO` folded into `inputsHash` | Yes |
 | 18 | Static check: no diversity-column reads; no `calculateApplicationVerdict` import | Yes |
 | 19 | Every `SKIP` carries ≥1 forward action (§12.1) | Yes |
-| 20 | ~~Declaration store is per-credential and reversible~~ — **built**: `scripts/migrations/add-candidate-credential-declarations.sql` + `lib/candidates/credential-declarations.ts` (§13.1, §13.2) | Done |
+| 20 | Declaration store is branch-present but not required by the pure core; DB-backed persistence remains an integration milestone | No — core accepts structured declarations |
 | 21 | `probeApplyUrl` 401/403 reclassified as `unknown` | No — X-Ray's caveat covers it; fix separately |
 | 22 | `must possess valid work authorization` pattern tightened in `lib/jobs/metadata.ts` | No — X-Ray re-derives; fix separately |
 | 23 | Remaining status-vocabulary consumers migrated; `application_timing_signals` recomputed | No — not a v0 decision input |
