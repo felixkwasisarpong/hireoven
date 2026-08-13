@@ -3,8 +3,9 @@
 A consumer of Application X-Ray. Answers **"of everything open to me right now,
 which few should I actually apply to today, and why not the rest."**
 
-This is a milestone *after* the X-Ray pure core, and it imposes one requirement
-on that core (§4). Nothing here changes the X-Ray contract's semantics; it
+This is a milestone *after* the X-Ray pure core. §4 was rewritten after
+inspecting the delivered core: the requirement lands on the **loader**, not the
+engine, and is smaller than first assumed. Nothing here changes the X-Ray contract's semantics; it
 changes how the engine is invoked and adds a surface.
 
 Companions: `product-contract.md`, `decision-table.md`, `xray-contract.ts`.
@@ -89,40 +90,63 @@ as "we looked at everything" when we didn't.
 
 ---
 
-## 4. Deterministic batch mode — the core requirement
+## 4. Deterministic batch mode — the remaining requirement
 
-**This is the one thing that must land in the X-Ray core, not be retrofitted.**
+**Updated after inspecting the delivered pure core.** The architecture is better
+than this spec originally assumed, and the gap is correspondingly narrower.
 
-X-Ray as specified is a detail-page engine: it probes apply URLs on a 5s
-timeout, queries the networking finder (four parallel queries), and may call an
-LLM. Running that across 200 jobs would issue ~200 outbound HTTP probes and ~800
-network-contact queries per user per day. The web box has previously been
-OOM-restarted by far less.
+### 4.0 What the pure-core milestone already got right
 
-So the engine must expose an execution mode:
+Verified by inspection of `lib/application-xray/` (26 modules, 59 tests passing,
+`tsc` clean):
 
-```
-mode: "detail" | "batch"
-```
-
-`batch` guarantees:
-
-| Forbidden in batch | Consequence |
+| Property | Status |
 | --- | --- |
-| `probeApplyUrl` | `applyUrlStatus = "unknown"` — already a legal value, already produces no penalty |
-| Networking finder | `accessRoutes = []`, so **`FIND_ACCESS` is unreachable in batch**. Those jobs surface as `APPLY_NOW`; the route is discovered on the detail view. Stated in the output, not hidden. |
-| Any LLM call | All requirement strengths cap at `INFERRED`; no LLM-phrased headlines |
-| Per-job outbound HTTP | — |
-| Uncached ghost recompute | Cached score used; absent cache ⇒ `band = "unknown"` |
+| The engine is genuinely pure — zero I/O in `lib/application-xray/*.ts` | **Confirmed** |
+| All loading is isolated in `lib/application-xray/server/load-input.ts` | **Confirmed** |
+| `probeApplyUrl` is **never called** — `url_status` is read from the `ghost_job_scores` cache | **Confirmed.** This removes the outbound-HTTP risk entirely, which was the single largest concern in the original draft of this section. |
+| `overall_score` is barred from Capability, enforced by `source-policy.test.ts` | **Confirmed** |
+| The networking-contact call is **injectable** via a `loadContacts?` parameter | **Confirmed** — batch mode can pass a no-op without touching the engine |
 
-Everything `batch` *may* read is already cached or local: `jobs` / `companies`
-rows, `job_match_scores.score_breakdown` (subject to `isScoreFreshForResume`),
-`ghost_job_scores`, `company_health_scores`, the parsed résumé, and posting text.
+Because the core is pure and the loader is separate, **batch mode is a property
+of the loader, not of the engine.** No engine rework is required.
 
-**`XRaySummary` must be fully computable in `batch` mode.** That is the
-acceptance test for this requirement.
+### 4.1 The actual gap
 
-### 4.1 Two passes, because Evidence and Positioning are the expensive local work
+`loadApplicationXRayInput` is written for one `(user, job)` pair. It issues
+roughly a dozen queries per call, and the split matters:
+
+| Scope | Tables |
+| --- | --- |
+| **Per job** (must batch) | `jobs`, `ghost_job_scores`, `company_health_scores`, `rejection_patterns`, `job_match_scores` |
+| **Per user** (must hoist — identical for every job in the run) | `profiles` ×2, `resumes` ×3, `autofill_profiles`, `job_applications`, `candidate_credential_declarations` |
+
+Called naively in a loop over a 200-job candidate set, that is roughly **3,200
+queries per shortlist run** — of which about 1,400 re-fetch the same user rows
+200 times over. Add `getJobNetworkingContacts` (four queries per job) and it is
+worse.
+
+### 4.2 What batch mode must do
+
+Add a batch loader beside the existing one. Do **not** modify the engine.
+
+1. **Hoist the user-scoped reads.** Load the profile, résumés, autofill profile,
+   applications and declarations **once per run**, then reuse across all
+   candidates.
+2. **Batch the job-scoped reads** with `WHERE job_id = ANY($1::uuid[])` /
+   `company_id = ANY(...)`, chunked, on indexed predicates only.
+3. **Pass a no-op `loadContacts`.** The seam already exists, so
+   `accessRoutes = []` and **`FIND_ACCESS` becomes unreachable in batch** —
+   deliberately, and stated in the output rather than hidden. Routes are
+   discovered on the detail view.
+4. **No LLM calls.** Requirement strengths cap at `INFERRED`.
+
+Target: **~6 queries per run**, independent of candidate-set size, down from
+~3,200.
+
+`XRaySummary` must be fully computable on this path. That is the acceptance test.
+
+### 4.3 Two passes, because Evidence and Positioning are the expensive local work
 
 `buildLocalTailorAnalysis` and `buildPositioningBrief` are pure but do real
 string work per job. At 200 jobs that is meaningful CPU on a shared box, and
