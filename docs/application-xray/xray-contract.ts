@@ -570,14 +570,17 @@ export type EligibilityObservationBand =
  * SPONSORSHIP_SCOPE_AMBIGUOUS is the default for a bare no-sponsorship
  * statement. "We are unable to provide visa sponsorship for this position"
  * does NOT establish that only *current* sponsorship is barred — it is simply
- * silent on scope. Only explicit temporal wording ("currently", "at this
- * time", "now", "in the future", "now or in the future") moves a statement
- * into one of the scoped categories.
+ * silent on scope. "currently", "at this time", "at present", "right now",
+ * "for this role" and "for this position" describe present employer policy or
+ * the role being discussed; they do not establish current-only sponsorship
+ * scope. NO_CURRENT_SPONSORSHIP requires deterministic begin-employment or
+ * initial-work-authorization language. Future categories require explicit
+ * future wording.
  */
 export type PostingAuthorizationLanguageCategory =
   /** Bare no-sponsorship language with no temporal qualifier. */
   | "SPONSORSHIP_SCOPE_AMBIGUOUS"
-  /** Explicitly scoped to now: "we cannot sponsor at this time". */
+  /** Explicitly scoped to starting work: "begin employment without sponsorship". */
   | "NO_CURRENT_SPONSORSHIP"
   /** Explicitly scoped to later: "will not sponsor in the future". */
   | "NO_FUTURE_SPONSORSHIP"
@@ -593,9 +596,8 @@ export type PostingAuthorizationLanguageCategory =
   | "SPONSORSHIP_OFFERED"
 
 export type TemporalScopeMarker =
-  | "currently"
-  | "at_this_time"
-  | "now"
+  | "start_employment"
+  | "initial_work_authorization"
   | "in_the_future"
   | "now_or_in_the_future"
   | "none_present"
@@ -724,6 +726,30 @@ export type CandidateAuthorizationTimeline = {
   /** True when only schema defaults were available. Forces every field to the
    *  unknown branch. */
   derivedFromDefaultsOnly: boolean
+  /** Required to distinguish citizens from green-card holders for citizenship
+   *  requirements. */
+  currentAuthorizationType?: "citizen" | "green_card" | "temporary_status" | "unknown"
+}
+
+export type EmployerActionFeasibilityStatus =
+  | "AVAILABLE"
+  | "REFUSED_CONFIRMED"
+  | "NOT_FOUND"
+  | "UNKNOWN"
+
+export type EmployerActionFeasibility = {
+  actionType: FutureEmployerActionType
+  status: EmployerActionFeasibilityStatus
+  /** Required for REFUSED_CONFIRMED to become decisioning evidence. */
+  employerStatementExcerpt: string | null
+  /** True only when the candidate explicitly confirms this action is required
+   *  for this target job. NOT_FOUND and UNKNOWN never imply true. This field
+   *  does not redefine current work authorization; a candidate can remain
+   *  canWorkForTargetEmployerWithoutNewImmigrationAction = YES while a future
+   *  employer action is refused. */
+  candidateRequiresAction: boolean | "unknown"
+  sourceFactIds: string[]
+  confidence: XRayConfidence
 }
 
 /**
@@ -777,6 +803,10 @@ export type EligibilityAssessment = XRayDimension<EligibilityObservationBand> & 
   postingRequirements: PostingAuthorizationRequirement[]
   descriptionWasReadable: boolean
   conflicts: AuthorizationConflictEvaluation[]
+  /** Direct employer-action feasibility evidence. Can produce
+   *  EXPLICIT_REQUIREMENT_CONFLICT only when the candidate-required action and
+   *  employer refusal are both explicit, cited and confidence >= medium. */
+  employerActionFeasibility: EmployerActionFeasibility[]
 
   sponsorshipHistory: SponsorshipHistorySignal | null
 

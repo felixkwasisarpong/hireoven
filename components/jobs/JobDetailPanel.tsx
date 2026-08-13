@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { ApplicationXRayPanel } from "@/components/application-xray/ApplicationXRayPanel"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
 import {
@@ -573,6 +574,15 @@ export default function JobDetailPanel({
               </div>
             )
           ) : null}
+        </div>
+
+        {/* ── Application X-Ray ── */}
+        <div className={sectionCls}>
+          <ApplicationXRayPanel
+            jobId={job.id}
+            resumeId={resumeId}
+            applyUrl={applyUrl}
+          />
         </div>
 
         {/* ── Match Score ── */}

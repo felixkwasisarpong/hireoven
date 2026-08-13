@@ -341,7 +341,8 @@ further. The OPT clock is phrasing context only.
 ### B3a. OPT authorized now, generic no-sponsorship language *(revised — correction 2)*
 
 **Signals.** As B3, but the description says: "We are not able to provide visa
-sponsorship for this position." No temporal marker anywhere in the sentence →
+sponsorship for this position." No start-employment or future-scope marker
+appears in the sentence →
 `temporalScope = none_present` → category **`SPONSORSHIP_SCOPE_AMBIGUOUS`**,
 `deterministicMatch = true`, excerpt captured.
 Candidate: `visa_status='opt'`, unexpired EAD, role related to the degree →
@@ -370,7 +371,7 @@ job. The honest output names the open question and asks the employer.
 **Signals.** As B3a, but the candidate never set `visa_status` or
 `work_authorization`; only schema defaults exist →
 `derivedFromDefaultsOnly = true`, every timeline field `unknown`.
-**Matrix cell.** `NO_CURRENT_SPONSORSHIP` × "timeline unknown" →
+**Matrix cell.** `SPONSORSHIP_SCOPE_AMBIGUOUS` × "timeline unknown" →
 `needs_clarification`, `candidateDataSufficient = false`.
 `G_BLOCKING_CONFIRMATION` is true (category is not `AMBIGUOUS_GENERAL`, and the
 clarification is due to insufficient candidate data).
@@ -402,17 +403,19 @@ flipping the band.
 **Why.** Distinguishes `RC2` (future conflict) from `RC1` (current). The copy
 difference is the whole point of the correction.
 
-### B4. STEM OPT, E-Verify participation unknown *(revised — correction 5A)*
+### B4. OPT now, future STEM OPT E-Verify participation unknown *(revised — correction 5A)*
 
-**Signals.** `visa_status='stem_opt'`, EAD valid 14 more months. No E-Verify
-dataset was consulted or the lookup failed → `EVerifySignal.participation =
-UNKNOWN`, `sourceName = null`. STEM-related role. No posting authorization
-language.
+**Signals.** `visa_status='opt'`, current OPT EAD valid 14 more months, role
+related to the degree. The candidate can work for the target employer today:
+`canWorkForTargetEmployerWithoutNewImmigrationAction = YES`. No E-Verify dataset
+was consulted or the lookup failed → `EVerifySignal.participation = UNKNOWN`,
+`sourceName = null`. STEM-related role. No posting authorization language.
 Timeline: `canWorkForTargetEmployerWithoutNewImmigrationAction =
-NEEDS_EMPLOYER_ACTION` — STEM OPT only works where the employer enrols in
-E-Verify and completes the I-983, and neither is established.
+YES`; the E-Verify/I-983 issue is a future continuation path, not present work
+authorization.
 `futureEmployerActions` = STEM_OPT_EVERIFY_PARTICIPATION `REQUIRED`,
 STEM_OPT_I983 `REQUIRED`, H1B_PETITION `POSSIBLE`.
+`EmployerActionFeasibility` for E-Verify is `UNKNOWN`, not refused.
 **Bands.** HR `LIVE` · CAP `MEETS` · EV `ADEQUATE` · EL `EMPLOYER_ACTION_MAY_BE_NEEDED` · POS `ALIGNED`.
 **Action.** `APPLY_NOW` (`RI2`) with `confirm_everify_participation`.
 **Confidence.** `medium`. **Gaps.** `everify-participation-unknown`.
@@ -427,6 +430,8 @@ against the candidate.
 row → `participation = NOT_FOUND_IN_SOURCE`, `sourceName` set,
 `sourceCoverageNote` recording that the dataset lists enrolled employers only
 and lags enrolment by an unknown interval.
+`EmployerActionFeasibility.status = NOT_FOUND`, which cannot be upgraded to
+refusal.
 **Bands.** HR `LIVE` · CAP `MEETS` · EV `ADEQUATE` · EL `EMPLOYER_ACTION_MAY_BE_NEEDED` · POS `ALIGNED`.
 **Action.** `APPLY_NOW` (`RI2`) with `confirm_everify_participation`, and the
 coverage note rendered alongside. **Confidence.** `medium`.
@@ -443,9 +448,11 @@ index is a fact about the index.
 
 **Signals.** As B4, but the employer states directly — in the posting or a
 recruiter reply — that it does not participate in E-Verify →
-`participation = CONFIRMED_NOT_ENROLLED`, excerpt captured. The candidate has
-**not** confirmed that STEM OPT is the path they need; their current EAD runs
-14 more months, and H1B_PETITION is `POSSIBLE`.
+`participation = CONFIRMED_NOT_ENROLLED`, excerpt captured.
+`EmployerActionFeasibility.status = REFUSED_CONFIRMED`, but
+`candidateRequiresAction = "unknown"`. The candidate has **not** confirmed that
+STEM OPT is the path they need; their current EAD runs 14 more months, and
+H1B_PETITION is `POSSIBLE`.
 **Bands.** HR `LIVE` · CAP `MEETS` · EV `ADEQUATE` · EL `EMPLOYER_ACTION_MAY_BE_NEEDED` · POS `ALIGNED`.
 **Action.** `APPLY_NOW` (`RI2`) with two actions:
 `confirm_stem_opt_requirement` (candidate — is STEM OPT the path you need for
@@ -464,9 +471,14 @@ present bar. It becomes decisive only in B4c.
 to hold this job (their EAD expires inside the role's expected start-to-need
 window), **and** the employer confirms it will neither participate nor enrol.
 Both sides are now confirmed, both cited.
-Timeline: `canWorkForTargetEmployerWithoutNewImmigrationAction = NO`.
+Timeline: `canWorkForTargetEmployerWithoutNewImmigrationAction = YES` because
+the candidate still has unexpired OPT work authorization for this target
+employer today. The blocker is only the refused future employer action.
+`EmployerActionFeasibility.status = REFUSED_CONFIRMED`,
+`candidateRequiresAction = true`, `sourceFactIds` is non-empty and confidence is
+at least `medium`.
 **Bands.** HR `LIVE` · CAP `MEETS` · EV `ADEQUATE` · EL `EXPLICIT_REQUIREMENT_CONFLICT` · POS `ALIGNED`.
-**Action.** `SKIP` (`RC1`). **Confidence.** `medium` — not `high`; it rests on
+**Action.** `SKIP` (`RC4`). **Confidence.** `medium` — not `high`; it rests on
 two separate confirmations, either of which the candidate can revise.
 **Forbidden.** `confidence: high`; "you are not eligible to work in the US";
 firing on the employer's confirmation alone (that is B4b); firing on the
@@ -475,7 +487,7 @@ candidate's alone.
 requirement and the refusal are confirmed by the parties who own them. Note the
 band is reached via the candidate's declared *need* meeting the employer's
 declared *refusal*, not via posting language — so the copy describes an
-arrangement that cannot be made, never a legal status.
+arrangement that cannot be made, never a legal status or present-work bar.
 
 ### B5. Explicit no-current-sponsorship, candidate not currently authorized *(revised)*
 
@@ -655,8 +667,8 @@ condition.
 **Forbidden.** `RD2` (the ambiguity is in wording that bars nobody, so knowing
 the answer would not flip the action); `SKIP`; `STRENGTHEN_FIRST`.
 **Why.** Pins the exact boundary of `G_BLOCKING_CONFIRMATION`: compare with
-B3b, where the category was specific and the same missing candidate data *was*
-decision-blocking.
+B3b, where the posting contains a sponsorship bar and the same missing
+candidate data *was* decision-blocking.
 
 ---
 
@@ -1256,7 +1268,7 @@ out. Posting has no authorization language.
 | Required certification not mentioned, candidate status unknown | **A6** |
 | Candidate explicitly confirms certification absent | **A6b** |
 | OPT authorized now, future sponsorship prohibited | **B3c** |
-| OPT authorized now, posting says only no *current* sponsorship | **B3a** |
+| OPT authorized now, generic no-sponsorship scope ambiguous | **B3a** |
 | STEM OPT candidate at a non-E-Verify employer | **B4a** |
 | Duplicate whose canonical has an eligibility conflict | **C7a** |
 | Duplicate whose canonical has a capability mismatch | **C7b** |
