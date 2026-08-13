@@ -9,8 +9,10 @@
  * Deliberately small + pure so it's unit-testable; the API does the SQL.
  */
 
+import { APPLICATION_RESPONSE_STATUSES } from "@/lib/applications/statuses"
+
 /** Stages that count as "the application got a callback". */
-export const RESPONSE_STATUSES = ["phone_screen", "interview", "final_round", "offer"] as const
+export const RESPONSE_STATUSES = APPLICATION_RESPONSE_STATUSES
 
 /** Minimum submitted applications on a variant before we trust its rate. */
 export const MIN_SAMPLE = 5
