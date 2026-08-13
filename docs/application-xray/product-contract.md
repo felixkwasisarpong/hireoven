@@ -45,6 +45,40 @@ Four constraints, each binding on what may ship:
 
 ---
 
+## 1a. Repository-claim classification (correction 8)
+
+Earlier drafts referred to repository artefacts without saying which were
+pre-existing, which were observed uncommitted in the working tree, and which
+this design work created. Every claim is classified below, and each was
+confirmed by inspecting the repository at the time of writing — not from
+memory.
+
+| Artefact | Classification | Evidence |
+| --- | --- | --- |
+| `lib/applications/statuses.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed | Present as an untracked file when this design work began; not authored here. Committed as `53868c61`, merged to `main` via PR #496, and confirmed present in `origin/main`. |
+| The `last_seen_at` fix in `lib/harvester/persist-bulk.ts` | **OBSERVED_UNCOMMITTED_CHANGE**, since committed and deployed | Present as an uncommitted diff when this work began; not authored here. Merged via #496 and verified running on both boxes. |
+| `scripts/migrations/add-candidate-credential-declarations.sql` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed **absent from `origin/main`**; sits in open PR #497. |
+| `candidate_credential_declarations` (the table) | **PROPOSED_NOT_IMPLEMENTED** | The migration is not in `main`, and the startup runner only applies migrations present in the deployed image, so the table cannot exist in any environment. No manual application was performed. |
+| `lib/candidates/credential-declarations.ts` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed absent from `origin/main`; in open PR #497. |
+| `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO` | **PROPOSED_NOT_IMPLEMENTED** *(file authored, unmerged)* | Written during this engagement. Confirmed absent from `origin/main`; in open PR #497. |
+| `lib/matching/fast-scorer.ts`, `lib/jobs/metadata.ts`, `lib/jobs/ghost-job-risk.ts`, `lib/health/score-computer.ts`, `lib/networking/job-contact-finder.ts`, `app/api/jobs/[id]/ghost-risk/route.ts` and every other module cited as evidence | **VERIFIED_EXISTING_BEFORE_THIS_DESIGN** | Read directly; unmodified by this work. |
+
+**Disclosure.** The original brief said not to implement production code. That
+held through the design passes. It was then set aside at explicit user
+direction in later turns — the user asked for the uncommitted work to be
+committed and pushed, and for the epoch constant to be determined and set. The
+four files marked *file authored* above are the result. They are additive, they
+are behind an unmerged PR, and no pre-existing production behaviour was altered
+by them. **No production code was created or modified during this final
+correction pass.**
+
+**Consequence for implementation.** Anything Codex builds against the
+declaration store depends on PR #497 merging first. Branching from `main` today
+gives a repository where `RC3`, `RE4` and the resolution path of `RD2` have no
+backing store.
+
+---
+
 ## 2. User inputs
 
 X-Ray is computed for a `(user, resume, job)` triple. Everything else is
@@ -291,26 +325,60 @@ never shared outward, never a `SKIP` reason.
 The question is deliberately *not* "is the candidate eligible". We cannot answer
 that and must not appear to.
 
-**Candidate side is a timeline, not a flag.**
+**Candidate side is a timeline against the target employer.**
+
+The field is `canWorkForTargetEmployerWithoutNewImmigrationAction` — deliberately
+long, because the short version invites the error. It is not "does the candidate
+hold a status"; it is "can they start work *here* without someone filing
+something first".
 
 | Field | Meaning |
 | --- | --- |
-| `currentlyAuthorized` | can they work for this employer **today** |
-| `currentAuthorizationType` | the declared status |
-| `authorizationEndDate` | e.g. `profiles.opt_end_date`; null when unbounded *or* unknown, disambiguated by type |
-| `futureEmployerActionLikely` | will the employer have to act **later** |
-| `futureActionType` | `h1b_petition` · `stem_opt_everify_participation` · `green_card_sponsorship` · `visa_transfer` · `other` · `unknown` |
+| `canWorkForTargetEmployerWithoutNewImmigrationAction` | `YES` · `NO` · `NEEDS_EMPLOYER_ACTION` · `UNKNOWN` |
+| `declaredVisaStatus` / `declaredWorkAuthorization` | What the candidate told us, from either vocabulary |
+| `authorizationEndDate` | e.g. `profiles.opt_end_date`; null when unbounded *or* unknown |
+| `futureEmployerActions[]` | Ordered, most imminent first — each with type, horizon, status, source, confidence and gaps |
 
-**Being on OPT does not mean "needs sponsorship now."** An F-1 OPT holder is
-authorized today; the employer need do nothing until the EAD expires. Revision 1
-collapsed this into one `needsSponsorship` flag and consequently returned `SKIP`
-on postings that only bar *current* sponsorship. That was wrong and is fixed.
+**An H-1B holder employed elsewhere is `NEEDS_EMPLOYER_ACTION`, never `YES`.**
+Being in H-1B status authorizes work for the *petitioning* employer; starting at
+a new one requires a transfer petition. Reading "currently in H-1B status" as
+"can start here" would let a posting barring sponsorship *and transfer* read as
+no-conflict, and would tell an H-1B holder they can simply begin.
+
+**An OPT holder is `YES`** while the EAD is unexpired and the role relates to the
+degree — subject to that relation, which stays `UNKNOWN` when unestablished.
+**A STEM OPT holder is `NEEDS_EMPLOYER_ACTION`** until the target employer is
+known to enrol in E-Verify and complete the I-983.
+
+**Future actions are a list, and initial OPT does not imply H-1B.** Someone on
+initial OPT may extend via STEM OPT, may go to H-1B, may do neither — and which
+paths are open turns on facts we often lack, above all STEM-degree eligibility.
+Missing eligibility stays `UNKNOWN`; it is never resolved by assumption. Types:
+`STEM_OPT_EVERIFY_PARTICIPATION`, `STEM_OPT_I983`, `H1B_PETITION`,
+`H1B_TRANSFER`, `OTHER`, `UNKNOWN` — each carrying `REQUIRED` / `POSSIBLE` /
+`UNKNOWN` with its own source and data gaps.
+
+**E-Verify participation is four-state.** `CONFIRMED_PARTICIPATING`,
+`CONFIRMED_NOT_ENROLLED`, `NOT_FOUND_IN_SOURCE`, `UNKNOWN`. A miss in an
+incomplete index is a fact about the index: `NOT_FOUND_IN_SOURCE` must render
+with the source named and its coverage disclosed. Only `CONFIRMED_NOT_ENROLLED`
+is substantive, and even then it constrains a *future* path rather than present
+work.
 
 **Posting side is categorized, not booleanized.**
-`NO_CURRENT_SPONSORSHIP` · `NO_FUTURE_SPONSORSHIP` ·
+`SPONSORSHIP_SCOPE_AMBIGUOUS` · `NO_CURRENT_SPONSORSHIP` · `NO_FUTURE_SPONSORSHIP` ·
 `NO_CURRENT_OR_FUTURE_SPONSORSHIP` · `UNRESTRICTED_AUTHORIZATION_REQUIRED` ·
 `CITIZENSHIP_REQUIRED` · `CLEARANCE_REQUIRED` · `AMBIGUOUS_GENERAL` ·
 `SPONSORSHIP_OFFERED`.
+
+**Scope is read, never assumed.** "We are unable to provide visa sponsorship for
+this position" says nothing about whether the bar extends past today. Absent a
+temporal marker — "currently", "at this time", "now", "in the future", "now or
+in the future" — the category is `SPONSORSHIP_SCOPE_AMBIGUOUS`. For a candidate
+authorized today who will need employer action later, that yields
+`NEEDS_CLARIFICATION` — not `NO_EXPLICIT_CONFLICT_FOUND`, and not an automatic
+skip. It continues to `APPLY_NOW` at low confidence with a prominent
+`confirm_future_sponsorship_policy` action, unless another rule fires.
 
 The repository collapses all of these into `jobs.requires_authorization`
 (`boolean DEFAULT false`, so `inferRequiresAuthorization`'s `null` is lost), and
@@ -552,8 +620,10 @@ a projection of the same object, never an independent computation.
 2. Claim-level evidence verification (needs a claim ↔ source-span table).
 3. JD-change detection and true repost cycles (needs a JD-history table).
 4. **A credential acquirability catalog.** Until one exists, acquirability is
-   `unknown` unless the candidate declares it, and `RE4` is effectively
-   unreachable.
+   `unknown` unless the candidate declares it. The declaration path *is* built
+   (`candidate_credential_declarations` +
+   `lib/candidates/credential-declarations.ts`), so `RE4` is reachable — but
+   only through an explicit candidate answer, never an estimate of ours.
 5. Cross-employer or cohort benchmarking ("candidates like you").
 6. Salary negotiation guidance. LCA wages are a legal floor, not a market rate;
    salary is displayed context only.

@@ -12,6 +12,25 @@ contract) · **open** (procedural mitigation only, needs a test or a code change
 
 ---
 
+## 0. Repository-claim classification (correction 8)
+
+This review cites repository modules as evidence. Each claim is classified so a
+reader can tell inspected fact from proposal. Full table and disclosure in
+`product-contract.md` §1a; summary:
+
+| Class | Items |
+| --- | --- |
+| **VERIFIED_EXISTING_BEFORE_THIS_DESIGN** | Every module cited as evidence below — `fast-scorer.ts`, `metadata.ts`, `ghost-job-risk.ts`, `score-computer.ts`, `job-contact-finder.ts`, `visa-fit-score.ts`, `application-verdict.ts`, `persist-bulk.ts`, the ghost-risk route, and the schema defaults. Read directly; unmodified. |
+| **OBSERVED_UNCOMMITTED_CHANGE** *(present in the working tree when this work began; not authored here; since committed and merged)* | `lib/applications/statuses.ts`; the `last_seen_at` fix in `lib/harvester/persist-bulk.ts`. |
+| **PROPOSED_NOT_IMPLEMENTED** *(authored during this engagement, unmerged in PR #497)* | `scripts/migrations/add-candidate-credential-declarations.sql`; the `candidate_credential_declarations` table, which exists in **no** environment; `lib/candidates/credential-declarations.ts`; `lib/jobs/last-seen-trust.ts` and `HARVESTER_LAST_SEEN_EPOCH_ISO`. |
+
+Every "fixed" marker in §1–§13 below refers to a fix **in the design**, not to
+shipped behaviour, except the two OBSERVED items, which are merged and deployed.
+
+**No production code was created or modified during this final correction pass.**
+
+---
+
 ## 1. Ways X-Ray could mislead candidates
 
 ### 1.1 (S1) A soft signal reads as a closed door — *guarded*
@@ -82,9 +101,10 @@ one boolean written to `jobs.requires_authorization` (`DEFAULT false`, so
 `createVisaIntelligenceFallback` labels every hit
 `requires_unrestricted_work_authorization`.
 
-**Mitigation.** `PostingAuthorizationLanguageCategory` has eight members, each
-requiring a literal excerpt. **Tests:** B5, B7a, B8, B9 produce four distinct
-categories and four distinct copy paths.
+**Mitigation.** `PostingAuthorizationLanguageCategory` has nine members, each
+requiring a literal excerpt and each recording the `temporalScope` marker that
+placed it. **Tests:** B3a, B5, B7a, B8, B9 produce five distinct categories and
+five distinct copy paths.
 
 ### 1.7 (S1) Bare authorization boilerplate flagged as a blocker — *fixed in r2, code fix open*
 
@@ -109,9 +129,10 @@ OPT holder with two years of runway was skipped from postings that only barred
 *current* sponsorship. That is a wrong answer on a large and vulnerable
 population, delivered with high confidence.
 
-**Mitigation.** `CandidateAuthorizationTimeline` + the §5.3 matrix. The three
-cells that changed are marked in the table. **Tests:** B3a (no conflict), B3c
-(future conflict), B5a (transfer).
+**Mitigation.** `CandidateAuthorizationTimeline` keyed on
+`canWorkForTargetEmployerWithoutNewImmigrationAction`, plus the §5.3 matrix.
+**Tests:** B3a (scope ambiguous → needs clarification), B3c (future conflict),
+B5a (H-1B transfer → `NEEDS_EMPLOYER_ACTION`, never `YES`).
 
 ### 1.9 (S2) "Not seen since" on a live job — *guarded, improved*
 
@@ -145,7 +166,7 @@ someone toward a bad decision on a clock.
 | **(S1)** Predicting an H-1B outcome | `predictH1BApproval` produces probability-shaped payloads | Display-only, never a decision input, always with `dataAsOf` | guarded |
 | **(S1)** Blending cap-exempt into lottery odds | `calculateVisaFitScore` warns about this itself | `CapExemptSignal` stays a separate field; no arithmetic combines them | guarded |
 | **(S1)** An uncitable requirement | A regex hit with no excerpt is unfalsifiable | `PostingAuthorizationRequirement.excerpt` is non-optional | guarded |
-| **(S1)** Conflating "authorized now" with "authorized forever" | Both directions are wrong: skipping an OPT holder who can work today, and reassuring one whose EAD expires in three months | The timeline carries both `currentlyAuthorized` and `futureEmployerActionLikely`; `EMPLOYER_ACTION_MAY_BE_NEEDED` exists precisely to say both at once | fixed in r2 |
+| **(S1)** Conflating "authorized now" with "authorized forever" | Both directions are wrong: skipping an OPT holder who can work today, and reassuring one whose EAD expires in three months | The timeline carries `canWorkForTargetEmployerWithoutNewImmigrationAction` alongside an ordered `futureEmployerActions[]`; `EMPLOYER_ACTION_MAY_BE_NEEDED` exists precisely to say both at once | fixed in r2 |
 | **(S1)** Inferring clearance from immigration status | Revision 1 skipped a TS/SCI posting based on `visa_status` | Clearance is `needs_clarification` for every timeline state; there is no candidate clearance field to infer from | fixed in r2 |
 | **(S2)** Aggregate history overriding posting text | LCA volume is persuasive | Layer A wins the band; Layer B is context | guarded |
 | **(S2)** Absence of role-family filings read as refusal | `calculateVisaFitScore` applies −14 | Reported as a gap | guarded |
@@ -673,15 +694,57 @@ description, aggregator apply URL), X-Ray now evaluates the worse one.
 4. Log canonical swaps where the canonical is older than the duplicate; a
    sustained rate is a dedup bug, not an X-Ray bug.
 
+### 13.9 (S2) Scope-ambiguity fatigue — *new in this pass, open*
+
+Correction 2 is right: a bare no-sponsorship line does not establish scope. But
+that phrasing is extremely common, so a sponsorship-needing candidate may now
+see `NEEDS_CLARIFICATION` and a `confirm_future_sponsorship_policy` action on a
+large fraction of their feed. Advice that appears everywhere is read as noise,
+and the candidate stops seeing the cases where it matters.
+
+**Mitigations.**
+1. The action is per employer, not per posting — one answer about a company's
+   sponsorship posture resolves every one of its listings.
+2. Suppress the prompt entirely when `futureEmployerActions` is empty, i.e. for
+   candidates who will never need employer action. They are the majority, and
+   ambiguity is irrelevant to them.
+3. Rank it below any concrete positioning or evidence action; it is a question
+   for later, not a blocker now.
+4. Never let it change the final action on its own — the matrix routes it to
+   `APPLY_NOW` at low confidence precisely so it informs without obstructing.
+
+### 13.10 (S1) Confirmed non-enrolment sliding into a legal claim — *new in this pass, open*
+
+Correction 5C creates the first path where an employer attribute reaches `SKIP`
+(fixture B4c). The failure mode is the copy: "this employer is not enrolled in
+E-Verify, so you cannot work here" is both wrong and frightening. The candidate's
+current EAD may have a year left; what cannot be arranged is a *future*
+extension at *this* employer.
+
+**Mitigations.**
+1. `B4c` requires **two** confirmations from the two parties who own the facts —
+   the candidate that STEM OPT is the path they need, the employer that it will
+   neither participate nor enrol. Neither alone fires.
+2. Confidence is capped at `medium`, never `high`, because either confirmation
+   can be revised.
+3. The copy describes an arrangement that cannot be made, never a status:
+   "this employer says it will not enrol in E-Verify, and you've told us you'll
+   need STEM OPT for this role."
+4. B4b exists specifically to hold the one-sided case at `APPLY_NOW`.
+
 ### 13.8 (S3) The 3-of-5-unknown sufficiency threshold is arbitrary — *open*
 
 `G_SUFFICIENT` trips at three `UNKNOWN` dimensions. Two is fine; three is not.
 There is no evidence for that line, and D4 vs D3 turns on it.
 
 **Mitigation.** It is documented as a chosen constant, exposed in
-`decisionTrace.inputs`, and covered by two fixtures on either side of the
-boundary (D3, D4). Revisit once real distributions exist. This is honest
+`decisionTrace.inputs`, and covered by fixtures on either side of the boundary
+(D3, D4, A6a). Revisit once real distributions exist. This is honest
 arbitrariness, not hidden arbitrariness.
+
+Correction 7 tightened one edge of it: `evidence.band = UNREADABLE` now counts
+toward the unknown tally, which is what makes A6a resolve coherently instead of
+claiming a stage-E rule fired while the stage-D gate was failing.
 
 ---
 
@@ -708,7 +771,7 @@ arbitrariness, not hidden arbitrariness.
 | 17 | `FAST_SCORE_CACHE_EPOCH_ISO` folded into `inputsHash` | Yes |
 | 18 | Static check: no diversity-column reads; no `calculateApplicationVerdict` import | Yes |
 | 19 | Every `SKIP` carries ≥1 forward action (§12.1) | Yes |
-| 20 | Declaration store is per-credential and reversible (§13.1, §13.2) | Yes |
+| 20 | ~~Declaration store is per-credential and reversible~~ — **built**: `scripts/migrations/add-candidate-credential-declarations.sql` + `lib/candidates/credential-declarations.ts` (§13.1, §13.2) | Done |
 | 21 | `probeApplyUrl` 401/403 reclassified as `unknown` | No — X-Ray's caveat covers it; fix separately |
 | 22 | `must possess valid work authorization` pattern tightened in `lib/jobs/metadata.ts` | No — X-Ray re-derives; fix separately |
 | 23 | Remaining status-vocabulary consumers migrated; `application_timing_signals` recomputed | No — not a v0 decision input |
