@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { domainFromApplyUrl } from "@/lib/applications/company-domain"
+import {
+  isApplicationTimingOutcomeStatus,
+  timingOutcomeGotRecruiterResponse,
+} from "@/lib/applications/statuses"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { createClient } from "@/lib/supabase/server"
 import { randomUUID } from "crypto"
@@ -100,13 +104,12 @@ export async function PATCH(
 
     // Record timing outcome whenever application moves out of 'applied' ghost state
     const ghostStatuses = new Set(["applied"])
-    const responseStatuses = new Set(["interviewing", "offer", "rejected", "withdrawn"])
     if (
       typeof body.status === "string" &&
-      responseStatuses.has(body.status) &&
+      isApplicationTimingOutcomeStatus(body.status) &&
       ghostStatuses.has(current.status)
     ) {
-      const gotResponse = body.status !== "withdrawn"
+      const gotResponse = timingOutcomeGotRecruiterResponse(body.status)
       const { recordApplicationOutcome } = await import("@/lib/apex/timing/signal-learner")
       recordApplicationOutcome(id, gotResponse).catch((err) =>
         console.error("[applications/PATCH] timing signal failed:", err instanceof Error ? err.message : err)
