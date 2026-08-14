@@ -1,0 +1,83 @@
+{
+  "generatedAt": "2026-08-14T20:44:36.793Z",
+  "source": {
+    "host": "5.161.53.248",
+    "database": "hireoven",
+    "note": "production read-only; local snapshot is frozen at 2026-05-04 and cannot supply fresh jobs"
+  },
+  "userId": "6ab1784e-1d7f-4908-9725-82d4a69c400f",
+  "email": "felixsarpong25@gmail.com",
+  "authorization": {
+    "visa_status": "opt",
+    "work_authorization": "opt",
+    "needs_sponsorship": true,
+    "requires_sponsorship": true,
+    "authorized_to_work": true,
+    "is_international": true,
+    "opt_end_date": "2027-02-14",
+    "conflictsDetected": false,
+    "conflictCheck": "profiles.visa_status=opt matches autofill_profiles.work_authorization=opt; needs_sponsorship=true matches requires_sponsorship=true"
+  },
+  "resume": {
+    "resumeId": "2d5aed28-4bac-4e83-a877-65b5dc67e47b",
+    "resumeVersion": 1786656925,
+    "resumeVersionBasis": "getResumeVersion() = floor(updated_at epoch seconds)",
+    "name": "Felix_Sarpong_Apex_Solutions_Engineer",
+    "parseStatus": "complete",
+    "parseError": null,
+    "isPrimary": true,
+    "updatedAt": "2026-08-13T21:35:25.125435+00:00",
+    "contentHashSha256": "cbbe334f17999ec571c209223baae74e9d8cd805d9baff1edb7525388db8bcc3",
+    "rawTextLength": 7146,
+    "contentModified": true,
+    "yearsOfExperience": 8,
+    "primaryRole": "Solutions Engineer / Backend Engineer",
+    "seniorityLevel": "mid",
+    "atsScore": 83,
+    "resumeScore": 73,
+    "topSkills": [
+      "Java",
+      "Python",
+      "TypeScript",
+      "Go",
+      "SQL",
+      "XML",
+      "REST",
+      "SOAP/XML",
+      "microservices",
+      "event-driven architecture"
+    ]
+  },
+  "experienceSummary": [
+    {
+      "title": "Generative AI Engineer",
+      "company": "Community Dreams Foundation (Dreamline AI)",
+      "start": "Mar 2026",
+      "end": null
+    },
+    {
+      "title": "Founding Engineer",
+      "company": "Sepurux LLC",
+      "start": "Oct 2025",
+      "end": "Mar 2026"
+    },
+    {
+      "title": "Software Engineer, Payments Platform",
+      "company": "Electronic Funds Technology Corporation",
+      "start": "Aug 2021",
+      "end": "Dec 2023"
+    },
+    {
+      "title": "Software Engineer, Core Banking Integration",
+      "company": "Republic Bank",
+      "start": "Oct 2020",
+      "end": "Jul 2021"
+    },
+    {
+      "title": "Backend Developer, Contract",
+      "company": "Passmall",
+      "start": "Dec 2018",
+      "end": "Sep 2020"
+    }
+  ]
+}
