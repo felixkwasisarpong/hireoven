@@ -57,6 +57,12 @@ export type CapabilitySignalInput = {
     seniorityGap: number | null
     note: string | null
   }
+  /**
+   * True when a readable, parsed resume was supplied. Distinguishes
+   * "the candidate gave us nothing" from "HireOven has not scored this pair
+   * yet". Only the first is the candidate's to fix.
+   */
+  resumeReadable?: boolean
   confidence?: XRayConfidence
   findings?: XRayFinding[]
 }
@@ -100,6 +106,9 @@ export type PositioningSignalInput = {
   closeGaps: string[]
   fieldContext: PositioningAssessment["fieldContext"]
   repairEstimate: PositioningAssessment["repairEstimate"]
+  /** True when the ATS screen score was actually computed. A null score
+   *  because nothing scored it is not evidence of misalignment. */
+  atsScreenScoreAvailable?: boolean
   confidence?: XRayConfidence
   findings?: XRayFinding[]
   bandHint?: PositioningAssessment["band"]

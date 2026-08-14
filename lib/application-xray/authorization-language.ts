@@ -105,12 +105,87 @@ export const AUTHORIZATION_CONFLICT_MATRIX: Record<
 const VISA_NAME_RE = /\b(?:f-?1|opt|cpt|stem|h-?1b|h-?2|tn|temporary visas?)\b/i
 
 function firstSentenceContaining(text: string, pattern: RegExp): string | null {
-  const sentences = text
-    .replace(/\s+/g, " ")
+  return splitSentences(text).find((sentence) => pattern.test(sentence)) ?? null
+}
+
+/**
+ * Sentence-level negation applied to a sponsorship phrase.
+ *
+ * The offered-sponsorship patterns are substrings of their own negations:
+ * "sponsorship available" sits inside "NO sponsorship available", and
+ * "offer sponsorship" inside "we cannot offer sponsorship". Matching them
+ * without checking for negation classified an explicit refusal as an explicit
+ * offer — the worst possible direction for a candidate who needs sponsorship,
+ * because it turns a job that excludes them into one that welcomes them.
+ *
+ * Scoped to the sentence, so "We offer sponsorship. No exceptions." is not
+ * negated by a later sentence.
+ */
+function hasSponsorshipNegation(sentence: string): boolean {
+  const lower = sentence.toLowerCase()
+  return (
+    // "no sponsorship", "no visa sponsorship available"
+    /\bno\b[^.]{0,40}\bsponsor(?:ship)?\b/.test(lower) ||
+    // "not able to / unable to / cannot / won't / do not ... sponsor"
+    /\b(?:not able to|unable to|cannot|can not|can't|won'?t|will not|do(?:es)? not|isn'?t|is not|aren'?t|are not|never)\b[^.]{0,80}\bsponsor(?:ship)?\b/.test(lower) ||
+    // "sponsorship is not available / will not be provided / unavailable"
+    /\bsponsor(?:ship)?\b[^.]{0,60}\b(?:not available|unavailable|not provided|not offered|not possible|not considered|will not be)\b/.test(lower) ||
+    // "without sponsorship"
+    /\bwithout\b[^.]{0,40}\bsponsor(?:ship)?\b/.test(lower)
+  )
+}
+
+/**
+ * "Sponsor" and "sponsorship" have common non-immigration senses that must not
+ * produce a visa requirement in either direction:
+ *   - advertising / commercial  ("sponsorship integrations", "sponsors and advertisers")
+ *   - mentorship / management   ("mentor, coach, and sponsor a team of 4-6 engineers")
+ * Both appear verbatim in live postings in this database.
+ */
+function isNonVisaSponsorshipSense(sentence: string): boolean {
+  const lower = sentence.toLowerCase()
+  return (
+    /\bsponsor(?:ship|ed|ing)?s?\b[^.]{0,60}\b(?:integration|deal|package|revenue|opportunit|activation|inventory|advertiser|advertising|brand|campaign|broadcast|media|stadium|league|sport|event|booth|conference|podcast|newsletter)/.test(lower) ||
+    /\b(?:advertis\w*|marketing|brand|event|title|media|commercial)\s+sponsor(?:ship)?/.test(lower) ||
+    // "mentor, coach, and sponsor a team" — people-development sense
+    /\bsponsor\b[^.]{0,30}\b(?:a\s+)?(?:team|teams|squad|group|mentee|report|direct report)/.test(lower) ||
+    /\b(?:mentor|coach|develop|grow|champion)\b[^.]{0,40}\bsponsor\b/.test(lower)
+  )
+}
+
+function firstSentenceContainingWhere(
+  text: string,
+  pattern: RegExp,
+  predicate: (sentence: string) => boolean,
+): string | null {
+  return splitSentences(text).find((sentence) => pattern.test(sentence) && predicate(sentence)) ?? null
+}
+
+/**
+ * Abbreviations whose trailing period is not a sentence boundary. Without this
+ * guard, "Applicants must be U.S. citizens." splits after "U.S." and the
+ * citizenship pattern — which needs "u.s." and "citizens" in the same sentence
+ * — never matches. That is the commonest citizenship phrasing in the corpus,
+ * so the whole CITIZENSHIP_REQUIRED path was effectively dead on it.
+ */
+const SENTENCE_SAFE_ABBREVIATIONS = [
+  "u.s.", "u.s.a.", "e.g.", "i.e.", "etc.", "inc.", "ltd.", "co.", "corp.",
+  "vs.", "approx.", "dept.", "est.", "no.", "mr.", "ms.", "mrs.", "dr.", "st.",
+]
+
+export function splitSentences(text: string): string[] {
+  let working = text.replace(/\s+/g, " ")
+  // Protect abbreviation periods behind a sentinel before splitting.
+  for (const abbr of SENTENCE_SAFE_ABBREVIATIONS) {
+    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    working = working.replace(new RegExp(escaped, "gi"), (m) => m.replace(/\./g, "\u0000"))
+  }
+  // Also protect single-letter initials such as "J. Smith".
+  working = working.replace(/\b([A-Z])\.(?=\s+[A-Z])/g, "$1\u0000")
+  return working
     .split(/(?<=[.!?])\s+/)
-    .map((sentence) => sentence.trim())
+    .map((sentence) => sentence.replace(/\u0000/g, ".").trim())
     .filter(Boolean)
-  return sentences.find((sentence) => pattern.test(sentence)) ?? null
 }
 
 function scopeForSentence(sentence: string): {
@@ -160,9 +235,10 @@ export function categorizePostingAuthorizationLanguage(input: {
   const sourceFactId = input.sourceFactId ?? "posting-auth-language"
   const confidence = input.confidence ?? "high"
 
-  const offered = firstSentenceContaining(
+  const offered = firstSentenceContainingWhere(
     text,
-    /\b(?:visa sponsorship (?:is )?available|will sponsor|sponsorship available)\b/i,
+    /\b(?:(?:visa|work|employment)?\s*sponsorship\s+(?:is\s+)?available|will\s+sponsor|(?:offers?|provides?|supports?)\s+(?:visa\s+|work\s+|employment\s+)?sponsorship|sponsorship\s+(?:is\s+)?(?:offered|provided|supported))\b/i,
+    (sentence) => !hasSponsorshipNegation(sentence) && !isNonVisaSponsorshipSense(sentence),
   )
   if (offered) {
     return [{
@@ -224,9 +300,10 @@ export function categorizePostingAuthorizationLanguage(input: {
     }]
   }
 
-  const sponsorshipBar = firstSentenceContaining(
+  const sponsorshipBar = firstSentenceContainingWhere(
     text,
     /\b(?:without|no|not able to|unable to|cannot|can not|won'?t|will not|do(?:es)? not|sponsorship\s+(?:is|will)?\s*(?:not|unavailable|not available))\b[^.]{0,120}\bsponsor(?:ship)?\b|\bsponsorship\s+(?:is|will\s+be)\s+(?:unavailable|not available)\b|\bsponsorship\b[^.]{0,80}\bwill\s+not\s+be\s+(?:provided|available|offered)\b|\b(?:candidate|applicant|individual)s?\s+(?:who\s+)?(?:require|requiring|requires)\s+sponsorship[^.]{0,120}\bwill\s+not\s+be\s+considered\b|\btemporary\s+visas?\b[^.]{0,180}\bwill\s+not\s+be\s+considered\b/i,
+    (sentence) => !isNonVisaSponsorshipSense(sentence),
   )
   if (sponsorshipBar) {
     const scoped = scopeForSentence(sponsorshipBar)

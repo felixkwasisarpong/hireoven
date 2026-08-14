@@ -69,6 +69,13 @@ type Rule = {
   action: XRayFinalAction | "FALL_THROUGH"
   condition: boolean
   confidence: XRayConfidence
+  /**
+   * Every value this rule's condition reads, recorded so the decision is
+   * replayable from the trace alone. An empty object is a bug: it means the
+   * trace cannot explain why the rule fired, which defeats the point of
+   * having one.
+   */
+  inputs: Record<string, string | number | boolean | null>
 }
 
 const STAGE_ORDER: XRayDecisionStage[] = [
@@ -108,6 +115,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: isDefinitivelyClosed(context.hiringReality.availability),
       confidence: "high",
+      inputs: { isActive: context.hiringReality.availability.isActive, closedAt: context.hiringReality.availability.closedAt, publicationStatus: context.hiringReality.availability.publicationStatus, closedAtReliable: context.hiringReality.availability.closedAtReliable },
     },
     {
       id: "RC1",
@@ -115,6 +123,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: conflictDecisive && conflict === "conflict_now",
       confidence: context.eligibility.confidence,
+      inputs: { conflictDecisive, conflict, eligibilityBand: context.eligibility.band, canWork: context.eligibility.candidate.canWorkForTargetEmployerWithoutNewImmigrationAction },
     },
     {
       id: "RC2",
@@ -122,6 +131,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: conflictDecisive && conflict === "conflict_future",
       confidence: context.eligibility.confidence,
+      inputs: { conflictDecisive, conflict, eligibilityBand: context.eligibility.band, canWork: context.eligibility.candidate.canWorkForTargetEmployerWithoutNewImmigrationAction },
     },
     {
       id: "RC3",
@@ -129,6 +139,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: hardReqAbsent,
       confidence: hardRequirementConfidence(context.capability),
+      inputs: { hardReqAbsent, requirementCount: context.capability.requirements.length, hardSkipCount: context.capability.requirements.filter((r) => r.supportsHardSkip).length },
     },
     {
       id: "RC4",
@@ -136,6 +147,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: requiredActionRefused,
       confidence: capConfidence(context.eligibility.confidence, "medium"),
+      inputs: { requiredActionRefused, canWork: context.eligibility.candidate.canWorkForTargetEmployerWithoutNewImmigrationAction },
     },
     {
       id: "RD1",
@@ -143,6 +155,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "INSUFFICIENT_DATA",
       condition: !sufficient,
       confidence: "unknown",
+      inputs: { sufficient, capabilityBand: context.capability.band, evidenceBand: context.evidence.band, positioningBand: context.positioning.band, eligibilityBand: context.eligibility.band, hiringRealityBand: context.hiringReality.band },
     },
     {
       id: "RD2",
@@ -150,6 +163,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "INSUFFICIENT_DATA",
       condition: sufficient && blockingConfirmation,
       confidence: "unknown",
+      inputs: { sufficient, blockingConfirmation },
     },
     {
       id: "RE1",
@@ -157,6 +171,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: mismatchCorroborated,
       confidence: "medium",
+      inputs: { mismatchCorroborated, corroborationCount: context.capability.mismatchCorroborationCount, capabilityBand: context.capability.band },
     },
     {
       id: "RE2",
@@ -164,6 +179,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: repairFitsWindow(window, capabilityRepairEffort) ? "STRENGTHEN_FIRST" : "FALL_THROUGH",
       condition: context.capability.band === "STRETCH" && years === "severe",
       confidence: "medium",
+      inputs: { capabilityBand: context.capability.band, years },
     },
     {
       id: "RE3",
@@ -171,6 +187,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "STRENGTHEN_FIRST",
       condition: reqUnconfirmed && sufficient,
       confidence: "medium",
+      inputs: { reqUnconfirmed, sufficient },
     },
     {
       id: "RE4",
@@ -178,6 +195,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "STRENGTHEN_FIRST",
       condition: acquirableAbsent,
       confidence: "medium",
+      inputs: { acquirableAbsent },
     },
     {
       id: "RF1",
@@ -185,6 +203,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "STRENGTHEN_FIRST",
       condition: context.evidence.band === "UNREADABLE" && context.evidence.legibility.blocksAssessment,
       confidence: context.evidence.confidence,
+      inputs: { evidenceBand: context.evidence.band, blocksAssessment: context.evidence.legibility.blocksAssessment, parseStatus: context.evidence.legibility.parseStatus },
     },
     {
       id: "RF2",
@@ -192,6 +211,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: repairFitsWindow(window, positioningRepairEffort) ? "STRENGTHEN_FIRST" : "FALL_THROUGH",
       condition: context.evidence.band === "BURIED",
       confidence: "medium",
+      inputs: { evidenceBand: context.evidence.band, buriedCount: context.evidence.buriedEvidence.length },
     },
     {
       id: "RF3",
@@ -201,6 +221,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
         context.evidence.band === "THIN" &&
         (context.capability.band === "NEAR_MISS" || context.capability.band === "STRETCH"),
       confidence: "medium",
+      inputs: { evidenceBand: context.evidence.band, capabilityBand: context.capability.band, repairable },
     },
     {
       id: "RF4",
@@ -210,6 +231,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
         context.evidence.band === "THIN" &&
         (context.capability.band === "MEETS" || context.capability.band === "EXCEEDS"),
       confidence: "medium",
+      inputs: { evidenceBand: context.evidence.band, capabilityBand: context.capability.band },
     },
     {
       id: "RG1",
@@ -217,6 +239,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: repairFitsWindow(window, positioningRepairEffort) && repairable ? "STRENGTHEN_FIRST" : "FALL_THROUGH",
       condition: context.positioning.band === "MISALIGNED" && repairable,
       confidence: "medium",
+      inputs: { positioningBand: context.positioning.band, repairable },
     },
     {
       id: "RG2",
@@ -227,6 +250,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
         (context.positioning.repairEstimate.estimatedMinutes ?? 31) <= 30 &&
         repairFitsWindow(window, "minutes"),
       confidence: "medium",
+      inputs: { positioningBand: context.positioning.band, estimatedMinutes: context.positioning.repairEstimate.estimatedMinutes, repairFitsWindow: repairable },
     },
     {
       id: "RG3",
@@ -234,6 +258,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "FALL_THROUGH",
       condition: context.positioning.band === "MISALIGNED" && !repairable,
       confidence: "medium",
+      inputs: { positioningBand: context.positioning.band, repairable },
     },
     {
       id: "RH1",
@@ -244,6 +269,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
         ["MEETS", "EXCEEDS", "NEAR_MISS"].includes(context.capability.band) &&
         ["STRONG", "ADEQUATE", "BURIED"].includes(context.evidence.band),
       confidence: routes[0]?.confidence ?? "unknown",
+      inputs: { routeCount: routes.length, capabilityBand: context.capability.band, evidenceBand: context.evidence.band },
     },
     {
       id: "RI1",
@@ -251,6 +277,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "APPLY_NOW",
       condition: context.hiringReality.band === "UNCERTAIN" || context.hiringReality.band === "LIKELY_CLOSED",
       confidence: "low",
+      inputs: { hiringRealityBand: context.hiringReality.band },
     },
     {
       id: "RI2",
@@ -258,6 +285,7 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "APPLY_NOW",
       condition: true,
       confidence: "high",
+      inputs: { hiringRealityBand: context.hiringReality.band, capabilityBand: context.capability.band, evidenceBand: context.evidence.band, eligibilityBand: context.eligibility.band, positioningBand: context.positioning.band },
     },
   ]
 
@@ -446,11 +474,23 @@ function buildTraceRows(rules: Rule[], selected: Rule): XRayDecisionTrace["evalu
   for (const stage of STAGE_ORDER.filter((stage) => stage !== "A_canonical_resolution")) {
     const stageRules = rules.filter((rule) => rule.stage === stage && rule.condition)
     const winner = selected.stage === stage ? selected : null
+    const fallThrough = stageRules.find((rule) => rule.action === "FALL_THROUGH") ?? null
+    const attributed = winner ?? fallThrough
     rows.push({
       stage,
-      firedRuleId: winner?.id ?? stageRules.find((rule) => rule.action === "FALL_THROUGH")?.id ?? null,
+      firedRuleId: attributed?.id ?? null,
       outcome: winner ? "selected_action" : "passed_through",
-      inputs: {},
+      // Carry the values the attributed rule actually read. For a stage that
+      // merely passed through, record the inputs of every rule that was
+      // evaluated there, so the trace explains the non-firing too.
+      inputs: attributed
+        ? { ...attributed.inputs }
+        : rules
+            .filter((rule) => rule.stage === stage)
+            .reduce<Record<string, string | number | boolean | null>>(
+              (acc, rule) => Object.assign(acc, rule.inputs),
+              {},
+            ),
     })
     if (winner) break
   }

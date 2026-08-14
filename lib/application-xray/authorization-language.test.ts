@@ -93,3 +93,67 @@ test("named temporary visa exclusions become unrestricted authorization requirem
   assert.equal(requirement?.category, "UNRESTRICTED_AUTHORIZATION_REQUIRED")
   assert.deepEqual(requirement?.namesVisaCategories, ["CPT", "F-1", "H-1B", "OPT", "STEM", "TN", "temporary visas"])
 })
+
+// ─── Sentence-level negation discriminators ─────────────────────────────────
+// The offered-sponsorship phrases are substrings of their own negations, so a
+// refusal was being read as an offer. These five cases are the contract.
+
+function categoriesFor(text: string): string[] {
+  return categorizePostingAuthorizationLanguage({ text }).map((r) => r.category)
+}
+
+test("'no sponsorship available' is scope-ambiguous, never an offer", () => {
+  const cats = categoriesFor("This is a full time REMOTE role with no sponsorship available.")
+  assert.ok(cats.includes("SPONSORSHIP_SCOPE_AMBIGUOUS"), `got ${cats.join(",")}`)
+  assert.ok(!cats.includes("SPONSORSHIP_OFFERED"), "must NOT be SPONSORSHIP_OFFERED")
+})
+
+test("'sponsorship available' is an offer", () => {
+  assert.deepEqual(
+    categoriesFor("Visa sponsorship available for this position."),
+    ["SPONSORSHIP_OFFERED"],
+  )
+})
+
+test("'we cannot offer sponsorship' is scope-ambiguous, never an offer", () => {
+  const cats = categoriesFor("We cannot offer sponsorship for this role.")
+  assert.ok(cats.includes("SPONSORSHIP_SCOPE_AMBIGUOUS"), `got ${cats.join(",")}`)
+  assert.ok(!cats.includes("SPONSORSHIP_OFFERED"), "must NOT be SPONSORSHIP_OFFERED")
+})
+
+test("'we offer sponsorship' is an offer", () => {
+  assert.deepEqual(
+    categoriesFor("We offer sponsorship to qualified candidates."),
+    ["SPONSORSHIP_OFFERED"],
+  )
+})
+
+test("advertising sponsorship yields no visa requirement", () => {
+  // Verbatim shape from a live Apple posting in the corpus.
+  assert.deepEqual(
+    categoriesFor("Sponsorship integrations and experiences in live sports on Apple TV help advertisers connect with fans."),
+    [],
+  )
+})
+
+test("'sponsor a team' yields no visa requirement", () => {
+  // Verbatim shape from a live Sentry posting in the corpus.
+  assert.deepEqual(
+    categoriesFor("Lead, mentor, coach, and sponsor a team of 4-6 engineers."),
+    [],
+  )
+})
+
+test("negation is scoped to its own sentence", () => {
+  // A later refusal must not negate an earlier genuine offer, and vice versa.
+  const cats = categoriesFor("We offer visa sponsorship. No exceptions to our interview process.")
+  assert.deepEqual(cats, ["SPONSORSHIP_OFFERED"])
+})
+
+test("a citizenship requirement outranks an unrelated sponsorship mention", () => {
+  const cats = categoriesFor(
+    "Applicants must be U.S. citizens. We also sponsor local sports events in the community.",
+  )
+  assert.ok(cats.includes("CITIZENSHIP_REQUIRED"), `got ${cats.join(",")}`)
+  assert.ok(!cats.includes("SPONSORSHIP_OFFERED"))
+})

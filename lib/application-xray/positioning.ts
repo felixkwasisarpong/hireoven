@@ -62,18 +62,55 @@ export function assessPositioning(input: {
   }
 }
 
+/**
+ * MISALIGNED is an accusation about a document, so it requires positive,
+ * source-backed evidence — never the mere absence of an input.
+ *
+ * Previously a null ATS score (nothing had scored the pair) combined with an
+ * empty keyword set could reach MISALIGNED through the requiresNewEvidence
+ * branch, and the corpus being unavailable had the same effect. That is the
+ * unknown-becomes-negative failure the contract forbids, and it is especially
+ * unfair here: it tells someone their resume is aimed at the wrong job on the
+ * strength of a cache miss.
+ */
+function hasPositiveMisalignmentEvidence(input: PositioningSignalInput): boolean {
+  const scoreAvailable = input.atsScreenScoreAvailable !== false && input.atsScreenScore !== null
+  // Evidence 1: a computed screen score that is genuinely low.
+  if (scoreAvailable && (input.atsScreenScore as number) < 55) return true
+  // Evidence 2: the posting's terms were extracted, and the resume supports
+  // almost none of them while needing new evidence for the rest.
+  const termsExtracted = input.unsupportedMissing.length + input.supportedMissing.length + input.presentKeywords.length
+  if (
+    termsExtracted > 0 &&
+    input.repairEstimate.requiresNewEvidence &&
+    input.unsupportedMissing.length > input.supportedMissing.length &&
+    input.presentKeywords.length === 0
+  ) {
+    return true
+  }
+  return false
+}
+
 function inferBand(input: PositioningSignalInput): PositioningBand {
-  if (input.atsScreenScore === null && input.supportedMissing.length === 0 && input.unsupportedMissing.length === 0) {
+  const scoreAvailable = input.atsScreenScoreAvailable !== false && input.atsScreenScore !== null
+  const termsExtracted =
+    input.unsupportedMissing.length + input.supportedMissing.length + input.presentKeywords.length
+
+  // Nothing to reason from: no computed score AND no extracted posting terms.
+  // Widen to UNKNOWN rather than inventing a verdict.
+  if (!scoreAvailable && termsExtracted === 0) {
     return "UNKNOWN"
   }
-  if (input.repairEstimate.requiresNewEvidence && input.unsupportedMissing.length > input.supportedMissing.length) {
+  if (hasPositiveMisalignmentEvidence(input)) {
     return "MISALIGNED"
   }
   if (input.supportedMissing.length > 0 || input.surfaceFromRawText.length > 0) {
     return "TUNABLE"
   }
-  if (input.atsScreenScore !== null && input.atsScreenScore < 55) {
-    return "MISALIGNED"
+  // An ALIGNED claim also needs something behind it. With no computed score we
+  // can say the keywords are covered, not that the document is well aimed.
+  if (!scoreAvailable) {
+    return "UNKNOWN"
   }
   return "ALIGNED"
 }

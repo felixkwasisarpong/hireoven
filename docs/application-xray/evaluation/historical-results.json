@@ -1,0 +1,3060 @@
+{
+  "generatedAt": "2026-08-14T03:31:54.377Z",
+  "apiOrigin": "http://localhost:3000",
+  "packPath": "docs/application-xray/xray-eval-pack.md",
+  "candidate": {
+    "userId": "6ab1784e-1d7f-4908-9725-82d4a69c400f",
+    "email": "felixsarpong25@gmail.com",
+    "profile": {
+      "id": "6ab1784e-1d7f-4908-9725-82d4a69c400f",
+      "full_name": "felix sarpong",
+      "email": "felixsarpong25@gmail.com",
+      "visa_status": "opt",
+      "needs_sponsorship": true,
+      "opt_end_date": "2027-02-14T06:00:00.000Z",
+      "primary_resume_id": "2d5aed28-4bac-4e83-a877-65b5dc67e47b"
+    },
+    "authMethod": "signed ho_session cookie; resumeId omitted so API used default/primary resume resolution"
+  },
+  "constraints": {
+    "didNotRegenerateQuestionnaire": true,
+    "didNotModifyRules": true,
+    "didNotScoreHiringRealityAccuracy": true,
+    "didNotScoreActionUsefulness": true,
+    "didNotCalculateOverallFinalActionAgreement": true,
+    "rb1DefinitiveClosureDistinguishedFromRi1StaleUncertainty": true
+  },
+  "results": [
+    {
+      "index": 1,
+      "title": "Senior Java Full Stack Developer",
+      "jobId": "94d93b1f-17ed-484f-bd5f-26d4b314f6f0",
+      "company": "Citigroup",
+      "roleFamily": "Backend / Java",
+      "whySelected": "Java + banking. Closest single match to your FIDO/EFT/Republic Bank history.",
+      "preDecision": "SKIP",
+      "preReason": "is_active=false - closed",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/94d93b1f-17ed-484f-bd5f-26d4b314f6f0/xray",
+      "requestedAt": "2026-08-14T03:31:49.061Z",
+      "durationMs": 651,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 2,
+      "title": "Lead Software Engineer, Back End",
+      "jobId": "6466c48e-7379-4ac8-8794-4460560aaad5",
+      "company": "Capital One",
+      "roleFamily": "Backend",
+      "whySelected": "Lead Back End at a bank, on Workday. Level and domain both line up.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "Java backend at a bank, senior level, exact lane",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/6466c48e-7379-4ac8-8794-4460560aaad5/xray",
+      "requestedAt": "2026-08-14T03:31:49.154Z",
+      "durationMs": 91,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 3,
+      "title": "Backend Engineer, Core Technology",
+      "jobId": "cd82fc7d-54b4-4811-8192-14be418f04a3",
+      "company": "Stripe",
+      "roleFamily": "Backend / payments",
+      "whySelected": "Payments infrastructure — your EFT Corporation lane.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "payments backend, your EFT lane",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/cd82fc7d-54b4-4811-8192-14be418f04a3/xray",
+      "requestedAt": "2026-08-14T03:31:49.240Z",
+      "durationMs": 86,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 4,
+      "title": "Senior Software Engineer, Backend",
+      "jobId": "ee165f9f-6834-41c4-9c8c-c38b0bd97d16",
+      "company": "Coinbase",
+      "roleFamily": "Backend",
+      "whySelected": "Senior backend at a fintech; no level stretch.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "senior backend fintech, no stretch",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/ee165f9f-6834-41c4-9c8c-c38b0bd97d16/xray",
+      "requestedAt": "2026-08-14T03:31:49.333Z",
+      "durationMs": 93,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 5,
+      "title": "Senior Software Engineer, Backend (Platform - Financial En",
+      "jobId": "3d779276-bb8f-41fb-8773-ac20a9740a7d",
+      "company": "Coinbase",
+      "roleFamily": "Backend / fintech",
+      "whySelected": "Financial platform team — domain-specific backend.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "financial platform backend",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/3d779276-bb8f-41fb-8773-ac20a9740a7d/xray",
+      "requestedAt": "2026-08-14T03:31:49.414Z",
+      "durationMs": 81,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 6,
+      "title": "Senior Software Engineer, Identity & Access Management",
+      "jobId": "08b30169-eefc-46ea-ba52-f725460f480e",
+      "company": "Snowflake",
+      "roleFamily": "Backend / security",
+      "whySelected": "Identity & Access. You list Spring Security explicitly.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "IAM - Spring Security is on your resume",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/08b30169-eefc-46ea-ba52-f725460f480e/xray",
+      "requestedAt": "2026-08-14T03:31:49.578Z",
+      "durationMs": 164,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 7,
+      "title": "Senior Software Engineer",
+      "jobId": "d30fea9e-8479-49f0-b485-316c373f09a0",
+      "company": "Match Group",
+      "roleFamily": "Backend",
+      "whySelected": "Senior SWE on Lever — ATS spread, plain senior backend.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "plain senior backend",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/d30fea9e-8479-49f0-b485-316c373f09a0/xray",
+      "requestedAt": "2026-08-14T03:31:49.661Z",
+      "durationMs": 83,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 8,
+      "title": "Software Engineer, DevInfra",
+      "jobId": "d96db4a8-9acb-41bc-8f19-11ea046ecd50",
+      "company": "Mixpanel",
+      "roleFamily": "Backend / infra",
+      "whySelected": "DevInfra on Greenhouse — adjacent but well within reach.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "devinfra, adjacent but reachable",
+      "section": "backend_fintech",
+      "endpoint": "/api/jobs/d96db4a8-9acb-41bc-8f19-11ea046ecd50/xray",
+      "requestedAt": "2026-08-14T03:31:49.744Z",
+      "durationMs": 83,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 9,
+      "title": "Senior Software Engineer Applied Gen AI Engineering",
+      "jobId": "282eba74-159d-4dae-8ae3-8ac173564539",
+      "company": "Citigroup",
+      "roleFamily": "AI/ML + backend",
+      "whySelected": "Gen AI at a bank — the bridge between your fintech depth and your ML research.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "GenAI at a bank - bridges fintech depth and ML research",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/282eba74-159d-4dae-8ae3-8ac173564539/xray",
+      "requestedAt": "2026-08-14T03:31:49.828Z",
+      "durationMs": 84,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 10,
+      "title": "Senior AI Software Engineer",
+      "jobId": "587de755-1293-4531-98b8-229a8f3533a3",
+      "company": "Amplitude",
+      "roleFamily": "AI/ML",
+      "whySelected": "Senior AI SWE on Greenhouse.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "senior AI SWE - ML is research-only on paper",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/587de755-1293-4531-98b8-229a8f3533a3/xray",
+      "requestedAt": "2026-08-14T03:31:49.913Z",
+      "durationMs": 85,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 11,
+      "title": "Senior SWE, AI Backend: Observe by Snowflake",
+      "jobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+      "company": "Snowflake",
+      "roleFamily": "AI/ML + backend",
+      "whySelected": "\"AI Backend\" — tests whether X-Ray reads this as backend or as ML.",
+      "preDecision": "APPLY_NOW",
+      "preReason": "AI Backend reads as backend",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/82ab60c4-69a8-4098-a404-82b712e43150/xray",
+      "requestedAt": "2026-08-14T03:31:50.927Z",
+      "durationMs": 1014,
+      "transportError": null,
+      "httpStatus": 200,
+      "apiError": null,
+      "finalAction": "INSUFFICIENT_DATA",
+      "selectedRuleId": "RD1",
+      "selectedStage": "D_sufficiency",
+      "confidence": "unknown",
+      "dimensionBands": {
+        "hiringReality": "LIVE",
+        "capability": "UNKNOWN",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "authorization": {
+        "candidate": {
+          "canWorkForTargetEmployerWithoutNewImmigrationAction": "YES",
+          "targetEmployerAuthorizationExplanation": "Initial OPT can authorize work for the target employer now; later employer actions may still be needed.",
+          "declaredVisaStatus": "opt",
+          "declaredWorkAuthorization": "opt",
+          "authorizationEndDate": "2027-02-14T06:00:00.000Z",
+          "futureEmployerActions": [
+            {
+              "type": "H1B_PETITION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "H1B_PETITION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_EVERIFY_PARTICIPATION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_EVERIFY_PARTICIPATION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_I983",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_I983 is possible from the supplied authorization timeline."
+            }
+          ],
+          "readFrom": [
+            "autofill_profiles.work_authorization",
+            "profiles.visa_status"
+          ],
+          "derivedFromDefaultsOnly": false,
+          "currentAuthorizationType": "temporary_status"
+        },
+        "categories": [],
+        "postingRequirements": [],
+        "conflicts": [],
+        "employerActionFeasibility": [
+          {
+            "actionType": "STEM_OPT_EVERIFY_PARTICIPATION",
+            "status": "AVAILABLE",
+            "employerStatementExcerpt": null,
+            "candidateRequiresAction": "unknown",
+            "sourceFactIds": [
+              "company-everify-source"
+            ],
+            "confidence": "medium"
+          }
+        ],
+        "sponsorshipHistory": {
+          "employerHasSponsored": true,
+          "recentPetitionCount": 153,
+          "totalLcaCount": 308,
+          "roleFamilyLcaCount": null,
+          "roleFamilyMatchMethod": "unknown",
+          "worksiteLcaCount": null,
+          "dataAsOf": "2026-08-13T18:20:27.81049+00:00",
+          "dataStale": false,
+          "eVerify": {
+            "participation": "CONFIRMED_PARTICIPATING",
+            "sourceName": "stored E-Verify employer data",
+            "sourceCoverageNote": null,
+            "observedAt": "2026-06-26T16:08:46.203666+00:00",
+            "confidence": "medium"
+          },
+          "notARolePromise": true
+        }
+      },
+      "capability": {
+        "band": "UNKNOWN",
+        "confidence": "unknown",
+        "headline": "Capability cannot be assessed from the supplied inputs.",
+        "findings": [
+          {
+            "id": "cap-career-fit",
+            "kind": null,
+            "label": null,
+            "statement": "Capability cannot be assessed from the supplied inputs.",
+            "severity": null,
+            "confidence": "unknown",
+            "basis": "inference",
+            "sourceFactIds": []
+          }
+        ],
+        "careerFitScore": null,
+        "careerFitLabel": null,
+        "relevantYears": null,
+        "totalYears": 8,
+        "requiredYears": null,
+        "requiredYearsStated": false,
+        "relevantYearsRatio": null,
+        "roleFamily": null,
+        "candidateRoleFamilies": [],
+        "roleFamilyCompatible": "unknown",
+        "requirements": [],
+        "mismatchCorroborationCount": 0,
+        "mismatchCorroborations": [],
+        "overqualification": {
+          "detected": false,
+          "seniorityGap": null,
+          "note": null
+        },
+        "dataGaps": [
+          {
+            "id": "capability-inputs-missing",
+            "dimension": "capability",
+            "severity": "dimension_blocking",
+            "label": "Capability inputs are missing",
+            "missingField": "resume or careerFitScore",
+            "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+            "resolution": {
+              "actor": "candidate",
+              "step": "Upload or re-parse a resume."
+            }
+          },
+          {
+            "id": "years-requirement-unstated",
+            "dimension": "capability",
+            "severity": "cosmetic",
+            "label": "Years requirement was not stated",
+            "missingField": "requiredYears",
+            "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+            "resolution": null
+          }
+        ]
+      },
+      "evidence": {
+        "band": "ADEQUATE",
+        "confidence": "medium",
+        "headline": "The resume shows enough relevant evidence for this role.",
+        "findings": [],
+        "verificationLevel": "inferred",
+        "requirementSupport": [
+          {
+            "requirement": "Snowflake",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Machine Learning",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Multi-agent Orchestration",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Python",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "TypeScript",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Go",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Data Warehouse",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "LLM",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Distributed Systems",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Site Reliability Engineering",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          }
+        ],
+        "coverage": {
+          "requiredTermCount": 10,
+          "presentCount": 6,
+          "supportedCount": 0,
+          "notFoundCount": 4,
+          "confirmedAbsentCount": 0,
+          "presentRatio": 0.6
+        },
+        "buriedEvidence": [],
+        "legibility": {
+          "parseStatus": "complete",
+          "parseError": null,
+          "datedRoleCount": 5,
+          "hasRawText": true,
+          "blocksAssessment": false
+        },
+        "consistencyNotes": [],
+        "mayEstablishCapabilityAbsence": false,
+        "dataGaps": []
+      },
+      "positioning": {
+        "band": "MISALIGNED",
+        "confidence": "medium",
+        "headline": "The resume appears aimed at a different role.",
+        "findings": [],
+        "atsScreenScore": null,
+        "atsReadabilityScore": 83,
+        "targetAts": "ashby",
+        "atsProfileApplied": "ashby",
+        "titleAlignment": {
+          "resumeTitle": "Solutions Engineer / Backend Engineer",
+          "jobTitle": "Senior SWE, AI Backend: Observe by Snowflake",
+          "mirrorsJobTitle": false
+        },
+        "supportedMissing": [],
+        "unsupportedMissing": [
+          "Data Warehouse",
+          "Machine Learning",
+          "Site Reliability Engineering",
+          "Snowflake"
+        ],
+        "presentKeywords": [
+          "Distributed Systems",
+          "Go",
+          "LLM",
+          "Multi-agent Orchestration",
+          "Python",
+          "TypeScript"
+        ],
+        "leadWith": [
+          "Go",
+          "LLM",
+          "Multi-agent Orchestration",
+          "Python",
+          "TypeScript"
+        ],
+        "surfaceFromRawText": [],
+        "closeGaps": [
+          "Data Warehouse",
+          "Machine Learning",
+          "Site Reliability Engineering",
+          "Snowflake"
+        ],
+        "fieldContext": {
+          "targetFieldKey": "backend",
+          "fieldFitScore": null,
+          "corpusAvailable": false
+        },
+        "repairEstimate": {
+          "supportedEditCount": 1,
+          "estimatedMinutes": 25,
+          "requiresNewEvidence": true
+        },
+        "dataGaps": [
+          {
+            "id": "field-corpus-unavailable",
+            "dimension": "positioning",
+            "severity": "cosmetic",
+            "label": "Field corpus data is unavailable",
+            "missingField": "field_skill_profiles",
+            "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+            "resolution": {
+              "actor": "hireoven",
+              "step": "Refresh field profiles."
+            }
+          }
+        ]
+      },
+      "topRisks": [],
+      "recommendedActions": [
+        {
+          "id": "complete-inputs",
+          "kind": "complete_profile",
+          "label": "Complete missing inputs",
+          "rationale": "Provide the missing data before using X-Ray for this job.",
+          "effort": "minutes",
+          "doableNow": true,
+          "requiresCandidateConfirmation": true,
+          "isDecisionBlockingConfirmation": true,
+          "addresses": [
+            "eligibility"
+          ],
+          "addressesRiskIds": [],
+          "routeId": null,
+          "target": null,
+          "sourceFactIds": []
+        }
+      ],
+      "dataGaps": [
+        {
+          "id": "capability-inputs-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Capability inputs are missing",
+          "missingField": "resume or careerFitScore",
+          "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+          "resolution": {
+            "actor": "candidate",
+            "step": "Upload or re-parse a resume."
+          }
+        },
+        {
+          "id": "career-fit-score-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Career-fit score is unavailable",
+          "missingField": "job_match_scores.score_breakdown.careerFit",
+          "whyNotDefaulted": "Missing or stale match data is not a capability score.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Recompute deterministic match scoring for this resume and job."
+          }
+        },
+        {
+          "id": "field-corpus-unavailable",
+          "dimension": "positioning",
+          "severity": "cosmetic",
+          "label": "Field corpus data is unavailable",
+          "missingField": "field_skill_profiles",
+          "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Refresh field profiles."
+          }
+        },
+        {
+          "id": "role-specific-sponsorship-unknown",
+          "dimension": "eligibility",
+          "severity": "decision_relevant",
+          "label": "Role-specific employer action policy is unknown",
+          "missingField": "role-specific sponsorship or employer-action statement",
+          "whyNotDefaulted": "Employer history and future-action timelines are not promises for this role.",
+          "resolution": {
+            "actor": "employer",
+            "step": "Confirm the role-specific policy before relying on history."
+          }
+        },
+        {
+          "id": "years-requirement-unstated",
+          "dimension": "capability",
+          "severity": "cosmetic",
+          "label": "Years requirement was not stated",
+          "missingField": "requiredYears",
+          "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+          "resolution": null
+        }
+      ],
+      "canonical": {
+        "requestedJobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+        "evaluatedJobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+        "outcome": "not_a_duplicate",
+        "hops": 0,
+        "canonicalApplyUrl": "https://jobs.ashbyhq.com/snowflake/a9ac05e3-cfe7-474c-a8e6-41baff859964/application",
+        "requestedApplyUrl": "https://jobs.ashbyhq.com/snowflake/a9ac05e3-cfe7-474c-a8e6-41baff859964/application",
+        "applyUrlDiffers": false,
+        "sourceFactIds": [],
+        "note": null
+      },
+      "decisionTrace": {
+        "engineVersion": "application-xray-core-2026-08-13.1",
+        "evaluated": [
+          {
+            "stage": "A_canonical_resolution",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "B_definitive_closure",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "C_explicit_requirement_conflict",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "D_sufficiency",
+            "firedRuleId": "RD1",
+            "outcome": "selected_action",
+            "inputs": {}
+          }
+        ],
+        "selectedStage": "D_sufficiency",
+        "selectedRuleId": "RD1",
+        "suppressedRuleIds": [
+          "RI2"
+        ],
+        "tieBreak": null
+      },
+      "meta": {
+        "requestedJobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+        "evaluatedJobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+        "resumeId": "2d5aed28-4bac-4e83-a877-65b5dc67e47b",
+        "computedAt": "2026-08-14T03:31:49.945Z",
+        "schemaVersion": "xray-2026-08-13.r3-core"
+      }
+    },
+    {
+      "index": 12,
+      "title": "Staff Machine Learning Engineer - Cortex Code Quality",
+      "jobId": "35757934-eace-40ca-9291-53df90f9e48e",
+      "company": "Snowflake",
+      "roleFamily": "ML engineering",
+      "whySelected": "Staff MLE. Production ML, which your résumé shows as research only.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Staff MLE - production ML not evidenced",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/35757934-eace-40ca-9291-53df90f9e48e/xray",
+      "requestedAt": "2026-08-14T03:31:51.171Z",
+      "durationMs": 244,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 13,
+      "title": "Applied Scientist, Customer FinOps Intelligence",
+      "jobId": "349df183-df7b-466b-929f-0c07546400e9",
+      "company": "Snowflake",
+      "roleFamily": "Applied science",
+      "whySelected": "Applied Scientist + FinOps. Research-flavoured, finance domain.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Applied Scientist - research lane, level stretch",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/349df183-df7b-466b-929f-0c07546400e9/xray",
+      "requestedAt": "2026-08-14T03:31:51.257Z",
+      "durationMs": 86,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 14,
+      "title": "Staff Software Engineer - AI SDK",
+      "jobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+      "company": "Temporal",
+      "roleFamily": "AI infra",
+      "whySelected": "Staff level + AI SDK. One level up, adjacent lane.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Staff + AI SDK, one level up",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/ec94f69a-c0a5-4c97-bb11-60d91198877a/xray",
+      "requestedAt": "2026-08-14T03:31:52.105Z",
+      "durationMs": 848,
+      "transportError": null,
+      "httpStatus": 200,
+      "apiError": null,
+      "finalAction": "SKIP",
+      "selectedRuleId": "RB1",
+      "selectedStage": "B_definitive_closure",
+      "confidence": "high",
+      "dimensionBands": {
+        "hiringReality": "CLOSED",
+        "capability": "UNKNOWN",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "authorization": {
+        "candidate": {
+          "canWorkForTargetEmployerWithoutNewImmigrationAction": "YES",
+          "targetEmployerAuthorizationExplanation": "Initial OPT can authorize work for the target employer now; later employer actions may still be needed.",
+          "declaredVisaStatus": "opt",
+          "declaredWorkAuthorization": "opt",
+          "authorizationEndDate": "2027-02-14T06:00:00.000Z",
+          "futureEmployerActions": [
+            {
+              "type": "H1B_PETITION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "H1B_PETITION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_EVERIFY_PARTICIPATION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_EVERIFY_PARTICIPATION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_I983",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_I983 is possible from the supplied authorization timeline."
+            }
+          ],
+          "readFrom": [
+            "autofill_profiles.work_authorization",
+            "profiles.visa_status"
+          ],
+          "derivedFromDefaultsOnly": false,
+          "currentAuthorizationType": "temporary_status"
+        },
+        "categories": [],
+        "postingRequirements": [],
+        "conflicts": [],
+        "employerActionFeasibility": [
+          {
+            "actionType": "STEM_OPT_EVERIFY_PARTICIPATION",
+            "status": "UNKNOWN",
+            "employerStatementExcerpt": null,
+            "candidateRequiresAction": "unknown",
+            "sourceFactIds": [],
+            "confidence": "unknown"
+          }
+        ],
+        "sponsorshipHistory": {
+          "employerHasSponsored": true,
+          "recentPetitionCount": 10,
+          "totalLcaCount": 0,
+          "roleFamilyLcaCount": null,
+          "roleFamilyMatchMethod": "unknown",
+          "worksiteLcaCount": null,
+          "dataAsOf": "2026-08-13T14:58:30.777586+00:00",
+          "dataStale": false,
+          "eVerify": {
+            "participation": "UNKNOWN",
+            "sourceName": null,
+            "sourceCoverageNote": null,
+            "observedAt": null,
+            "confidence": "unknown"
+          },
+          "notARolePromise": true
+        }
+      },
+      "capability": {
+        "band": "UNKNOWN",
+        "confidence": "unknown",
+        "headline": "Capability cannot be assessed from the supplied inputs.",
+        "findings": [
+          {
+            "id": "cap-career-fit",
+            "kind": null,
+            "label": null,
+            "statement": "Capability cannot be assessed from the supplied inputs.",
+            "severity": null,
+            "confidence": "unknown",
+            "basis": "inference",
+            "sourceFactIds": []
+          }
+        ],
+        "careerFitScore": null,
+        "careerFitLabel": null,
+        "relevantYears": null,
+        "totalYears": 8,
+        "requiredYears": null,
+        "requiredYearsStated": false,
+        "relevantYearsRatio": null,
+        "roleFamily": null,
+        "candidateRoleFamilies": [],
+        "roleFamilyCompatible": "unknown",
+        "requirements": [],
+        "mismatchCorroborationCount": 0,
+        "mismatchCorroborations": [],
+        "overqualification": {
+          "detected": false,
+          "seniorityGap": null,
+          "note": null
+        },
+        "dataGaps": [
+          {
+            "id": "capability-inputs-missing",
+            "dimension": "capability",
+            "severity": "dimension_blocking",
+            "label": "Capability inputs are missing",
+            "missingField": "resume or careerFitScore",
+            "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+            "resolution": {
+              "actor": "candidate",
+              "step": "Upload or re-parse a resume."
+            }
+          },
+          {
+            "id": "years-requirement-unstated",
+            "dimension": "capability",
+            "severity": "cosmetic",
+            "label": "Years requirement was not stated",
+            "missingField": "requiredYears",
+            "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+            "resolution": null
+          }
+        ]
+      },
+      "evidence": {
+        "band": "ADEQUATE",
+        "confidence": "medium",
+        "headline": "The resume shows enough relevant evidence for this role.",
+        "findings": [],
+        "verificationLevel": "inferred",
+        "requirementSupport": [
+          {
+            "requirement": "Multi-agent Orchestration",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Go",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Machine Learning",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Generative AI",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "OpenAI",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Python",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Java",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "TypeScript",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Data Pipelines",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Anthropic Claude",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Distributed Systems",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "DevOps",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Temporal",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Data Engineering",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Data Science",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "LLM",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          }
+        ],
+        "coverage": {
+          "requiredTermCount": 16,
+          "presentCount": 11,
+          "supportedCount": 0,
+          "notFoundCount": 5,
+          "confirmedAbsentCount": 0,
+          "presentRatio": 0.6875
+        },
+        "buriedEvidence": [],
+        "legibility": {
+          "parseStatus": "complete",
+          "parseError": null,
+          "datedRoleCount": 5,
+          "hasRawText": true,
+          "blocksAssessment": false
+        },
+        "consistencyNotes": [],
+        "mayEstablishCapabilityAbsence": false,
+        "dataGaps": []
+      },
+      "positioning": {
+        "band": "MISALIGNED",
+        "confidence": "medium",
+        "headline": "The resume appears aimed at a different role.",
+        "findings": [],
+        "atsScreenScore": null,
+        "atsReadabilityScore": 83,
+        "targetAts": "greenhouse",
+        "atsProfileApplied": "greenhouse",
+        "titleAlignment": {
+          "resumeTitle": "Solutions Engineer / Backend Engineer",
+          "jobTitle": "Staff Software Engineer, AI Foundations",
+          "mirrorsJobTitle": false
+        },
+        "supportedMissing": [],
+        "unsupportedMissing": [
+          "Data Engineering",
+          "Data Pipelines",
+          "DevOps",
+          "Machine Learning",
+          "Temporal"
+        ],
+        "presentKeywords": [
+          "Anthropic Claude",
+          "Data Science",
+          "Distributed Systems",
+          "Generative AI",
+          "Go",
+          "Java",
+          "LLM",
+          "Multi-agent Orchestration",
+          "OpenAI",
+          "Python",
+          "TypeScript"
+        ],
+        "leadWith": [
+          "Generative AI",
+          "Go",
+          "Multi-agent Orchestration",
+          "OpenAI",
+          "Python"
+        ],
+        "surfaceFromRawText": [],
+        "closeGaps": [
+          "Data Engineering",
+          "Data Pipelines",
+          "DevOps",
+          "Machine Learning",
+          "Temporal"
+        ],
+        "fieldContext": {
+          "targetFieldKey": "backend",
+          "fieldFitScore": null,
+          "corpusAvailable": false
+        },
+        "repairEstimate": {
+          "supportedEditCount": 1,
+          "estimatedMinutes": 30,
+          "requiresNewEvidence": true
+        },
+        "dataGaps": [
+          {
+            "id": "field-corpus-unavailable",
+            "dimension": "positioning",
+            "severity": "cosmetic",
+            "label": "Field corpus data is unavailable",
+            "missingField": "field_skill_profiles",
+            "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+            "resolution": {
+              "actor": "hireoven",
+              "step": "Refresh field profiles."
+            }
+          }
+        ]
+      },
+      "topRisks": [],
+      "recommendedActions": [
+        {
+          "id": "confirm-everify",
+          "kind": "confirm_everify_participation",
+          "label": "Confirm E-Verify",
+          "rationale": "Ask whether the employer can support the required E-Verify step.",
+          "effort": "minutes",
+          "doableNow": true,
+          "requiresCandidateConfirmation": true,
+          "isDecisionBlockingConfirmation": false,
+          "addresses": [
+            "eligibility"
+          ],
+          "addressesRiskIds": [],
+          "routeId": null,
+          "target": null,
+          "sourceFactIds": []
+        },
+        {
+          "id": "choose-different-target",
+          "kind": "choose_different_target",
+          "label": "Choose another target",
+          "rationale": "Use this signal to focus on roles without this blocker.",
+          "effort": "minutes",
+          "doableNow": true,
+          "requiresCandidateConfirmation": false,
+          "isDecisionBlockingConfirmation": false,
+          "addresses": [
+            "capability"
+          ],
+          "addressesRiskIds": [],
+          "routeId": null,
+          "target": null,
+          "sourceFactIds": []
+        }
+      ],
+      "dataGaps": [
+        {
+          "id": "capability-inputs-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Capability inputs are missing",
+          "missingField": "resume or careerFitScore",
+          "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+          "resolution": {
+            "actor": "candidate",
+            "step": "Upload or re-parse a resume."
+          }
+        },
+        {
+          "id": "career-fit-score-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Career-fit score is unavailable",
+          "missingField": "job_match_scores.score_breakdown.careerFit",
+          "whyNotDefaulted": "Missing or stale match data is not a capability score.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Recompute deterministic match scoring for this resume and job."
+          }
+        },
+        {
+          "id": "everify-participation-unknown",
+          "dimension": "eligibility",
+          "severity": "decision_relevant",
+          "label": "E-Verify participation is unknown",
+          "missingField": "employer E-Verify participation",
+          "whyNotDefaulted": "Unknown employer participation is not confirmed non-enrolment.",
+          "resolution": {
+            "actor": "employer",
+            "step": "Confirm whether the employer participates in E-Verify."
+          }
+        },
+        {
+          "id": "field-corpus-unavailable",
+          "dimension": "positioning",
+          "severity": "cosmetic",
+          "label": "Field corpus data is unavailable",
+          "missingField": "field_skill_profiles",
+          "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Refresh field profiles."
+          }
+        },
+        {
+          "id": "role-specific-sponsorship-unknown",
+          "dimension": "eligibility",
+          "severity": "decision_relevant",
+          "label": "Role-specific employer action policy is unknown",
+          "missingField": "role-specific sponsorship or employer-action statement",
+          "whyNotDefaulted": "Employer history and future-action timelines are not promises for this role.",
+          "resolution": {
+            "actor": "employer",
+            "step": "Confirm the role-specific policy before relying on history."
+          }
+        },
+        {
+          "id": "years-requirement-unstated",
+          "dimension": "capability",
+          "severity": "cosmetic",
+          "label": "Years requirement was not stated",
+          "missingField": "requiredYears",
+          "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+          "resolution": null
+        }
+      ],
+      "canonical": {
+        "requestedJobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+        "evaluatedJobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+        "outcome": "not_a_duplicate",
+        "hops": 0,
+        "canonicalApplyUrl": "https://job-boards.greenhouse.io/temporaltechnologies/jobs/5125079007",
+        "requestedApplyUrl": "https://job-boards.greenhouse.io/temporaltechnologies/jobs/5125079007",
+        "applyUrlDiffers": false,
+        "sourceFactIds": [],
+        "note": null
+      },
+      "decisionTrace": {
+        "engineVersion": "application-xray-core-2026-08-13.1",
+        "evaluated": [
+          {
+            "stage": "A_canonical_resolution",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "B_definitive_closure",
+            "firedRuleId": "RB1",
+            "outcome": "selected_action",
+            "inputs": {}
+          }
+        ],
+        "selectedStage": "B_definitive_closure",
+        "selectedRuleId": "RB1",
+        "suppressedRuleIds": [
+          "RD1",
+          "RI2"
+        ],
+        "tieBreak": null
+      },
+      "meta": {
+        "requestedJobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+        "evaluatedJobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+        "resumeId": "2d5aed28-4bac-4e83-a877-65b5dc67e47b",
+        "computedAt": "2026-08-14T03:31:51.293Z",
+        "schemaVersion": "xray-2026-08-13.r3-core"
+      }
+    },
+    {
+      "index": 15,
+      "title": "Staff Software Engineer, Cortex AI Infrastructure",
+      "jobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+      "company": "Snowflake",
+      "roleFamily": "AI infra",
+      "whySelected": "Staff, Cortex AI Infrastructure.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Staff AI infra",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/bdd13595-162d-4d86-81e3-acebad4c817e/xray",
+      "requestedAt": "2026-08-14T03:31:52.822Z",
+      "durationMs": 717,
+      "transportError": null,
+      "httpStatus": 200,
+      "apiError": null,
+      "finalAction": "INSUFFICIENT_DATA",
+      "selectedRuleId": "RD1",
+      "selectedStage": "D_sufficiency",
+      "confidence": "unknown",
+      "dimensionBands": {
+        "hiringReality": "LIVE",
+        "capability": "UNKNOWN",
+        "evidence": "STRONG",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "authorization": {
+        "candidate": {
+          "canWorkForTargetEmployerWithoutNewImmigrationAction": "YES",
+          "targetEmployerAuthorizationExplanation": "Initial OPT can authorize work for the target employer now; later employer actions may still be needed.",
+          "declaredVisaStatus": "opt",
+          "declaredWorkAuthorization": "opt",
+          "authorizationEndDate": "2027-02-14T06:00:00.000Z",
+          "futureEmployerActions": [
+            {
+              "type": "H1B_PETITION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "H1B_PETITION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_EVERIFY_PARTICIPATION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_EVERIFY_PARTICIPATION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_I983",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_I983 is possible from the supplied authorization timeline."
+            }
+          ],
+          "readFrom": [
+            "autofill_profiles.work_authorization",
+            "profiles.visa_status"
+          ],
+          "derivedFromDefaultsOnly": false,
+          "currentAuthorizationType": "temporary_status"
+        },
+        "categories": [],
+        "postingRequirements": [],
+        "conflicts": [],
+        "employerActionFeasibility": [
+          {
+            "actionType": "STEM_OPT_EVERIFY_PARTICIPATION",
+            "status": "AVAILABLE",
+            "employerStatementExcerpt": null,
+            "candidateRequiresAction": "unknown",
+            "sourceFactIds": [
+              "company-everify-source"
+            ],
+            "confidence": "medium"
+          }
+        ],
+        "sponsorshipHistory": {
+          "employerHasSponsored": true,
+          "recentPetitionCount": 153,
+          "totalLcaCount": 308,
+          "roleFamilyLcaCount": null,
+          "roleFamilyMatchMethod": "unknown",
+          "worksiteLcaCount": null,
+          "dataAsOf": "2026-08-13T18:20:27.81049+00:00",
+          "dataStale": false,
+          "eVerify": {
+            "participation": "CONFIRMED_PARTICIPATING",
+            "sourceName": "stored E-Verify employer data",
+            "sourceCoverageNote": null,
+            "observedAt": "2026-06-26T16:08:46.203666+00:00",
+            "confidence": "medium"
+          },
+          "notARolePromise": true
+        }
+      },
+      "capability": {
+        "band": "UNKNOWN",
+        "confidence": "unknown",
+        "headline": "Capability cannot be assessed from the supplied inputs.",
+        "findings": [
+          {
+            "id": "cap-career-fit",
+            "kind": null,
+            "label": null,
+            "statement": "Capability cannot be assessed from the supplied inputs.",
+            "severity": null,
+            "confidence": "unknown",
+            "basis": "inference",
+            "sourceFactIds": []
+          }
+        ],
+        "careerFitScore": null,
+        "careerFitLabel": null,
+        "relevantYears": null,
+        "totalYears": 8,
+        "requiredYears": null,
+        "requiredYearsStated": false,
+        "relevantYearsRatio": null,
+        "roleFamily": null,
+        "candidateRoleFamilies": [],
+        "roleFamilyCompatible": "unknown",
+        "requirements": [],
+        "mismatchCorroborationCount": 0,
+        "mismatchCorroborations": [],
+        "overqualification": {
+          "detected": false,
+          "seniorityGap": null,
+          "note": null
+        },
+        "dataGaps": [
+          {
+            "id": "capability-inputs-missing",
+            "dimension": "capability",
+            "severity": "dimension_blocking",
+            "label": "Capability inputs are missing",
+            "missingField": "resume or careerFitScore",
+            "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+            "resolution": {
+              "actor": "candidate",
+              "step": "Upload or re-parse a resume."
+            }
+          },
+          {
+            "id": "years-requirement-unstated",
+            "dimension": "capability",
+            "severity": "cosmetic",
+            "label": "Years requirement was not stated",
+            "missingField": "requiredYears",
+            "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+            "resolution": null
+          }
+        ]
+      },
+      "evidence": {
+        "band": "STRONG",
+        "confidence": "medium",
+        "headline": "The resume makes the relevant evidence easy to find.",
+        "findings": [],
+        "verificationLevel": "inferred",
+        "requirementSupport": [
+          {
+            "requirement": "Snowflake",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Multi-agent Orchestration",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "RAG",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Python",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Java",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Go",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "SQL",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Microservices",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Data Pipelines",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Kubernetes",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Machine Learning",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "LLM",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Vector Database",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Distributed Systems",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Vector Databases",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Agentic AI",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "AI Orchestration",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          }
+        ],
+        "coverage": {
+          "requiredTermCount": 17,
+          "presentCount": 12,
+          "supportedCount": 0,
+          "notFoundCount": 5,
+          "confirmedAbsentCount": 0,
+          "presentRatio": 0.7058823529411765
+        },
+        "buriedEvidence": [],
+        "legibility": {
+          "parseStatus": "complete",
+          "parseError": null,
+          "datedRoleCount": 5,
+          "hasRawText": true,
+          "blocksAssessment": false
+        },
+        "consistencyNotes": [],
+        "mayEstablishCapabilityAbsence": false,
+        "dataGaps": []
+      },
+      "positioning": {
+        "band": "MISALIGNED",
+        "confidence": "medium",
+        "headline": "The resume appears aimed at a different role.",
+        "findings": [],
+        "atsScreenScore": null,
+        "atsReadabilityScore": 83,
+        "targetAts": "ashby",
+        "atsProfileApplied": "ashby",
+        "titleAlignment": {
+          "resumeTitle": "Solutions Engineer / Backend Engineer",
+          "jobTitle": "Staff Software Engineer, Cortex AI Infrastructure",
+          "mirrorsJobTitle": false
+        },
+        "supportedMissing": [],
+        "unsupportedMissing": [
+          "AI Orchestration",
+          "Data Pipelines",
+          "Machine Learning",
+          "Snowflake",
+          "Vector Database"
+        ],
+        "presentKeywords": [
+          "Agentic AI",
+          "Distributed Systems",
+          "Go",
+          "Java",
+          "Kubernetes",
+          "LLM",
+          "Microservices",
+          "Multi-agent Orchestration",
+          "Python",
+          "RAG",
+          "SQL",
+          "Vector Databases"
+        ],
+        "leadWith": [
+          "Go",
+          "Java",
+          "Multi-agent Orchestration",
+          "Python",
+          "RAG"
+        ],
+        "surfaceFromRawText": [],
+        "closeGaps": [
+          "AI Orchestration",
+          "Data Pipelines",
+          "Machine Learning",
+          "Snowflake",
+          "Vector Database"
+        ],
+        "fieldContext": {
+          "targetFieldKey": "backend",
+          "fieldFitScore": null,
+          "corpusAvailable": false
+        },
+        "repairEstimate": {
+          "supportedEditCount": 1,
+          "estimatedMinutes": 30,
+          "requiresNewEvidence": true
+        },
+        "dataGaps": [
+          {
+            "id": "field-corpus-unavailable",
+            "dimension": "positioning",
+            "severity": "cosmetic",
+            "label": "Field corpus data is unavailable",
+            "missingField": "field_skill_profiles",
+            "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+            "resolution": {
+              "actor": "hireoven",
+              "step": "Refresh field profiles."
+            }
+          }
+        ]
+      },
+      "topRisks": [],
+      "recommendedActions": [
+        {
+          "id": "complete-inputs",
+          "kind": "complete_profile",
+          "label": "Complete missing inputs",
+          "rationale": "Provide the missing data before using X-Ray for this job.",
+          "effort": "minutes",
+          "doableNow": true,
+          "requiresCandidateConfirmation": true,
+          "isDecisionBlockingConfirmation": true,
+          "addresses": [
+            "eligibility"
+          ],
+          "addressesRiskIds": [],
+          "routeId": null,
+          "target": null,
+          "sourceFactIds": []
+        }
+      ],
+      "dataGaps": [
+        {
+          "id": "capability-inputs-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Capability inputs are missing",
+          "missingField": "resume or careerFitScore",
+          "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+          "resolution": {
+            "actor": "candidate",
+            "step": "Upload or re-parse a resume."
+          }
+        },
+        {
+          "id": "career-fit-score-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Career-fit score is unavailable",
+          "missingField": "job_match_scores.score_breakdown.careerFit",
+          "whyNotDefaulted": "Missing or stale match data is not a capability score.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Recompute deterministic match scoring for this resume and job."
+          }
+        },
+        {
+          "id": "field-corpus-unavailable",
+          "dimension": "positioning",
+          "severity": "cosmetic",
+          "label": "Field corpus data is unavailable",
+          "missingField": "field_skill_profiles",
+          "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Refresh field profiles."
+          }
+        },
+        {
+          "id": "role-specific-sponsorship-unknown",
+          "dimension": "eligibility",
+          "severity": "decision_relevant",
+          "label": "Role-specific employer action policy is unknown",
+          "missingField": "role-specific sponsorship or employer-action statement",
+          "whyNotDefaulted": "Employer history and future-action timelines are not promises for this role.",
+          "resolution": {
+            "actor": "employer",
+            "step": "Confirm the role-specific policy before relying on history."
+          }
+        },
+        {
+          "id": "years-requirement-unstated",
+          "dimension": "capability",
+          "severity": "cosmetic",
+          "label": "Years requirement was not stated",
+          "missingField": "requiredYears",
+          "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+          "resolution": null
+        }
+      ],
+      "canonical": {
+        "requestedJobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+        "evaluatedJobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+        "outcome": "not_a_duplicate",
+        "hops": 0,
+        "canonicalApplyUrl": "https://jobs.ashbyhq.com/snowflake/a1f1779b-464c-48f6-a664-56314825c8ac/application",
+        "requestedApplyUrl": "https://jobs.ashbyhq.com/snowflake/a1f1779b-464c-48f6-a664-56314825c8ac/application",
+        "applyUrlDiffers": false,
+        "sourceFactIds": [],
+        "note": null
+      },
+      "decisionTrace": {
+        "engineVersion": "application-xray-core-2026-08-13.1",
+        "evaluated": [
+          {
+            "stage": "A_canonical_resolution",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "B_definitive_closure",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "C_explicit_requirement_conflict",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "D_sufficiency",
+            "firedRuleId": "RD1",
+            "outcome": "selected_action",
+            "inputs": {}
+          }
+        ],
+        "selectedStage": "D_sufficiency",
+        "selectedRuleId": "RD1",
+        "suppressedRuleIds": [
+          "RI2"
+        ],
+        "tieBreak": null
+      },
+      "meta": {
+        "requestedJobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+        "evaluatedJobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+        "resumeId": "2d5aed28-4bac-4e83-a877-65b5dc67e47b",
+        "computedAt": "2026-08-14T03:31:52.142Z",
+        "schemaVersion": "xray-2026-08-13.r3-core"
+      }
+    },
+    {
+      "index": 16,
+      "title": "Staff Software Engineer (Platform - Financial Engineering)",
+      "jobId": "b1f68f3d-8ac0-4df3-ac34-c1d678afb830",
+      "company": "Coinbase",
+      "roleFamily": "Backend / fintech",
+      "whySelected": "Staff on a financial engine — domain fits, level stretches.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Staff, domain fits, level stretches",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/b1f68f3d-8ac0-4df3-ac34-c1d678afb830/xray",
+      "requestedAt": "2026-08-14T03:31:52.914Z",
+      "durationMs": 92,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 17,
+      "title": "Staff Software Engineer - AI I",
+      "jobId": "076db0e8-fb74-4f13-b52b-04eb11a3928b",
+      "company": "Thomson Reuters",
+      "roleFamily": "AI/ML",
+      "whySelected": "Staff AI on Workday at a data/analytics firm.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "Staff AI",
+      "section": "ai_ml_staff",
+      "endpoint": "/api/jobs/076db0e8-fb74-4f13-b52b-04eb11a3928b/xray",
+      "requestedAt": "2026-08-14T03:31:53.023Z",
+      "durationMs": 109,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 18,
+      "title": "Principal Software Engineer – AI & Cloud (Healthcare / EHR",
+      "jobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+      "company": "Oracle",
+      "roleFamily": "Backend / AI",
+      "whySelected": "GENUINE. \"full time REMOTE role with no sponsorship available.\" No temporal marker -> should be SPONSORSHIP_SCOPE_AMBIGUOUS, not an automatic skip.",
+      "preDecision": "SKIP",
+      "preReason": "no sponsorship available + you need it",
+      "section": "visa_language_edge_cases",
+      "endpoint": "/api/jobs/dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7/xray",
+      "requestedAt": "2026-08-14T03:31:53.708Z",
+      "durationMs": 685,
+      "transportError": null,
+      "httpStatus": 200,
+      "apiError": null,
+      "finalAction": "INSUFFICIENT_DATA",
+      "selectedRuleId": "RD1",
+      "selectedStage": "D_sufficiency",
+      "confidence": "unknown",
+      "dimensionBands": {
+        "hiringReality": "LIKELY_CLOSED",
+        "capability": "UNKNOWN",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "authorization": {
+        "candidate": {
+          "canWorkForTargetEmployerWithoutNewImmigrationAction": "YES",
+          "targetEmployerAuthorizationExplanation": "Initial OPT can authorize work for the target employer now; later employer actions may still be needed.",
+          "declaredVisaStatus": "opt",
+          "declaredWorkAuthorization": "opt",
+          "authorizationEndDate": "2027-02-14T06:00:00.000Z",
+          "futureEmployerActions": [
+            {
+              "type": "H1B_PETITION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "H1B_PETITION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_EVERIFY_PARTICIPATION",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_EVERIFY_PARTICIPATION is possible from the supplied authorization timeline."
+            },
+            {
+              "type": "STEM_OPT_I983",
+              "horizonDays": null,
+              "horizonBasis": "OPT timeline",
+              "status": "POSSIBLE",
+              "source": "derived_from_status",
+              "confidence": "medium",
+              "dataGapIds": [],
+              "explanation": "STEM_OPT_I983 is possible from the supplied authorization timeline."
+            }
+          ],
+          "readFrom": [
+            "autofill_profiles.work_authorization",
+            "profiles.visa_status"
+          ],
+          "derivedFromDefaultsOnly": false,
+          "currentAuthorizationType": "temporary_status"
+        },
+        "categories": [
+          "SPONSORSHIP_OFFERED"
+        ],
+        "postingRequirements": [
+          {
+            "category": "SPONSORSHIP_OFFERED",
+            "temporalScope": "none_present",
+            "excerpt": "This is a full time US REMOTE role with no sponsorship available.",
+            "confidence": "high",
+            "deterministicMatch": true,
+            "sourceFactId": "job-authorization-language"
+          }
+        ],
+        "conflicts": [
+          {
+            "requirement": {
+              "category": "SPONSORSHIP_OFFERED",
+              "excerpt": "This is a full time US REMOTE role with no sponsorship available.",
+              "sourceFactId": "job-authorization-language",
+              "confidence": "high",
+              "deterministicMatch": true,
+              "temporalScope": "none_present",
+              "namesVisaCategories": []
+            },
+            "outcome": "no_conflict",
+            "explanation": "No explicit conflict was found between the posting language and the supplied timeline.",
+            "confidence": "high",
+            "candidateDataSufficient": true
+          }
+        ],
+        "employerActionFeasibility": [
+          {
+            "actionType": "STEM_OPT_EVERIFY_PARTICIPATION",
+            "status": "AVAILABLE",
+            "employerStatementExcerpt": null,
+            "candidateRequiresAction": "unknown",
+            "sourceFactIds": [
+              "company-everify-source"
+            ],
+            "confidence": "medium"
+          }
+        ],
+        "sponsorshipHistory": {
+          "employerHasSponsored": true,
+          "recentPetitionCount": 1090,
+          "totalLcaCount": 811,
+          "roleFamilyLcaCount": null,
+          "roleFamilyMatchMethod": "unknown",
+          "worksiteLcaCount": null,
+          "dataAsOf": "2026-08-14T03:05:03.554502+00:00",
+          "dataStale": false,
+          "eVerify": {
+            "participation": "CONFIRMED_PARTICIPATING",
+            "sourceName": "stored E-Verify employer data",
+            "sourceCoverageNote": null,
+            "observedAt": "2026-06-26T16:04:54.587452+00:00",
+            "confidence": "medium"
+          },
+          "notARolePromise": true
+        }
+      },
+      "capability": {
+        "band": "UNKNOWN",
+        "confidence": "unknown",
+        "headline": "Capability cannot be assessed from the supplied inputs.",
+        "findings": [
+          {
+            "id": "cap-career-fit",
+            "kind": null,
+            "label": null,
+            "statement": "Capability cannot be assessed from the supplied inputs.",
+            "severity": null,
+            "confidence": "unknown",
+            "basis": "inference",
+            "sourceFactIds": []
+          }
+        ],
+        "careerFitScore": null,
+        "careerFitLabel": null,
+        "relevantYears": null,
+        "totalYears": 8,
+        "requiredYears": null,
+        "requiredYearsStated": false,
+        "relevantYearsRatio": null,
+        "roleFamily": null,
+        "candidateRoleFamilies": [],
+        "roleFamilyCompatible": "unknown",
+        "requirements": [],
+        "mismatchCorroborationCount": 0,
+        "mismatchCorroborations": [],
+        "overqualification": {
+          "detected": false,
+          "seniorityGap": null,
+          "note": null
+        },
+        "dataGaps": [
+          {
+            "id": "capability-inputs-missing",
+            "dimension": "capability",
+            "severity": "dimension_blocking",
+            "label": "Capability inputs are missing",
+            "missingField": "resume or careerFitScore",
+            "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+            "resolution": {
+              "actor": "candidate",
+              "step": "Upload or re-parse a resume."
+            }
+          },
+          {
+            "id": "years-requirement-unstated",
+            "dimension": "capability",
+            "severity": "cosmetic",
+            "label": "Years requirement was not stated",
+            "missingField": "requiredYears",
+            "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+            "resolution": null
+          }
+        ]
+      },
+      "evidence": {
+        "band": "ADEQUATE",
+        "confidence": "medium",
+        "headline": "The resume shows enough relevant evidence for this role.",
+        "findings": [],
+        "verificationLevel": "inferred",
+        "requirementSupport": [
+          {
+            "requirement": "Python",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Java",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Distributed Systems",
+            "status": "present",
+            "absenceKind": null,
+            "supportingContext": null,
+            "locatedIn": "structured_fields",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "Cloud Platforms",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          },
+          {
+            "requirement": "EHR/EMR",
+            "status": "missing_needs_confirmation",
+            "absenceKind": "NOT_FOUND_IN_READABLE_DATA",
+            "supportingContext": null,
+            "locatedIn": "not_found",
+            "sourceFactIds": []
+          }
+        ],
+        "coverage": {
+          "requiredTermCount": 5,
+          "presentCount": 3,
+          "supportedCount": 0,
+          "notFoundCount": 2,
+          "confirmedAbsentCount": 0,
+          "presentRatio": 0.6
+        },
+        "buriedEvidence": [],
+        "legibility": {
+          "parseStatus": "complete",
+          "parseError": null,
+          "datedRoleCount": 5,
+          "hasRawText": true,
+          "blocksAssessment": false
+        },
+        "consistencyNotes": [],
+        "mayEstablishCapabilityAbsence": false,
+        "dataGaps": []
+      },
+      "positioning": {
+        "band": "MISALIGNED",
+        "confidence": "medium",
+        "headline": "The resume appears aimed at a different role.",
+        "findings": [],
+        "atsScreenScore": null,
+        "atsReadabilityScore": 83,
+        "targetAts": "custom",
+        "atsProfileApplied": "custom",
+        "titleAlignment": {
+          "resumeTitle": "Solutions Engineer / Backend Engineer",
+          "jobTitle": "Principal Software Engineer – Senior Software Engineer – Java, SRE & Observability",
+          "mirrorsJobTitle": false
+        },
+        "supportedMissing": [],
+        "unsupportedMissing": [
+          "Cloud Platforms",
+          "EHR/EMR"
+        ],
+        "presentKeywords": [
+          "Distributed Systems",
+          "Java",
+          "Python"
+        ],
+        "leadWith": [
+          "Distributed Systems",
+          "Java",
+          "Python"
+        ],
+        "surfaceFromRawText": [],
+        "closeGaps": [
+          "Cloud Platforms",
+          "EHR/EMR"
+        ],
+        "fieldContext": {
+          "targetFieldKey": "backend",
+          "fieldFitScore": null,
+          "corpusAvailable": false
+        },
+        "repairEstimate": {
+          "supportedEditCount": 1,
+          "estimatedMinutes": 15,
+          "requiresNewEvidence": true
+        },
+        "dataGaps": [
+          {
+            "id": "field-corpus-unavailable",
+            "dimension": "positioning",
+            "severity": "cosmetic",
+            "label": "Field corpus data is unavailable",
+            "missingField": "field_skill_profiles",
+            "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+            "resolution": {
+              "actor": "hireoven",
+              "step": "Refresh field profiles."
+            }
+          }
+        ]
+      },
+      "topRisks": [
+        {
+          "id": "risk-posting",
+          "kind": "posting_may_be_closed",
+          "severity": "high",
+          "statement": "Soft posting signals should be checked directly.",
+          "dimension": "hiringReality",
+          "confidence": "low",
+          "likelihoodBasis": "inference",
+          "addressableByActionId": "complete-inputs",
+          "sampleSize": null,
+          "sourceFactIds": []
+        }
+      ],
+      "recommendedActions": [
+        {
+          "id": "complete-inputs",
+          "kind": "complete_profile",
+          "label": "Complete missing inputs",
+          "rationale": "Provide the missing data before using X-Ray for this job.",
+          "effort": "minutes",
+          "doableNow": true,
+          "requiresCandidateConfirmation": true,
+          "isDecisionBlockingConfirmation": true,
+          "addresses": [
+            "eligibility"
+          ],
+          "addressesRiskIds": [],
+          "routeId": null,
+          "target": null,
+          "sourceFactIds": []
+        }
+      ],
+      "dataGaps": [
+        {
+          "id": "capability-inputs-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Capability inputs are missing",
+          "missingField": "resume or careerFitScore",
+          "whyNotDefaulted": "A missing resume or score does not mean the candidate lacks capability.",
+          "resolution": {
+            "actor": "candidate",
+            "step": "Upload or re-parse a resume."
+          }
+        },
+        {
+          "id": "career-fit-score-missing",
+          "dimension": "capability",
+          "severity": "dimension_blocking",
+          "label": "Career-fit score is unavailable",
+          "missingField": "job_match_scores.score_breakdown.careerFit",
+          "whyNotDefaulted": "Missing or stale match data is not a capability score.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Recompute deterministic match scoring for this resume and job."
+          }
+        },
+        {
+          "id": "field-corpus-unavailable",
+          "dimension": "positioning",
+          "severity": "cosmetic",
+          "label": "Field corpus data is unavailable",
+          "missingField": "field_skill_profiles",
+          "whyNotDefaulted": "An unavailable corpus cannot be read as zero field fit.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Refresh field profiles."
+          }
+        },
+        {
+          "id": "ghost-risk-cache-stale",
+          "dimension": "hiringReality",
+          "severity": "decision_relevant",
+          "label": "Ghost-risk cache is stale",
+          "missingField": "fresh ghost_job_scores row",
+          "whyNotDefaulted": "A stale URL/repost scan is not evidence that the posting is live or closed.",
+          "resolution": {
+            "actor": "hireoven",
+            "step": "Refresh ghost-risk scanning."
+          }
+        },
+        {
+          "id": "role-specific-sponsorship-unknown",
+          "dimension": "eligibility",
+          "severity": "decision_relevant",
+          "label": "Role-specific employer action policy is unknown",
+          "missingField": "role-specific sponsorship or employer-action statement",
+          "whyNotDefaulted": "Employer history and future-action timelines are not promises for this role.",
+          "resolution": {
+            "actor": "employer",
+            "step": "Confirm the role-specific policy before relying on history."
+          }
+        },
+        {
+          "id": "years-requirement-unstated",
+          "dimension": "capability",
+          "severity": "cosmetic",
+          "label": "Years requirement was not stated",
+          "missingField": "requiredYears",
+          "whyNotDefaulted": "No stated years requirement means no shortfall can be computed.",
+          "resolution": null
+        }
+      ],
+      "canonical": {
+        "requestedJobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+        "evaluatedJobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+        "outcome": "not_a_duplicate",
+        "hops": 0,
+        "canonicalApplyUrl": "https://careers.oracle.com/en/sites/jobsearch/job/332595",
+        "requestedApplyUrl": "https://careers.oracle.com/en/sites/jobsearch/job/332595",
+        "applyUrlDiffers": false,
+        "sourceFactIds": [],
+        "note": null
+      },
+      "decisionTrace": {
+        "engineVersion": "application-xray-core-2026-08-13.1",
+        "evaluated": [
+          {
+            "stage": "A_canonical_resolution",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "B_definitive_closure",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "C_explicit_requirement_conflict",
+            "firedRuleId": null,
+            "outcome": "passed_through",
+            "inputs": {}
+          },
+          {
+            "stage": "D_sufficiency",
+            "firedRuleId": "RD1",
+            "outcome": "selected_action",
+            "inputs": {}
+          }
+        ],
+        "selectedStage": "D_sufficiency",
+        "selectedRuleId": "RD1",
+        "suppressedRuleIds": [
+          "RI1",
+          "RI2"
+        ],
+        "tieBreak": null
+      },
+      "meta": {
+        "requestedJobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+        "evaluatedJobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+        "resumeId": "2d5aed28-4bac-4e83-a877-65b5dc67e47b",
+        "computedAt": "2026-08-14T03:31:53.057Z",
+        "schemaVersion": "xray-2026-08-13.r3-core"
+      }
+    },
+    {
+      "index": 19,
+      "title": "Principal Software Developer - Oracle Health, US citizensh",
+      "jobId": "7140bf3e-82ad-4334-b800-f8454234141e",
+      "company": "Oracle",
+      "roleFamily": "Backend",
+      "whySelected": "GENUINE. Title itself says US citizenship; body has Work Authorization / Clearance.",
+      "preDecision": "SKIP",
+      "preReason": "US citizenship / clearance",
+      "section": "visa_language_edge_cases",
+      "endpoint": "/api/jobs/7140bf3e-82ad-4334-b800-f8454234141e/xray",
+      "requestedAt": "2026-08-14T03:31:53.821Z",
+      "durationMs": 113,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 20,
+      "title": "Software Engineer - Early Career (Front-end)",
+      "jobId": "23528ac4-e204-4b11-90dd-706c2f48e5b8",
+      "company": "Apple",
+      "roleFamily": "Frontend",
+      "whySelected": "TRAP. \"Sponsorship integrations ... in live sports on Apple TV help advertisers\" — advertising sponsorship, not visa.",
+      "preDecision": "STRENGTHEN_FIRST",
+      "preReason": "TRAP: advertising sponsorship, NOT visa. Also frontend + early career = wrong lane/level",
+      "section": "visa_language_edge_cases",
+      "endpoint": "/api/jobs/23528ac4-e204-4b11-90dd-706c2f48e5b8/xray",
+      "requestedAt": "2026-08-14T03:31:53.904Z",
+      "durationMs": 83,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 21,
+      "title": "Engineering Manager, (Apple/Android), SDK Vienna, Austria",
+      "jobId": "f97f82e0-b514-4f14-a287-040a5d41cdae",
+      "company": "Sentry",
+      "roleFamily": "Eng management",
+      "whySelected": "TRAP. \"mentor, coach, and sponsor a team of 4-6 engineers\" — mentorship, not visa.",
+      "preDecision": "SKIP",
+      "preReason": "TRAP: 'sponsor a team' is mentorship. Real reason to skip is eng-management lane, not visa",
+      "section": "visa_language_edge_cases",
+      "endpoint": "/api/jobs/f97f82e0-b514-4f14-a287-040a5d41cdae/xray",
+      "requestedAt": "2026-08-14T03:31:53.988Z",
+      "durationMs": 84,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 22,
+      "title": "Forward Deployed Software Engineer",
+      "jobId": "adb9e4b6-5cd5-4096-a403-30533119d581",
+      "company": "Palantir",
+      "roleFamily": "Forward deployed",
+      "whySelected": "6,095 days old (~16.7 yr). Corrupt or ancient date. Has an exact is_active=false twin in the DB.",
+      "preDecision": "INSUFFICIENT_DATA",
+      "preReason": "6095d age is corrupt - cannot judge",
+      "section": "sparse_malformed",
+      "endpoint": "/api/jobs/adb9e4b6-5cd5-4096-a403-30533119d581/xray",
+      "requestedAt": "2026-08-14T03:31:54.070Z",
+      "durationMs": 82,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 23,
+      "title": "Application Security Engineer",
+      "jobId": "7a23a5da-991f-432f-b1c7-d95a3ba2e375",
+      "company": "Palantir",
+      "roleFamily": "Security engineering",
+      "whySelected": "5,084 days old. Same duplicate-pair pattern.",
+      "preDecision": "INSUFFICIENT_DATA",
+      "preReason": "5084d age corrupt; security lane anyway",
+      "section": "sparse_malformed",
+      "endpoint": "/api/jobs/7a23a5da-991f-432f-b1c7-d95a3ba2e375/xray",
+      "requestedAt": "2026-08-14T03:31:54.147Z",
+      "durationMs": 77,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 24,
+      "title": "Software Engineer, Applied AI",
+      "jobId": "82b14ca9-6d60-41da-b9f8-7abae7e32473",
+      "company": "mercor",
+      "roleFamily": "AI engineering",
+      "whySelected": "Description is 337 characters. Almost nothing to extract requirements from.",
+      "preDecision": "INSUFFICIENT_DATA",
+      "preReason": "337-char description",
+      "section": "sparse_malformed",
+      "endpoint": "/api/jobs/82b14ca9-6d60-41da-b9f8-7abae7e32473/xray",
+      "requestedAt": "2026-08-14T03:31:54.295Z",
+      "durationMs": 148,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    },
+    {
+      "index": 25,
+      "title": "engineering and product",
+      "jobId": "8ab94406-57bd-4c59-a077-8b18e0c06708",
+      "company": "Samsara Inc.",
+      "roleFamily": "UNCLEAR",
+      "whySelected": "Title is \"engineering and product\" — a department page captured as a job. Location NULL, remote=true.",
+      "preDecision": "INSUFFICIENT_DATA",
+      "preReason": "'engineering and product' is a department page",
+      "section": "sparse_malformed",
+      "endpoint": "/api/jobs/8ab94406-57bd-4c59-a077-8b18e0c06708/xray",
+      "requestedAt": "2026-08-14T03:31:54.377Z",
+      "durationMs": 82,
+      "transportError": null,
+      "httpStatus": 404,
+      "apiError": "JOB_NOT_FOUND",
+      "finalAction": null,
+      "selectedRuleId": null,
+      "selectedStage": null,
+      "confidence": null,
+      "dimensionBands": null,
+      "authorization": null,
+      "capability": null,
+      "evidence": null,
+      "positioning": null,
+      "topRisks": [],
+      "recommendedActions": [],
+      "dataGaps": [],
+      "canonical": null,
+      "decisionTrace": null,
+      "meta": null
+    }
+  ],
+  "issueSummary": {
+    "total": 23,
+    "byType": {
+      "api_failure": 21,
+      "incorrect_evidence_classification": 1,
+      "false_visa_match": 1
+    },
+    "bySeverity": {
+      "blocking": 21,
+      "major": 2
+    }
+  },
+  "issues": [
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 1,
+      "jobId": "94d93b1f-17ed-484f-bd5f-26d4b314f6f0",
+      "title": "Senior Java Full Stack Developer",
+      "company": "Citigroup",
+      "message": "GET /api/jobs/94d93b1f-17ed-484f-bd5f-26d4b314f6f0/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 2,
+      "jobId": "6466c48e-7379-4ac8-8794-4460560aaad5",
+      "title": "Lead Software Engineer, Back End",
+      "company": "Capital One",
+      "message": "GET /api/jobs/6466c48e-7379-4ac8-8794-4460560aaad5/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 3,
+      "jobId": "cd82fc7d-54b4-4811-8192-14be418f04a3",
+      "title": "Backend Engineer, Core Technology",
+      "company": "Stripe",
+      "message": "GET /api/jobs/cd82fc7d-54b4-4811-8192-14be418f04a3/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 4,
+      "jobId": "ee165f9f-6834-41c4-9c8c-c38b0bd97d16",
+      "title": "Senior Software Engineer, Backend",
+      "company": "Coinbase",
+      "message": "GET /api/jobs/ee165f9f-6834-41c4-9c8c-c38b0bd97d16/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 5,
+      "jobId": "3d779276-bb8f-41fb-8773-ac20a9740a7d",
+      "title": "Senior Software Engineer, Backend (Platform - Financial En",
+      "company": "Coinbase",
+      "message": "GET /api/jobs/3d779276-bb8f-41fb-8773-ac20a9740a7d/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 6,
+      "jobId": "08b30169-eefc-46ea-ba52-f725460f480e",
+      "title": "Senior Software Engineer, Identity & Access Management",
+      "company": "Snowflake",
+      "message": "GET /api/jobs/08b30169-eefc-46ea-ba52-f725460f480e/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 7,
+      "jobId": "d30fea9e-8479-49f0-b485-316c373f09a0",
+      "title": "Senior Software Engineer",
+      "company": "Match Group",
+      "message": "GET /api/jobs/d30fea9e-8479-49f0-b485-316c373f09a0/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 8,
+      "jobId": "d96db4a8-9acb-41bc-8f19-11ea046ecd50",
+      "title": "Software Engineer, DevInfra",
+      "company": "Mixpanel",
+      "message": "GET /api/jobs/d96db4a8-9acb-41bc-8f19-11ea046ecd50/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 9,
+      "jobId": "282eba74-159d-4dae-8ae3-8ac173564539",
+      "title": "Senior Software Engineer Applied Gen AI Engineering",
+      "company": "Citigroup",
+      "message": "GET /api/jobs/282eba74-159d-4dae-8ae3-8ac173564539/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 10,
+      "jobId": "587de755-1293-4531-98b8-229a8f3533a3",
+      "title": "Senior AI Software Engineer",
+      "company": "Amplitude",
+      "message": "GET /api/jobs/587de755-1293-4531-98b8-229a8f3533a3/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 12,
+      "jobId": "35757934-eace-40ca-9291-53df90f9e48e",
+      "title": "Staff Machine Learning Engineer - Cortex Code Quality",
+      "company": "Snowflake",
+      "message": "GET /api/jobs/35757934-eace-40ca-9291-53df90f9e48e/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 13,
+      "jobId": "349df183-df7b-466b-929f-0c07546400e9",
+      "title": "Applied Scientist, Customer FinOps Intelligence",
+      "company": "Snowflake",
+      "message": "GET /api/jobs/349df183-df7b-466b-929f-0c07546400e9/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "incorrect_evidence_classification",
+      "severity": "major",
+      "jobIndex": 15,
+      "jobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+      "title": "Staff Software Engineer, Cortex AI Infrastructure",
+      "company": "Snowflake",
+      "message": "Evidence is STRONG while capability is UNKNOWN; this can overstate proof quality.",
+      "evidence": {
+        "evidenceBand": "STRONG",
+        "capabilityBand": "UNKNOWN"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 16,
+      "jobId": "b1f68f3d-8ac0-4df3-ac34-c1d678afb830",
+      "title": "Staff Software Engineer (Platform - Financial Engineering)",
+      "company": "Coinbase",
+      "message": "GET /api/jobs/b1f68f3d-8ac0-4df3-ac34-c1d678afb830/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 17,
+      "jobId": "076db0e8-fb74-4f13-b52b-04eb11a3928b",
+      "title": "Staff Software Engineer - AI I",
+      "company": "Thomson Reuters",
+      "message": "GET /api/jobs/076db0e8-fb74-4f13-b52b-04eb11a3928b/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "false_visa_match",
+      "severity": "major",
+      "jobIndex": 18,
+      "jobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+      "title": "Principal Software Engineer – AI & Cloud (Healthcare / EHR",
+      "company": "Oracle",
+      "message": "Oracle Health role classified text as SPONSORSHIP_OFFERED even though the excerpt says “no sponsorship available”; expected a no-sponsorship category with the corrected scope semantics, not an offer category.",
+      "evidence": {
+        "categories": [
+          "SPONSORSHIP_OFFERED"
+        ],
+        "requirements": [
+          {
+            "category": "SPONSORSHIP_OFFERED",
+            "temporalScope": "none_present",
+            "excerpt": "This is a full time US REMOTE role with no sponsorship available.",
+            "confidence": "high",
+            "deterministicMatch": true,
+            "sourceFactId": "job-authorization-language"
+          }
+        ]
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 19,
+      "jobId": "7140bf3e-82ad-4334-b800-f8454234141e",
+      "title": "Principal Software Developer - Oracle Health, US citizensh",
+      "company": "Oracle",
+      "message": "GET /api/jobs/7140bf3e-82ad-4334-b800-f8454234141e/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 20,
+      "jobId": "23528ac4-e204-4b11-90dd-706c2f48e5b8",
+      "title": "Software Engineer - Early Career (Front-end)",
+      "company": "Apple",
+      "message": "GET /api/jobs/23528ac4-e204-4b11-90dd-706c2f48e5b8/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 21,
+      "jobId": "f97f82e0-b514-4f14-a287-040a5d41cdae",
+      "title": "Engineering Manager, (Apple/Android), SDK Vienna, Austria",
+      "company": "Sentry",
+      "message": "GET /api/jobs/f97f82e0-b514-4f14-a287-040a5d41cdae/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 22,
+      "jobId": "adb9e4b6-5cd5-4096-a403-30533119d581",
+      "title": "Forward Deployed Software Engineer",
+      "company": "Palantir",
+      "message": "GET /api/jobs/adb9e4b6-5cd5-4096-a403-30533119d581/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 23,
+      "jobId": "7a23a5da-991f-432f-b1c7-d95a3ba2e375",
+      "title": "Application Security Engineer",
+      "company": "Palantir",
+      "message": "GET /api/jobs/7a23a5da-991f-432f-b1c7-d95a3ba2e375/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 24,
+      "jobId": "82b14ca9-6d60-41da-b9f8-7abae7e32473",
+      "title": "Software Engineer, Applied AI",
+      "company": "mercor",
+      "message": "GET /api/jobs/82b14ca9-6d60-41da-b9f8-7abae7e32473/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    },
+    {
+      "type": "api_failure",
+      "severity": "blocking",
+      "jobIndex": 25,
+      "jobId": "8ab94406-57bd-4c59-a077-8b18e0c06708",
+      "title": "engineering and product",
+      "company": "Samsara Inc.",
+      "message": "GET /api/jobs/8ab94406-57bd-4c59-a077-8b18e0c06708/xray returned 404 JOB_NOT_FOUND.",
+      "evidence": {
+        "httpStatus": 404,
+        "apiError": "JOB_NOT_FOUND"
+      }
+    }
+  ]
+}

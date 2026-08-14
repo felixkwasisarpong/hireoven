@@ -31,15 +31,37 @@ export function assessCapability(input: {
 
   const dataGaps: CapabilityAssessment["dataGaps"] = []
   if (band === "UNKNOWN") {
-    dataGaps.push({
-      id: "capability-inputs-missing",
-      dimension: "capability",
-      severity: "dimension_blocking",
-      label: "Capability inputs are missing",
-      missingField: "resume or careerFitScore",
-      whyNotDefaulted: "A missing resume or score does not mean the candidate lacks capability.",
-      resolution: { actor: "candidate", step: "Upload or re-parse a resume." },
-    })
+    // Attribute the gap to whoever can actually close it.
+    //
+    // A readable, parsed resume with no careerFitScore is NOT a candidate
+    // problem — it means HireOven has never scored this (resume, job) pair.
+    // Telling that candidate to "upload or re-parse a resume" is both wrong and
+    // insulting: they did their part, and the missing artefact is ours. It also
+    // sends them round a loop that cannot fix anything, because re-uploading
+    // does not trigger scoring for this job.
+    const resumeUsable = input.signals.resumeReadable === true && !input.resumeMissing
+    dataGaps.push(
+      resumeUsable
+        ? {
+            id: "capability-score-not-computed",
+            dimension: "capability",
+            severity: "dimension_blocking",
+            label: "Match score has not been computed for this job",
+            missingField: "job_match_scores.score_breakdown.careerFit",
+            whyNotDefaulted:
+              "The resume is readable. An uncomputed score is a HireOven gap, not evidence about the candidate.",
+            resolution: { actor: "hireoven", step: "Recompute the match score for this resume and job." },
+          }
+        : {
+            id: "capability-inputs-missing",
+            dimension: "capability",
+            severity: "dimension_blocking",
+            label: "Capability inputs are missing",
+            missingField: "resume or careerFitScore",
+            whyNotDefaulted: "A missing resume or score does not mean the candidate lacks capability.",
+            resolution: { actor: "candidate", step: "Upload or re-parse a resume." },
+          },
+    )
   }
   if (!input.signals.requiredYearsStated) {
     dataGaps.push({

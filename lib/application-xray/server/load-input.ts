@@ -49,10 +49,31 @@ import { sanitizeApplicationXRayOutput } from "./sanitize-output"
 const MAX_CANONICAL_HOPS = 3
 const GHOST_CACHE_MAX_HOURS = 24
 const REJECTION_PATTERN_MAX_DAYS = 180
-const HIDDEN_STATUSES_EXCLUDED_FROM_XRAY = [
+/**
+ * Publication statuses that mean "do not surface this row in a feed".
+ *
+ * These are deliberately NOT applied to the direct-by-id lookup. A feed filter
+ * answers "should we show this unprompted"; an X-Ray request answers "the user
+ * asked about THIS job". Filtering them at lookup produced two defects:
+ *
+ *   1. A user pasting a link to a closed job got JOB_NOT_FOUND instead of the
+ *      SKIP the decision table exists to produce — rule RB1 (definitive
+ *      closure) was structurally unreachable through the route.
+ *   2. `sqlJobLocatedInUsa` was also applied here, so any job whose location is
+ *      NULL — unknown, not foreign — vanished entirely. Unknown became
+ *      exclusion, upstream of every guarantee the engine makes.
+ *
+ * Both concerns are now handled where they belong: closure feeds Hiring
+ * Reality, and location feeds Eligibility.otherConstraints.
+ */
+const FEED_HIDDEN_STATUSES = [
   "hidden_invalid",
   "hidden_low_quality",
 ] as const
+
+export function isFeedHiddenStatus(status: string | null | undefined): boolean {
+  return status != null && (FEED_HIDDEN_STATUSES as readonly string[]).includes(status)
+}
 
 export class ApplicationXRayLoadError extends Error {
   constructor(
@@ -307,10 +328,8 @@ async function loadJobById(pool: XRayQueryable, jobId: string): Promise<XRayJobR
      FROM jobs j
      LEFT JOIN companies c ON c.id = j.company_id
      WHERE j.id = $1::uuid
-       AND ${sqlJobLocatedInUsa("j", { companyAlias: "c" })}
-       AND COALESCE(j.publication_status, 'published') <> ALL($2::text[])
      LIMIT 1`,
-    [jobId, [...HIDDEN_STATUSES_EXCLUDED_FROM_XRAY]],
+    [jobId],
   )
   return result.rows[0] ?? null
 }
