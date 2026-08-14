@@ -188,6 +188,14 @@ function job(overrides: Partial<ApplicationXRayJobRecord> = {}): ApplicationXRay
     contentHash: "hash-1",
     availability: availability(),
     descriptionReadable: true,
+    // A well-formed posting: role noun in the title, duties, requirements and
+    // an apply route. Fixtures must clear assessability so that suites testing
+    // the decision table are not silently short-circuited at stage B0.
+    descriptionText:
+      "Responsibilities: You will design and build backend services, own delivery of core APIs, " +
+      "and collaborate with product partners. Requirements: 5 years of experience with Java and " +
+      "Spring, proficiency with PostgreSQL, and a bachelor's degree or equivalent experience.",
+    externalId: "REQ-1001",
     ...overrides,
   }
 }

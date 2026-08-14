@@ -4,6 +4,7 @@ import {
   normalizeCredentialKey,
   resolveRequirementPresence,
 } from "@/lib/candidates/credential-declarations"
+import { detectTrackIncompatibility } from "../career-track"
 import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
 import { categorizePostingAuthorizationLanguage } from "../authorization-language"
 import type {
@@ -94,6 +95,27 @@ export function mapCapability(input: {
     if (!compatible) mismatchCorroborations.push("role_family_incompatible")
   }
 
+  // Track incompatibility (IC vs people management). RoleFamily is a domain
+  // classifier with no notion of track, so an Engineering Manager and a backend
+  // engineer both read as "tech" and look compatible. This supplies the missing
+  // structural signal — and only fires when the posting is management AND the
+  // resume shows no management evidence.
+  const trackVerdict = detectTrackIncompatibility({
+    postingTitle: input.job?.title ?? null,
+    postingDescription: input.job?.description ?? null,
+    candidateTitles: (input.resume?.work_experience ?? []).map((item) => item.title ?? null),
+    candidateExperienceText: [
+      input.resume?.raw_text ?? "",
+      ...(input.resume?.work_experience ?? []).map((item) =>
+        [item.title, item.description, ...(item.achievements ?? [])].filter(Boolean).join(" "),
+      ),
+    ].join("\n"),
+    candidateDataReadable: Boolean(input.resume && input.resume.parse_status === "complete"),
+  })
+  if (trackVerdict?.incompatible && !mismatchCorroborations.includes("role_family_incompatible")) {
+    mismatchCorroborations.push("role_family_incompatible")
+  }
+
   const requirements = mapDeterministicRequirements({
     job: input.job,
     resume: input.resume,
@@ -106,6 +128,7 @@ export function mapCapability(input: {
     // A resume counts as readable when it parsed and carries usable text or
     // structure — that is what separates "candidate gave us nothing" from
     // "we never scored this pair".
+    trackExplanation: trackVerdict?.explanation ?? null,
     resumeReadable: Boolean(
       input.resume &&
         input.resume.parse_status === "complete" &&

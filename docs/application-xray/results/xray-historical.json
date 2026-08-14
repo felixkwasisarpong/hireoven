@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-08-14T12:36:49.255Z",
+  "ranAt": "2026-08-14T19:01:59.884Z",
   "candidate": {
     "visa_status": "opt",
     "needs_sponsorship": true,
@@ -249,10 +249,10 @@
       "ok": true,
       "predicted": "APPLY_NOW",
       "predictedWhy": "plain senior backend",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
-      "confidence": "medium",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "EXCEEDS",
@@ -263,12 +263,12 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -276,13 +276,23 @@
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "d96db4a8-9acb-41bc-8f19-11ea046ecd50",
@@ -514,6 +524,9 @@
       "traceInputKeys": [
         "mismatchCorroborated",
         "corroborationCount",
+        "corroborations",
+        "structuralCorroborations",
+        "structuralCount",
         "capabilityBand"
       ],
       "headline": "Skip this one"
@@ -683,10 +696,10 @@
       "ok": true,
       "predicted": "SKIP",
       "predictedWhy": "no sponsorship available + you need it",
-      "action": "SKIP",
-      "rule": "RE1",
-      "stage": "E_capability",
-      "confidence": "low",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "MISMATCH",
@@ -699,14 +712,14 @@
         "SPONSORSHIP_SCOPE_AMBIGUOUS"
       ],
       "actions": [
+        "verify_posting",
         "confirm_everify_participation",
-        "confirm_future_sponsorship_policy",
-        "choose_different_target"
+        "confirm_future_sponsorship_policy"
       ],
       "actionAddresses": [
+        "hiringReality",
         "eligibility",
-        "eligibility",
-        "capability"
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -715,11 +728,23 @@
         "sponsorship-scope-unstated"
       ],
       "traceInputKeys": [
-        "mismatchCorroborated",
-        "corroborationCount",
-        "capabilityBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Skip this one"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "7140bf3e-82ad-4334-b800-f8454234141e",
@@ -766,10 +791,10 @@
       "ok": true,
       "predicted": "STRENGTHEN_FIRST",
       "predictedWhy": "TRAP: advertising sponsorship, NOT visa. Also frontend + early career = wrong lane/level",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
-      "confidence": "medium",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "EXCEEDS",
@@ -780,12 +805,12 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -794,13 +819,23 @@
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "f97f82e0-b514-4f14-a287-040a5d41cdae",
@@ -836,6 +871,9 @@
       "traceInputKeys": [
         "mismatchCorroborated",
         "corroborationCount",
+        "corroborations",
+        "structuralCorroborations",
+        "structuralCount",
         "capabilityBand"
       ],
       "headline": "Skip this one"
@@ -845,10 +883,10 @@
       "ok": true,
       "predicted": "INSUFFICIENT_DATA",
       "predictedWhy": "6095d age is corrupt - cannot judge",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
-      "confidence": "medium",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "EXCEEDS",
@@ -859,12 +897,12 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -872,23 +910,33 @@
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "7a23a5da-991f-432f-b1c7-d95a3ba2e375",
       "ok": true,
       "predicted": "INSUFFICIENT_DATA",
       "predictedWhy": "5084d age corrupt; security lane anyway",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
-      "confidence": "medium",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "NEAR_MISS",
@@ -899,12 +947,12 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -912,22 +960,32 @@
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "82b14ca9-6d60-41da-b9f8-7abae7e32473",
       "ok": true,
       "predicted": "INSUFFICIENT_DATA",
       "predictedWhy": "337-char description",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
       "confidence": "unknown",
       "bands": {
         "hiringReality": "LIVE",
@@ -939,35 +997,45 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "everify-participation-unknown",
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     },
     {
       "jobId": "8ab94406-57bd-4c59-a077-8b18e0c06708",
       "ok": true,
       "predicted": "INSUFFICIENT_DATA",
       "predictedWhy": "'engineering and product' is a department page",
-      "action": "APPLY_NOW",
-      "rule": "RI2",
-      "stage": "I_apply",
-      "confidence": "medium",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
       "bands": {
         "hiringReality": "LIKELY_LIVE",
         "capability": "NEAR_MISS",
@@ -978,12 +1046,12 @@
       "canWork": "YES",
       "postingCategories": [],
       "actions": [
-        "confirm_everify_participation",
-        "confirm_requirement_status"
+        "verify_posting",
+        "confirm_everify_participation"
       ],
       "actionAddresses": [
-        "eligibility",
-        "evidence+positioning"
+        "hiringReality",
+        "eligibility"
       ],
       "dataGapIds": [
         "board-check-stale",
@@ -991,13 +1059,23 @@
         "role-specific-sponsorship-unknown"
       ],
       "traceInputKeys": [
-        "hiringRealityBand",
-        "capabilityBand",
-        "evidenceBand",
-        "eligibilityBand",
-        "positioningBand"
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
       ],
-      "headline": "Apply now"
+      "headline": "Not enough to judge"
     }
   ]
 }

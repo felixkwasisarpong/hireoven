@@ -3,6 +3,8 @@ import { hasDecisiveConflict, hasRequiredEmployerActionRefusal, worstConflict } 
 import { capConfidence, confidenceFromCoverage, minConfidence } from "./confidence"
 import { isDefinitivelyClosed } from "./hiring-reality"
 import { hasAcquirableAbsentRequirement, hasUnconfirmedMandatoryRequirement } from "./requirements"
+import { isStructuralCorroboration, mismatchIsCorroborated } from "./capability"
+import type { AssessabilityVerdict } from "./assessability"
 import type {
   ApplicationXRay,
   CapabilityAssessment,
@@ -29,6 +31,9 @@ export type XRayDecisionContext = Pick<
   | "dataGaps"
 > & {
   computedAt: string
+  /** Stage-B0 posting assessability. Computed before sufficiency, because
+   *  "no conflict found" means nothing when there was nothing to search. */
+  assessability?: AssessabilityVerdict
 }
 
 export type XRayDecision = {
@@ -46,6 +51,7 @@ type RuleId =
   | "RC2"
   | "RC3"
   | "RC4"
+  | "RD0"
   | "RD1"
   | "RD2"
   | "RE1"
@@ -96,7 +102,9 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
   const capabilityRepairEffort = effortFromMinutes(context.positioning.repairEstimate.estimatedMinutes, "hours")
   const positioningRepairEffort = effortFromMinutes(context.positioning.repairEstimate.estimatedMinutes, "minutes")
   const repairable = evidenceRepairable(context.evidence, context.positioning)
-  const sufficient = isSufficient(context)
+  const assessabilityBlocks = context.assessability?.blocksDecision === true
+  // An unassessable posting cannot be judged, so sufficiency is moot.
+  const sufficient = !assessabilityBlocks && isSufficient(context)
   const blockingConfirmation = hasBlockingConfirmation(context)
   const conflict = worstConflict(context.eligibility.conflicts)
   const conflictDecisive = hasDecisiveConflict(context.eligibility.conflicts)
@@ -105,7 +113,10 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
   const reqUnconfirmed = hasUnconfirmedMandatoryRequirement(context.capability.requirements)
   const acquirableAbsent = hasAcquirableAbsentRequirement(context.capability.requirements)
   const years = yearsGate(context.capability)
-  const mismatchCorroborated = context.capability.mismatchCorroborationCount >= 2
+  // Two corroborations, at least one structural. A low career-fit score may
+  // corroborate a mismatch but may not establish one on its own.
+  const mismatchCorroborated = mismatchIsCorroborated(context.capability.mismatchCorroborations)
+  const structuralCorroborations = context.capability.mismatchCorroborations.filter(isStructuralCorroboration)
   const routePresent = routes.length > 0
 
   const rules: Rule[] = [
@@ -150,6 +161,17 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       inputs: { requiredActionRefused, canWork: context.eligibility.candidate.canWorkForTargetEmployerWithoutNewImmigrationAction },
     },
     {
+      id: "RD0",
+      stage: "D_sufficiency",
+      action: "INSUFFICIENT_DATA",
+      confidence: "unknown",
+      condition: assessabilityBlocks,
+      inputs: {
+        assessability: context.assessability?.state ?? "UNKNOWN",
+        ...(context.assessability?.inputs ?? {}),
+      },
+    },
+    {
       id: "RD1",
       stage: "D_sufficiency",
       action: "INSUFFICIENT_DATA",
@@ -171,7 +193,14 @@ export function decideApplicationXRay(context: XRayDecisionContext): XRayDecisio
       action: "SKIP",
       condition: mismatchCorroborated,
       confidence: "medium",
-      inputs: { mismatchCorroborated, corroborationCount: context.capability.mismatchCorroborationCount, capabilityBand: context.capability.band },
+      inputs: {
+        mismatchCorroborated,
+        corroborationCount: context.capability.mismatchCorroborationCount,
+        corroborations: context.capability.mismatchCorroborations.join(","),
+        structuralCorroborations: structuralCorroborations.join(","),
+        structuralCount: structuralCorroborations.length,
+        capabilityBand: context.capability.band,
+      },
     },
     {
       id: "RE2",
@@ -520,6 +549,23 @@ function buildActions(input: {
 
   if (input.ruleId === "RI1") {
     add(action("verify-posting", "verify_posting", "Verify posting", "Open the employer posting directly before relying on this listing.", ["hiringReality"], "minutes", false))
+  }
+  if (input.ruleId === "RD0") {
+    // The blocker is the posting, not the candidate. Sending them to complete a
+    // profile here would be both useless and misdirected — nothing they do to
+    // their own data makes an unreadable listing readable.
+    const state = input.context.assessability?.state ?? "UNKNOWN"
+    add(action(
+      "verify-posting",
+      "verify_posting",
+      state === "CORRUPT_TIMING_DATA" ? "Check this posting is still open" : "Open the employer posting",
+      input.context.assessability?.explanation ??
+        "We could not read enough of this listing to assess it. Open the employer posting directly.",
+      ["hiringReality"],
+      "minutes",
+      false,
+      true,
+    ))
   }
   if (input.ruleId === "RE2") {
     add(action("reframe-experience", "reframe_transferable_experience", "Reframe experience", "Foreground relevant experience before investing heavily in this role.", ["capability", "positioning"], "hours", false))

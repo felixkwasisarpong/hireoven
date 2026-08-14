@@ -26,6 +26,11 @@ export type ApplicationXRayJobRecord = {
   contentHash: string | null
   availability: JobAvailabilityEvidence
   descriptionReadable: boolean
+  /** Raw posting text, used by the assessability check to look for duties and
+   *  requirements. Never used to judge the candidate. */
+  descriptionText?: string | null
+  /** Requisition-like id, if the source supplied one. */
+  externalId?: string | null
 }
 
 export type ApplicationXRayResumeInput = {
@@ -63,6 +68,10 @@ export type CapabilitySignalInput = {
    * yet". Only the first is the candidate's to fix.
    */
   resumeReadable?: boolean
+  /** Human-readable reason the posting's career track does or does not match
+   *  the candidate's history. Surfaced so a lane mismatch is stated, not
+   *  merely implied by a corroboration flag. */
+  trackExplanation?: string | null
   confidence?: XRayConfidence
   findings?: XRayFinding[]
 }

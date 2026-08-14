@@ -1,4 +1,36 @@
-import type { CapabilityAssessment, CapabilityBand, XRayFinding } from "./types"
+import type { CapabilityAssessment, CapabilityBand, MismatchCorroboration, XRayFinding } from "./types"
+
+/**
+ * Corroborations that describe the *shape* of the mismatch — a different lane,
+ * a stated bar the candidate is far under, a required credential they have
+ * confirmed they lack. Each is a claim about the job and the history, and each
+ * can be pointed at.
+ *
+ * `career_fit_below_floor` is deliberately absent. It is our own weighted sum
+ * crossing a threshold we chose, so it can corroborate a mismatch that
+ * something else established but must never establish one alone: a low score
+ * with no structural reason behind it is far more likely to be a scoring
+ * artefact than a candidate in the wrong lane. Sentry is the worked example —
+ * an engineering-management posting where a backend candidate scored 26 and was
+ * skipped for the right reason entirely by accident.
+ */
+export const STRUCTURAL_MISMATCH_CORROBORATIONS: readonly MismatchCorroboration[] = [
+  "role_family_incompatible",
+  "severe_years_shortfall",
+  "mandatory_absent_confirmed",
+]
+
+export function isStructuralCorroboration(value: MismatchCorroboration): boolean {
+  return STRUCTURAL_MISMATCH_CORROBORATIONS.includes(value)
+}
+
+/**
+ * RE1 eligibility. Two independent corroborations, at least one structural.
+ */
+export function mismatchIsCorroborated(corroborations: readonly MismatchCorroboration[]): boolean {
+  const unique = [...new Set(corroborations)]
+  return unique.length >= 2 && unique.some(isStructuralCorroboration)
+}
 import type { CapabilitySignalInput } from "./inputs"
 
 export function assessCapability(input: {
@@ -75,8 +107,24 @@ export function assessCapability(input: {
     })
   }
 
+  const trackFinding: XRayFinding[] = input.signals.trackExplanation
+    ? [{
+        id: "cap-career-track",
+        statement: input.signals.trackExplanation,
+        basis: "inference",
+        confidence: "medium",
+        impact: corroborations.includes("role_family_incompatible") ? "limiting" : "supporting",
+        sourceFactIds: ["job-row", "resume-row"],
+        explanation:
+          "Career track (individual contributor vs people management) is judged from the posting title and duties " +
+          "against titles and descriptions in the resume. It is separate from domain: a backend engineer and an " +
+          "engineering manager share a domain but not a track.",
+      }]
+    : []
+
   const findings: XRayFinding[] = [
     ...(input.signals.findings ?? []),
+    ...trackFinding,
     {
       id: "cap-career-fit",
       statement: capabilityStatement(band),

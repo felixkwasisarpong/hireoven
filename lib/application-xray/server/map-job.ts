@@ -19,6 +19,8 @@ export function mapJobRecord(row: XRayJobRow, now: string): ApplicationXRayJobRe
     contentHash: row.content_hash,
     availability: mapJobAvailability(row, now),
     descriptionReadable: readableDescription(row.description),
+    descriptionText: row.description ?? null,
+    externalId: row.external_id ?? null,
   }
 }
 

@@ -44,6 +44,7 @@ import type {
   XRayResumeRow,
   XRayScoreRow,
 } from "./records"
+import { assessPosting } from "../assessability"
 import { sanitizeApplicationXRayOutput } from "./sanitize-output"
 
 const MAX_CANONICAL_HOPS = 3
