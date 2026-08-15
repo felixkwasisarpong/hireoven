@@ -36,10 +36,9 @@ export default function FeaturesPage() {
       {/* ── Hero ──────────────────────────────────────────────────── */}
       <section className="mx-auto grid w-full max-w-[78rem] items-end gap-8 px-4 pt-12 sm:px-6 md:grid-cols-[minmax(0,0.95fr)_minmax(22rem,0.78fr)] lg:px-10">
         <div>
-          <p className="term-label">&gt; {FEATURES_HERO.kicker}</p>
+          <p className="term-label">{FEATURES_HERO.kicker}</p>
           <h1 className="mt-4 max-w-[38rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
             {FEATURES_HERO.title}
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 max-w-[36rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">{FEATURES_HERO.subtitle}</p>
           <div className="mt-7 flex flex-col items-start gap-3 sm:flex-row">
@@ -162,7 +161,7 @@ export default function FeaturesPage() {
       {/* ── Footer CTA ────────────────────────────────────────────── */}
       <section className="border-t border-[rgba(120,200,160,0.26)] px-4 py-20 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="term-label">{"// ready?"}</p>
+          <p className="term-label">{"Ready?"}</p>
           <h2 className="mt-2 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3rem]">
             Ready to <span className="text-[#f5a623]">start?</span>
           </h2>

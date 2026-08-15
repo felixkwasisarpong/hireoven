@@ -29,7 +29,7 @@ export default function MethodologyPage() {
         >
           ← Back to leaderboard
         </Link>
-        <p className="term-label mt-6">{"// methodology"}</p>
+        <p className="term-label mt-6">{"Methodology"}</p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
           Leaderboard <span className="text-[#f5a623]">methodology</span>
         </h1>

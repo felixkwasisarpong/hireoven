@@ -4,6 +4,7 @@ import {
   normalizeCredentialKey,
   resolveRequirementPresence,
 } from "@/lib/candidates/credential-declarations"
+import { detectTrackIncompatibility } from "../career-track"
 import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
 import { categorizePostingAuthorizationLanguage } from "../authorization-language"
 import type {
@@ -94,6 +95,27 @@ export function mapCapability(input: {
     if (!compatible) mismatchCorroborations.push("role_family_incompatible")
   }
 
+  // Track incompatibility (IC vs people management). RoleFamily is a domain
+  // classifier with no notion of track, so an Engineering Manager and a backend
+  // engineer both read as "tech" and look compatible. This supplies the missing
+  // structural signal — and only fires when the posting is management AND the
+  // resume shows no management evidence.
+  const trackVerdict = detectTrackIncompatibility({
+    postingTitle: input.job?.title ?? null,
+    postingDescription: input.job?.description ?? null,
+    candidateTitles: (input.resume?.work_experience ?? []).map((item) => item.title ?? null),
+    candidateExperienceText: [
+      input.resume?.raw_text ?? "",
+      ...(input.resume?.work_experience ?? []).map((item) =>
+        [item.title, item.description, ...(item.achievements ?? [])].filter(Boolean).join(" "),
+      ),
+    ].join("\n"),
+    candidateDataReadable: Boolean(input.resume && input.resume.parse_status === "complete"),
+  })
+  if (trackVerdict?.incompatible && !mismatchCorroborations.includes("role_family_incompatible")) {
+    mismatchCorroborations.push("role_family_incompatible")
+  }
+
   const requirements = mapDeterministicRequirements({
     job: input.job,
     resume: input.resume,
@@ -103,6 +125,15 @@ export function mapCapability(input: {
   })
 
   return {
+    // A resume counts as readable when it parsed and carries usable text or
+    // structure — that is what separates "candidate gave us nothing" from
+    // "we never scored this pair".
+    trackExplanation: trackVerdict?.explanation ?? null,
+    resumeReadable: Boolean(
+      input.resume &&
+        input.resume.parse_status === "complete" &&
+        (Boolean(input.resume.raw_text) || (input.resume.work_experience?.length ?? 0) > 0),
+    ),
     careerFitScore: careerFit?.careerFitScore ?? null,
     careerFitLabel: careerFit?.label ?? null,
     relevantYears: careerFit?.relevantYears ?? null,
@@ -144,20 +175,41 @@ export function mapEvidenceAndPositioning(input: {
     })
     : null
 
-  const requirementSupport: EvidenceSignalInput["requirementSupport"] = (local?.skillSuggestions ?? []).map((item) => ({
-    requirement: item.skill,
-    status: item.status,
-    absenceKind: item.status === "missing_needs_confirmation" || item.status === "not_recommended"
-      ? "NOT_FOUND_IN_READABLE_DATA"
-      : null,
-    supportingContext: typeof item.evidence === "string" ? item.evidence.slice(0, 240) : null,
-    locatedIn: item.status === "present"
-      ? "structured_fields"
+  // Provenance for evidence claims.
+  //
+  // A `present` item asserts something about the candidate — "your resume shows
+  // X" — so it must point at the artefact we read it from. Shipping these with
+  // an empty array made every positive evidence claim unfalsifiable, which is
+  // exactly what the basis/source discipline exists to prevent. Absences cite
+  // the search rather than a span, so they may legitimately carry none.
+  // Reference the ids baseSourceFacts actually emits, so provenance resolves.
+  const resumeFactId = resume ? "resume-row" : null
+  const jobFactId = input.job ? "job-row" : null
+
+  const requirementSupport: EvidenceSignalInput["requirementSupport"] = (local?.skillSuggestions ?? []).map((item) => {
+    const locatedIn = item.status === "present"
+      ? ("structured_fields" as const)
       : item.status === "missing_supported"
-        ? "raw_text_only"
-        : "not_found",
-    sourceFactIds: [],
-  }))
+        ? ("raw_text_only" as const)
+        : ("not_found" as const)
+
+    const factIds: string[] = []
+    // A located claim points at the resume it was read from...
+    if (locatedIn !== "not_found" && resumeFactId) factIds.push(resumeFactId)
+    // ...and every support judgement is made against the posting's terms.
+    if (jobFactId) factIds.push(jobFactId)
+
+    return {
+      requirement: item.skill,
+      status: item.status,
+      absenceKind: item.status === "missing_needs_confirmation" || item.status === "not_recommended"
+        ? ("NOT_FOUND_IN_READABLE_DATA" as const)
+        : null,
+      supportingContext: typeof item.evidence === "string" ? item.evidence.slice(0, 240) : null,
+      locatedIn,
+      sourceFactIds: factIds,
+    }
+  })
 
   const supportedMissing = (local?.skillSuggestions ?? [])
     .filter((item) => item.status === "missing_supported")
@@ -176,6 +228,7 @@ export function mapEvidenceAndPositioning(input: {
     },
     positioning: {
       atsScreenScore: breakdown?.careerFit?.atsScreenScore ?? null,
+      atsScreenScoreAvailable: breakdown?.careerFit?.atsScreenScore != null,
       atsReadabilityScore: resume?.ats_score ?? null,
       targetAts: mapAts(input.job),
       atsProfileApplied: input.job?.source_ats ?? input.job?.company?.ats_type ?? null,

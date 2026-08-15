@@ -36,7 +36,7 @@ const APPLIC_META: Record<Applicability, { label: string; color: string }> = {
   does_not_apply: { label: "Doesn't apply", color: "#38e08a" },
 }
 
-const selectCls = "w-full px-3 py-2.5 font-mono text-[14px] outline-none"
+const selectCls = "w-full px-3 py-2.5 text-[14px] outline-none"
 
 export default function RulesChecker() {
   const [status, setStatus] = useState<StayStatus>("opt")
@@ -52,7 +52,7 @@ export default function RulesChecker() {
     <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
       {/* Inputs */}
       <div className="term-panel h-fit p-5">
-        <p className="term-label">&gt; your_case</p>
+        <p className="term-label">Your case</p>
         <div className="mt-4 grid gap-4">
           <label className="block">
             <span className="mb-1.5 block text-[12px] font-medium text-[#ccd6cf]/70">Current status</span>

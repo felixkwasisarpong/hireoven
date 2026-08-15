@@ -8,12 +8,12 @@ import { Puzzle, Smartphone } from "lucide-react"
 export default function ComingSoonSection() {
   return (
     <section
-      className="border-y border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] px-6 py-20 font-mono md:py-28"
+      className="border-y border-[rgba(120,200,160,0.26)] bg-[#0a0e0c] px-6 py-20 md:py-28"
       aria-labelledby="coming-soon-heading"
     >
       <div className="mx-auto max-w-5xl">
         <div className="mx-auto mb-10 max-w-2xl text-center">
-          <p className="term-label mb-3">{"// coming soon"}</p>
+          <p className="term-label mb-3">{"Coming soon"}</p>
           <h2
             id="coming-soon-heading"
             className="text-3xl font-semibold tracking-tight text-white sm:text-4xl"

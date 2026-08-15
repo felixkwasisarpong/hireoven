@@ -36,14 +36,15 @@ export default function NavbarAuthCluster() {
   // width of the auth buttons so the layout doesn't jump. Never show Login/Signup
   // until we know the user is definitely not authenticated.
   if (isAuthed === null) {
-    return <div className="h-9 w-24 animate-pulse rounded-lg bg-surface-alt" aria-hidden />
+    return <div className="h-9 w-24 animate-pulse rounded-full bg-[rgba(255,92,24,0.18)]" aria-hidden />
   }
 
   if (isAuthed === true) {
     return (
       <Link
         href="/dashboard"
-        className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] transition-colors hover:bg-primary-hover"
+        prefetch
+        className="marketing-auth-primary"
       >
         <LayoutDashboard className="h-4 w-4 shrink-0" aria-hidden />
         Dashboard
@@ -55,14 +56,16 @@ export default function NavbarAuthCluster() {
     <>
       <Link
         href="/login"
-        className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors hover:bg-surface-alt hover:text-strong"
+        prefetch
+        className="marketing-auth-login"
       >
         <LogIn className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
         <span className="hidden sm:inline">Login</span>
       </Link>
       <Link
         href="/signup"
-        className="inline-flex items-center gap-2 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground shadow-[0_1px_0_rgba(0,0,0,0.06)] transition-colors hover:bg-primary-hover"
+        prefetch
+        className="marketing-auth-primary"
       >
         <UserPlus className="h-4 w-4 shrink-0" aria-hidden />
         Sign up

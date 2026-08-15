@@ -78,7 +78,7 @@ export default function OutcomeReporter({
   return (
     <div className="mt-3 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="term-label">&gt; community_outcomes</p>
+        <p className="term-label">Community outcomes</p>
         {summary && summary.total > 0 && (
           <span className="text-[11px] text-[#6c7a72]">{summary.total} reported</span>
         )}

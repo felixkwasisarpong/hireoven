@@ -26,7 +26,7 @@ function FooterColumn({ links, title }: { links: FooterLink[]; title: string }) 
 
 export default function MarketingFooter() {
   return (
-    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-bg)] px-5 py-16 font-mono lg:px-12">
+    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-bg)] px-5 py-16 lg:px-12">
       <div className="mx-auto max-w-[78rem]">
         <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr_1fr]">
           <div>

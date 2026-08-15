@@ -65,7 +65,7 @@ export default async function PublicScorecardPage({ params }: Props) {
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
         <div className="term-panel p-6 sm:p-8">
-          <p className="term-label">&gt; sponsorability_scorecard</p>
+          <p className="term-label">Sponsorability scorecard</p>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">{card.display_name}</h1>
           <div className="mt-5 flex items-end gap-4">
             <div className={cn("text-7xl font-semibold leading-none tracking-tight", hue)}>{card.grade}</div>

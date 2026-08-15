@@ -22,7 +22,6 @@ export default function StayRulesPage() {
         </Link>
         <h1 className="mt-4 max-w-[24ch] text-[2.3rem] font-semibold leading-[1.04] tracking-tight text-white sm:text-[3.1rem]">
           Which 2026 rules <span className="text-[#f5a623]">actually apply to you?</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-5 max-w-[64ch] text-[16px] leading-relaxed text-[#ccd6cf]/70">
           The panic is loud and mostly imprecise. Here&apos;s the calm version — pick your situation and see which of

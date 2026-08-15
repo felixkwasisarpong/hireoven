@@ -2,6 +2,7 @@ import { validAccessRoutes } from "./access-routes"
 import { evaluateAuthorizationConflicts, eligibilityConfidence, resolveEligibilityBand } from "./authorization-conflict"
 import { assessCapability } from "./capability"
 import { resolveCanonicalJob } from "./canonical-resolution"
+import { assessPosting } from "./assessability"
 import { decideApplicationXRay } from "./decision-engine"
 import { assessEvidence } from "./evidence"
 import { assessHiringReality } from "./hiring-reality"
@@ -127,7 +128,23 @@ export function scoreApplicationXRay(input: ApplicationXRayInput): ApplicationXR
     legacyVerdictProjection: null,
   }
 
-  const decision = decideApplicationXRay({ ...undecided, dataGaps })
+  // Stage B0: can this posting be assessed at all? Computed here so the
+  // decision engine stays pure and the verdict rides in the context.
+  const evaluatedRecord =
+    input.jobRecords.find((record) => record.id === undecided.evaluatedJobId) ?? input.jobRecords[0] ?? null
+  const assessability = assessPosting({
+    title: evaluatedRecord?.title ?? null,
+    description: evaluatedRecord?.descriptionText ?? null,
+    applyUrl: evaluatedRecord?.applyUrl ?? null,
+    externalId: evaluatedRecord?.externalId ?? null,
+    ageDays: evaluatedRecord?.availability.ageDays ?? null,
+    applyUrlStatus: evaluatedRecord?.availability.applyUrlStatus ?? "unknown",
+    lastSeenAt: evaluatedRecord?.availability.lastSeenAt ?? null,
+    lastSeenAtTrustworthy: evaluatedRecord?.availability.lastSeenAtTrustworthy ?? false,
+    now: input.now,
+  })
+
+  const decision = decideApplicationXRay({ ...undecided, dataGaps, assessability })
   const decided: ApplicationXRay = {
     ...undecided,
     rejectionRisks: decision.rejectionRisks,

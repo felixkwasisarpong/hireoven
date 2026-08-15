@@ -141,10 +141,9 @@ export default function PricingPage() {
 
       {/* ── Hero ──────────────────────────────────────────────── */}
       <section className="mx-auto w-full max-w-3xl px-4 pt-12 text-center sm:px-6">
-        <p className="term-label">&gt; pricing --plans</p>
+        <p className="term-label">Pricing</p>
         <h1 className="mx-auto mt-4 max-w-3xl text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
           Land your next job <span className="text-[#f5a623]">faster</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Real-time jobs, AI resume tools, and H1B sponsorship intel - everything you need in one place
@@ -247,7 +246,7 @@ export default function PricingPage() {
       {/* ── Footer CTA ────────────────────────────────────────── */}
       <section className="border-t border-[rgba(120,200,160,0.26)] px-4 py-24 sm:px-6 lg:px-10">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="term-label">{"// apply first"}</p>
+          <p className="term-label">{"Apply first"}</p>
           <h2 className="mt-2 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3rem]">
             Start finding jobs the moment they <span className="text-[#f5a623]">post</span>
           </h2>

@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import HireovenLogo from "@/components/ui/HireovenLogo"
+import { useCallback, useEffect, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
+import Navbar from "@/components/layout/Navbar"
 import { track } from "@/lib/analytics"
 
 type Match = {
@@ -61,17 +62,15 @@ function fbTrack(event: string, params?: Record<string, unknown>) {
 }
 
 export default function FindClient() {
-  const [role, setRole] = useState("")
+  const searchParams = useSearchParams()
+  const initialRole = searchParams.get("role")?.trim() ?? ""
+  const initialSearchDone = useRef(false)
+  const [role, setRole] = useState(initialRole)
   const [loading, setLoading] = useState(false)
   const [matches, setMatches] = useState<Match[] | null>(null)
   const [submittedRole, setSubmittedRole] = useState("")
 
-  useEffect(() => {
-    track("find_landing_view")
-    beacon("find_landing_view")
-  }, [])
-
-  async function run(searchRole: string) {
+  const run = useCallback(async (searchRole: string) => {
     const r = searchRole.trim()
     if (!r) return
     setLoading(true)
@@ -96,15 +95,22 @@ export default function FindClient() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    track("find_landing_view")
+    beacon("find_landing_view")
+  }, [])
+
+  useEffect(() => {
+    if (!initialRole || initialSearchDone.current) return
+    initialSearchDone.current = true
+    run(initialRole)
+  }, [initialRole, run])
 
   return (
     <main className="term-page min-h-dvh [font-feature-settings:normal]">
-      {/* Bare ad-landing header — logo only, no nav links (every link is an exit). */}
-      <header className="term-nav sticky top-0 z-40 flex items-center gap-2 px-5 py-3 lg:px-8">
-        <span className="text-[#38e08a]" aria-hidden>&gt;</span>
-        <HireovenLogo variant="header" className="h-8 w-auto [filter:brightness(0)_invert(1)]" priority />
-      </header>
+      <Navbar />
       <div className="mx-auto w-full max-w-xl px-5 py-10 sm:py-14">
         {/* HERO */}
         <p className="text-[13px] font-medium text-[#f5a623]">
@@ -135,7 +141,7 @@ export default function FindClient() {
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
                 placeholder="e.g. Software Engineer, Data Analyst…"
-                className="w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 py-3.5 font-mono text-base text-[#ccd6cf] outline-none placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
+                className="w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 py-3.5 text-base text-[#ccd6cf] outline-none placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
                 autoFocus
               />
               <button type="submit" disabled={loading} className="term-btn term-btn-amber justify-center py-3.5 text-base disabled:opacity-60">

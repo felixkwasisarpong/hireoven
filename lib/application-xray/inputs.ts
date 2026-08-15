@@ -26,6 +26,11 @@ export type ApplicationXRayJobRecord = {
   contentHash: string | null
   availability: JobAvailabilityEvidence
   descriptionReadable: boolean
+  /** Raw posting text, used by the assessability check to look for duties and
+   *  requirements. Never used to judge the candidate. */
+  descriptionText?: string | null
+  /** Requisition-like id, if the source supplied one. */
+  externalId?: string | null
 }
 
 export type ApplicationXRayResumeInput = {
@@ -57,6 +62,16 @@ export type CapabilitySignalInput = {
     seniorityGap: number | null
     note: string | null
   }
+  /**
+   * True when a readable, parsed resume was supplied. Distinguishes
+   * "the candidate gave us nothing" from "HireOven has not scored this pair
+   * yet". Only the first is the candidate's to fix.
+   */
+  resumeReadable?: boolean
+  /** Human-readable reason the posting's career track does or does not match
+   *  the candidate's history. Surfaced so a lane mismatch is stated, not
+   *  merely implied by a corroboration flag. */
+  trackExplanation?: string | null
   confidence?: XRayConfidence
   findings?: XRayFinding[]
 }
@@ -100,6 +115,9 @@ export type PositioningSignalInput = {
   closeGaps: string[]
   fieldContext: PositioningAssessment["fieldContext"]
   repairEstimate: PositioningAssessment["repairEstimate"]
+  /** True when the ATS screen score was actually computed. A null score
+   *  because nothing scored it is not evidence of misalignment. */
+  atsScreenScoreAvailable?: boolean
   confidence?: XRayConfidence
   findings?: XRayFinding[]
   bandHint?: PositioningAssessment["band"]

@@ -65,10 +65,9 @@ export default async function PartnersPage() {
       {/* Hero — flat terminal, no photo band. */}
       <section className="mx-auto grid w-full max-w-[78rem] items-end gap-10 px-4 pt-12 sm:px-6 sm:pt-16 md:grid-cols-[minmax(0,1fr)_minmax(22rem,0.72fr)]">
         <div>
-          <p className="term-label">&gt; partnerships</p>
+          <p className="term-label">Partnerships</p>
           <h1 className="mt-4 max-w-[43rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
             Give your audience a real <span className="text-[#f5a623]">hiring edge</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 max-w-[36rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Fresh jobs straight from company career pages, with H-1B sponsorship intelligence on every role.
@@ -93,7 +92,7 @@ export default async function PartnersPage() {
 
       {/* Who we partner with */}
       <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
-        <h2 className="term-label text-center">{"// who we partner with"}</h2>
+        <h2 className="term-label text-center">{"Who we partner with"}</h2>
         <div className="mt-5 grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-2 lg:grid-cols-3">
           {AUDIENCES.map((a) => (
             <div key={a.title} className="term-panel-hover bg-[#0e1411] p-5">
@@ -106,7 +105,7 @@ export default async function PartnersPage() {
 
       {/* What you get */}
       <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
-        <p className="term-label text-center">{"// what partners get"}</p>
+        <p className="term-label text-center">{"What partners get"}</p>
         <div className="mt-6 grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-2">
           {BENEFITS.map(({ Icon, title, body }) => (
             <div key={title} className="term-panel-hover bg-[#0e1411] p-5">
@@ -121,7 +120,7 @@ export default async function PartnersPage() {
       {/* Testimonials — rendered only when published rows exist (admin-managed). */}
       {testimonials.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-3xl px-4 sm:px-6">
-          <p className="term-label text-center">{"// what partners say"}</p>
+          <p className="term-label text-center">{"What partners say"}</p>
           <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {testimonials.map((t, i) => (
               <figure key={i} className="term-panel p-6">
@@ -148,7 +147,7 @@ export default async function PartnersPage() {
       {/* Partner logos — rendered only when published rows exist. */}
       {partners.length > 0 && (
         <section className="mx-auto mt-16 w-full max-w-4xl px-4 sm:px-6">
-          <p className="term-label text-center">{"// trusted by"}</p>
+          <p className="term-label text-center">{"Trusted by"}</p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-6">
             {partners.map((p) => {
               const inner = p.logoUrl ? (
@@ -172,7 +171,7 @@ export default async function PartnersPage() {
       {/* Inquiry form */}
       <section id="become-a-partner" className="mx-auto mb-20 mt-16 w-full max-w-2xl scroll-mt-20 px-4 sm:px-6">
         <div className="term-panel p-6 sm:p-8">
-          <p className="term-label">{"// become a partner"}</p>
+          <p className="term-label">{"Become a partner"}</p>
           <h2 className="mt-2 text-[1.9rem] font-semibold leading-tight tracking-tight text-white">Become a partner</h2>
           <p className="mt-2 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Tell us who you reach and we&apos;ll set up a co-branded page or curated feed you can share. It&apos;s free.

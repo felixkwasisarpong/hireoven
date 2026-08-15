@@ -161,12 +161,11 @@ export default function ExtensionPage() {
         {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section className="mx-auto grid w-full max-w-6xl items-center gap-12 px-4 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
           <div>
-            <p className="term-label">&gt; chrome_extension --version=0.1.0</p>
+            <p className="term-label">Chrome extension</p>
 
             <h1 className="mt-4 text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.2rem]">
               A match score on every{" "}
               <span className="text-[#f5a623]">job posting</span>
-              <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
             </h1>
 
             <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
@@ -227,7 +226,7 @@ export default function ExtensionPage() {
         <section className="mt-20 border-y border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 py-8 sm:px-6">
           <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
             <div>
-              <p className="term-label">ats_coverage</p>
+              <p className="term-label">ATS coverage</p>
               <p className="mt-2 text-[13px] leading-relaxed text-[#ccd6cf]/60">
                 Native autofill on the major application systems, with broad
                 tracking across the rest of the Hireoven job graph.
@@ -258,7 +257,7 @@ export default function ExtensionPage() {
         <section className="px-4 py-20 sm:px-6">
           <div className="mx-auto max-w-6xl">
             <div className="mx-auto mb-14 max-w-2xl text-center">
-              <p className="term-label">{"// built for the actual application loop"}</p>
+              <p className="term-label">{"Built for the actual application loop"}</p>
               <h2 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
                 Stop guessing whether you should apply.
               </h2>
@@ -310,7 +309,7 @@ export default function ExtensionPage() {
           <div className="mx-auto max-w-6xl">
             <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
               <div>
-                <p className="term-label">apex_analysis</p>
+                <p className="term-label">Apex analysis</p>
                 <h3 className="mt-3 text-[1.6rem] font-semibold tracking-tight text-white sm:text-[2rem]">
                   Hit a job page. See your fit in a second.
                 </h3>
@@ -359,7 +358,7 @@ export default function ExtensionPage() {
                 />
               </div>
               <div className="order-1 lg:order-2">
-                <p className="term-label">autofill_drawer</p>
+                <p className="term-label">Autofill drawer</p>
                 <h3 className="mt-3 text-[1.6rem] font-semibold tracking-tight text-white sm:text-[2rem]">
                   Fill 15 fields in 15 seconds. With a review pass.
                 </h3>
@@ -426,7 +425,7 @@ export default function ExtensionPage() {
         {/* ── Final CTA ───────────────────────────────────────────────────── */}
         <section className="px-4 py-20 sm:px-6">
           <div className="mx-auto max-w-3xl text-center">
-            <p className="term-label">{"// install once"}</p>
+            <p className="term-label">{"Install once"}</p>
             <h2 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
               The extension is the easy part.
             </h2>

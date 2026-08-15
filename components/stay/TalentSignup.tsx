@@ -25,8 +25,8 @@ const US_STATES = [
 ]
 
 const inputCls =
-  "w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 py-2.5 font-mono text-[14px] text-[#ccd6cf] outline-none placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
-const selectCls = "w-full px-3 py-2.5 font-mono text-[14px] outline-none"
+  "w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 py-2.5 text-[14px] text-[#ccd6cf] outline-none placeholder:text-[#ccd6cf]/35 focus:border-[#38e08a]"
+const selectCls = "w-full px-3 py-2.5 text-[14px] outline-none"
 
 function getVisitorId(): string | undefined {
   try {
@@ -95,7 +95,7 @@ export default function TalentSignup({
 
   return (
     <div className="term-panel p-5 sm:p-6">
-      <p className="term-label">&gt; get_discovered</p>
+      <p className="term-label">Get discovered</p>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <label className="block sm:col-span-2">
           <span className="mb-1.5 block text-[12px] font-medium text-[#ccd6cf]/70">Email *</span>

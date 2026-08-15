@@ -48,10 +48,9 @@ export default function ContactPage() {
       <main>
         {/* ── Hero ─────────────────────────────────────────────────────── */}
         <section className="mx-auto w-full max-w-3xl px-6 pt-14 pb-10">
-          <p className="term-label">&gt; contact</p>
+          <p className="term-label">Contact</p>
           <h1 className="mt-4 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
             Let&apos;s <span className="text-[#f5a623]">talk</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Questions, feedback, or something urgent? Email the right team below and a real

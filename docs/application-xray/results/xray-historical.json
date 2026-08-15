@@ -1,0 +1,1081 @@
+{
+  "ranAt": "2026-08-14T19:01:59.884Z",
+  "candidate": {
+    "visa_status": "opt",
+    "needs_sponsorship": true,
+    "opt_end_date": "2026-09-03"
+  },
+  "results": [
+    {
+      "jobId": "94d93b1f-17ed-484f-bd5f-26d4b314f6f0",
+      "ok": true,
+      "predicted": "SKIP",
+      "predictedWhy": "is_active=false - closed",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "6466c48e-7379-4ac8-8794-4460560aaad5",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "Java backend at a bank, senior level, exact lane",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "low",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "THIN",
+        "eligibility": "NEEDS_CLARIFICATION",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [
+        "SPONSORSHIP_SCOPE_AMBIGUOUS"
+      ],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_future_sponsorship_policy",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "sponsorship-scope-unstated"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "cd82fc7d-54b4-4811-8192-14be418f04a3",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "payments backend, your EFT lane",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "ee165f9f-6834-41c4-9c8c-c38b0bd97d16",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "senior backend fintech, no stretch",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "3d779276-bb8f-41fb-8773-ac20a9740a7d",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "financial platform backend",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "08b30169-eefc-46ea-ba52-f725460f480e",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "IAM - Spring Security is on your resume",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD2",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "ADEQUATE",
+        "eligibility": "NEEDS_CLARIFICATION",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [
+        "CLEARANCE_REQUIRED"
+      ],
+      "actions": [
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown"
+      ],
+      "traceInputKeys": [
+        "sufficient",
+        "blockingConfirmation"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "d30fea9e-8479-49f0-b485-316c373f09a0",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "plain senior backend",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "d96db4a8-9acb-41bc-8f19-11ea046ecd50",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "devinfra, adjacent but reachable",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "BURIED",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "TUNABLE"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "282eba74-159d-4dae-8ae3-8ac173564539",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "GenAI at a bank - bridges fintech depth and ML research",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "BURIED",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "TUNABLE"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "587de755-1293-4531-98b8-229a8f3533a3",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "senior AI SWE - ML is research-only on paper",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MEETS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "82ab60c4-69a8-4098-a404-82b712e43150",
+      "ok": true,
+      "predicted": "APPLY_NOW",
+      "predictedWhy": "AI Backend reads as backend",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "35757934-eace-40ca-9291-53df90f9e48e",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Staff MLE - production ML not evidenced",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "349df183-df7b-466b-929f-0c07546400e9",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Applied Scientist - research lane, level stretch",
+      "action": "SKIP",
+      "rule": "RE1",
+      "stage": "E_capability",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MISMATCH",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "choose_different_target"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "capability"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "mismatchCorroborated",
+        "corroborationCount",
+        "corroborations",
+        "structuralCorroborations",
+        "structuralCount",
+        "capabilityBand"
+      ],
+      "headline": "Skip this one"
+    },
+    {
+      "jobId": "ec94f69a-c0a5-4c97-bb11-60d91198877a",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Staff + AI SDK, one level up",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "TUNABLE"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "bdd13595-162d-4d86-81e3-acebad4c817e",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Staff AI infra",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "b1f68f3d-8ac0-4df3-ac34-c1d678afb830",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Staff, domain fits, level stretches",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "076db0e8-fb74-4f13-b52b-04eb11a3928b",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "Staff AI",
+      "action": "APPLY_NOW",
+      "rule": "RI2",
+      "stage": "I_apply",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "confirm_requirement_status"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "evidence+positioning"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "hiringRealityBand",
+        "capabilityBand",
+        "evidenceBand",
+        "eligibilityBand",
+        "positioningBand"
+      ],
+      "headline": "Apply now"
+    },
+    {
+      "jobId": "dd6ead4c-ee8c-4ce6-b21b-84b39d13a2e7",
+      "ok": true,
+      "predicted": "SKIP",
+      "predictedWhy": "no sponsorship available + you need it",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MISMATCH",
+        "evidence": "THIN",
+        "eligibility": "NEEDS_CLARIFICATION",
+        "positioning": "ALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [
+        "SPONSORSHIP_SCOPE_AMBIGUOUS"
+      ],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation",
+        "confirm_future_sponsorship_policy"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "ghost-risk-cache-stale",
+        "sponsorship-scope-unstated"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "7140bf3e-82ad-4334-b800-f8454234141e",
+      "ok": true,
+      "predicted": "SKIP",
+      "predictedWhy": "US citizenship / clearance",
+      "action": "SKIP",
+      "rule": "RC1",
+      "stage": "C_explicit_requirement_conflict",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EXPLICIT_REQUIREMENT_CONFLICT",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [
+        "CITIZENSHIP_REQUIRED"
+      ],
+      "actions": [
+        "confirm_everify_participation",
+        "choose_different_target"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "capability"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown"
+      ],
+      "traceInputKeys": [
+        "conflictDecisive",
+        "conflict",
+        "eligibilityBand",
+        "canWork"
+      ],
+      "headline": "Skip this one"
+    },
+    {
+      "jobId": "23528ac4-e204-4b11-90dd-706c2f48e5b8",
+      "ok": true,
+      "predicted": "STRENGTHEN_FIRST",
+      "predictedWhy": "TRAP: advertising sponsorship, NOT visa. Also frontend + early career = wrong lane/level",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "UNREADABLE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "job-requirements-unextractable",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "f97f82e0-b514-4f14-a287-040a5d41cdae",
+      "ok": true,
+      "predicted": "SKIP",
+      "predictedWhy": "TRAP: 'sponsor a team' is mentorship. Real reason to skip is eng-management lane, not visa",
+      "action": "SKIP",
+      "rule": "RE1",
+      "stage": "E_capability",
+      "confidence": "medium",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "MISMATCH",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "confirm_everify_participation",
+        "choose_different_target"
+      ],
+      "actionAddresses": [
+        "eligibility",
+        "capability"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "mismatchCorroborated",
+        "corroborationCount",
+        "corroborations",
+        "structuralCorroborations",
+        "structuralCount",
+        "capabilityBand"
+      ],
+      "headline": "Skip this one"
+    },
+    {
+      "jobId": "adb9e4b6-5cd5-4096-a403-30533119d581",
+      "ok": true,
+      "predicted": "INSUFFICIENT_DATA",
+      "predictedWhy": "6095d age is corrupt - cannot judge",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "7a23a5da-991f-432f-b1c7-d95a3ba2e375",
+      "ok": true,
+      "predicted": "INSUFFICIENT_DATA",
+      "predictedWhy": "5084d age corrupt; security lane anyway",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "82b14ca9-6d60-41da-b9f8-7abae7e32473",
+      "ok": true,
+      "predicted": "INSUFFICIENT_DATA",
+      "predictedWhy": "337-char description",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIVE",
+        "capability": "EXCEEDS",
+        "evidence": "ADEQUATE",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    },
+    {
+      "jobId": "8ab94406-57bd-4c59-a077-8b18e0c06708",
+      "ok": true,
+      "predicted": "INSUFFICIENT_DATA",
+      "predictedWhy": "'engineering and product' is a department page",
+      "action": "INSUFFICIENT_DATA",
+      "rule": "RD0",
+      "stage": "D_sufficiency",
+      "confidence": "unknown",
+      "bands": {
+        "hiringReality": "LIKELY_LIVE",
+        "capability": "NEAR_MISS",
+        "evidence": "THIN",
+        "eligibility": "EMPLOYER_ACTION_MAY_BE_NEEDED",
+        "positioning": "MISALIGNED"
+      },
+      "canWork": "YES",
+      "postingCategories": [],
+      "actions": [
+        "verify_posting",
+        "confirm_everify_participation"
+      ],
+      "actionAddresses": [
+        "hiringReality",
+        "eligibility"
+      ],
+      "dataGapIds": [
+        "board-check-stale",
+        "everify-participation-unknown",
+        "role-specific-sponsorship-unknown"
+      ],
+      "traceInputKeys": [
+        "assessability",
+        "hasTitle",
+        "titleIsNavigation",
+        "titleHasRoleNoun",
+        "dutyCount",
+        "requirementCount",
+        "hasApplyRoute",
+        "hasRequisition",
+        "descriptionLength",
+        "ageDays",
+        "ageImplausible",
+        "applyUrlStatus",
+        "lastSeenDays",
+        "lastSeenAtTrustworthy",
+        "recentlyConfirmedLive"
+      ],
+      "headline": "Not enough to judge"
+    }
+  ]
+}

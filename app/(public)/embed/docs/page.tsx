@@ -40,7 +40,7 @@ export default function EmbedDocsPage() {
         >
           ← Back to widgets
         </Link>
-        <p className="term-label mt-6">{"// embed_widget_docs"}</p>
+        <p className="term-label mt-6">{"Embed widget docs"}</p>
         <h1 className="mt-3 text-[2.1rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.7rem]">
           Embed widget <span className="text-[#f5a623]">docs</span>
         </h1>

@@ -134,7 +134,6 @@ export default async function LaunchPage({
               Jobs posted <span className="text-[#f5a623]">minutes</span> ago.
               <br />
               Not days.
-              <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
             </h1>
             <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-[#ccd6cf]/70">
               Hireoven monitors thousands of company career pages in real time so you apply
@@ -217,7 +216,7 @@ export default async function LaunchPage({
       <section className="border-y border-[rgba(120,200,160,0.2)] px-4 py-16 lg:py-24">
         <div className="mx-auto grid max-w-6xl gap-12 lg:grid-cols-2 lg:items-start">
           <div>
-            <p className="term-label">&gt; for OPT, STEM OPT, and H1B seekers</p>
+            <p className="term-label">For OPT, STEM OPT, and H1B seekers</p>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white lg:text-4xl">
               The most painful part of your job search - finally solved.
             </h2>

@@ -26,7 +26,7 @@ export default function StayScorePanel({
     <div className="term-panel p-5">
       <div className="flex items-center justify-between gap-3 border-b border-[rgba(120,200,160,0.12)] pb-4">
         <div>
-          <p className="term-label">&gt; stay_score</p>
+          <p className="term-label">Stay score</p>
           <p className="mt-0.5 text-[13px] text-[#ccd6cf]/60">odds of building a lasting career here</p>
         </div>
         <div className="flex items-center gap-3">

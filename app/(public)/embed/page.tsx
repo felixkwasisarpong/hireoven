@@ -67,10 +67,9 @@ export default async function EmbedGalleryPage() {
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-12">
         <div className="max-w-2xl">
-          <p className="term-label">{"// embed --h1b --widgets"}</p>
+          <p className="term-label">{"Embed"}</p>
           <h1 className="mt-3 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
             Embeddable <span className="text-[#f5a623]">H-1B widgets</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Add live H-1B data to any site with one line of HTML. Widgets render server-side,

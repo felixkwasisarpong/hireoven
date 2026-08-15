@@ -277,10 +277,9 @@ export default async function BlogPage() {
 
       {/* Hero — flat terminal masthead. */}
       <section className="mx-auto w-full max-w-6xl px-4 pt-12 sm:px-6 sm:pt-16 lg:px-8">
-        <p className="term-label">&gt; field_notes --source=job_market</p>
+        <p className="term-label">Field notes</p>
         <h1 className="mt-4 max-w-3xl text-[2.4rem] font-semibold leading-[1.03] tracking-tight text-white sm:text-[3.4rem]">
           Field notes from the <span className="text-[#f5a623]">modern job market</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-5 max-w-2xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Weekly intelligence on H-1B sponsorship, tech hiring shifts, interview signals, and the moves that keep your search ahead of stale advice.
@@ -331,7 +330,7 @@ export default async function BlogPage() {
               <section>
                 <div className="mb-5 flex items-end justify-between gap-4">
                   <div>
-                    <p className="term-label">{"// editor's desk"}</p>
+                    <p className="term-label">{"Editor's desk"}</p>
                     <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Start with the latest signal</h2>
                   </div>
                 </div>
@@ -352,7 +351,7 @@ export default async function BlogPage() {
               <section>
                 <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                   <div>
-                    <p className="term-label">{"// more stories"}</p>
+                    <p className="term-label">{"More stories"}</p>
                     <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Browse the research library</h2>
                   </div>
                   <p className="max-w-md text-sm leading-6 text-[#ccd6cf]/55">

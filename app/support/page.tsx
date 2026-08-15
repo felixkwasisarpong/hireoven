@@ -13,7 +13,7 @@ export default function SupportPage() {
     <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <p className="term-label">&gt; support</p>
+        <p className="term-label">Support</p>
         <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-white">Support</h1>
         <p className="mt-2 text-[13px] text-[#ccd6cf]/45">We&apos;re here to help.</p>
 

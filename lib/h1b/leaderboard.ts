@@ -119,7 +119,11 @@ function buildWhere(
   f: LeaderboardFilters,
   params: unknown[]
 ): string {
-  const clauses: string[] = []
+  const clauses: string[] = [
+    `COALESCE(company_domain, '') NOT ILIKE '%-tenant%'`,
+    `COALESCE(company_logo_url, '') NOT ILIKE '%oraclecloud.com%'`,
+    `lower(company_name) NOT LIKE '%.oraclecloud.com'`,
+  ]
 
   const minFilings = f.min_filings ?? DEFAULT_MIN_FILINGS
   params.push(minFilings)
@@ -311,6 +315,9 @@ export async function getLeaderboardIndustries(): Promise<string[]> {
   const { rows } = await getPostgresPool().query<{ industry: string }>(
     `SELECT industry FROM h1b_leaderboard_mv
      WHERE industry IS NOT NULL
+       AND COALESCE(company_domain, '') NOT ILIKE '%-tenant%'
+       AND COALESCE(company_logo_url, '') NOT ILIKE '%oraclecloud.com%'
+       AND lower(company_name) NOT LIKE '%.oraclecloud.com'
      GROUP BY industry ORDER BY COUNT(*) DESC`
   )
   return rows.map((r) => r.industry)
