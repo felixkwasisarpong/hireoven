@@ -3,6 +3,11 @@ import { Resend } from "resend"
 import { logApiUsage } from "@/lib/admin/usage"
 import { notificationFreshnessDate } from "@/lib/alerts/job-freshness"
 import { isDeadSubscriptionError, removeSubscription, getUserSubscriptions } from "@/lib/alerts/push-subscriptions"
+import {
+  INSTANT_EMAIL_TARGET_ROWS,
+  fetchPreviouslySentInstantJobs,
+  slotsFor,
+} from "@/lib/alerts/previous-instant-jobs"
 import { getEmailBaseUrl, getHireovenEmailLogoUrl } from "@/lib/email/branding"
 import { extractDomainFromLogoDevUrl, resolveLogoDomainOverride } from "@/lib/companies/logo-url"
 import { getAlertsFromEmail } from "@/lib/email/identity"
@@ -217,11 +222,34 @@ function renderExtensionPromoBlock(baseUrl: string): string {
 `
 }
 
+/**
+ * Captioned "previously sent" block appended under the new jobs — a visual
+ * break, a caption saying plainly that these are earlier alerts, then the rows.
+ * Keeps a one-job instant email from looking empty without pretending the
+ * recap roles are new (see lib/alerts/previous-instant-jobs.ts).
+ */
+function renderRecapSection(rowsHtml: string, caption: string, subCaption: string) {
+  if (!rowsHtml) return ""
+  return `
+    <tr><td colspan="2" style="padding:6px 0 18px;">
+      <div style="height:1px;background:#e2e8f0;"></div>
+    </td></tr>
+    <tr><td colspan="2" style="padding:0 0 16px;">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#94a3b8;margin-bottom:4px;">${esc(caption)}</div>
+      <div style="font-size:13px;color:#64748b;line-height:1.5;">${esc(subCaption)}</div>
+    </td></tr>
+    ${rowsHtml}
+  `
+}
+
 function renderEmailShell({
   preheader,
   headerTitle,
   headerSub,
   jobRowsHtml,
+  recapRowsHtml = "",
+  recapCaption = "",
+  recapSubCaption = "",
   viewAllUrl,
   viewAllLabel,
   recipientName,
@@ -233,6 +261,9 @@ function renderEmailShell({
   headerTitle: string
   headerSub: string
   jobRowsHtml: string
+  recapRowsHtml?: string
+  recapCaption?: string
+  recapSubCaption?: string
   viewAllUrl: string
   viewAllLabel: string
   recipientName: string | null
@@ -276,6 +307,7 @@ function renderEmailShell({
             <tr><td style="padding:20px 24px 4px;">
               <table width="100%" cellpadding="0" cellspacing="0">
                 ${jobRowsHtml}
+                ${renderRecapSection(recapRowsHtml, recapCaption, recapSubCaption)}
               </table>
             </td></tr>
           </table>
@@ -363,9 +395,23 @@ export async function sendEmailAlert(
   if (!profile.email) throw new Error(`User ${userId} has no email address`)
 
   const total = hydratedJobs.length
-  const visible = hydratedJobs.slice(0, 5)
+  const visible = hydratedJobs.slice(0, INSTANT_EMAIL_TARGET_ROWS)
   const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i, scores?.get(j.id)?.overall_score)).join("")
-  const viewAllLabel = total > 5 ? `See all ${total} matches` : "View all matching jobs"
+  const viewAllLabel = total > INSTANT_EMAIL_TARGET_ROWS ? `See all ${total} matches` : "View all matching jobs"
+
+  // Top the email up with earlier instant matches that are still open, so a
+  // single-job alert isn't a near-empty send. Counts above stay new-jobs-only.
+  const recap = await fetchPreviouslySentInstantJobs({
+    userId,
+    notificationType: "alert",
+    excludeJobIds: hydratedJobs.map((j) => j.id),
+    limit: slotsFor(visible.length),
+  })
+  const recapRowsHtml = recap.jobs.length
+    ? (await hydrateJobs(recap.jobs))
+        .map((j, i) => renderJobRow(j, i, recap.scores.get(j.id)?.overall_score))
+        .join("")
+    : ""
 
   const topCompanies = [...new Set(visible.slice(0, 2).map(j => j.company?.name).filter(Boolean))]
   const companyStr = topCompanies.length > 0
@@ -385,6 +431,12 @@ export async function sendEmailAlert(
     headerTitle: total === 1 ? "1 new match for you" : `${total} new matches for you`,
     headerSub,
     jobRowsHtml,
+    recapRowsHtml,
+    recapCaption: "Earlier matches · still open",
+    recapSubCaption:
+      recap.jobs.length === 1
+        ? "From a recent alert — this role is still live and you haven't tracked it yet."
+        : "From your recent alerts — these roles are still live and untracked.",
     viewAllUrl: buildAlertDashboardUrl(alertName),
     viewAllLabel,
     recipientName: profile.full_name ?? null,
@@ -517,8 +569,18 @@ export async function sendWatchlistEmail(
   if (!profile.email) throw new Error(`User ${userId} has no email address`)
 
   const total = hydratedJobs.length
-  const visible = hydratedJobs.slice(0, 5)
+  const visible = hydratedJobs.slice(0, INSTANT_EMAIL_TARGET_ROWS)
   const jobRowsHtml = visible.map((j, i) => renderJobRow(j, i, null)).join("")
+
+  const recap = await fetchPreviouslySentInstantJobs({
+    userId,
+    notificationType: "watchlist",
+    excludeJobIds: hydratedJobs.map((j) => j.id),
+    limit: slotsFor(visible.length),
+  })
+  const recapRowsHtml = recap.jobs.length
+    ? (await hydrateJobs(recap.jobs)).map((j, i) => renderJobRow(j, i, null)).join("")
+    : ""
 
   const companies = [...new Set(hydratedJobs.map((j) => j.company?.name).filter(Boolean))]
   const companyStr =
@@ -543,8 +605,14 @@ export async function sendWatchlistEmail(
     headerTitle: "Companies you follow are hiring",
     headerSub,
     jobRowsHtml,
+    recapRowsHtml,
+    recapCaption: "Earlier roles · still open",
+    recapSubCaption:
+      recap.jobs.length === 1
+        ? "From a recent update on the companies you follow — still live and untracked."
+        : "From recent updates on the companies you follow — still live and untracked.",
     viewAllUrl: `${getBaseUrl()}/dashboard`,
-    viewAllLabel: total > 5 ? `See all ${total} new roles` : "View new roles",
+    viewAllLabel: total > INSTANT_EMAIL_TARGET_ROWS ? `See all ${total} new roles` : "View new roles",
     recipientName: profile.full_name ?? null,
     recipientEmail: profile.email,
     alertNote: "You're receiving this because you're following these companies on Hireoven.",

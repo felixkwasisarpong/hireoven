@@ -95,7 +95,7 @@ export default function StayDemo({
       <div className="grid gap-6 lg:grid-cols-[1fr_1.05fr] lg:items-center">
         {/* Your situation */}
         <div>
-          <p className="term-label">&gt; your_situation</p>
+          <p className="term-label">Your situation</p>
 
           <div className="mt-4">
             <div className="flex items-center justify-between text-[13px] font-medium text-[#ccd6cf]/80">
@@ -162,7 +162,7 @@ export default function StayDemo({
                   onChange={(e) => setSocGroup(e.target.value)}
                   aria-label="Role"
                   style={TERM_SELECT_STYLE}
-                  className="term-select min-w-0 px-2.5 py-2 font-mono text-[13px] outline-none"
+                  className="term-select min-w-0 px-2.5 py-2 text-[13px] outline-none"
                 >
                   <option value="">Any role</option>
                   {roleOptions.map((r) => (
@@ -176,7 +176,7 @@ export default function StayDemo({
                   onChange={(e) => setStateAbbr(e.target.value)}
                   aria-label="State"
                   style={TERM_SELECT_STYLE}
-                  className="term-select px-2.5 py-2 font-mono text-[13px] outline-none"
+                  className="term-select px-2.5 py-2 text-[13px] outline-none"
                 >
                   <option value="">State</option>
                   {US_STATES.map((s) => (
@@ -344,14 +344,14 @@ function JobChecker({ salary, isStem }: { salary: number; isStem: boolean }) {
 
   return (
     <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-      <p className="term-label">&gt; paste any job or type a company</p>
+      <p className="term-label">Paste any job or type a company</p>
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run(query)}
           placeholder="e.g. Stanford, Google, Mayo Clinic…"
-          className="min-w-0 flex-1 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2.5 font-mono text-[14px] text-[#ccd6cf] outline-none placeholder:text-[#6c7a72] focus:border-[#38e08a]"
+          className="min-w-0 flex-1 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2.5 text-[14px] text-[#ccd6cf] outline-none placeholder:text-[#6c7a72] focus:border-[#38e08a]"
         />
         <button type="button" onClick={() => run(query)} disabled={pending} className="term-btn term-btn-amber justify-center disabled:opacity-60">
           {pending ? "scoring…" : "Score it"}

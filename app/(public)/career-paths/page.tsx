@@ -52,7 +52,6 @@ export default async function CareerPathsHub() {
           </span>
           <h1 className="mt-4 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.4rem]">
             How people actually <span className="text-[#f5a623]">move between fields</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Every path below is mapped from real résumé work histories — the field someone worked in, and the field
@@ -63,7 +62,7 @@ export default async function CareerPathsHub() {
 
         {paths.length === 0 ? (
           <section className="term-panel mt-10 px-6 py-10 text-center">
-            <p className="term-label">{"// accumulating"}</p>
+            <p className="term-label">{"Accumulating"}</p>
             <h2 className="mt-2 text-xl font-semibold text-white">The map is still filling in</h2>
             <p className="mx-auto mt-2 max-w-md text-[14px] text-[#ccd6cf]/65">
               We only publish a path once enough people have really made the move — so what shows here is always
@@ -97,7 +96,7 @@ export default async function CareerPathsHub() {
         )}
 
         <section className="term-panel mt-12 px-6 py-8 text-center">
-          <p className="term-label">{"// your move"}</p>
+          <p className="term-label">{"Your move"}</p>
           <h2 className="mt-2 text-xl font-semibold text-white">Wondering how far your own pivot is?</h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] text-[#ccd6cf]/65">
             Upload your résumé and HireOven maps your bridge to any field — the skills that carry over, the gaps to

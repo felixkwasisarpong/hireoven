@@ -37,7 +37,10 @@ async function getCompanies(reason: string | undefined): Promise<{ rows: Row[]; 
   if (!hasPostgresEnv()) return { rows: [], total: 0 }
   const pool = getPostgresPool()
   const params: unknown[] = []
-  let where = "WHERE is_cap_exempt = true AND is_active = true"
+  let where = `WHERE is_cap_exempt = true AND is_active = true
+    AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+    AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+    AND lower(name) NOT LIKE '%.oraclecloud.com'`
   if (reason) {
     params.push(reason)
     where += ` AND cap_exempt_reason = $${params.length}`
@@ -79,10 +82,9 @@ export default async function CapExemptPage({
       <Navbar />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <p className="term-label">&gt; cap_exempt --no-lottery</p>
+        <p className="term-label">Cap exempt</p>
         <h1 className="mt-4 text-[2.1rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.6rem]">
           H-1B <span className="text-[#f5a623]">Cap-Exempt</span> Employers
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
           Under INA 214(g)(5), universities, government research organizations, and affiliated

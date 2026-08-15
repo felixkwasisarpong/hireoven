@@ -206,6 +206,13 @@ const LOCAL_LOGO_URL_BY_DOMAIN: Record<string, string> = {
 }
 
 const FAVICON_DOMAIN_OVERRIDES: Record<string, string> = {
+  // Kroger rows arrive under a few guessed or corporate domains; logo.dev
+  // resolves some of those to unrelated marks, so force the consumer brand.
+  "kroger.co": "kroger.com",
+  "thekroger.com": "kroger.com",
+  // LCA imports sometimes compress "Amazon Web Services, Inc." to this
+  // guessed domain; the actual AWS mark lives on the Amazon subdomain.
+  "amazonweb.com": "aws.amazon.com",
   // career-soft.com favicon fails; its careers site host resolves.
   "career-soft.com": "career.com",
   // Brand domain for S&P Global Market Intelligence; direct domain resolves to the wrong mark.
@@ -239,6 +246,47 @@ const FAVICON_DOMAIN_OVERRIDES: Record<string, string> = {
   // "Thales USA" compresses to thales.com; the canonical brand host is
   // thalesgroup.com.
   "thales.com": "thalesgroup.com",
+}
+
+const COMPANY_NAME_LOGO_DOMAIN_OVERRIDES: Record<string, string> = {
+  // Public company cards should show the consumer/corporate brand, not a
+  // fallback mark from an ATS tenant or guessed host.
+  "advance auto parts": "advanceautoparts.com",
+  "advance auto parts inc": "advanceautoparts.com",
+  "american express travel related": "americanexpress.com",
+  "amazon": "amazon.com",
+  "amazon web services": "aws.amazon.com",
+  "amazon web services aws": "aws.amazon.com",
+  "aws": "aws.amazon.com",
+  "autozone": "autozone.com",
+  "circle k": "circlek.com",
+  "circle k stores": "circlek.com",
+  "circle k stores inc": "circlek.com",
+  "kroger": "kroger.com",
+  "the kroger": "kroger.com",
+  "the kroger co": "kroger.com",
+  "macys": "macys.com",
+  "macy s": "macys.com",
+  "tjx": "tjx.com",
+  "walmart": "walmart.com",
+}
+
+function normalizeCompanyNameForLogo(name: string | null | undefined): string {
+  return (name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/['’]/g, "")
+    .replace(/\b(incorporated|inc|corporation|corp|company|co|llc|ltd|limited|plc)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+}
+
+export function resolveLogoDomainFromCompanyName(name: string | null | undefined): string {
+  const key = normalizeCompanyNameForLogo(name)
+  if (!key) return ""
+  return COMPANY_NAME_LOGO_DOMAIN_OVERRIDES[key] ?? ""
 }
 
 /**

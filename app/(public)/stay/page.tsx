@@ -75,10 +75,9 @@ export default async function StayPage() {
 
       {/* Hero */}
       <section className="mx-auto w-full max-w-[78rem] px-4 pt-12 sm:px-6 sm:pt-16 lg:px-10">
-        <p className="term-label">&gt; stay --survival-odds --rules=2026</p>
+        <p className="term-label">Stay</p>
         <h1 className="mt-4 max-w-[20ch] text-[2.5rem] font-semibold leading-[1.03] tracking-tight text-white sm:text-[3.6rem]">
           Will this job actually <span className="text-[#f5a623]">keep you in the country?</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-5 max-w-[62ch] text-[16px] leading-relaxed text-[#ccd6cf]/70">
           Every other tool tells you whether a company <em className="text-[#ccd6cf] not-italic">sponsors</em>. Stay scores
@@ -98,7 +97,7 @@ export default async function StayPage() {
           className="term-panel term-panel-hover flex flex-col items-start justify-between gap-3 p-5 sm:flex-row sm:items-center"
         >
           <div>
-            <p className="term-label">&gt; timeline_copilot</p>
+            <p className="term-label">Timeline copilot</p>
             <p className="mt-1.5 text-[15px] font-semibold text-white">
               Race your OPT clock — how many H-1B draws you really have, and what to do this week
             </p>
@@ -111,7 +110,7 @@ export default async function StayPage() {
 
       {/* Why now — the shocks */}
       <section className="mx-auto mt-16 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
-        <p className="term-label">{"// why now — the playbook broke in one year"}</p>
+        <p className="term-label">{"Why now — the playbook broke in one year"}</p>
         <h2 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
           Three federal shocks, one year, stacked on entry-level talent
         </h2>
@@ -134,7 +133,7 @@ export default async function StayPage() {
       <section className="mx-auto mt-16 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="term-label">&gt; lottery_skip_list --cap-exempt</p>
+            <p className="term-label">Lottery skip list</p>
             <h2 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
               The escape hatch: <span className="text-[#38e08a]">{stats.employers.toLocaleString()}</span> employers that skip the lottery
             </h2>
@@ -182,7 +181,7 @@ export default async function StayPage() {
 
       {/* Moat */}
       <section className="mx-auto mt-16 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
-        <p className="term-label">{"// the moat — a data engine competitors can't clone in a quarter"}</p>
+        <p className="term-label">{"The moat — a data engine competitors can't clone in a quarter"}</p>
         {outcomeCount > 0 && (
           <p className="mt-2 text-[13px] text-[#ccd6cf]/60">
             <span className="tabular-nums text-[#38e08a]">{outcomeCount.toLocaleString()}</span> real outcomes reported by job
@@ -205,7 +204,7 @@ export default async function StayPage() {
       {/* CTA */}
       <section className="mx-auto mt-16 mb-20 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
         <div className="term-panel p-8 text-center sm:p-12">
-          <p className="term-label">{"// join the first cohort"}</p>
+          <p className="term-label">{"Join the first cohort"}</p>
           <h2 className="mx-auto mt-3 max-w-[24ch] text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
             Know your real odds before you waste 500 applications
           </h2>

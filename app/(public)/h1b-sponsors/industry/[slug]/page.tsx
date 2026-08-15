@@ -24,10 +24,13 @@ async function listIndustries(): Promise<IndustryRow[]> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<IndustryRow>(
     `SELECT industry, count(*)::int AS sponsors
-       FROM companies
+      FROM companies
       WHERE is_active = true AND sponsors_h1b = true
         AND COALESCE(h1b_sponsor_count_1yr, 0) > 0
         AND industry IS NOT NULL AND industry <> ''
+        AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+        AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+        AND lower(name) NOT LIKE '%.oraclecloud.com'
       GROUP BY industry HAVING count(*) >= 5
       ORDER BY sponsors DESC`,
   )
@@ -43,9 +46,12 @@ async function getData(slug: string): Promise<Data | null> {
 
   const { rows } = await pool.query<Sponsor>(
     `SELECT id, name, domain, logo_url, h1b_sponsor_count_1yr
-       FROM companies
+      FROM companies
       WHERE is_active = true AND sponsors_h1b = true
         AND COALESCE(h1b_sponsor_count_1yr, 0) > 0 AND industry = $1
+        AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+        AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+        AND lower(name) NOT LIKE '%.oraclecloud.com'
       ORDER BY h1b_sponsor_count_1yr DESC NULLS LAST
       LIMIT 100`,
     [match.industry],
@@ -107,7 +113,6 @@ export default async function IndustryHub({ params }: Props) {
           </span>
           <h1 className="mt-4 text-[2rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.5rem]">
             {d.industry} companies that <span className="text-[#f5a623]">sponsor H-1B</span> visas
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             {d.industry} employers with a record of H-1B sponsorship, ranked by certified LCA filings over the last 12
@@ -137,7 +142,7 @@ export default async function IndustryHub({ params }: Props) {
 
         {d.others.length > 0 && (
           <section className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-6">
-            <h2 className="term-label">{"// H-1B sponsors by industry"}</h2>
+            <h2 className="term-label">{"H-1B sponsors by industry"}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {d.others.map((o) => (
                 <Link

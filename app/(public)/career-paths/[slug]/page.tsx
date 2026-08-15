@@ -129,7 +129,7 @@ export default async function CareerPathPage({ params }: Props) {
 
         {detail.topRoleMoves.length > 0 && (
           <section className="mt-10">
-            <h2 className="term-label">{"// the moves people actually made"}</h2>
+            <h2 className="term-label">{"The moves people actually made"}</h2>
             <ul className="mt-3 space-y-2">
               {detail.topRoleMoves.map((m, i) => (
                 <li
@@ -151,7 +151,7 @@ export default async function CareerPathPage({ params }: Props) {
         )}
 
         <section className="term-panel mt-12 px-6 py-8 text-center">
-          <p className="term-label">{"// your move"}</p>
+          <p className="term-label">{"Your move"}</p>
           <h2 className="mt-2 text-xl font-semibold text-white">
             Could you make this move? See your own bridge.
           </h2>

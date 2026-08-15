@@ -93,7 +93,6 @@ export default async function CategoryPage({ params }: { params: { category: str
         </Link>
         <h1 className="mt-4 text-[2.2rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3rem]">
           {category.name}
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">{category.description}</p>
       </section>

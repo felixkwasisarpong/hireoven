@@ -13,7 +13,7 @@ export default function PrivacyPage() {
     <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <p className="term-label">&gt; privacy_policy</p>
+        <p className="term-label">Privacy policy</p>
         <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-white">Privacy Policy</h1>
         <p className="mt-2 text-[13px] text-[#ccd6cf]/45">Last updated: July 2026</p>
 

@@ -2,38 +2,27 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { PLAN_DATA } from "@/lib/pricing"
-import type { LucideIcon } from "lucide-react"
 import {
   ArrowRight,
+  BadgeCheck,
   BellRing,
+  Bookmark,
   Bot,
-  BrainCircuit,
-  Briefcase,
+  Building2,
   Check,
   CheckCircle2,
   Chrome,
   Clock3,
-  Code2,
-  Database,
   FileCheck2,
   FileSearch,
-  Gauge,
   Ghost,
-  KeyRound,
-  Layers3,
+  MapPin,
   Mic2,
   MousePointerClick,
-  Radar,
   Search,
-  ServerCog,
   ShieldCheck,
-  Siren,
-  Sparkles,
   Users,
-  Webhook,
-  Workflow,
 } from "lucide-react"
-import LandingParticleBackground from "@/components/marketing/LandingParticleBackground"
 import MaintenanceBanner from "@/components/marketing/MaintenanceBanner"
 import Navbar from "@/components/layout/Navbar"
 import CompanyLogo from "@/components/ui/CompanyLogo"
@@ -46,10 +35,15 @@ import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 export const revalidate = 300
 
 export const metadata: Metadata = {
-  title: "Hireoven - Job search on easy mode.",
+  title: "Hireoven - Fresh jobs with sponsor proof.",
   description:
-    "Fresh job alerts, H-1B sponsorship intelligence, AI match scores, and one-click autofill for job seekers who want to apply first.",
+    "Search fresh jobs from employer career pages with H-1B sponsorship evidence, profile match scoring, alerts, and one-click application autofill.",
 }
+
+/** Shared page shell: max width and horizontal padding for every section. */
+const SHELL = "mx-auto w-full max-w-[80rem] px-5 lg:px-8"
+/** Standard white surface. Radius and shadow come from the theme primitives. */
+const CARD = "term-panel"
 
 type LogoCompany = {
   id: string
@@ -64,11 +58,6 @@ type LogoCompany = {
   sponsors_h1b?: boolean | null
   sponsorship_confidence?: number | null
   last_crawled_at?: Date | string | null
-}
-
-type Stat = {
-  value: string
-  label: string
 }
 
 const fallbackCompanies: LogoCompany[] = [
@@ -96,152 +85,151 @@ const curatedCompanyDomains = fallbackCompanies
   .map((company) => company.domain?.trim().toLowerCase())
   .filter((domain): domain is string => Boolean(domain))
 
-const apexCards = [
+const howItWorksSteps = [
   {
-    icon: Search,
-    title: "Finds the openings worth your time",
-    body: "Filter by freshness, sponsor strength, remote policy, role fit, salary evidence, and risk signals.",
+    icon: BellRing,
+    image: "/marketing/job-alert-workspace.webp",
+    title: "Get alerted while the role is still fresh",
+    body: "We monitor company career pages directly instead of waiting for aggregators to catch up, so new openings reach you within minutes of going live.",
   },
   {
-    icon: FileCheck2,
-    title: "Tailors your resume for the role",
-    body: "Apex spots keyword gaps, rewrites bullets with your facts, and keeps every final edit in your control.",
+    icon: ShieldCheck,
+    image: "/marketing/evidence-dashboard.webp",
+    title: "See the sponsorship evidence up front",
+    body: "Every listing carries H-1B petition history from public DOL and USCIS records, plus visa language found in the posting itself.",
   },
   {
     icon: MousePointerClick,
-    title: "Autofills the application",
-    body: "The extension fills repetitive fields across major ATS forms, then waits for your review before submission.",
-  },
-  {
-    icon: BellRing,
-    title: "Keeps the search moving",
-    body: "Watchlists, reminders, and alerts keep high-fit jobs from going cold in another browser tab.",
+    image: "/marketing/autofill-workflow.webp",
+    title: "Apply without retyping your life story",
+    body: "The Chrome extension fills repetitive fields across Greenhouse, Lever, Ashby, Workday, iCIMS and more, then waits for your review before anything is submitted.",
   },
 ]
 
-const candidateMoments = [
+const carouselSlides = [
   {
-    title: "Before applying",
-    body: "Know whether the employer has sponsored similar roles before you spend an hour on the form.",
+    image: "/marketing/carousel-alerts-dark.webp",
+    kicker: "Fresh alerts",
+    title: "See new roles while they are still warm",
+    body: "Career-page monitoring brings roles into your feed before aggregator traffic piles on.",
   },
   {
-    title: "When a role opens",
-    body: "Get the alert while the first batch of applicants is still forming, not after the job board catches up.",
+    image: "/marketing/carousel-sponsor-dark.webp",
+    kicker: "Sponsor proof",
+    title: "Prioritize employers with real filing history",
+    body: "Petition and wage evidence stays attached to the company and role context.",
   },
   {
-    title: "At the application",
-    body: "Autofill, tailored materials, and job-specific evidence stay in one workflow.",
-  },
-]
-
-const workflowSteps = [
-  {
-    eyebrow: "01 Alert",
-    title: "A fresh role lands before the job board crowd arrives.",
-    body: "Hireoven watches company career pages directly, then sends openings into your radar while they are still early.",
-    stat: "Minutes",
-  },
-  {
-    eyebrow: "02 Evidence",
-    title: "Sponsor history and role fit get checked in the same view.",
-    body: "Apex pairs each opening with H-1B history, visa language, title match, skill overlap, and application risk.",
-    stat: "Proof",
-  },
-  {
-    eyebrow: "03 Apply",
-    title: "The repetitive work is prepared before you open the form.",
-    body: "Resume tailoring, field review, and autofill stay one step away, so you can move quickly without losing control.",
-    stat: "Ready",
+    image: "/marketing/carousel-autofill-dark.webp",
+    kicker: "Apply faster",
+    title: "Review the application before anything goes out",
+    body: "Autofill and Apex prep the repetitive parts while final approval stays with you.",
   },
 ]
 
-const outcomeStats = [
-  { value: "First", label: "batch awareness" },
-  { value: "One", label: "place for evidence" },
-  { value: "Less", label: "manual form work" },
-]
-
-const productSignals = [
-  "Data Engineering",
-  "Compliance",
-  "PyTorch",
-  "Python",
-  "AWS",
-]
-
-const wowFeatureCards = [
+const featureCards = [
   {
     icon: Bot,
-    eyebrow: "Apex AI",
-    title: "An autonomous search agent, not another chat box.",
-    body: "Apex can research companies, build application queues, tailor materials, and operate the browser flow. Sensitive actions pause for approval, and final submission stays with you.",
-    chips: ["Apply-agent", "Browser operator", "Career twin"],
+    category: "Apex AI",
+    title: "An application assistant that does the legwork",
+    body: "Apex researches companies, builds an application queue, tailors your materials, and drives the browser flow. Sensitive steps pause for approval and final submission always stays with you.",
+    tags: ["Apply agent", "Browser operator", "Career profile"],
     href: "/signup?next=%2Fdashboard%2Fapex",
   },
   {
     icon: Chrome,
-    eyebrow: "Chrome extension",
-    title: "One-click apply across the messy parts of ATS forms.",
-    body: "Autofill packets, field review, and live match context travel with you across Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR, and more.",
-    chips: ["Autofill", "ATS support", "LinkedIn context"],
+    category: "Chrome extension",
+    title: "One-click apply across messy ATS forms",
+    body: "Autofill packets, field review, and live match context follow you across Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, BambooHR and more.",
+    tags: ["Autofill", "Wide ATS support", "LinkedIn import"],
     href: "/extension",
   },
   {
     icon: Mic2,
-    eyebrow: "Interview prep",
-    title: "Voice and coding practice that follows the role.",
-    body: "Practice with role-specific prompts, live voice sessions, coding interviews, scheduling, and AI debriefs that turn a rough answer into the next rep.",
-    chips: ["Voice", "Coding", "Debrief"],
+    category: "Interview prep",
+    title: "Voice and coding practice tied to the role",
+    body: "Practice with role-specific prompts, live voice sessions, coding interviews, and AI debriefs that turn a rough answer into a better one next time.",
+    tags: ["Voice", "Coding", "Debrief"],
     href: "/signup?next=%2Fdashboard%2Finterview",
   },
   {
     icon: Ghost,
-    eyebrow: "Ghost-job risk",
-    title: "Spot postings that may not deserve your time.",
-    body: "Timing, reposting, freshness, and employer signals help flag listings that look stale, recycled, or resume-collection heavy before you spend an application.",
-    chips: ["Repost signals", "Timing", "Risk"],
+    category: "Ghost-job detection",
+    title: "Skip postings that will not go anywhere",
+    body: "Timing, reposting patterns, freshness, and employer signals flag listings that look stale, recycled, or built to collect resumes before you spend an application on them.",
+    tags: ["Repost signals", "Timing", "Risk score"],
     href: "/find",
   },
   {
     icon: Users,
-    eyebrow: "Cohorts",
-    title: "See the search through people with similar context.",
-    body: "Layoff cohorts, peer movement, employer requests, and background-matched signals show where people like you are getting traction.",
-    chips: ["Cohorts", "Layoff radar", "Peer signals"],
+    category: "Peer signals",
+    title: "See the market through people like you",
+    body: "Layoff cohorts, peer movement, and background-matched signals show where candidates with your profile are actually getting traction right now.",
+    tags: ["Cohorts", "Layoff radar", "Peer moves"],
     href: "/signup?next=%2Fdashboard%2Fcohorts",
   },
   {
     icon: FileSearch,
-    eyebrow: "Comp + scorecards",
-    title: "The offer and sponsor story stay attached.",
-    body: "H-1B wage data, salary comparisons, offer tracking, shareable sponsorability scorecards, and personal-brand modules keep the decision evidence in view.",
-    chips: ["Wage data", "Scorecard", "Offer intel"],
+    category: "Salary and offers",
+    title: "Know the number before the conversation",
+    body: "H-1B wage data, salary comparisons, offer tracking, and shareable sponsorability scorecards keep the compensation picture attached to every role.",
+    tags: ["Wage data", "Scorecard", "Offer tracking"],
     href: "/h1b-salaries",
   },
 ]
 
-const missionDeckSteps = [
-  { icon: Radar, label: "Career pages", value: "Tiered crawl" },
-  { icon: ShieldCheck, label: "Sponsor proof", value: "DOL + USCIS" },
-  { icon: BrainCircuit, label: "Apex prep", value: "Tailor + queue" },
-  { icon: Code2, label: "Interview loop", value: "Voice + coding" },
+/** Illustrative job cards for the hero preview. Labelled as an example in the UI. */
+const previewJobs = [
+  {
+    company: "Anthropic",
+    domain: "anthropic.com",
+    logo: "/company-logos/anthropic.svg",
+    title: "Staff ML Platform Engineer",
+    location: "San Francisco, CA · Hybrid",
+    posted: "7 minutes ago",
+    match: 91,
+    sponsor: "Sponsors H-1B",
+    source: "Greenhouse",
+    fresh: true,
+  },
+  {
+    company: "Samsara",
+    domain: "samsara.com",
+    logo: "/company-logos/samsara.svg",
+    title: "Senior Backend Engineer, Data",
+    location: "Remote · United States",
+    posted: "24 minutes ago",
+    match: 84,
+    sponsor: "Sponsors H-1B",
+    source: "Lever",
+    fresh: true,
+  },
+  {
+    company: "Autodesk",
+    domain: "autodesk.com",
+    logo: "/company-logos/autodesk.svg",
+    title: "Product Analyst II",
+    location: "Boston, MA · On-site",
+    posted: "1 hour ago",
+    match: 78,
+    sponsor: "Sponsor history",
+    source: "Workday",
+    fresh: false,
+  },
 ]
 
-const signalApiPillars = [
+const sponsorshipProofPoints = [
   {
-    icon: KeyRound,
-    title: "Tenant access",
-    body: "API keys, tenant isolation, usage accounting, and quotas for partner integrations.",
+    title: "Petition history, not guesswork",
+    body: "Approved and denied H-1B petitions from public USCIS records, counted per employer over the last one and three years.",
   },
   {
-    icon: Webhook,
-    title: "Webhooks and embeds",
-    body: "Push job and sponsor events into external workflows, then render company intelligence wherever customers need it.",
+    title: "Prevailing wage from DOL filings",
+    body: "Certified LCA wage levels by role and worksite, so you can compare an offer against what the employer has actually filed.",
   },
   {
-    icon: Database,
-    title: "Real-time data product",
-    body: "The same crawl, sponsorship, freshness, and role intelligence behind Hireoven can power a second B2B surface.",
+    title: "Cap-exempt employers surfaced",
+    body: "Universities, non-profits, and affiliated research employers that hire outside the annual lottery entirely.",
   },
 ]
 
@@ -401,23 +389,71 @@ function companyProof(company: LogoCompany) {
   }
 }
 
+function SectionHeading({
+  align = "left",
+  eyebrow,
+  title,
+  body,
+}: {
+  align?: "left" | "center"
+  eyebrow: string
+  title: React.ReactNode
+  body?: string
+}) {
+  const centered = align === "center"
+  return (
+    <div className={centered ? "mx-auto max-w-[44rem] text-center" : "max-w-[42rem]"}>
+      <p className="term-label">{eyebrow}</p>
+      <h2 className="mt-3 text-[1.9rem] font-semibold leading-[1.15] tracking-tight text-[var(--term-strong)] md:text-[2.5rem]">
+        {title}
+      </h2>
+      {body ? (
+        <p className={`mt-4 text-[16px] leading-relaxed text-[var(--term-fg)] ${centered ? "" : "max-w-[38rem]"}`}>
+          {body}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 function EmailCapture({ next = "/dashboard/onboarding" }: { next?: string }) {
   return (
-    <form
-      action="/signup"
-      className="flex w-full max-w-[34rem] flex-col gap-2 sm:flex-row"
-      method="get"
-    >
+    <form action="/signup" className="flex w-full max-w-[32rem] flex-col gap-2.5 sm:flex-row" method="get">
       <input name="next" type="hidden" value={next} />
       <input
         aria-label="Email"
-        className="min-h-[3rem] min-w-0 flex-1 border border-[var(--term-line-strong)] bg-[var(--term-input-bg)] px-4 text-[14px] text-[var(--term-fg)] outline-none transition focus:border-[var(--term-green)]"
+        className="min-h-[3rem] min-w-0 flex-1 rounded-md border border-[var(--term-line-strong)] bg-[var(--term-input-bg)] px-4 text-[15px] text-[var(--term-fg)] outline-none"
         name="email"
-        placeholder="you@email.com"
+        placeholder="Enter your email"
         type="email"
       />
-      <button className="term-btn term-btn-amber shrink-0 justify-center" type="submit">
-        Get started
+      <button className="term-btn term-btn-amber min-h-[3rem] shrink-0 justify-center" type="submit">
+        Get started free
+        <ArrowRight className="h-4 w-4" aria-hidden />
+      </button>
+    </form>
+  )
+}
+
+function HeroSearchForm() {
+  return (
+    <form action="/find" className={`${CARD} mt-8 grid gap-2 p-2 sm:grid-cols-[1fr_auto]`} method="get">
+      <label className="sr-only" htmlFor="home-role-search">
+        Search jobs
+      </label>
+      <div className="flex min-h-[3.35rem] min-w-0 items-center gap-3 rounded-md bg-[var(--term-panel-2)] px-4">
+        <Search className="h-4 w-4 shrink-0 text-[var(--term-dim)]" aria-hidden />
+        <input
+          className="min-w-0 flex-1 bg-transparent text-[15px] font-medium text-[var(--term-strong)] outline-none placeholder:text-[var(--term-dim)]"
+          id="home-role-search"
+          name="role"
+          placeholder="Software engineer, data analyst, product manager..."
+          required
+          type="search"
+        />
+      </div>
+      <button className="term-btn term-btn-amber min-h-[3.35rem] justify-center px-5" type="submit">
+        Find jobs
         <ArrowRight className="h-4 w-4" aria-hidden />
       </button>
     </form>
@@ -427,326 +463,395 @@ function EmailCapture({ next = "/dashboard/onboarding" }: { next?: string }) {
 function AnnouncementBar() {
   return (
     <Link
-      className="flex min-h-9 items-center justify-center gap-2 border-b border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 text-center text-[12.5px] text-[#ccd6cf]/70 transition hover:text-[#38e08a]"
+      className="marketing-announcement-link"
       href="/extension"
+      prefetch
     >
-      <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-      Apex is live on Chrome
-      <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+      <Chrome className="h-4 w-4 shrink-0 text-[#ff5c18]" aria-hidden />
+      The Hireoven extension is live on Chrome
+      <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
     </Link>
+  )
+}
+
+/** Illustrative feed preview. Mirrors the real job-card layout in the product. */
+function JobFeedPreview() {
+  return (
+    <div className={`${CARD} overflow-hidden`}>
+      <div className="flex items-center justify-between gap-3 border-b border-[var(--term-line)] px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-[var(--term-dim)]" aria-hidden />
+          <span className="text-[14px] font-semibold text-[var(--term-strong)]">Your job feed</span>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(5,118,66,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[var(--term-green)]">
+          <span className="h-1.5 w-1.5 rounded-full bg-[var(--term-green)]" aria-hidden />
+          Live
+        </span>
+      </div>
+
+      <ul className="divide-y divide-[var(--term-line)]">
+        {previewJobs.map((job) => (
+          <li className="px-5 py-4 transition hover:bg-[var(--term-panel-2)]" key={job.title}>
+            <div className="flex items-start gap-3">
+              <Image
+                alt=""
+                className="h-11 w-11 shrink-0 rounded-md border border-[var(--term-line-strong)] bg-white object-contain p-1.5"
+                height={44}
+                src={job.logo}
+                width={44}
+              />
+
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-semibold text-[var(--term-amber)]">{job.title}</p>
+                <p className="mt-0.5 truncate text-[13.5px] text-[var(--term-strong)]">{job.company}</p>
+                <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px] text-[var(--term-dim)]">
+                  <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                  {job.location}
+                </p>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(5,118,66,0.1)] px-2 py-0.5 text-[11px] font-semibold text-[var(--term-green)]">
+                    <BadgeCheck className="h-3 w-3" aria-hidden />
+                    {job.sponsor}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-[var(--term-line-strong)] px-2 py-0.5 text-[11px] font-medium text-[var(--term-fg)]">
+                    {job.match}% match
+                  </span>
+                  <span className="hidden items-center rounded-full border border-[var(--term-line-strong)] px-2 py-0.5 text-[11px] font-medium text-[var(--term-fg)] sm:inline-flex">
+                    {job.source}
+                  </span>
+                </div>
+
+                <p
+                  className={`mt-2.5 flex items-center gap-1.5 text-[12px] font-medium ${
+                    job.fresh ? "text-[var(--term-green)]" : "text-[var(--term-dim)]"
+                  }`}
+                >
+                  <Clock3 className="h-3.5 w-3.5" aria-hidden />
+                  Posted {job.posted}
+                </p>
+              </div>
+
+              <Bookmark className="mt-1 h-4 w-4 shrink-0 text-[var(--term-dim)]" aria-hidden />
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <p className="border-t border-[var(--term-line)] bg-[var(--term-panel-2)] px-5 py-3 text-[11.5px] text-[var(--term-dim)]">
+        Example feed. Live results depend on your profile, filters, and current openings.
+      </p>
+    </div>
   )
 }
 
 function HeroSection({ stats }: { stats: { jobs: number; companies: number } }) {
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 pb-6 pt-12 sm:pt-16 lg:px-12">
-      <p className="term-label inline-flex items-center gap-2">
-        <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-        &gt; {formatCount(stats.jobs, "10,000+")} live jobs tracked
-      </p>
+    <section className={`${SHELL} pb-14 pt-12 sm:pt-16`}>
+      <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+        <div>
+          <p className="inline-flex items-center gap-2 rounded-full border border-[var(--term-line-strong)] bg-[var(--term-panel)] px-3 py-1.5 text-[12.5px] font-medium text-[var(--term-fg)]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[var(--term-amber)]" aria-hidden />
+            {formatCount(stats.jobs, "10,000+")} live jobs tracked right now
+          </p>
 
-      <h1 className="mt-5 max-w-[34rem] text-[2.8rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[4rem] md:text-[4.6rem]">
-        Job search, <span className="text-[#f5a623]">easy mode</span>
-        <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
-      </h1>
+          <h1 className="mt-6 max-w-[38rem] text-[2.55rem] font-semibold leading-[1.08] tracking-tight text-[var(--term-strong)] sm:text-[3.35rem]">
+            Search fresh jobs with sponsor proof before you apply.
+          </h1>
 
-      <p className="mt-6 max-w-[35rem] text-[15px] leading-relaxed text-[#ccd6cf]/70 md:text-[16px]">
-        Fresh openings, sponsor intelligence, AI matching, and one-click autofill work together so you apply first with proof.
-      </p>
+          <p className="mt-5 max-w-[36rem] text-[17px] leading-relaxed text-[var(--term-fg)]">
+            Hireoven monitors employer career pages directly, scores each role against your profile, and attaches H-1B
+            evidence before you spend time on the application.
+          </p>
 
-      <div className="mt-8">
-        <EmailCapture />
-      </div>
+          <HeroSearchForm />
 
-      <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2">
-        {["No credit card", "Free job search", "H-1B evidence built in"].map((label) => (
-          <span className="inline-flex items-center gap-1.5 text-[12.5px] text-[#ccd6cf]/60" key={label}>
-            <CheckCircle2 className="h-4 w-4 text-[#38e08a]" aria-hidden />
-            {label}
-          </span>
-        ))}
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2">
+            {["Free to search", "No credit card required", "H-1B evidence built in"].map((label) => (
+              <span className="inline-flex items-center gap-1.5 text-[13px] text-[var(--term-dim)]" key={label}>
+                <CheckCircle2 className="h-4 w-4 text-[var(--term-green)]" aria-hidden />
+                {label}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link className="term-btn term-btn-amber" href="/signup?next=%2Fdashboard%2Fonboarding">
+              Create free alerts
+              <BellRing className="h-4 w-4" aria-hidden />
+            </Link>
+            <Link className="term-btn" href="/companies">
+              Browse companies
+            </Link>
+          </div>
+        </div>
+
+        <JobFeedPreview />
       </div>
     </section>
   )
 }
 
-function LogoCloud({ companies }: { companies: LogoCompany[] }) {
-  const sourceCompanies = companies.length > 0 ? companies : fallbackCompanies
-  const visibleCompanies = uniqueLogoCompanies(sourceCompanies).slice(0, 21)
-
+function ImageCarouselSection() {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-visible border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-3 lg:grid-cols-7">
-      {visibleCompanies.map((company, index) => {
-        const proof = companyProof(company)
+    <section className="bg-[#12100e] py-16">
+      <div className="mx-auto w-full max-w-[80rem] px-5 lg:px-8">
+        <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[#ff5c18]">Product workflow</p>
+            <h2 className="mt-3 max-w-[28rem] text-[1.8rem] font-semibold leading-[1.12] tracking-tight text-[#fff7ed] md:text-[2.35rem]">
+              A job search cockpit, not another list of stale posts
+            </h2>
+            <p className="mt-4 max-w-[31rem] text-[15px] leading-7 text-[#cfc6bd]">
+              The carousel shows the three surfaces that matter most: freshness, proof, and application speed.
+            </p>
+          </div>
 
-        return (
-          <Link
-            aria-label={`View ${company.name}`}
-            className="term-panel-hover group relative z-0 flex min-h-[84px] cursor-pointer items-center justify-center gap-2 bg-[#0e1411] px-4 py-4 hover:z-20 focus-visible:z-20 focus-visible:outline focus-visible:outline-1 focus-visible:outline-[#38e08a]"
-            href={companyHref(company)}
-            key={company.id}
-            title={company.name}
-          >
-            {isLocalCompanyLogo(company.logo_url) ? (
-              <Image
-                alt={company.name}
-                className="h-8 w-8 object-contain opacity-70 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
-                height={32}
-                src={company.logo_url ?? ""}
-                width={32}
-              />
-            ) : (
-              <CompanyLogo
-                className="h-8 w-8 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] opacity-80 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
-                companyName={company.name}
-                domain={company.domain}
-                logoUrl={company.logo_url}
-                priority={index < 7}
-              />
-            )}
-            <span className="max-w-[7rem] truncate text-[12.5px] font-medium text-[#ccd6cf]/70 transition group-hover:text-white">
-              {company.name}
-            </span>
-
-            <span className="pointer-events-none absolute bottom-[calc(100%+0.5rem)] left-1/2 z-30 hidden w-[17rem] -translate-x-1/2 translate-y-1 border border-[rgba(120,200,160,0.26)] bg-[#0e1411] p-4 text-left opacity-0 transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 sm:block">
-              <span className="flex items-center gap-3 border-b border-[rgba(120,200,160,0.12)] pb-3">
-                {isLocalCompanyLogo(company.logo_url) ? (
-                  <Image
-                    alt=""
-                    className="h-8 w-8 object-contain"
-                    height={32}
-                    src={company.logo_url ?? ""}
-                    width={32}
-                  />
-                ) : (
-                  <CompanyLogo
-                    className="h-8 w-8 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c]"
-                    companyName={company.name}
-                    domain={company.domain}
-                    logoUrl={company.logo_url}
-                  />
-                )}
-                <span className="min-w-0">
-                  <span className="block truncate text-[13px] font-semibold text-white">{company.name}</span>
-                  <span className="block truncate text-[11px] text-[#ccd6cf]/45">{proof.source}</span>
-                </span>
-              </span>
-
-              <span className="mt-3 grid grid-cols-2 gap-2">
-                <span className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-3">
-                  <span className="term-label block">{proof.primaryLabel}</span>
-                  <span className="mt-1 block text-[18px] font-semibold tabular-nums text-[#38e08a]">
-                    {proof.primary}
-                  </span>
-                </span>
-                <span className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-3">
-                  <span className="term-label block">{proof.sponsorLabel}</span>
-                  <span className="mt-1 block text-[14px] font-semibold tabular-nums text-[#38e08a]">
-                    {proof.sponsorValue}
-                  </span>
-                </span>
-              </span>
-
-              <span className="mt-3 flex items-center justify-between gap-3 text-[11px] text-[#ccd6cf]/45">
-                <span>{proof.footer}</span>
-                <span className="inline-flex items-center gap-1 text-[#f5a623]">
-                  View
-                  <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-                </span>
-              </span>
-            </span>
-
-            <ArrowRight
-              className="absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#ccd6cf]/35 opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100 group-focus-visible:opacity-100"
-              aria-hidden
-            />
-          </Link>
-        )
-      })}
-    </div>
+          <div className="-mx-5 flex snap-x gap-4 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:px-0">
+            {carouselSlides.map(({ body, image, kicker, title }) => (
+              <article
+                className="min-w-[82%] snap-start overflow-hidden rounded-lg border border-white/12 bg-[#1b1815] shadow-[0_18px_44px_-26px_rgba(0,0,0,0.9)] sm:min-w-[25rem] lg:min-w-[31rem]"
+                key={title}
+              >
+                <div className="relative aspect-[3/2] border-b border-white/10">
+                  <Image alt="" className="object-cover" fill sizes="(min-width: 1024px) 32rem, 82vw" src={image} />
+                </div>
+                <div className="p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[#ff5c18]">{kicker}</p>
+                  <h3 className="mt-2 text-[1.05rem] font-semibold leading-snug text-[#fff7ed]">{title}</h3>
+                  <p className="mt-2 text-[13.5px] leading-6 text-[#bfb6ad]">{body}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
-function LogoProofSection({
+function StatBar({ stats }: { stats: { jobs: number; companies: number } }) {
+  const items = [
+    { value: formatCompactCount(stats.jobs, "10k+"), label: "Live openings tracked" },
+    { value: formatCompactCount(stats.companies, "1k+"), label: "Companies monitored" },
+    { value: "15+", label: "ATS platforms supported" },
+    { value: "Minutes", label: "From posting to alert" },
+  ]
+
+  return (
+    <section className={SHELL}>
+      <dl className={`${CARD} grid grid-cols-2 gap-px overflow-hidden bg-[var(--term-line)] md:grid-cols-4`}>
+        {items.map(({ label, value }) => (
+          <div className="bg-[var(--term-panel)] px-5 py-6 text-center" key={label}>
+            <dt className="sr-only">{label}</dt>
+            <dd>
+              <span className="block text-[1.9rem] font-semibold leading-none tabular-nums text-[var(--term-strong)]">
+                {value}
+              </span>
+              <span className="mt-2 block text-[12.5px] text-[var(--term-dim)]">{label}</span>
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  )
+}
+
+function CompanyTile({ company, priority }: { company: LogoCompany; priority: boolean }) {
+  const proof = companyProof(company)
+
+  return (
+    <Link
+      aria-label={`View ${company.name}`}
+      className="group relative z-0 flex min-h-[88px] items-center justify-center gap-2.5 bg-[var(--term-panel)] px-4 py-4 transition hover:z-20 hover:bg-[var(--term-panel-2)] focus-visible:z-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--term-amber)]"
+      href={companyHref(company)}
+      title={company.name}
+    >
+      {isLocalCompanyLogo(company.logo_url) ? (
+        <Image
+          alt={company.name}
+          className="h-8 w-8 shrink-0 object-contain opacity-75 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
+          height={32}
+          src={company.logo_url ?? ""}
+          width={32}
+        />
+      ) : (
+        <CompanyLogo
+          className="h-8 w-8 shrink-0 rounded-md border border-[var(--term-line-strong)] bg-white opacity-85 grayscale transition duration-200 group-hover:opacity-100 group-hover:grayscale-0"
+          companyName={company.name}
+          domain={company.domain}
+          logoUrl={company.logo_url}
+          priority={priority}
+        />
+      )}
+      <span className="max-w-[7rem] truncate text-[13px] font-medium text-[var(--term-fg)] transition group-hover:text-[var(--term-strong)]">
+        {company.name}
+      </span>
+
+      {/* Hover card: real crawl and public H-1B figures for this employer. */}
+      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] z-50 hidden w-[17rem] -translate-x-1/2 translate-y-1 rounded-lg border border-[var(--term-line-strong)] bg-[var(--term-panel)] p-4 text-left opacity-0 shadow-[0_18px_42px_rgba(17,16,15,0.18)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 sm:block">
+        <span className="flex items-center gap-3 border-b border-[var(--term-line)] pb-3">
+          {isLocalCompanyLogo(company.logo_url) ? (
+            <Image alt="" className="h-8 w-8 object-contain" height={32} src={company.logo_url ?? ""} width={32} />
+          ) : (
+            <CompanyLogo
+              className="h-8 w-8 rounded-md border border-[var(--term-line-strong)] bg-white"
+              companyName={company.name}
+              domain={company.domain}
+              logoUrl={company.logo_url}
+            />
+          )}
+          <span className="min-w-0">
+            <span className="block truncate text-[13.5px] font-semibold text-[var(--term-strong)]">{company.name}</span>
+            <span className="block truncate text-[11.5px] text-[var(--term-dim)]">{proof.source}</span>
+          </span>
+        </span>
+
+        <span className="mt-3 grid grid-cols-2 gap-2">
+          <span className="rounded-md border border-[var(--term-line-strong)] p-3">
+            <span className="term-label block">{proof.primaryLabel}</span>
+            <span className="mt-1 block text-[18px] font-semibold tabular-nums text-[var(--term-strong)]">
+              {proof.primary}
+            </span>
+          </span>
+          <span className="rounded-md border border-[var(--term-line-strong)] p-3">
+            <span className="term-label block">{proof.sponsorLabel}</span>
+            <span className="mt-1 block text-[14px] font-semibold tabular-nums text-[var(--term-green)]">
+              {proof.sponsorValue}
+            </span>
+          </span>
+        </span>
+
+        <span className="mt-3 flex items-center justify-between gap-3 text-[11.5px] text-[var(--term-dim)]">
+          <span>{proof.footer}</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-[var(--term-amber)]">
+            View
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        </span>
+      </span>
+    </Link>
+  )
+}
+
+function TrustedBySection({
   companies,
   stats,
 }: {
   companies: LogoCompany[]
   stats: { jobs: number; companies: number }
 }) {
+  const sourceCompanies = companies.length > 0 ? companies : fallbackCompanies
+  const visibleCompanies = uniqueLogoCompanies(sourceCompanies).slice(0, 21)
+
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-10 lg:px-12">
-      <p className="term-label mb-4">{"// tracked_companies"}</p>
-      <LogoCloud companies={companies} />
-      <p className="mt-6 text-center text-[12.5px] text-[#ccd6cf]/55">
-        Tracking {formatCount(stats.companies, "1,000+")} companies across Greenhouse, Lever, Ashby, Workday, iCIMS, SmartRecruiters, Jobvite, SuccessFactors, and more.
+    <section className={`${SHELL} py-16`}>
+      <p className="text-center text-[13px] font-medium text-[var(--term-dim)]">
+        Openings tracked directly from employers including
       </p>
-      <p className="mx-auto mt-2 max-w-[46rem] text-center text-[11.5px] leading-5 text-[#ccd6cf]/40">
-        Hover facts use Hireoven&apos;s current company crawl plus public H-1B employer records. Sponsorship support still depends on the specific role.
+
+      <div className={`${CARD} relative z-0 mt-6 grid grid-cols-2 gap-px bg-[var(--term-line)] sm:grid-cols-3 lg:grid-cols-7`}>
+        {visibleCompanies.map((company, index) => (
+          <CompanyTile company={company} key={company.id} priority={index < 7} />
+        ))}
+      </div>
+
+      <p className="mx-auto mt-5 max-w-[52rem] text-center text-[13px] leading-6 text-[var(--term-dim)]">
+        Tracking {formatCount(stats.companies, "1,000+")} companies across Greenhouse, Lever, Ashby, Workday, iCIMS,
+        SmartRecruiters, Jobvite, SuccessFactors and more. Hover figures come from Hireoven&apos;s current crawl plus
+        public H-1B employer records; sponsorship for any specific role is still up to the employer.
       </p>
     </section>
   )
 }
 
-function MetricStrip({ stats }: { stats: Stat[] }) {
+function HowItWorksSection() {
   return (
-    <div className="grid gap-5 sm:grid-cols-3">
-      {stats.map(({ value, label }) => (
-        <div className="min-w-0 border-t border-[rgba(120,200,160,0.26)] pt-5" key={label}>
-          <p className="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[clamp(2.4rem,4vw,3rem)] font-semibold leading-none tabular-nums text-[#38e08a]">
-            {value}
-          </p>
-          <p className="term-label mt-2">{label}</p>
-        </div>
-      ))}
-    </div>
-  )
-}
+    <section className={`${SHELL} py-16`}>
+      <SectionHeading
+        align="center"
+        eyebrow="How it works"
+        title="Three things that decide whether you get the interview"
+        body="Most applications are lost on timing, on wasted effort, or on a form that takes forty minutes. Hireoven works on all three."
+      />
 
-function ProductShowcaseImage() {
-  return (
-    <div className="space-y-4">
-      <div className="term-panel overflow-hidden">
-        <div className="flex items-center gap-2 border-b border-[rgba(120,200,160,0.12)] px-4 py-2.5">
-          <span className="h-2 w-2 rounded-full bg-[#38e08a]" aria-hidden />
-          <span className="term-label">apex --autofill</span>
-        </div>
-        <div className="relative aspect-[16/10] w-full bg-[#0a0e0c]">
-          <Image
-            alt="Apex autofill preview on a job application page"
-            className="object-cover object-center"
-            fill
-            sizes="(min-width: 1024px) 48vw, 100vw"
-            src="/extension/autofill-drawer.png"
-          />
-        </div>
-      </div>
+      <ol className="mt-12 grid gap-5 md:grid-cols-3">
+        {howItWorksSteps.map(({ body, icon: Icon, image, title }, index) => (
+          <li className={`${CARD} flex flex-col overflow-hidden`} key={title}>
+            <div className="relative aspect-[3/2] w-full border-b border-[var(--term-line)] bg-[var(--term-panel-2)]">
+              <Image
+                alt=""
+                className="object-cover"
+                fill
+                sizes="(min-width: 768px) 33vw, 100vw"
+                src={image}
+              />
+            </div>
 
-      <div className="term-panel p-4 sm:p-5">
-        <div className="flex items-center justify-between border-b border-[rgba(120,200,160,0.12)] pb-3">
-          <p className="term-label">analysis</p>
-          <span className="term-label">apex</span>
-        </div>
-
-        <div className="grid grid-cols-[6.5rem_1fr] gap-y-2 py-4 text-[12.5px]">
-          <span className="text-[#ccd6cf]/50">Match score</span>
-          <span className="font-semibold tabular-nums text-[#38e08a]">71%</span>
-          <span className="text-[#ccd6cf]/50">Source</span>
-          <span className="font-medium text-[#ccd6cf]">Greenhouse</span>
-          <span className="text-[#ccd6cf]/50">Autofill</span>
-          <span className="font-medium text-[#ccd6cf]">Supported</span>
-          <span className="text-[#ccd6cf]/50">Sponsor check</span>
-          <span className="font-medium text-[#ccd6cf]">Evidence found</span>
-        </div>
-
-        <div className="border-t border-[rgba(120,200,160,0.12)] pt-3">
-          <p className="term-label mb-2">matched signals</p>
-          <div className="space-y-1">
-            {productSignals.map((signal, index) => (
-              <div
-                className={[
-                  "h-7 items-center justify-between border border-[rgba(120,200,160,0.12)] bg-[#0a0e0c] px-3 text-[11.5px] font-medium text-[#ccd6cf]/80",
-                  index > 2 ? "hidden sm:flex" : "flex",
-                ].join(" ")}
-                key={signal}
-              >
-                {signal}
-                <span className="border border-[#f5a623]/30 px-1.5 text-[9px] font-bold text-[#f5a623]">H</span>
+            <div className="flex flex-1 flex-col p-6">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
+                  <Icon className="h-5 w-5" aria-hidden />
+                </span>
+                <span className="term-label">Step {index + 1}</span>
               </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-1.5 border border-[rgba(120,200,160,0.12)] bg-[#0a0e0c] p-1.5 text-[10px]">
-          <span className="inline-flex h-6 items-center gap-2 whitespace-nowrap border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-2 font-semibold text-[#ccd6cf]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-            Apex
-          </span>
-          <span className="hidden min-w-0 flex-1 truncate text-[#ccd6cf]/35 sm:block">AI enabled on this form</span>
-          <span className="hidden border border-[rgba(120,200,160,0.2)] px-2 py-1 font-semibold text-[#ccd6cf]/70 sm:inline-flex">
-            Save
-          </span>
-          <span className="border border-[#f5a623]/30 px-2 py-1 font-semibold text-[#f5a623]">Analyze</span>
-          <span className="border border-[#f5a623]/30 px-2 py-1 font-bold uppercase tracking-[0.08em] text-[#f5a623]">
-            Autofill supported
-          </span>
-        </div>
-      </div>
-    </div>
+              <h3 className="mt-5 text-[1.15rem] font-semibold leading-snug tracking-tight text-[var(--term-strong)]">
+                {title}
+              </h3>
+              <p className="mt-3 text-[14.5px] leading-6 text-[var(--term-fg)]">{body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
-function CompaniesSection({ stats }: { stats: { jobs: number; companies: number } }) {
+function SponsorshipSection() {
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-14 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
+    <section className={`${SHELL} py-16`}>
+      <div className="grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
         <div>
-          <p className="term-label">{"// for_job_seekers"}</p>
-          <h2 className="mt-4 max-w-[42rem] text-[2rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3rem]">
-            A hiring radar that understands exactly what you <span className="text-[#f5a623]">need</span>.
-          </h2>
-          <p className="mt-6 max-w-[36rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            Hireoven watches company career pages, ranks openings by your profile, and brings sponsor evidence into the same view.
-          </p>
+          <SectionHeading
+            eyebrow="Sponsorship intelligence"
+            title="Stop guessing whether an employer sponsors"
+            body="Hireoven attaches public immigration and wage records to the companies you are applying to, so you can prioritize before you spend an hour on an application form."
+          />
 
-          <div className="mt-10">
-            <MetricStrip
-              stats={[
-                { value: formatCompactCount(stats.jobs, "10k+"), label: "active jobs monitored" },
-                { value: "2m", label: "typical setup time" },
-                { value: "1", label: "workflow from alert to application" },
-              ]}
+          <div className={`${CARD} relative mt-8 hidden aspect-[3/2] w-full overflow-hidden lg:block`}>
+            <Image
+              alt=""
+              className="object-cover"
+              fill
+              sizes="(min-width: 1024px) 45vw, 100vw"
+              src="/marketing/sponsorship-research.webp"
             />
           </div>
         </div>
 
-        <ProductShowcaseImage />
-      </div>
-    </section>
-  )
-}
-
-function WorkflowStorySection() {
-  return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-end">
-        <div>
-          <p className="term-label">{"// how_it_moves"}</p>
-          <h2 className="mt-4 max-w-[40rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-            From market signal to <span className="text-[#f5a623]">ready-to-review</span> application.
-          </h2>
-          <p className="mt-5 max-w-[34rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            Hireoven is built around the actual rhythm of a job search: finding the opening early, understanding whether it is worth it, and preparing the work before momentum fades.
-          </p>
-        </div>
-
-        <div className="term-panel p-5">
-          <div className="mb-3 flex items-center gap-2 border-b border-[rgba(120,200,160,0.12)] pb-2">
-            <span className="h-2 w-2 rounded-full bg-[#38e08a]" aria-hidden />
-            <span className="term-label">pipeline --live</span>
-          </div>
-          <div className="grid gap-px border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-3">
-            {["Fresh role", "Sponsor check", "Apex prep"].map((label, index) => (
-              <div className="bg-[#0e1411] p-4" key={label}>
-                <p className="term-label">step {index + 1}</p>
-                <p className="mt-1 text-[14px] font-semibold text-white">{label}</p>
+        <div className="grid gap-4">
+          {sponsorshipProofPoints.map(({ body, title }) => (
+            <div className={`${CARD} flex gap-4 p-5`} key={title}>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(5,118,66,0.1)] text-[var(--term-green)]">
+                <ShieldCheck className="h-5 w-5" aria-hidden />
+              </span>
+              <div>
+                <h3 className="text-[15px] font-semibold text-[var(--term-strong)]">{title}</h3>
+                <p className="mt-1.5 text-[14px] leading-6 text-[var(--term-fg)]">{body}</p>
               </div>
-            ))}
+            </div>
+          ))}
+
+          <div className="flex flex-wrap gap-3">
+            <Link className="term-btn term-btn-amber" href="/h1b-sponsors">
+              Browse H-1B sponsors
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+            <Link className="term-btn" href="/h1b-salaries">
+              See H-1B salary data
+            </Link>
           </div>
         </div>
-      </div>
-
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
-        {workflowSteps.map((step) => (
-          <div className="term-panel p-6" key={step.eyebrow}>
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-[0.7rem] font-semibold tracking-wide text-[#f5a623]">{step.eyebrow}</p>
-              <span className="term-label border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-2 py-1">{step.stat}</span>
-            </div>
-            <h3 className="mt-6 text-[1.25rem] font-semibold leading-tight tracking-tight text-white">{step.title}</h3>
-            <p className="mt-3 text-[13px] leading-6 text-[#ccd6cf]/65">{step.body}</p>
-          </div>
-        ))}
       </div>
     </section>
   )
@@ -760,24 +865,20 @@ function StaySection({
   roleOptions: { socGroup: string; label: string }[]
 }) {
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="mx-auto max-w-[46rem] text-center">
-        <p className="term-label">{"> stay --survival-odds --rules=2026"}</p>
-        <h2 className="mt-4 text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-          Will this job actually <span className="text-[#f5a623]">keep you in the country?</span>
-        </h2>
-        <p className="mt-5 text-[15px] leading-relaxed text-[#ccd6cf]/70">
-          The 2026 rules changed the H-1B math. Stay scores every job by your real odds of building a lasting career
-          here — and surfaces the roles that skip the lottery entirely.
-        </p>
-      </div>
+    <section className={`${SHELL} py-16`}>
+      <SectionHeading
+        align="center"
+        eyebrow="Stay"
+        title="Will this job actually keep you in the country?"
+        body="The 2026 rules changed the H-1B maths. Stay scores each role by your real odds of building a lasting career here, and surfaces the employers that skip the lottery entirely."
+      />
 
-      <div className="mx-auto mt-10 max-w-[78rem]">
+      <div className="mx-auto mt-10 max-w-[74rem]">
         <StayDemo capExemptRoles={capExemptRoles} roleOptions={roleOptions} />
       </div>
 
-      <div className="mt-6 flex justify-center">
-        <Link href="/stay" className="term-btn term-btn-amber">
+      <div className="mt-8 flex justify-center">
+        <Link className="term-btn term-btn-amber" href="/stay">
           Open the full Stay toolkit
           <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
@@ -786,162 +887,32 @@ function StaySection({
   )
 }
 
-function ApexCard({
-  body,
-  icon: Icon,
-  title,
-}: {
-  body: string
-  icon: LucideIcon
-  title: string
-}) {
+function FeatureCard({ body, category, href, icon: Icon, tags, title }: (typeof featureCards)[number]) {
   return (
-    <div className="term-panel p-6">
-      <span className="flex h-10 w-10 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-        <Icon className="h-5 w-5" aria-hidden />
-      </span>
-      <h3 className="mt-6 text-[16px] font-semibold text-white">{title}</h3>
-      <p className="mt-3 text-[13px] leading-6 text-[#ccd6cf]/65">{body}</p>
-    </div>
-  )
-}
-
-function ApexSection() {
-  return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <div>
-          <p className="term-label inline-flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-[#f5a623]" aria-hidden />
-            apex_ai
-          </p>
-          <h2 className="mt-4 max-w-[38rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-            The busy work <span className="text-[#f5a623]">leaves your search</span>.
-          </h2>
-          <p className="mt-5 max-w-[35rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            Apex handles research, tailoring, and application prep while you stay in control of the decisions that matter.
-          </p>
-
-          <div className="mt-9 w-full max-w-[34rem]">
-            <EmailCapture />
-          </div>
-          <p className="term-label mt-4">{`free plan available // paid plans start at $${PLAN_DATA.pro.monthly}/month`}</p>
-        </div>
-
-        <div className="term-panel p-5">
-          <div className="flex items-center justify-between gap-4 border-b border-[rgba(120,200,160,0.12)] pb-3">
-            <p className="term-label">apex runbook</p>
-            <span className="term-label inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-              live
-            </span>
-          </div>
-          <div className="mt-4 grid gap-px border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-3">
-            {["Scan role", "Tailor resume", "Review fields"].map((label) => (
-              <div className="bg-[#0e1411] px-3 py-4" key={label}>
-                <p className="text-[13px] font-semibold text-white">{label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-14 grid gap-4 md:grid-cols-2">
-        {apexCards.map((card) => (
-          <ApexCard key={card.title} {...card} />
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function MissionDeckVisual() {
-  return (
-    <div className="term-panel p-5">
-      <div className="flex items-center justify-between gap-4 border-b border-[rgba(120,200,160,0.12)] pb-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-            <Workflow className="h-5 w-5" aria-hidden />
-          </span>
-          <div>
-            <p className="term-label">job-search os</p>
-            <p className="text-[14px] font-semibold text-white">Live mission deck</p>
-          </div>
-        </div>
-        <span className="term-label inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-          active
-        </span>
-      </div>
-
-      <div className="mt-5 grid gap-px border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-2">
-        {missionDeckSteps.map(({ icon: Icon, label, value }) => (
-          <div className="bg-[#0e1411] p-4" key={label}>
-            <Icon className="h-5 w-5 text-[#f5a623]" aria-hidden />
-            <p className="term-label mt-4">{label}</p>
-            <p className="mt-1 text-[16px] font-semibold text-white">{value}</p>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="term-label">queue</p>
-          <span className="inline-flex items-center gap-1.5 text-[0.7rem] tracking-wide text-[#f5a623]">
-            <Layers3 className="h-3.5 w-3.5" aria-hidden />
-            4 systems
-          </span>
-        </div>
-        <div className="mt-4 space-y-2">
-          {[
-            ["Fresh role found", "Career page source checked"],
-            ["Apex packet ready", "Resume, cover letter, autofill"],
-            ["Interview loop generated", "Voice + coding prep"],
-          ].map(([title, body]) => (
-            <div className="flex items-center gap-3 border border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-3 py-3" key={title}>
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#38e08a]" aria-hidden />
-              <span className="min-w-0">
-                <span className="block truncate text-[13px] font-semibold text-white">{title}</span>
-                <span className="block truncate text-[11px] text-[#ccd6cf]/45">{body}</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-start gap-3 border border-[#f5a623]/25 bg-[#f5a623]/10 p-4">
-        <Siren className="mt-0.5 h-4 w-4 shrink-0 text-[#f5a623]" aria-hidden />
-        <p className="text-[12px] leading-5 text-[#ccd6cf]/70">
-          Watched-company alerts, WARN/layoff signals, salary movement, and quota-backed API events can all be part of the same intelligence loop.
-        </p>
-      </div>
-    </div>
-  )
-}
-
-function WowFeatureCard({
-  body,
-  chips,
-  eyebrow,
-  href,
-  icon: Icon,
-  title,
-}: (typeof wowFeatureCards)[number]) {
-  return (
-    <Link className="term-panel term-panel-hover group block p-6" href={href}>
+    <Link className={`${CARD} term-panel-hover group flex flex-col p-6`} href={href}>
       <div className="flex items-start justify-between gap-4">
-        <span className="flex h-10 w-10 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
           <Icon className="h-5 w-5" aria-hidden />
         </span>
-        <ArrowRight className="h-4 w-4 text-[#ccd6cf]/35 transition group-hover:translate-x-1 group-hover:text-[#38e08a]" aria-hidden />
+        <ArrowRight
+          className="h-4 w-4 text-[var(--term-dim)] transition group-hover:translate-x-1 group-hover:text-[var(--term-amber)]"
+          aria-hidden
+        />
       </div>
-      <p className="mt-6 text-[0.7rem] font-semibold tracking-wide text-[#f5a623]">{eyebrow}</p>
-      <h3 className="mt-2 text-[18px] font-semibold leading-tight tracking-tight text-white">{title}</h3>
-      <p className="mt-3 text-[13px] leading-6 text-[#ccd6cf]/65">{body}</p>
+
+      <p className="term-label mt-5">{category}</p>
+      <h3 className="mt-2 text-[1.1rem] font-semibold leading-snug tracking-tight text-[var(--term-strong)]">
+        {title}
+      </h3>
+      <p className="mt-3 flex-1 text-[14px] leading-6 text-[var(--term-fg)]">{body}</p>
+
       <div className="mt-5 flex flex-wrap gap-2">
-        {chips.map((chip) => (
-          <span className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-2.5 py-1 text-[11px] text-[#ccd6cf]/70" key={chip}>
-            {chip}
+        {tags.map((tag) => (
+          <span
+            className="rounded-full border border-[var(--term-line-strong)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--term-dim)]"
+            key={tag}
+          >
+            {tag}
           </span>
         ))}
       </div>
@@ -949,300 +920,76 @@ function WowFeatureCard({
   )
 }
 
-function BeyondRadarSection() {
+function FeaturesSection() {
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
-        <div>
-          <p className="term-label inline-flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-[#f5a623]" aria-hidden />
-            beyond_the_radar
-          </p>
-          <h2 className="mt-4 max-w-[40rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-            The search becomes a full <span className="text-[#f5a623]">operating system</span>.
-          </h2>
-          <p className="mt-5 max-w-[36rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            The job and sponsorship feed is the front door. Behind it sits Apex, autofill, interview prep, ghost-risk detection, cohorts, salary evidence, alerts, and scorecards in one loop.
-          </p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {[
-              { label: "Fast-tier boards checked within minutes", icon: Radar },
-              { label: "Sensitive Apex actions require approval", icon: ShieldCheck },
-              { label: "Interview, salary, and cohort context stay attached", icon: BrainCircuit },
-              { label: "Chrome extension carries the workflow across ATS pages", icon: Chrome },
-            ].map(({ icon: Icon, label }) => (
-              <div className="flex items-center gap-3 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-4 py-3" key={label}>
-                <Icon className="h-4 w-4 shrink-0 text-[#f5a623]" aria-hidden />
-                <span className="text-[12.5px] font-medium text-[#ccd6cf]">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+    <section className={`${SHELL} py-16`}>
+      <SectionHeading
+        align="center"
+        eyebrow="The platform"
+        title="Everything the search needs, in one place"
+        body="The job feed is the front door. Behind it sit the application agent, autofill, interview practice, ghost-job detection, peer signals, and salary evidence."
+      />
 
-        <MissionDeckVisual />
-      </div>
-
-      <div className="mt-12 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {wowFeatureCards.map((card) => (
-          <WowFeatureCard key={card.title} {...card} />
+      <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        {featureCards.map((card) => (
+          <FeatureCard key={card.title} {...card} />
         ))}
       </div>
     </section>
   )
 }
 
-function SignalApiSection() {
-  return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
-        <div>
-          <p className="term-label inline-flex items-center gap-2">
-            <ServerCog className="h-3.5 w-3.5 text-[#f5a623]" aria-hidden />
-            signal_api
-          </p>
-          <h2 className="mt-4 max-w-[39rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-            A second product hiding inside the <span className="text-[#f5a623]">intelligence engine</span>.
-          </h2>
-          <p className="mt-5 max-w-[35rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            Hireoven&apos;s job freshness, sponsor evidence, company signals, embeds, webhooks, quotas, and tenant controls can serve other products too.
-          </p>
-
-          <div className="mt-9 grid gap-3">
-            {signalApiPillars.map(({ body, icon: Icon, title }) => (
-              <div className="term-panel flex gap-4 p-4" key={title}>
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-                  <Icon className="h-5 w-5" aria-hidden />
-                </span>
-                <div>
-                  <h3 className="text-[14px] font-semibold text-white">{title}</h3>
-                  <p className="mt-1 text-[13px] leading-6 text-[#ccd6cf]/60">{body}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="term-panel overflow-hidden">
-          <div className="flex items-center justify-between border-b border-[rgba(120,200,160,0.12)] px-5 py-3">
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#ccd6cf]/25" aria-hidden />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#f5a623]" aria-hidden />
-              <span className="h-2.5 w-2.5 rounded-full bg-[#38e08a]" aria-hidden />
-            </div>
-            <span className="term-label">tenant: production</span>
-          </div>
-
-          <div className="grid gap-0 lg:grid-cols-[1fr_0.78fr]">
-            <div className="border-b border-[rgba(120,200,160,0.12)] p-5 lg:border-b-0 lg:border-r">
-              <p className="term-label">event stream</p>
-              <pre className="mt-4 overflow-x-auto text-[12px] leading-6 text-[#38e08a]">
-{`POST /api/signal/v1/jobs/ingest
-{
-  "company": "Anthropic",
-  "freshness": "new",
-  "sponsorSignal": 100,
-  "ats": "greenhouse",
-  "webhooks": ["job.created"]
-}`}
-              </pre>
-            </div>
-            <div className="p-5">
-              <p className="term-label">controls</p>
-              <div className="mt-4 space-y-2">
-                {[
-                  ["API keys", "active"],
-                  ["Quotas", "metered"],
-                  ["Embeds", "ready"],
-                  ["Webhooks", "queued"],
-                ].map(([label, value]) => (
-                  <div className="flex items-center justify-between border border-[rgba(120,200,160,0.12)] bg-[#0a0e0c] px-3 py-2 text-[12px]" key={label}>
-                    <span className="font-medium text-[#ccd6cf]">{label}</span>
-                    <span className="text-[#ccd6cf]/45">{value}</span>
-                  </div>
-                ))}
-              </div>
-              <Link
-                className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
-                href="/embed/docs"
-              >
-                View API surface
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function CandidateJourneyBoard() {
-  const moments = [
-    {
-      icon: ShieldCheck,
-      label: "Before applying",
-      title: "Sponsorability check",
-      body: "H-1B history, OPT fit, and visa language are attached before you commit time.",
-      metric: "88 score",
-    },
-    {
-      icon: BellRing,
-      label: "When a role opens",
-      title: "Fresh alert",
-      body: "Watched companies move from crawl to alert while the applicant batch is still forming.",
-      metric: "7m old",
-    },
-    {
-      icon: MousePointerClick,
-      label: "At the application",
-      title: "Review gate",
-      body: "Apex prepares materials and autofill answers, then waits for explicit approval.",
-      metric: "You OK",
-    },
+function ApexSection() {
+  const capabilities = [
+    { icon: Search, label: "Finds the openings worth your time" },
+    { icon: FileCheck2, label: "Tailors your resume to the role" },
+    { icon: MousePointerClick, label: "Fills the application form" },
+    { icon: BellRing, label: "Keeps the search moving" },
   ]
 
   return (
-    <div className="term-panel p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgba(120,200,160,0.12)] pb-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-            <Workflow className="h-5 w-5" aria-hidden />
-          </span>
-          <div className="min-w-0">
-            <p className="term-label truncate">candidate journey</p>
-            <p className="truncate text-[14px] font-semibold text-white">Signal to submitted application</p>
-          </div>
-        </div>
-        <div className="flex gap-1.5">
-          <span className="h-2 w-2 rounded-full bg-[#38e08a]" aria-hidden />
-          <span className="h-2 w-2 rounded-full bg-[#38e08a]" aria-hidden />
-          <span className="h-2 w-2 rounded-full bg-[#ccd6cf]/25" aria-hidden />
-        </div>
-      </div>
-
-      <div className="mt-5 grid gap-4 lg:grid-cols-[minmax(0,0.82fr)_minmax(18rem,1fr)]">
-        <div className="space-y-3">
-          {moments.map(({ body, icon: Icon, label, metric, title }) => (
-            <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4" key={label}>
-              <div className="flex items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#f5a623]">
-                  <Icon className="h-5 w-5" aria-hidden />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="term-label truncate">{label}</p>
-                    <span className="shrink-0 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-2 py-0.5 text-[10px] font-semibold tabular-nums text-[#38e08a]">{metric}</span>
-                  </div>
-                  <h3 className="mt-2 text-[15px] font-semibold text-white">{title}</h3>
-                  <p className="mt-1.5 text-[12px] leading-5 text-[#ccd6cf]/55">{body}</p>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
-          <div className="flex items-center justify-between gap-3">
-            <p className="term-label">apex handoff</p>
-            <span className="term-label inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
-              ready
-            </span>
-          </div>
-
-          <div className="mt-5 border border-[rgba(120,200,160,0.12)] bg-[#0e1411] p-4">
-            <p className="text-[13px] font-semibold text-white">Staff ML Platform Engineer</p>
-            <p className="mt-1 text-[12px] text-[#ccd6cf]/45">Career page source · first detected 7 minutes ago</p>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {[
-                ["Match", "71%"],
-                ["Sponsor", "Strong"],
-                ["Risk", "Low"],
-              ].map(([label, value]) => (
-                <div className="border border-[rgba(120,200,160,0.12)] bg-[#0a0e0c] px-3 py-3" key={label}>
-                  <p className="term-label">{label}</p>
-                  <p className="mt-1 truncate text-[13px] font-semibold text-[#38e08a]">{value}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {[
-              ["Resume", "Tailored to role keywords"],
-              ["Cover letter", "Drafted with company context"],
-              ["Autofill", "Fields prepared for review"],
-              ["Submit", "Locked until your approval"],
-            ].map(([label, value], index) => (
-              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-3 py-2" key={label}>
-                <span className={["h-1.5 w-1.5 rounded-full", index === 3 ? "bg-[#f5a623]" : "bg-[#ccd6cf]/30"].join(" ")} aria-hidden />
-                <span className="truncate text-[12px] font-medium text-[#ccd6cf]">{label}</span>
-                <span className="hidden truncate text-[11px] text-[#ccd6cf]/40 sm:block">{value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function CandidateMomentsSection() {
-  return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
+    <section className={`${SHELL} py-16`}>
+      <div className={`${CARD} grid gap-10 p-8 lg:grid-cols-[1fr_0.85fr] lg:items-center lg:p-12`}>
         <div>
-          <p className="term-label">{"// candidate_moments"}</p>
-          <h2 className="mt-4 max-w-[39rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[2.8rem]">
-            Built for the points where searches usually <span className="text-[#f5a623]">slow down</span>.
+          <p className="term-label">Apex AI</p>
+          <h2 className="mt-3 max-w-[32rem] text-[1.9rem] font-semibold leading-[1.15] tracking-tight text-[var(--term-strong)] md:text-[2.4rem]">
+            Let the busy work leave your job search
           </h2>
-          <div className="mt-8 space-y-5">
-            {candidateMoments.map(({ body, title }) => (
-              <div className="border-l border-[rgba(120,200,160,0.26)] pl-5" key={title}>
-                <h3 className="text-[15px] font-semibold text-white">{title}</h3>
-                <p className="mt-1.5 text-[13px] leading-6 text-[#ccd6cf]/65">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+          <p className="mt-4 max-w-[34rem] text-[16px] leading-relaxed text-[var(--term-fg)]">
+            Apex handles the research, the tailoring, and the application prep while every decision that matters stays
+            with you. Nothing is submitted without your approval.
+          </p>
 
-        <CandidateJourneyBoard />
-      </div>
-    </section>
-  )
-}
-
-function OutcomeSection() {
-  return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="grid gap-12 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-        <div className="term-panel p-6 sm:p-8">
-          <div className="flex items-center gap-2 border-b border-[rgba(120,200,160,0.12)] pb-3">
-            <span className="h-2 w-2 rounded-full bg-[#38e08a]" aria-hidden />
-            <span className="term-label">outcome</span>
+          <div className="mt-8">
+            <EmailCapture next="/dashboard/apex" />
           </div>
-          <p className="mt-5 text-[1.6rem] font-semibold leading-tight tracking-tight text-white">
-            When the right role opens, you already know what to do <span className="text-[#f5a623]">next</span>.
+          <p className="mt-4 text-[13px] text-[var(--term-dim)]">
+            Free plan available. Paid plans start at ${PLAN_DATA.pro.monthly}/month.
           </p>
         </div>
 
         <div>
-          <p className="term-label">{"// what_changes"}</p>
-          <h2 className="mt-4 max-w-[40rem] text-[2rem] font-semibold leading-[1.06] tracking-tight text-white md:text-[3rem]">
-            The search feels less like checking boards and more like <span className="text-[#f5a623]">operating a pipeline</span>.
-          </h2>
-          <p className="mt-5 max-w-[35rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-            You still make the judgment calls. Hireoven keeps the timing, evidence, and application prep moving around those decisions.
-          </p>
-
-          <div className="mt-10 grid gap-5 sm:grid-cols-3">
-            {outcomeStats.map(({ label, value }) => (
-              <div className="border-t border-[rgba(120,200,160,0.26)] pt-5" key={label}>
-                <p className="text-[2.4rem] font-semibold leading-none tabular-nums text-[#38e08a]">{value}</p>
-                <p className="term-label mt-2">{label}</p>
-              </div>
-            ))}
+          <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg border border-[var(--term-line-strong)] bg-[var(--term-panel-2)]">
+            <Image
+              alt=""
+              className="object-cover"
+              fill
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              src="/marketing/apex-workflow.webp"
+            />
           </div>
+
+          <ul className="mt-4 grid gap-3">
+            {capabilities.map(({ icon: Icon, label }) => (
+              <li
+                className="flex items-center gap-3 rounded-lg border border-[var(--term-line-strong)] bg-[var(--term-panel-2)] px-4 py-3.5"
+                key={label}
+              >
+                <Icon className="h-4 w-4 shrink-0 text-[var(--term-amber)]" aria-hidden />
+                <span className="text-[14px] font-medium text-[var(--term-strong)]">{label}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
     </section>
@@ -1251,16 +998,17 @@ function OutcomeSection() {
 
 function FinalCtaSection() {
   return (
-    <section className="mx-auto w-full max-w-[88rem] px-5 py-20 lg:px-12">
-      <div className="term-panel mx-auto flex max-w-[48rem] flex-col items-center p-8 text-center sm:p-12">
-        <span className="flex h-11 w-11 items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#f5a623]">
-          <Briefcase className="h-5 w-5" aria-hidden />
+    <section className={`${SHELL} py-16`}>
+      <div className={`${CARD} mx-auto flex max-w-[46rem] flex-col items-center p-8 text-center sm:p-12`}>
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
+          <Building2 className="h-5 w-5" aria-hidden />
         </span>
-        <h2 className="mt-6 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white md:text-[3rem]">
-          Stop finding out about jobs <span className="text-[#f5a623]">days late</span>.
+        <h2 className="mt-6 text-[1.9rem] font-semibold leading-[1.12] tracking-tight text-[var(--term-strong)] md:text-[2.5rem]">
+          Stop finding out about jobs days late
         </h2>
-        <p className="mt-5 max-w-[34rem] text-[15px] leading-relaxed text-[#ccd6cf]/70">
-          Let Hireoven watch the market, check the evidence, and prepare the application while the role is still fresh.
+        <p className="mt-4 max-w-[34rem] text-[16px] leading-relaxed text-[var(--term-fg)]">
+          Let Hireoven watch the market, check the sponsorship evidence, and prepare the application while the role is
+          still fresh.
         </p>
         <div className="mt-8 flex w-full justify-center">
           <EmailCapture />
@@ -1277,7 +1025,7 @@ function FooterColumn({ links, title }: { links: { href: string; label: string }
       <ul className="space-y-2.5">
         {links.map(({ href, label }) => (
           <li key={href}>
-            <Link className="text-[13px] text-[var(--term-fg)] opacity-60 transition hover:text-[var(--term-green)] hover:opacity-100" href={href}>
+            <Link className="text-[13.5px] text-[var(--term-fg)] transition hover:text-[var(--term-amber)]" href={href}>
               {label}
             </Link>
           </li>
@@ -1289,15 +1037,15 @@ function FooterColumn({ links, title }: { links: { href: string; label: string }
 
 function Footer() {
   return (
-    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-bg)] px-5 py-16 lg:px-12">
-      <div className="mx-auto max-w-[88rem]">
+    <footer className="border-t border-[var(--term-line-strong)] bg-[var(--term-panel)] px-5 py-14 lg:px-8">
+      <div className="mx-auto max-w-[80rem]">
         <div className="grid gap-10 md:grid-cols-[1.3fr_1fr_1fr_1fr_1fr]">
           <div>
             <Link href="/">
               <HireovenLogo className="marketing-logo h-10 w-auto max-w-[180px]" variant="full" />
             </Link>
-            <p className="mt-4 max-w-[18rem] text-[13px] leading-6 text-[var(--term-fg)] opacity-60">
-              Fresh jobs, sponsor proof, and AI application workflows for job seekers who move early.
+            <p className="mt-4 max-w-[18rem] text-[13.5px] leading-6 text-[var(--term-dim)]">
+              Fresh jobs, sponsorship evidence, and AI application tools for people who want to apply early.
             </p>
           </div>
           <FooterColumn
@@ -1338,8 +1086,10 @@ function Footer() {
         </div>
 
         <div className="mt-12 flex flex-wrap items-center justify-between gap-4 border-t border-[var(--term-line)] pt-6">
-          <p className="text-[12px] text-[var(--term-fg)] opacity-45">© {new Date().getFullYear()} Hireoven. All rights reserved.</p>
-          <div className="flex items-center gap-2 text-[12px] text-[var(--term-fg)] opacity-45">
+          <p className="text-[12.5px] text-[var(--term-dim)]">
+            © {new Date().getFullYear()} Hireoven. All rights reserved.
+          </p>
+          <div className="flex items-center gap-2 text-[12.5px] text-[var(--term-dim)]">
             <Check className="h-3.5 w-3.5 text-[var(--term-green)]" aria-hidden />
             Built for fast, evidence-backed applications.
           </div>
@@ -1359,25 +1109,21 @@ export default async function HomePage() {
   const roleOptions = socRoles.map((r) => ({ socGroup: r.soc_group, label: r.short_label || r.label }))
 
   return (
-    <div className="term-page relative min-h-dvh overflow-hidden">
-      <LandingParticleBackground />
-      <div className="relative z-10">
-        <MaintenanceBanner />
-        <AnnouncementBar />
-        <Navbar />
-        <HeroSection stats={stats} />
-        <LogoProofSection companies={featured} stats={stats} />
-        <CompaniesSection stats={stats} />
-        <WorkflowStorySection />
-        <StaySection capExemptRoles={stayStats.openRoles} roleOptions={roleOptions} />
-        <BeyondRadarSection />
-        <ApexSection />
-        <CandidateMomentsSection />
-        <SignalApiSection />
-        <OutcomeSection />
-        <FinalCtaSection />
-        <Footer />
-      </div>
+    <div className="term-page min-h-dvh">
+      <MaintenanceBanner />
+      <AnnouncementBar />
+      <Navbar />
+      <HeroSection stats={stats} />
+      <ImageCarouselSection />
+      <StatBar stats={stats} />
+      <TrustedBySection companies={featured} stats={stats} />
+      <HowItWorksSection />
+      <SponsorshipSection />
+      <StaySection capExemptRoles={stayStats.openRoles} roleOptions={roleOptions} />
+      <FeaturesSection />
+      <ApexSection />
+      <FinalCtaSection />
+      <Footer />
     </div>
   )
 }

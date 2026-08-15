@@ -84,7 +84,7 @@ export default async function DailyReportDatePage({ params }: { params: { date: 
         <DailyReportView report={report} prevDate={prevDate} nextDate={nextDate} />
       ) : (
         <main className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
-          <p className="term-label">{"// fresh_jobs_report"}</p>
+          <p className="term-label">{"Fresh jobs report"}</p>
           <h1 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white">No report for this day</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             We don&apos;t have a Fresh Jobs Report captured for {date}.

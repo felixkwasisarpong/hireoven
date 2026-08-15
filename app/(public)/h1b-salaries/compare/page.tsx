@@ -63,7 +63,7 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
       <div className="term-page min-h-dvh">
         <Navbar />
         <main className="mx-auto max-w-2xl px-4 py-16 text-center text-[#ccd6cf]/70">
-          <p className="term-label">&gt; salary_compare</p>
+          <p className="term-label">Salary compare</p>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-white">Compare H-1B salaries</h1>
           <p className="mt-2 text-[14px]">
             Open a comparison from any role&rsquo;s top-employers list, or pass two company ids and a role.
@@ -90,7 +90,7 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
     <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-2xl px-4 py-10">
-        <p className="term-label">&gt; salary_compare</p>
+        <p className="term-label">Salary compare</p>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
           {ca.name} <span className="text-[#f5a623]">vs</span> {cb.name}
         </h1>

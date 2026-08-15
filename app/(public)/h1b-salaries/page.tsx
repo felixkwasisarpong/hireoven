@@ -31,10 +31,9 @@ export default async function SalariesIndexPage() {
       <Navbar />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <main className="mx-auto max-w-3xl px-4 py-10">
-        <p className="term-label">&gt; prevailing_wages --source=DOL</p>
+        <p className="term-label">Prevailing wages</p>
         <h1 className="mt-4 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
           H-1B <span className="text-[#f5a623]">Salaries</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Median prevailing wages from U.S. Department of Labor LCA filings — by role, company, and

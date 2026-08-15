@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { Suspense } from "react"
 import FindClient from "./FindClient"
 
 export const metadata: Metadata = {
@@ -12,5 +13,9 @@ export const dynamic = "force-dynamic"
 // Dedicated ad landing page. Value-first: shows sponsor-checked matches for a
 // typed role BEFORE any signup, then converts at peak intent. Point Meta ads here.
 export default function FindPage() {
-  return <FindClient />
+  return (
+    <Suspense fallback={null}>
+      <FindClient />
+    </Suspense>
+  )
 }

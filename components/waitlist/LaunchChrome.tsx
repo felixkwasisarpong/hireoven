@@ -6,8 +6,7 @@ export function LaunchNavbar() {
     <header className="term-nav sticky top-0 z-50 backdrop-blur-sm">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 lg:px-6">
         <Link href="/launch" className="flex shrink-0 items-center gap-2">
-          <span className="text-[#38e08a]" aria-hidden>&gt;</span>
-          <HireovenLogo className="h-11 w-auto [filter:brightness(0)_invert(1)]" priority />
+          <HireovenLogo className="marketing-logo h-11 w-auto" priority />
         </Link>
         <Link
           href="/login"

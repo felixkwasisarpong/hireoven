@@ -49,7 +49,11 @@ export default async function PublicCompaniesPage() {
         pool.query<Company>(
           `SELECT id, name, domain, logo_url, industry, size, job_count, sponsors_h1b, sponsorship_confidence
            FROM companies
-           WHERE is_active = true AND job_count > 0
+           WHERE is_active = true
+             AND job_count > 0
+             AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+             AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+             AND lower(name) NOT LIKE '%.oraclecloud.com'
            ORDER BY job_count DESC
            LIMIT 500`
         ),
@@ -95,10 +99,9 @@ export default async function PublicCompaniesPage() {
       {/* Hero — terminal prompt + data status line. */}
       <section className="mx-auto grid w-full max-w-[78rem] gap-6 px-4 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.62fr)] lg:items-end">
         <div>
-          <p className="term-label">&gt; company_radar --live</p>
+          <p className="term-label">Company radar</p>
           <h1 className="mt-4 max-w-[34rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
             Companies <span className="text-[#f5a623]">hiring now</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Browse employers with live roles, sponsorship signals, and career-page freshness from the same market graph powering Hireoven alerts.

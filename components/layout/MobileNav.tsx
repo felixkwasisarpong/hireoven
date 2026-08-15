@@ -1,81 +1,84 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Menu, X } from "lucide-react"
 import { NAV_LINKS } from "./nav-links"
 
 export default function MobileNav() {
   const [open, setOpen] = useState(false)
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
   const pathname = usePathname()
+  const router = useRouter()
+  const rootRef = useRef<HTMLDivElement>(null)
 
   // Close the menu whenever the route changes (link tapped).
   useEffect(() => {
     setOpen(false)
+    setPendingHref(null)
   }, [pathname])
 
-  // Lock body scroll + close on Escape while the overlay is open.
+  useEffect(() => {
+    if (!open) return
+    NAV_LINKS.forEach(({ href }) => router.prefetch(href))
+  }, [open, router])
+
+  // Close on Escape or when the user clicks outside the anchored dropdown.
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false)
     }
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
     document.addEventListener("keydown", onKey)
-    const prevOverflow = document.body.style.overflow
-    document.body.style.overflow = "hidden"
+    document.addEventListener("pointerdown", onPointerDown)
     return () => {
       document.removeEventListener("keydown", onKey)
-      document.body.style.overflow = prevOverflow
+      document.removeEventListener("pointerdown", onPointerDown)
     }
   }, [open])
 
   return (
-    <div className="md:hidden">
+    <div ref={rootRef} className="relative md:hidden">
       <button
         type="button"
         aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-10 w-10 items-center justify-center border border-[var(--term-line-strong)] bg-[var(--term-panel)] text-[var(--term-fg)] shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+        className="marketing-mobile-trigger"
       >
         {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
       </button>
 
       {open && (
-        <>
-          {/* Backdrop */}
-          <button
-            type="button"
-            aria-label="Close menu"
-            tabIndex={-1}
-            onClick={() => setOpen(false)}
-            className="fixed inset-0 top-[56px] z-40 bg-slate-950/45 backdrop-blur-sm"
-          />
-          {/* Panel */}
-          <div className="fixed inset-x-0 top-[56px] z-50 border-t border-[var(--term-line-strong)] bg-[var(--term-panel)] px-4 py-3 shadow-lg">
-            <nav className="flex flex-col" aria-label="Mobile">
-              {NAV_LINKS.map(({ href, label, icon: Icon }) => {
-                const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setOpen(false)}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] font-semibold transition-colors ${
-                      active
-                        ? "bg-[var(--term-amber)] text-[var(--term-amber-fg)]"
-                        : "text-[var(--term-fg)] opacity-75 hover:bg-[var(--term-panel-2)] hover:text-[var(--term-green)] hover:opacity-100"
-                    }`}
-                  >
-                    <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
-                    {label}
-                  </Link>
-                )
-              })}
-            </nav>
-          </div>
-        </>
+        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[rgba(255,92,24,0.36)] bg-[#12100e] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)]">
+          <nav className="flex flex-col" aria-label="Mobile">
+            {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))
+              const pending = pendingHref === href
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onFocus={() => router.prefetch(href)}
+                  onClick={() => setOpen(false)}
+                  onPointerDown={() => setPendingHref(href)}
+                  onTouchStart={() => router.prefetch(href)}
+                  prefetch
+                  className={`marketing-mobile-link ${active ? "is-active" : ""} ${pending ? "is-pending" : ""}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                  {label}
+                </Link>
+              )
+            })}
+          </nav>
+        </div>
       )}
     </div>
   )

@@ -50,7 +50,7 @@ export default async function DailyReportLatestPage() {
         <DailyReportView report={report} prevDate={prevDate} nextDate={null} />
       ) : (
         <main className="mx-auto w-full max-w-3xl px-4 py-20 text-center sm:px-6">
-          <p className="term-label">{"// fresh_jobs_report"}</p>
+          <p className="term-label">{"Fresh jobs report"}</p>
           <h1 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white">The first report is on its way</h1>
           <p className="mt-3 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             Hireoven publishes a Fresh Jobs Report every day. Check back after the next overnight run.

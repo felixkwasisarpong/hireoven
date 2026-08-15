@@ -48,6 +48,11 @@ async function getData(slug: string): Promise<Data | null> {
          FROM lca_records lr
          LEFT JOIN companies c ON c.id = lr.company_id
         WHERE lr.soc_code = $1
+          AND (c.id IS NULL OR (
+            COALESCE(c.domain, '') NOT ILIKE '%-tenant%'
+            AND COALESCE(c.logo_url, '') NOT ILIKE '%oraclecloud.com%'
+            AND lower(c.name) NOT LIKE '%.oraclecloud.com'
+          ))
         GROUP BY lr.company_id, COALESCE(c.name, lr.employer_name), c.domain, c.logo_url
         ORDER BY n DESC LIMIT 50`,
       [match.soc_code],
@@ -105,7 +110,7 @@ export default async function RoleHub({ params }: Props) {
           <span className="inline-flex items-center gap-1.5 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1 text-xs font-semibold text-[#ccd6cf]/80">
             <Briefcase className="h-3.5 w-3.5 text-[#f5a623]" /> <span className="tabular-nums text-[#38e08a]">{d.soc.n.toLocaleString()}</span> LCA filings{d.medianWage ? ` · median ${money(d.medianWage)}` : ""}
           </span>
-          <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.4rem]">Top <span className="text-[#f5a623]">H-1B sponsors</span> for {d.soc.soc_title}<span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span></h1>
+          <h1 className="mt-4 text-[1.9rem] font-semibold leading-tight tracking-tight text-white sm:text-[2.4rem]">Top <span className="text-[#f5a623]">H-1B sponsors</span> for {d.soc.soc_title}</h1>
           <p className="mt-4 text-[15px] leading-relaxed text-[#ccd6cf]/70">
             Employers that sponsor H-1B visas for {d.soc.soc_title} roles, ranked by certified Labor Condition Applications{d.medianWage ? `, with a median prevailing wage of ${money(d.medianWage)}` : ""}. Each links to its full sponsorship breakdown.
           </p>
@@ -142,7 +147,7 @@ export default async function RoleHub({ params }: Props) {
 
         {d.others.length > 0 && (
           <section className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-6">
-            <h2 className="term-label">{"// H-1B sponsors by occupation"}</h2>
+            <h2 className="term-label">{"H-1B sponsors by occupation"}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
               {d.others.map((o) => (
                 <Link key={o.soc_code} href={`/h1b-sponsors/role/${companySlug(o.soc_title)}`} className="border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-1.5 text-[12.5px] text-[#ccd6cf]/80 transition hover:border-[#38e08a] hover:text-[#38e08a]">

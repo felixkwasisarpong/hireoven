@@ -7,6 +7,7 @@ import {
   companyLogoUrlFromDomain,
   normalizeCompanyDomain,
   resolveLogoDomainOverride,
+  resolveLogoDomainFromCompanyName,
 } from "@/lib/companies/logo-url"
 import { isAtsDomain } from "@/lib/companies/ats-domains"
 
@@ -129,7 +130,11 @@ function isOverriddenStoredLogoUrl(logoUrl: string | null | undefined) {
   return Boolean(domain && resolveLogoDomainOverride(domain) !== domain)
 }
 
-function buildLogoSources(logoUrl: string | null | undefined, domain: string | null | undefined) {
+function buildLogoSources(
+  companyName: string,
+  logoUrl: string | null | undefined,
+  domain: string | null | undefined
+) {
   const out: string[] = []
   const push = (u: string) => {
     const t = u.trim()
@@ -138,10 +143,11 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
 
   const explicitDomain = domain ? normalizeCompanyDomain(domain) : ""
   const logoDomain = domainFromLogoUrl(logoUrl)
+  const nameDomain = resolveLogoDomainFromCompanyName(companyName)
 
   // Prefer the domain implied by the stored logo URL (e.g. explicit brand override
   // to petco.com/labcorp.com) before falling back to the raw company domain.
-  const canonicalDomain = [logoDomain, explicitDomain]
+  const canonicalDomain = [nameDomain, logoDomain, explicitDomain]
     .map((item) => (item ? resolveLogoDomainOverride(item) : item))
     .find((item) => item && !isPlaceholderDomain(item) && !isAtsDomain(item))
 
@@ -164,10 +170,12 @@ function buildLogoSources(logoUrl: string | null | undefined, domain: string | n
   if (useStoredLogo) push(logoUrl)
 
   if (canonicalDomain) {
-    // 3. logo.dev via server-side proxy — avoids depending on NEXT_PUBLIC_LOGO_DEV_TOKEN
+    // 3. Full-size logo.dev/local source for the resolved brand domain.
+    push(companyLogoUrlFromDomain(canonicalDomain, "logo-dev"))
+    // 4. logo.dev via server-side proxy — avoids depending on NEXT_PUBLIC_LOGO_DEV_TOKEN
     // being inlined at build time (Coolify's build-arg passthrough is unreliable).
     push(`/api/logo?domain=${encodeURIComponent(canonicalDomain)}`)
-    // 4. DuckDuckGo — site favicons, reliable fallback with no token required.
+    // 5. DuckDuckGo — site favicons, reliable fallback with no token required.
     push(companyLogoUrlFromDomain(canonicalDomain, "duckduckgo"))
   }
 
@@ -225,7 +233,7 @@ export default function CompanyLogo({
   className,
   priority = false,
 }: CompanyLogoProps) {
-  const sources = useMemo(() => buildLogoSources(logoUrl, domain), [logoUrl, domain])
+  const sources = useMemo(() => buildLogoSources(companyName, logoUrl, domain), [companyName, logoUrl, domain])
   const [index, setIndex] = useState(0)
   const [loaded, setLoaded] = useState(false)
 

@@ -291,62 +291,45 @@
     isolation: isolate;
   }
 
-  /* ── Data-desk marketing system ───────────────────────────────────
-     Dark by default, with an opt-in light theme controlled by
-     html[data-marketing-theme="light"]. */
-  :root {
-    --term-bg: #0a0e0c;
-    --term-panel: #0e1411;
-    --term-panel-2: #111a15;
-    --term-line: rgba(120, 200, 160, 0.12);
-    --term-line-strong: rgba(120, 200, 160, 0.26);
-    --term-fg: #ccd6cf;
-    --term-strong: #ffffff;
-    --term-dim: #6c7a72;
-    --term-amber: #f5a623;
-    --term-green: #38e08a;
-    --term-amber-rgb: 245, 166, 35;
-    --term-green-rgb: 56, 224, 138;
-    --term-nav-bg: rgba(10, 14, 12, 0.92);
-    --term-button-bg: transparent;
-    --term-amber-fg: #0a0e0c;
-    --term-input-bg: #0a0e0c;
-    --term-input-fill: #0e1411;
-    --term-muted-surface: #0a0e0c;
-    --term-muted-line: rgba(120, 200, 160, 0.2);
-    --term-logo-filter: brightness(0) invert(1);
-    --term-selection-fg: #0a0e0c;
-    --term-particle-bg: rgba(10, 14, 12, 0.45);
-    --term-particle-opacity: 0.8;
-    --term-particle-blend: screen;
-    --term-mono: var(--font-mono), ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
-  }
+  /* ── Marketing design system ──────────────────────────────────────
+     One theme only: professional hiring-platform surfaces with a black
+     navigation frame, orange primary actions, and green reserved for
+     freshness and verification proof. There is no dark variant.
 
+     The token names stay --term-* because ~50 public pages reference them
+     directly; the values below are the single source of truth. The base
+     :root block and the [data-marketing-theme="light"] block are kept in
+     sync so nothing can render on a black canvas even if the attribute is
+     ever missing (layout.tsx sets it statically on <html>). */
+  :root,
   :root[data-marketing-theme="light"] {
-    --term-bg: #fbfbf8;
+    --term-bg: #ffffff;
     --term-panel: #ffffff;
-    --term-panel-2: #f4f6f1;
-    --term-line: rgba(31, 41, 37, 0.055);
-    --term-line-strong: rgba(31, 41, 37, 0.16);
-    --term-fg: #23342b;
-    --term-strong: #07130e;
-    --term-dim: #79837c;
+    --term-panel-2: #f7f7f7;
+    --term-line: rgba(17, 16, 15, 0.08);
+    --term-line-strong: #ded4ca;
+    --term-fg: #3b332d;
+    --term-strong: #12100e;
+    --term-dim: #746b64;
     --term-amber: #ff5c18;
-    --term-green: #1f7a58;
+    --term-green: #15803d;
     --term-amber-rgb: 255, 92, 24;
-    --term-green-rgb: 31, 122, 88;
-    --term-nav-bg: rgba(255, 255, 255, 0.9);
+    --term-green-rgb: 21, 128, 61;
+    --term-nav-bg: #ffffff;
     --term-button-bg: #ffffff;
     --term-amber-fg: #ffffff;
     --term-input-bg: #ffffff;
     --term-input-fill: #ffffff;
-    --term-muted-surface: #f7f8f4;
-    --term-muted-line: rgba(31, 41, 37, 0.13);
+    --term-muted-surface: #f7f7f7;
+    --term-muted-line: #ded4ca;
     --term-logo-filter: none;
     --term-selection-fg: #ffffff;
-    --term-particle-bg: rgba(255, 255, 255, 0.7);
-    --term-particle-opacity: 0.55;
+    --term-particle-bg: rgba(255, 92, 24, 0.08);
+    --term-particle-opacity: 0.4;
     --term-particle-blend: normal;
+    --term-radius: 8px;
+    --term-shadow: 0 0 0 1px rgba(17, 16, 15, 0.02), 0 2px 8px rgba(17, 16, 15, 0.08);
+    --term-shadow-hover: 0 0 0 1px rgba(255, 92, 24, 0.12), 0 8px 24px rgba(17, 16, 15, 0.14);
   }
 
   .marketing-logo {
@@ -361,12 +344,8 @@
   .term-page {
     background-color: var(--term-bg);
     color: var(--term-fg);
-    font-family: var(--term-mono);
-    background-image:
-      linear-gradient(var(--term-line) 1px, transparent 1px),
-      linear-gradient(90deg, var(--term-line) 1px, transparent 1px);
-    background-size: 2.5rem 2.5rem;
-    transition: background-color 0.16s ease, color 0.16s ease;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
 
   .term-page ::selection {
@@ -392,8 +371,204 @@
   .term-nav {
     border-bottom: 1px solid var(--term-line-strong);
     background: var(--term-nav-bg);
-    font-family: var(--term-mono);
-    box-shadow: 0 1px 0 rgba(7, 19, 14, 0.04);
+    color: var(--term-strong);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    box-shadow: 0 1px 0 rgba(17, 16, 15, 0.05), 0 8px 24px -20px rgba(17, 16, 15, 0.28);
+  }
+
+  .marketing-announcement-link {
+    display: flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid rgba(255, 92, 24, 0.32);
+    background: #090807;
+    color: rgba(255, 247, 237, 0.86);
+    padding: 0.45rem 1rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    transition: color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .marketing-announcement-link:hover,
+  .marketing-announcement-link:focus-visible {
+    color: #ffffff;
+    background: #12100e;
+  }
+
+  .marketing-nav-brand {
+    display: inline-flex;
+    min-height: 2.75rem;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 0.55rem;
+    border-radius: 8px;
+    padding: 0.25rem 0.35rem;
+    color: var(--term-strong);
+    text-decoration: none;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .marketing-nav-brand:hover,
+  .marketing-nav-brand:focus-visible {
+    background: rgba(255, 92, 24, 0.07);
+    box-shadow: 0 0 0 1px rgba(255, 92, 24, 0.2);
+    outline: none;
+  }
+
+  .marketing-brand-hire {
+    color: #ff5c18;
+  }
+
+  .marketing-brand-oven {
+    color: var(--term-strong);
+  }
+
+  .marketing-nav-link {
+    position: relative;
+    display: inline-flex;
+    min-height: 2.5rem;
+    align-items: center;
+    gap: 0.5rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 0 0.75rem;
+    color: rgba(18, 16, 14, 0.78);
+    font-size: 0.875rem;
+    font-weight: 650;
+    text-decoration: none;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+
+  .marketing-nav-link svg {
+    color: rgba(18, 16, 14, 0.55);
+    transition: color 0.15s ease;
+  }
+
+  .marketing-nav-link:hover,
+  .marketing-nav-link:focus-visible,
+  .marketing-nav-link.is-active,
+  .marketing-nav-link.is-pending {
+    border-color: rgba(255, 92, 24, 0.38);
+    background: rgba(255, 92, 24, 0.13);
+    color: var(--term-strong);
+    outline: none;
+  }
+
+  .marketing-nav-link:hover svg,
+  .marketing-nav-link:focus-visible svg,
+  .marketing-nav-link.is-active svg,
+  .marketing-nav-link.is-pending svg {
+    color: #ff8a4c;
+  }
+
+  .marketing-nav-link:active {
+    transform: translateY(1px);
+  }
+
+  .marketing-nav-link.is-pending::after {
+    content: "";
+    position: absolute;
+    right: 0.75rem;
+    bottom: 0.28rem;
+    left: 0.75rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 92, 24, 0.12), #ff5c18, rgba(255, 92, 24, 0.12));
+    background-size: 180% 100%;
+    animation: marketing-nav-pending 0.75s linear infinite;
+  }
+
+  .marketing-auth-shell {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid rgba(255, 92, 24, 0.34);
+    border-radius: 9999px;
+    background: #ffffff;
+    padding: 0.25rem;
+    box-shadow: 0 1px 2px rgba(17, 16, 15, 0.08);
+  }
+
+  .marketing-auth-login,
+  .marketing-auth-primary {
+    display: inline-flex;
+    min-height: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0 0.85rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  }
+
+  .marketing-auth-login {
+    color: rgba(18, 16, 14, 0.78);
+  }
+
+  .marketing-auth-login:hover,
+  .marketing-auth-login:focus-visible {
+    background: rgba(255, 92, 24, 0.08);
+    color: var(--term-strong);
+    outline: none;
+  }
+
+  .marketing-auth-primary {
+    background: #ff5c18;
+    color: #ffffff;
+    box-shadow: 0 7px 18px rgba(255, 92, 24, 0.28);
+  }
+
+  .marketing-auth-primary:hover,
+  .marketing-auth-primary:focus-visible {
+    background: #e14e0e;
+    color: #ffffff;
+    outline: none;
+  }
+
+  .marketing-auth-login:active,
+  .marketing-auth-primary:active {
+    transform: translateY(1px);
+  }
+
+  .marketing-mobile-trigger {
+    display: inline-flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 92, 24, 0.38);
+    border-radius: 9999px;
+    background: #ffffff;
+    color: var(--term-strong);
+    box-shadow: 0 1px 2px rgba(17, 16, 15, 0.08);
+  }
+
+  .marketing-mobile-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 10px;
+    padding: 0.82rem 0.75rem;
+    color: rgba(255, 247, 237, 0.86);
+    font-size: 0.9375rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  .marketing-mobile-link:hover,
+  .marketing-mobile-link:focus-visible,
+  .marketing-mobile-link.is-active,
+  .marketing-mobile-link.is-pending {
+    background: rgba(255, 92, 24, 0.16);
+    color: #ffffff;
+    outline: none;
   }
 
   .term-btn {
@@ -402,7 +577,7 @@
     gap: 0.5rem;
     border: 1px solid var(--term-line-strong);
     padding: 0.6rem 1rem;
-    font-family: var(--term-mono);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-weight: 600;
     font-size: 0.82rem;
     color: var(--term-fg);
@@ -429,7 +604,7 @@
   }
 
   .term-label {
-    font-family: var(--term-mono);
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     font-size: 0.7rem;
     letter-spacing: 0.06em;
     color: var(--term-dim);
@@ -456,7 +631,7 @@
     padding-right: 1.9rem;
   }
   :root[data-marketing-theme="light"] .term-select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2323342b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23404040' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   }
   .term-select:focus {
     border-color: var(--term-green);
@@ -489,7 +664,7 @@
     -webkit-text-fill-color: var(--term-fg);
     -webkit-box-shadow: 0 0 0 1000px var(--term-input-fill) inset;
     caret-color: var(--term-fg);
-    border: 1px solid rgba(120, 200, 160, 0.26);
+    border: 1px solid var(--term-line-strong);
     transition: background-color 9999s ease-in-out 0s;
   }
 
@@ -498,9 +673,24 @@
     color: color-mix(in srgb, var(--term-fg) 35%, transparent);
   }
 
+  /* A lot of older public pages were authored for the original dark marketing
+     skin using `text-white`. In the current light skin those sections render on
+     cream/white surfaces, so map legacy white copy to readable dark text while
+     preserving explicit orange CTA/button text. */
   :root[data-marketing-theme="light"] .term-page .text-white,
   :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-white"] {
     color: var(--term-strong) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page .text-white:is(
+    .marketing-auth-primary,
+    [class*="bg-[#ff5c18]"],
+    [class*="bg-[#FF5C18]"],
+    [class*="bg-orange"],
+    [class*="bg-[#f5a623]"],
+    [class*="bg-[var(--term-amber"]
+  ) {
+    color: #ffffff !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]"] {
@@ -566,7 +756,7 @@
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="bg-[#0a0e0c]"] {
-    background-color: #f7f8f4 !important;
+    background-color: #ffffff !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="bg-[rgba(120,200,160"] {
@@ -581,16 +771,144 @@
     background-color: var(--term-green) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#38e08a]/"] {
-    background-color: rgba(31, 122, 88, 0.09) !important;
+  /* Tint variants only — an element carrying the solid class too (e.g.
+     `bg-[#38e08a] hover:bg-[#38e08a]/90`) must keep the solid fill. */
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#38e08a]/"]:not([class~="bg-[#38e08a]"]) {
+    background-color: rgba(5, 118, 66, 0.09) !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="border-[#38e08a]"] {
-    border-color: rgba(31, 122, 88, 0.28) !important;
+    border-color: rgba(5, 118, 66, 0.28) !important;
+  }
+
+  /* Legacy amber hexes map to the single orange brand accent. */
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#f5a623]"],
+  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-[#f5a623]"] {
+    color: var(--term-amber) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="bg-[#f5a623]"] {
+    background-color: var(--term-amber) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#f5a623]/"]:not([class~="bg-[#f5a623]"]) {
+    background-color: rgba(255, 92, 24, 0.1) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-[#f5a623]"] {
+    border-color: rgba(255, 92, 24, 0.4) !important;
+  }
+
+  /* These near-black hexes are only ever used as label text sitting on a solid
+     amber/green fill. On the light accents they must invert to white or the
+     label disappears (e.g. the Pro plan CTA). */
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#0a0e0c]"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#0e1411]"] {
+    color: #ffffff !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="border-t-[#0e1411]"] {
     border-top-color: #ffffff !important;
+  }
+
+  /* ── Professional primitives ──────────────────────────────────────
+     Strips the terminal signature (grid paper, monospace, square hard
+     edges, hairline-on-black) from the shared marketing primitives so
+     every public page reads like a hiring platform rather than a REPL. */
+  :root[data-marketing-theme="light"] .term-page {
+    background-image: none;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :root[data-marketing-theme="light"] .term-page ::selection {
+    background: rgba(255, 92, 24, 0.2);
+    color: var(--term-strong);
+  }
+
+  :root[data-marketing-theme="light"] .term-panel {
+    border-radius: var(--term-radius);
+    box-shadow: var(--term-shadow);
+  }
+
+  :root[data-marketing-theme="light"] .term-panel-hover {
+    transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  :root[data-marketing-theme="light"] .term-panel-hover:hover {
+    border-color: #d0cfcc;
+    background: var(--term-panel);
+    box-shadow: var(--term-shadow-hover);
+  }
+
+  :root[data-marketing-theme="light"] .term-nav {
+    font-family: inherit;
+    border-bottom-color: rgba(255, 92, 24, 0.26);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  :root[data-marketing-theme="light"] .term-btn {
+    font-family: inherit;
+    border-radius: 9999px;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--term-amber);
+    border-color: var(--term-amber);
+    border-width: 1.5px;
+  }
+
+  :root[data-marketing-theme="light"] .term-btn:hover {
+    color: #c2410c;
+    border-color: #c2410c;
+    background: rgba(255, 92, 24, 0.08);
+  }
+
+  :root[data-marketing-theme="light"] .term-btn-amber {
+    background: var(--term-amber);
+    color: #ffffff;
+  }
+
+  :root[data-marketing-theme="light"] .term-btn-amber:hover {
+    background: #12100e;
+    border-color: #12100e;
+    color: #ffffff;
+  }
+
+  /* Eyebrow labels: uppercase sans caption instead of a lowercase mono
+     shell prompt. */
+  :root[data-marketing-theme="light"] .term-label {
+    font-family: inherit;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--term-dim);
+  }
+
+  /* Inputs get the platform-form treatment: rounded, grey rule, orange focus
+     ring rather than a green terminal caret box. */
+  :root[data-marketing-theme="light"] .term-page input[type="email"],
+  :root[data-marketing-theme="light"] .term-page input[type="text"],
+  :root[data-marketing-theme="light"] .term-page input[type="search"],
+  :root[data-marketing-theme="light"] .term-page input[type="tel"],
+  :root[data-marketing-theme="light"] .term-page input[type="url"],
+  :root[data-marketing-theme="light"] .term-page input[type="password"],
+  :root[data-marketing-theme="light"] .term-page input[type="number"],
+  :root[data-marketing-theme="light"] .term-page textarea,
+  :root[data-marketing-theme="light"] .term-page select {
+    border-radius: 6px;
+  }
+
+  :root[data-marketing-theme="light"] .term-page input:focus-visible,
+  :root[data-marketing-theme="light"] .term-page textarea:focus-visible {
+    outline: 2px solid var(--term-amber);
+    outline-offset: -1px;
+  }
+
+  :root[data-marketing-theme="light"] .term-select {
+    border-radius: 6px;
+    border-color: var(--term-line-strong);
   }
 
   .stay-range {
@@ -623,6 +941,11 @@
   @keyframes term-scroll {
     from { transform: translateX(0); }
     to { transform: translateX(-50%); }
+  }
+
+  @keyframes marketing-nav-pending {
+    from { background-position: 180% 0; }
+    to { background-position: 0 0; }
   }
 
   .neo-shell::before {

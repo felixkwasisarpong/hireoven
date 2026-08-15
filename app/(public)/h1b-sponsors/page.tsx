@@ -32,6 +32,9 @@ async function getTopSponsors(): Promise<Row[]> {
       WHERE is_active = true
         AND sponsors_h1b = true
         AND COALESCE(h1b_sponsor_count_1yr, 0) > 0
+        AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+        AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+        AND lower(name) NOT LIKE '%.oraclecloud.com'
       ORDER BY h1b_sponsor_count_1yr DESC NULLS LAST
       LIMIT 150`,
   )
@@ -54,6 +57,9 @@ async function getBrowseFacets(): Promise<BrowseFacets> {
     pool.query<{ industry: string }>(
       `SELECT industry FROM companies
         WHERE is_active = true AND sponsors_h1b = true AND COALESCE(h1b_sponsor_count_1yr, 0) > 0 AND industry IS NOT NULL
+          AND COALESCE(domain, '') NOT ILIKE '%-tenant%'
+          AND COALESCE(logo_url, '') NOT ILIKE '%oraclecloud.com%'
+          AND lower(name) NOT LIKE '%.oraclecloud.com'
         GROUP BY industry HAVING count(*) >= 5 ORDER BY count(*) DESC LIMIT 12`,
     ).catch(() => ({ rows: [] as { industry: string }[] })),
     pool.query<{ city: string; state: string }>(
@@ -152,10 +158,9 @@ export default async function H1bSponsorsHub() {
 
       <section className="mx-auto grid w-full max-w-[78rem] gap-6 px-4 pt-10 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.62fr)] lg:items-end">
         <div>
-          <p className="term-label">&gt; top_sponsors --year={YEAR} --source=DOL</p>
+          <p className="term-label">Top sponsors · {YEAR} · Source: DOL</p>
           <h1 className="mt-4 max-w-[34rem] text-[2.4rem] font-semibold leading-[1.02] tracking-tight text-white sm:text-[3.4rem]">
             Top H-1B <span className="text-[#f5a623]">sponsor companies</span>
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 max-w-[34rem] text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Ranked by certified LCA filings over the last 12 months. Every company links to its full sponsorship
@@ -213,7 +218,7 @@ export default async function H1bSponsorsHub() {
 
         {(facets.industries.length > 0 || facets.cities.length > 0 || facets.roles.length > 0) && (
           <section className="mt-12 space-y-6">
-            <h2 className="term-label">{"// browse H-1B sponsors by"}</h2>
+            <h2 className="term-label">{"Browse H-1B sponsors by"}</h2>
             {facets.industries.length > 0 && (
               <FacetGroup title="Industry" items={facets.industries} />
             )}

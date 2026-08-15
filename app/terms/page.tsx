@@ -13,7 +13,7 @@ export default function TermsPage() {
     <div className="term-page min-h-dvh">
       <Navbar />
       <main className="mx-auto max-w-3xl px-6 py-16">
-        <p className="term-label">&gt; terms_of_service</p>
+        <p className="term-label">Terms of service</p>
         <h1 className="mt-3 text-[2rem] font-semibold tracking-tight text-white">Terms of Service</h1>
         <p className="mt-2 text-[13px] text-[#ccd6cf]/45">Last updated: April 2025</p>
 

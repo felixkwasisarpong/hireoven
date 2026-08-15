@@ -32,7 +32,6 @@ export default async function StayTalentPage() {
         </Link>
         <h1 className="mt-4 max-w-[22ch] text-[2.3rem] font-semibold leading-[1.04] tracking-tight text-white sm:text-[3.1rem]">
           Get discovered by <span className="text-[#f5a623]">sponsor-verified employers</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-5 max-w-[64ch] text-[16px] leading-relaxed text-[#ccd6cf]/70">
           Every application asks “will you need sponsorship?” — and a truthful “yes” auto-rejects you before a human
@@ -47,7 +46,7 @@ export default async function StayTalentPage() {
 
       {/* PII-free talent-pool teaser — the employer hook */}
       <section className="mx-auto mt-14 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
-        <p className="term-label">{"// the pool — sponsor-seeking talent, in aggregate"}</p>
+        <p className="term-label">{"The pool — sponsor-seeking talent, in aggregate"}</p>
         {stats.total > 0 ? (
           <>
             <h2 className="mt-3 text-[1.9rem] font-semibold tracking-tight text-white sm:text-[2.4rem]">
@@ -88,7 +87,7 @@ export default async function StayTalentPage() {
       {/* Employer CTA */}
       <section className="mx-auto mt-14 mb-20 w-full max-w-[78rem] px-4 sm:px-6 lg:px-10">
         <div className="term-panel p-6 sm:p-8">
-          <p className="term-label">{"// for employers"}</p>
+          <p className="term-label">{"For employers"}</p>
           <p className="mt-2 max-w-[62ch] text-[15px] leading-relaxed text-[#ccd6cf]/85">
             Sponsor international talent already? Reach pre-qualified, sponsorship-aware candidates directly — no résumé
             pile, no wasted “does this person need sponsorship?” screens. Verified-employer access is invite-only while

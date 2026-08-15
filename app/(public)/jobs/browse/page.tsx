@@ -51,7 +51,6 @@ export default async function BrowseJobsHub() {
           </span>
           <h1 className="mt-4 text-[2rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[2.4rem]">
             Find <span className="text-[#f5a623]">fresh jobs</span> by what matters to you
-            <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
           </h1>
           <p className="mt-4 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             Every collection below is built from jobs discovered directly from company career pages and refreshed
@@ -93,7 +92,7 @@ export default async function BrowseJobsHub() {
         </div>
 
         <section className="term-panel mt-12 px-6 py-8 text-center">
-          <p className="term-label">{"// unlock"}</p>
+          <p className="term-label">{"Unlock"}</p>
           <h2 className="mt-2 text-xl font-semibold text-white">Want these in your inbox every morning?</h2>
           <p className="mx-auto mt-2 max-w-md text-[14px] text-[#ccd6cf]/65">
             Track your titles and wake up to the roles posted overnight — with H-1B sponsorship intel built in.

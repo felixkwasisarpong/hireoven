@@ -45,10 +45,9 @@ export default function BuildingInPublicPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-14">
-        <p className="term-label">{"// build_log"}</p>
+        <p className="term-label">{"Build log"}</p>
         <h1 className="mt-3 text-[2.3rem] font-semibold leading-[1.05] tracking-tight text-white sm:text-[3.1rem]">
           Building in <span className="text-[#f5a623]">public</span>
-          <span className="ml-1 inline-block w-[0.5ch] animate-pulse text-[#38e08a]">_</span>
         </h1>
         <p className="mt-4 max-w-xl text-[14px] leading-relaxed text-[#ccd6cf]/70">
           Honest updates on what shipped each week. Tweet the highlights - link candidates here

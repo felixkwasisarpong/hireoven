@@ -355,7 +355,7 @@ export default async function H1bSponsorPage({ params }: Props) {
 
         {/* Stay — 2026 survival-odds outlook (the differentiator) */}
         <section className="term-panel mt-6 p-6 sm:p-8">
-          <p className="term-label">&gt; stay --2026-outlook</p>
+          <p className="term-label">Stay</p>
           <h2 className="mt-2 text-lg font-semibold text-white">
             Will {c.name} keep you in the U.S.? <span className="text-[#ccd6cf]/45">— the 2026 outlook</span>
           </h2>

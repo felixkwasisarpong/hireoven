@@ -51,7 +51,7 @@ function labelField(label: string, node: React.ReactNode) {
 }
 
 const inputCls =
-  "w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 py-2.5 font-mono text-[14px] text-[#ccd6cf] outline-none focus:border-[#38e08a]"
+  "w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-3 py-2.5 text-[14px] text-[#ccd6cf] outline-none focus:border-[#38e08a]"
 
 // Inlined so a native <select> can't render as an unstyled OS control regardless
 // of external-stylesheet state (appearance:none is the fix).
@@ -107,7 +107,7 @@ export default function TimelineCopilot() {
     <div className="grid gap-5 lg:grid-cols-[0.85fr_1.15fr]">
       {/* Inputs */}
       <div className="term-panel h-fit p-5">
-        <p className="term-label">&gt; your_clock</p>
+        <p className="term-label">Your clock</p>
         <div className="mt-4 grid gap-4">
           {labelField(
             "Current status",
@@ -152,7 +152,7 @@ export default function TimelineCopilot() {
               value={employment}
               onChange={(e) => setEmployment(e.target.value as OptTimelineEmploymentStatus)}
               style={TERM_SELECT_STYLE}
-              className="term-select w-full px-3 py-2.5 font-mono text-[14px] outline-none"
+              className="term-select w-full px-3 py-2.5 text-[14px] outline-none"
             >
               {EMPLOYMENT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -182,7 +182,7 @@ export default function TimelineCopilot() {
         {/* Urgency + clock */}
         <div className="term-panel p-5">
           <div className="flex items-center justify-between gap-3">
-            <p className="term-label">&gt; runway_status</p>
+            <p className="term-label">Runway status</p>
             <span
               className="border px-2 py-1 text-[11px] font-bold uppercase tracking-wide"
               style={{ color: urgencyColor, borderColor: urgencyColor + "66", background: urgencyColor + "18" }}
@@ -201,7 +201,7 @@ export default function TimelineCopilot() {
         {/* Lottery math against the runway */}
         {odds && (
           <div className="term-panel p-5">
-            <p className="term-label">&gt; your_lottery_math</p>
+            <p className="term-label">Your lottery math</p>
             <p className="mt-3 text-[14px] leading-relaxed text-[#ccd6cf]/80">
               At <span className="text-white">${salary.toLocaleString()}</span> ({WAGE_LEVEL_META[odds.level].label}), each
               draw is <span style={{ color: odds.singleDrawPct < 20 ? "#e5695f" : odds.singleDrawPct < 40 ? "#f5a623" : "#38e08a" }}>{odds.singleDrawPct}%</span>.{" "}
@@ -223,7 +223,7 @@ export default function TimelineCopilot() {
 
         {/* What to do this week */}
         <div className="term-panel p-5">
-          <p className="term-label">&gt; what_to_do_this_week</p>
+          <p className="term-label">What to do this week</p>
           <p className="mt-2 text-[13px] text-[#ccd6cf]/60">
             Aim for <span className="text-white">{dashboard.recommendedWeeklyApplicationTarget}</span> targeted applications this week.
           </p>
