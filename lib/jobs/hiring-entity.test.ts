@@ -122,3 +122,64 @@ test("resolveDisplayCompanyName: strips stored recruiter CTA text", () => {
     "Anaplan"
   )
 })
+
+// ── structured_job fallback ───────────────────────────────────────────────────
+// normalize.ts sets `hiringCompany` to the employer's own name whenever there is
+// no hiring-entity signal, so its presence must never imply an intermediary.
+
+test("structured_job fallback: direct employer is NOT a staffing intermediary", () => {
+  const rawData = {
+    structured_job: {
+      company: "Mercury Logistics Group",
+      hiringCompany: "Mercury Logistics Group",
+      staffingCompany: null,
+      staffingIntermediary: false,
+    },
+  }
+  assert.equal(isStaffingIntermediaryListing({ rawData }), false)
+  assert.equal(readHiringEntitySignalFromRawData(rawData)?.is_staffing_intermediary, false)
+})
+
+test("structured_job fallback: hiringCompany alone does not imply staffing", () => {
+  // No explicit flag and no board name to compare against — previously this
+  // returned is_staffing_intermediary: true and discarded company sponsorship.
+  const rawData = { structured_job: { hiringCompany: "Stripe" } }
+  assert.equal(isStaffingIntermediaryListing({ rawData }), false)
+  assert.equal(readHiringEntitySignalFromRawData(rawData)?.display_name, "Stripe")
+})
+
+test("structured_job fallback: honours an explicit staffingIntermediary flag", () => {
+  const rawData = {
+    structured_job: {
+      company: "Acme Talent Solutions",
+      hiringCompany: "Pinterest",
+      staffingCompany: "Acme Talent Solutions",
+      staffingIntermediary: true,
+    },
+  }
+  assert.equal(isStaffingIntermediaryListing({ rawData }), true)
+  const signal = readHiringEntitySignalFromRawData(rawData)
+  assert.equal(signal?.end_client_name, "Pinterest")
+  assert.equal(signal?.staffing_company_name, "Acme Talent Solutions")
+})
+
+test("structured_job fallback: infers staffing when hiring company differs from the board", () => {
+  const rawData = {
+    structured_job: {
+      company: "Acme Talent Solutions",
+      hiringCompany: "Pinterest",
+      staffingIntermediary: false,
+    },
+  }
+  assert.equal(isStaffingIntermediaryListing({ rawData }), true)
+  const signal = readHiringEntitySignalFromRawData(rawData)
+  assert.equal(signal?.end_client_name, "Pinterest")
+  assert.equal(signal?.staffing_company_name, "Acme Talent Solutions")
+})
+
+test("structured_job fallback: name comparison ignores case", () => {
+  const rawData = {
+    structured_job: { company: "Mercury", hiringCompany: "mercury", staffingIntermediary: false },
+  }
+  assert.equal(isStaffingIntermediaryListing({ rawData }), false)
+})
