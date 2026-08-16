@@ -341,10 +341,24 @@ export const PROHIBITED_XRAY_UI_LANGUAGE = [
   /\blegally ineligible\b/i,
 ]
 
-export function presentFinalAction(action: XRayFinalAction, headline?: string): PresentedFinalAction {
+export function presentFinalAction(
+  action: XRayFinalAction,
+  headline?: string,
+  blockingGap?: string | null,
+): PresentedFinalAction {
   const base = FINAL_ACTIONS[action]
+  // INSUFFICIENT_DATA used to say only "X-Ray needs more input before it can
+  // call this role" while the dimension cards underneath each rendered a verdict
+  // with its own confidence. Read top-to-bottom that looks like the panel
+  // contradicting itself. Naming the gap that actually blocks the call makes the
+  // confident dimensions below coherent rather than contradictory.
+  const description =
+    action === "INSUFFICIENT_DATA" && blockingGap?.trim()
+      ? `Blocked on one input: ${sanitizePresentationText(blockingGap).replace(/\.$/, "")}. Everything else below has been assessed.`
+      : base.description
   return {
     ...base,
+    description,
     headline: sanitizePresentationText(headline && headline.trim() ? headline : base.headline),
   }
 }
