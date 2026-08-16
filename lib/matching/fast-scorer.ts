@@ -2081,14 +2081,21 @@ export function computeFastScore({
   if (excellentSameProfessionEvidence) {
     // Near-perfect evidence reaches into the 96–98 band so a truly exceptional
     // fit is visibly distinct from a merely strong one (which tops out ~92–95).
+    // The floor is now anchored to skill evidence rather than bottoming out at
+    // 90. `hasUsableSkillEvidence` admits scores from 0.55, so a candidate
+    // matching barely over half the required stack was promoted to 90 purely on
+    // same-profession signals — the single biggest source of the "everything is
+    // excellent" complaint. A thin match keeps its computed score instead.
     const target =
       skills.score >= 0.9 && relevantExperience.score >= 0.95 && title.score >= 0.9 && seniority.score >= 0.85
         ? 98
         : skills.score >= 0.8
           ? 95
-          : skills.score >= 0.6
+          : skills.score >= 0.7
             ? 92
-            : 90
+            : skills.score >= 0.6
+              ? 88
+              : 0
     if (overall < target) {
       overall = target
       topBandPromotion = `Excellent same-profession evidence promoted score to ${target}.`
@@ -2105,7 +2112,15 @@ export function computeFastScore({
       targetField,
       `${job.title} ${(job.skills ?? []).join(" ")} ${job.description ?? ""}`.slice(0, 4000),
     )
-    targetFieldBoost = Math.round(TARGET_FIELD_BOOST_MAX * affinity)
+    // Apply the boost into the REMAINING headroom rather than adding it flat.
+    // Flat addition followed by clamp(0,100) collapsed distinct scores into a
+    // single 100: on one real feed, five roles scoring 92/94/97/97/98 before the
+    // boost all rendered as "100" afterwards, so a security role and a frontend
+    // role were indistinguishable for the same resume. Scaling by the headroom
+    // keeps the boost meaningful low in the range (60 +8 -> 63) while preserving
+    // order at the top (92 -> 93, 94 -> 94, 97 -> 97).
+    const rawBoost = TARGET_FIELD_BOOST_MAX * affinity
+    targetFieldBoost = Math.round((rawBoost * (100 - overall)) / 100)
     if (targetFieldBoost > 0) overall = overall + targetFieldBoost
   }
 
