@@ -47,7 +47,9 @@ export function XRayDecisionHero({
   onRefresh?: () => void
   onActionClick?: (action: RecommendedAction) => void
 }) {
-  const actionPresentation = presentFinalAction(xray.finalAction, xray.headline)
+  // First unresolved gap, used to explain WHY an INSUFFICIENT_DATA call is blocked.
+  const blockingGap = xray.dataGaps?.[0]?.label ?? null
+  const actionPresentation = presentFinalAction(xray.finalAction, xray.headline, blockingGap)
   const Icon = ACTION_ICON[xray.finalAction]
   const reasons = getDecisionReasons(xray)
   const primaryAction = getPrimaryAction(xray)

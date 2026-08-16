@@ -1,10 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import { Sparkles } from "lucide-react"
 import type { ApplicationXRay, RecommendedAction, XRayDimensionKey } from "@/lib/application-xray/types"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
+import { getPrimaryAction } from "./xray-presenters"
 import { XRayActionList } from "./XRayActionList"
 import { XRayDataGaps } from "./XRayDataGaps"
 import { XRayDecisionHero } from "./XRayDecisionHero"
@@ -179,16 +179,24 @@ export function ApplicationXRayPanel({
   if (!payload) return null
 
   const xray = payload.xray
+  // The hero renders exactly one "Next action"; everything downstream excludes
+  // it so a single recommendation is not printed as both the next step and
+  // ranked item #1. Likewise the dimension cards already surface their own data
+  // gaps inline, so the panel-level list shows only gaps not attributable to a
+  // dimension — previously "E-Verify participation is unknown" appeared in both.
+  const primaryActionId = getPrimaryAction(xray)?.id ?? null
+  const dimensionGapIds = new Set(
+    (["hiringReality", "capability", "evidence", "eligibility", "positioning"] as const)
+      .flatMap((key) => xray[key]?.dataGaps ?? [])
+      .map((gap) => gap.id),
+  )
+  const unattributedGaps = xray.dataGaps.filter((gap) => !dimensionGapIds.has(gap.id))
 
   return (
+    // XRayDecisionHero already prints an "Application X-Ray" eyebrow inside its
+    // card, so a second one here rendered the label twice, consecutively, on
+    // every job. The section keeps the accessible name.
     <section className={cn("space-y-4", className)} aria-label="Application X-Ray">
-      <div className="flex items-center gap-2">
-        <Sparkles className="h-4 w-4 text-orange-500" aria-hidden />
-        <p className="text-[10.5px] font-bold uppercase text-slate-400">
-          Application X-Ray
-        </p>
-      </div>
-
       {error ? <XRayErrorState error={error} onRetry={handleRetry} compact /> : null}
 
       <XRayDecisionHero
@@ -210,9 +218,10 @@ export function ApplicationXRayPanel({
         applyUrl={applyUrl ?? null}
         jobId={jobId}
         onActionClick={handleActionClick}
+        primaryActionId={primaryActionId}
       />
 
-      <XRayDataGaps gaps={xray.dataGaps} />
+      <XRayDataGaps gaps={unattributedGaps} />
 
       <XRayEvidenceDrawer xray={xray} onToggle={handleEvidenceToggle} />
     </section>

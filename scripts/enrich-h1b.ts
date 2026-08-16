@@ -23,6 +23,7 @@
 import { loadEnvConfig } from "@next/env"
 loadEnvConfig(process.cwd())
 import { Pool, type PoolClient } from "pg"
+import { reconcileLcaCounts, rollupSponsorCounts } from "../lib/h1b/sponsor-counts"
 
 // ─── CLI ────────────────────────────────────────────────────────────────────
 
@@ -307,11 +308,18 @@ async function recomputeScores(pool: Pool) {
       if (latest.approved > 10) conf += 10
       if (latest.approved > 50) conf += 10
 
+      // 1yr came from USCIS approvals while 3yr came from DOL LCA
+      // certifications — different datasets, so whenever LCA matching missed an
+      // employer the pair rendered as an impossibility (AWS: "2,901 this yr ·
+      // 0 (3yr)"). Roll both from USCIS over nested windows, keeping the LCA
+      // total only as a floor. See lib/h1b/sponsor-counts.ts.
+      const counts = rollupSponsorCounts(uscis, lca3y)
+
       patch = {
         sponsors_h1b: latest.approved > 0 || lca3y > 0,
         sponsorship_confidence: Math.min(100, conf),
-        h1b_sponsor_count_1yr: latest.approved,
-        h1b_sponsor_count_3yr: lca3y,
+        h1b_sponsor_count_1yr: counts.oneYear,
+        h1b_sponsor_count_3yr: counts.threeYear,
       }
     } else if (lca) {
       let conf = 0
@@ -320,11 +328,13 @@ async function recomputeScores(pool: Pool) {
       if (lca.cert1y > 10) conf += 10
       if (lca.cert1y > 50) conf += 10
 
+      const counts = reconcileLcaCounts(lca.cert1y, lca.cert3y)
+
       patch = {
         sponsors_h1b: lca.cert1y > 0 || lca.cert3y > 0,
         sponsorship_confidence: Math.min(100, conf),
-        h1b_sponsor_count_1yr: lca.cert1y,
-        h1b_sponsor_count_3yr: lca.cert3y,
+        h1b_sponsor_count_1yr: counts.oneYear,
+        h1b_sponsor_count_3yr: counts.threeYear,
       }
     } else {
       continue // no data → leave as-is

@@ -208,7 +208,11 @@ export async function POST(request: NextRequest) {
             : 55
       const petitions = r.company_petitions ?? 0
       const petAdj = petitions > 0 ? Math.min(12, Math.round(Math.log10(petitions + 1) * 4)) : 0
-      const sponsorScore = Math.max(40, Math.min(98, Math.round(conf * 0.88 + petAdj)))
+      // No floor. `Math.max(40, …)` meant a job with genuinely weak sponsorship
+      // still advertised "40 sponsor" on a public page, and nothing could ever
+      // render below it — the number looked precise while being partly
+      // manufactured. Clamp to the real 0–98 range so a weak signal reads weak.
+      const sponsorScore = Math.max(0, Math.min(98, Math.round(conf * 0.88 + petAdj)))
       const freshMins = r.first_detected_at
         ? Math.floor((Date.now() - new Date(r.first_detected_at).getTime()) / 60_000)
         : 99_999

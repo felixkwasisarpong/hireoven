@@ -38,6 +38,7 @@ import {
   resolveH1BSponsorshipDisplay,
   type SponsorshipVisaCardLabel,
 } from "@/lib/jobs/sponsorship-employer-signal"
+import { createVisaIntelligenceFallback } from "@/lib/jobs/intelligence"
 import { isNonUsWorksite } from "@/lib/jobs/location-filter"
 import {
   isStaffingIntermediaryListing,
@@ -460,10 +461,16 @@ export default function JobCardV2({
   // H1B / company sponsorship data — Company type has these as direct fields
   const h1bCount1yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_1yr ?? 0
   const h1bCount3yr = staffingIntermediary ? 0 : job.company?.h1b_sponsor_count_3yr ?? 0
-  // T1-03: show the same normalized, blended score the summary badge uses
-  // (max of job.sponsorship_score & company.sponsorship_confidence, coerced to
-  // 0–100) so the panel's "Confidence X%" can't disagree with the badge.
-  const sponsorConfidence = staffingIntermediary ? 0 : effectiveEmployerSponsorshipScore(job)
+  // The card's "Confidence X%" is the SAME canonical visa-fit score the job
+  // rail shows as "NN/100" and bands into its sponsorship pill. It used to be
+  // effectiveEmployerSponsorshipScore — max(job.sponsorship_score,
+  // company.sponsorship_confidence) — a different, employer-only scale, so the
+  // feed and the job page reported different numbers for one job.
+  // effectiveEmployerSponsorshipScore remains the fallback for rows the
+  // visa-fit model cannot score.
+  const sponsorConfidence = staffingIntermediary
+    ? 0
+    : createVisaIntelligenceFallback(job)?.visaFitScore ?? effectiveEmployerSponsorshipScore(job)
   const companySponsorsH1b = !staffingIntermediary && job.company?.sponsors_h1b === true
   // T1-05: H-1B is a US visa — never attach its badge/intel to a worksite that
   // is unambiguously outside the US (e.g. "Toronto, ON, CAN"). Conservative:
