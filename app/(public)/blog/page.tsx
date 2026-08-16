@@ -34,32 +34,32 @@ type CategoryTheme = {
 // chips with distinct-but-muted hues so categories stay visually separable on dark.
 const CATEGORY_COLORS: Record<string, CategoryTheme> = {
   "h1b-visa-intel": {
-    chip: "border-blue-500/25 bg-blue-500/12 text-blue-300",
-    accent: "text-blue-300",
+    chip: "border-blue-500/25 bg-blue-500/12 text-blue-700",
+    accent: "text-blue-700",
     bar: "bg-blue-400/70",
     Icon: BookOpenCheck,
   },
   "job-market-pulse": {
-    chip: "border-violet-500/25 bg-violet-500/12 text-violet-300",
-    accent: "text-violet-300",
+    chip: "border-violet-500/25 bg-violet-500/12 text-violet-700",
+    accent: "text-violet-700",
     bar: "bg-violet-400/70",
     Icon: LineChart,
   },
   "career-strategy": {
-    chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-300",
-    accent: "text-emerald-300",
+    chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-700",
+    accent: "text-emerald-700",
     bar: "bg-emerald-400/70",
     Icon: Sparkles,
   },
   "tech-company-watch": {
-    chip: "border-orange-500/25 bg-orange-500/12 text-orange-300",
-    accent: "text-orange-300",
+    chip: "border-orange-500/25 bg-orange-500/12 text-orange-700",
+    accent: "text-orange-700",
     bar: "bg-orange-400/70",
     Icon: Briefcase,
   },
   "interview-offers": {
-    chip: "border-rose-500/25 bg-rose-500/12 text-rose-300",
-    accent: "text-rose-300",
+    chip: "border-rose-500/25 bg-rose-500/12 text-rose-700",
+    accent: "text-rose-700",
     bar: "bg-rose-400/70",
     Icon: Flame,
   },

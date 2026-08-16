@@ -12,7 +12,7 @@ export default async function MaintenanceBanner() {
 
   return (
     <div className="relative z-50 flex items-start justify-center gap-3 border-b border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
-      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />
       <p className="max-w-3xl text-center text-[13.5px] font-medium leading-snug">
         {banner.message}
       </p>

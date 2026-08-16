@@ -3,7 +3,7 @@ import type { ScorecardPayload } from "@/types/h1b-scorecard"
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
         {label}
       </div>
       <div className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{value}</div>
@@ -40,7 +40,7 @@ export function ScorecardStats({ data }: { data: ScorecardPayload }) {
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           {m.top_states.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Top worksite states
               </div>
               <div className="mt-1 text-sm text-slate-700">
@@ -50,7 +50,7 @@ export function ScorecardStats({ data }: { data: ScorecardPayload }) {
           )}
           {m.top_titles.length > 0 && (
             <div className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 Top sponsored roles
               </div>
               <div className="mt-1 text-sm text-slate-700">

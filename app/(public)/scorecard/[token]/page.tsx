@@ -14,12 +14,12 @@ type Props = { params: Promise<{ token: string }> }
 
 // Semantic grade hues — kept DISTINCT (do not collapse). Brightened for the dark canvas.
 const HUE_TEXT: Record<ScoreHue, string> = {
-  emerald: "text-emerald-400",
-  green: "text-green-400",
-  lime: "text-lime-400",
-  amber: "text-amber-400",
-  orange: "text-orange-400",
-  red: "text-red-400",
+  emerald: "text-emerald-700",
+  green: "text-green-700",
+  lime: "text-lime-700",
+  amber: "text-amber-700",
+  orange: "text-orange-700",
+  red: "text-red-700",
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -104,7 +104,7 @@ export default async function PublicScorecardPage({ params }: Props) {
 
         <p className="mt-4 text-center text-[12px] text-[#ccd6cf]/45">
           A profile-vs-market fit signal, not a guarantee.{" "}
-          <Link href="/h1b-sponsors/leaderboard/methodology#personal-scorecard" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+          <Link href="/h1b-sponsors/leaderboard/methodology#personal-scorecard" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
             Methodology
           </Link>
         </p>

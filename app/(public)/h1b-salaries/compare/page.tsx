@@ -70,7 +70,7 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
           </p>
           <Link
             href="/h1b-salaries"
-            className="mt-4 inline-block text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            className="mt-4 inline-block text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
           >
             Browse roles →
           </Link>
@@ -114,7 +114,7 @@ export default async function ComparePage({ searchParams }: { searchParams: SP }
           equity.{" "}
           <Link
             href="/h1b-sponsors/leaderboard/methodology#salaries"
-            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
           >
             Methodology
           </Link>

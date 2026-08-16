@@ -182,7 +182,7 @@ export default function FeaturesPage() {
           </div>
           <p className="mt-8 text-[13px] text-[#ccd6cf]/45">
             Already have an account?{" "}
-            <Link href="/login" className="font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+            <Link href="/login" className="font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
               Log in
             </Link>
           </p>

@@ -99,7 +99,7 @@ export default async function LeaderboardView({
 
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div className="min-w-0">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-orange-600">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-orange-700">
                 <span className="h-1.5 w-1.5 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(255,92,24,0.6)]" />
                 FY2025 · DOL disclosure data
               </div>
@@ -108,7 +108,7 @@ export default async function LeaderboardView({
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-600">{subtitle}</p>
             </div>
-            <div className="text-right text-xs text-slate-400">
+            <div className="text-right text-xs text-slate-500">
               <div className="text-base font-semibold tabular-nums text-slate-900">
                 {data.total_count.toLocaleString()}
               </div>
@@ -120,7 +120,7 @@ export default async function LeaderboardView({
               )}
               <Link
                 href="/h1b-sponsors/leaderboard/methodology"
-                className="mt-1 inline-block text-slate-400 underline underline-offset-2 hover:text-slate-600"
+                className="mt-1 inline-block text-slate-500 underline underline-offset-2 hover:text-slate-600"
               >
                 Methodology
               </Link>

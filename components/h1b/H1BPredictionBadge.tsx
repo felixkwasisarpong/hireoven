@@ -78,7 +78,7 @@ function H1BPredictionBadgeImpl({
           className
         )}
       >
-        <span className="mr-1 opacity-60">H1B</span>
+        <span className="mr-1 font-medium">H1B</span>
         {label}
       </button>
     )

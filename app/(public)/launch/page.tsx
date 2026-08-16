@@ -176,10 +176,10 @@ export default async function LaunchPage({
           <div className="mt-12 grid gap-10 md:grid-cols-3">
             <div className="text-center">
               <ProblemIconClock />
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-red-400">
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-wider text-red-700">
                 The current reality
               </p>
-              <ul className="mt-4 space-y-2 text-sm font-medium leading-relaxed text-red-400/90">
+              <ul className="mt-4 space-y-2 text-sm font-medium leading-relaxed text-red-700/90">
                 <li>You apply on LinkedIn</li>
                 <li>The job was posted 4 days ago</li>
                 <li>347 people already applied</li>
@@ -395,7 +395,7 @@ export default async function LaunchPage({
               href="https://twitter.com/hireoven"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               Follow our journey →
             </Link>

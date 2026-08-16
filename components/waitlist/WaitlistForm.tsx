@@ -254,7 +254,7 @@ export default function WaitlistForm({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className={cn(
-            "min-h-[48px] w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 text-base text-[#ccd6cf] outline-none ring-offset-background placeholder:text-[#ccd6cf]/35 focus-visible:border-[#38e08a] focus-visible:ring-2 focus-visible:ring-[#38e08a]/30",
+            "min-h-[48px] w-full border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] px-4 text-base text-[#ccd6cf] outline-none ring-offset-background placeholder:text-[#ccd6cf]/35 focus-visible:border-[#38e08a] focus-visible:ring-2 focus-visible:ring-[var(--term-green)]/30",
             variant === "simple" && "sm:flex-1"
           )}
         />
@@ -284,7 +284,7 @@ export default function WaitlistForm({
                   type="checkbox"
                   checked={isInternational}
                   onChange={(e) => setIsInternational(e.target.checked)}
-                  className="mt-1 h-4 w-4 accent-[#38e08a]"
+                  className="mt-1 h-4 w-4 accent-[var(--term-green)]"
                 />
                 <span className="text-[#ccd6cf]">
                   Are you an international student?
@@ -354,7 +354,7 @@ export default function WaitlistForm({
       ) : null}
 
       {error ? (
-        <p className="text-sm font-medium text-red-300" role="alert">
+        <p className="text-sm font-medium text-red-700" role="alert">
           {error}
         </p>
       ) : null}

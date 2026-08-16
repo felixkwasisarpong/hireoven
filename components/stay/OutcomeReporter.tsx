@@ -10,7 +10,7 @@ import {
   type StayOutcome,
 } from "@/lib/stay/outcome-types"
 
-const TONE_COLOR = { good: "#38e08a", crit: "#e5695f", neutral: "#6c7a72" } as const
+const TONE_COLOR = { good: "var(--term-green)", crit: "var(--term-danger)", neutral: "var(--term-dim)" } as const
 
 function getVisitorId(): string | undefined {
   try {
@@ -80,7 +80,7 @@ export default function OutcomeReporter({
       <div className="flex items-center justify-between gap-3">
         <p className="term-label">Community outcomes</p>
         {summary && summary.total > 0 && (
-          <span className="text-[11px] text-[#6c7a72]">{summary.total} reported</span>
+          <span className="text-[11px] text-[var(--term-dim)]">{summary.total} reported</span>
         )}
       </div>
 
@@ -123,7 +123,7 @@ export default function OutcomeReporter({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="mt-3 text-[12px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          className="mt-3 text-[12px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
         >
           Report your outcome →
         </button>

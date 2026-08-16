@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Mic,
   Plane,
+  Search,
   Send,
   Settings,
   Triangle,
@@ -65,6 +66,7 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
 
   // ── Search & Apply ───────────────────────────────────────────────────────────
   { label: "Watchlist",      href: "/dashboard/watchlist",                icon: BookmarkCheck, group: "Search & Apply", subtitle: "Companies you're tracking" },
+  { label: "Site Scout",     href: "/dashboard/site-scout",               icon: Search,        group: "Search & Apply", gate: "apex_actions", subtitle: "Scan external career sites" },
   // Alerts (saved searches) moved into notification settings — reach them from
   // Settings -> Job alerts (D6). Route remains at /dashboard/alerts.
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },

@@ -8,14 +8,16 @@ const US_STATES = [
   "MI", "CO", "AZ", "MD", "OR", "MN", "TN", "IN", "WI", "MO", "CT", "UT", "NV",
 ]
 
+// Selected state is an accent tint, not a solid slab. bg-slate-900 read as a
+// pure-black block against the light page and out-shouted the results below it.
 function cls(active: boolean): string {
   return active
-    ? "rounded-full bg-slate-900 px-3 py-1.5 text-sm font-medium text-white"
-    : "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 transition-colors hover:bg-slate-50"
+    ? "rounded-full border border-[var(--term-amber)] bg-[var(--term-amber-soft)] px-3 py-1.5 text-sm font-semibold text-[var(--term-amber-text)]"
+    : "rounded-full border border-[var(--term-line-strong)] bg-white px-3 py-1.5 text-sm text-[var(--term-fg)] transition-colors hover:bg-[var(--term-panel-2)]"
 }
 
 const SELECT_CLS =
-  "rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-600 outline-none transition-colors hover:bg-slate-50"
+  "rounded-full border border-[var(--term-line-strong)] bg-white px-3 py-1.5 text-sm text-[var(--term-fg)] outline-none transition-colors hover:bg-[var(--term-panel-2)]"
 
 // URL-state-driven filters (no client store). Changing a control rewrites the
 // query string and resets the keyset cursor. `lockState` / `lockIndustry` hide a
@@ -61,7 +63,7 @@ export default function LeaderboardFilters({
         Highest cert. rate
       </button>
 
-      <span className="mx-1 h-5 w-px bg-slate-200" />
+      <span className="mx-1 h-5 w-px bg-[var(--term-line-strong)]" />
 
       <button
         className={cls(excludeStaffing)}

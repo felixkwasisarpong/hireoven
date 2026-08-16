@@ -109,7 +109,7 @@ export default function TermsPage() {
             <h2 className="mb-3 text-[1.05rem] font-semibold text-white">9. Contact</h2>
             <p>
               Questions about these terms? Email{" "}
-              <a href="mailto:legal@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <a href="mailto:legal@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 legal@hireoven.com
               </a>.
             </p>
@@ -119,11 +119,11 @@ export default function TermsPage() {
 
         <div className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-8 text-[13px] text-[#ccd6cf]/55">
           Also see our{" "}
-          <Link href="/privacy" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+          <Link href="/privacy" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
             Privacy Policy
           </Link>{" "}
           or return to{" "}
-          <Link href="/" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+          <Link href="/" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
             Hireoven
           </Link>.
         </div>

@@ -7,11 +7,11 @@ const TERM_SELECT_STYLE: React.CSSProperties = {
   WebkitAppearance: "none",
   MozAppearance: "none",
   appearance: "none",
-  backgroundColor: "#0a0e0c",
-  color: "#ccd6cf",
-  border: "1px solid rgba(120,200,160,0.2)",
+  backgroundColor: "var(--term-input-bg)",
+  color: "var(--term-fg)",
+  border: "1px solid var(--term-line-strong)",
   backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 0.65rem center",
   paddingRight: "1.9rem",
@@ -31,9 +31,9 @@ const FILING_OPTIONS: { value: FilingContext; label: string }[] = [
 ]
 
 const APPLIC_META: Record<Applicability, { label: string; color: string }> = {
-  applies: { label: "Affects you", color: "#f5a623" },
-  maybe: { label: "Depends", color: "#6c7a72" },
-  does_not_apply: { label: "Doesn't apply", color: "#38e08a" },
+  applies: { label: "Affects you", color: "var(--term-amber-text)" },
+  maybe: { label: "Depends", color: "var(--term-dim)" },
+  does_not_apply: { label: "Doesn't apply", color: "var(--term-green)" },
 }
 
 const selectCls = "w-full px-3 py-2.5 text-[14px] outline-none"
@@ -97,7 +97,11 @@ export default function RulesChecker() {
                 <h3 className="text-[16px] font-semibold text-white">{r.title}</h3>
                 <span
                   className="shrink-0 border px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide"
-                  style={{ color: meta.color, borderColor: meta.color + "66", background: meta.color + "18" }}
+                  style={{
+                    color: meta.color,
+                    borderColor: `color-mix(in srgb, ${meta.color} 40%, transparent)`,
+                    background: `color-mix(in srgb, ${meta.color} 9%, transparent)`,
+                  }}
                 >
                   {meta.label}
                 </span>
@@ -106,7 +110,7 @@ export default function RulesChecker() {
             </div>
           )
         })}
-        <p className="text-[12px] leading-relaxed text-[#6c7a72]">
+        <p className="text-[12px] leading-relaxed text-[var(--term-dim)]">
           Plain-English guidance modeled from the 2026 rule changes — not legal or immigration advice. Confirm your
           specific case with your DSO or immigration counsel.
         </p>

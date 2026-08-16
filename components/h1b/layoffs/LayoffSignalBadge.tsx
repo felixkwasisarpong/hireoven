@@ -12,10 +12,10 @@ const HUE_CLASSES: Record<LayoffHue, string> = {
 
 // Dark-theme hue classes (the leaderboard renders inside a dark panel).
 const DARK_HUE_CLASSES: Record<LayoffHue, string> = {
-  slate: "bg-white/5 text-slate-300 ring-white/10",
-  amber: "bg-amber-400/10 text-amber-300 ring-amber-400/25",
-  orange: "bg-orange-400/10 text-orange-300 ring-orange-400/25",
-  red: "bg-red-400/10 text-red-300 ring-red-400/25",
+  slate: "bg-slate-50 text-slate-500 ring-slate-200",
+  amber: "bg-amber-50 text-amber-700 ring-amber-200",
+  orange: "bg-orange-50 text-orange-700 ring-orange-200",
+  red: "bg-red-50 text-red-700 ring-red-200",
 }
 
 export function LayoffSignalBadge({

@@ -56,7 +56,7 @@ export default function MobileNav() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[rgba(255,92,24,0.36)] bg-[#12100e] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)]">
+        <div className="absolute right-0 top-[calc(100%+0.75rem)] z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-[var(--term-ink-line)] bg-[var(--term-ink)] p-2 shadow-[0_16px_40px_rgba(16,24,40,0.24)]">
           <nav className="flex flex-col" aria-label="Mobile">
             {NAV_LINKS.map(({ href, label, icon: Icon }) => {
               const active = pathname === href || (href !== "/" && pathname.startsWith(`${href}/`))

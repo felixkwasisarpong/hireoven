@@ -13,7 +13,7 @@ function lotteryChip(j: PublicJobRow) {
   const est = estimateWageLevel({ salary })
   if (!est) return null
   const oddsPct = Math.round(est.meta.singleDrawOdds * 100)
-  const color = oddsPct < 20 ? "#e5695f" : oddsPct < 40 ? "#f5a623" : "#38e08a"
+  const color = oddsPct < 20 ? "var(--term-danger)" : oddsPct < 40 ? "var(--term-amber-text)" : "var(--term-green)"
   return { label: WAGE_LEVEL_META[est.level].label, oddsPct, color }
 }
 
@@ -42,7 +42,7 @@ export default function PublicJobList({ jobs }: { jobs: PublicJobRow[] }) {
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-3">
                   <p className="min-w-0 flex-1 truncate text-[15px] font-semibold text-white">{j.title}</p>
-                  <span className="shrink-0 text-[12px] text-[#6c7a72]">{freshnessLabel(j.first_detected_at)}</span>
+                  <span className="shrink-0 text-[12px] text-[var(--term-dim)]">{freshnessLabel(j.first_detected_at)}</span>
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-[#ccd6cf]/55">
                   {j.company_name && <span className="truncate font-medium text-[#ccd6cf]/70">{j.company_name}</span>}
@@ -61,7 +61,11 @@ export default function PublicJobList({ jobs }: { jobs: PublicJobRow[] }) {
                   {chip && (
                     <span
                       className="inline-flex items-center gap-1 border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
-                      style={{ color: chip.color, borderColor: chip.color + "55", background: chip.color + "14" }}
+                      style={{
+                        color: chip.color,
+                        borderColor: `color-mix(in srgb, ${chip.color} 33%, transparent)`,
+                        background: `color-mix(in srgb, ${chip.color} 8%, transparent)`,
+                      }}
                       title="Estimated H-1B wage level and single-draw lottery odds under the 2026 weighted rule"
                     >
                       H-1B {chip.label} · {chip.oddsPct}%
