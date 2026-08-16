@@ -15,6 +15,57 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null
 
+/**
+ * Resend allows 10 requests/second. The send loop used to fire as fast as the
+ * event loop would let it, so a 91-recipient campaign burned 19 sends on 429s
+ * with no retry — those recipients were recorded as permanently failed and
+ * never got the email. Pace below the ceiling and retry the ones that still
+ * bounce off it.
+ */
+const SEND_INTERVAL_MS = 220 // ~4.5/sec, comfortably under the 10/sec limit
+const MAX_RATE_LIMIT_RETRIES = 4
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function isRateLimited(error: { message?: string; name?: string } | null): boolean {
+  if (!error) return false
+  const text = `${error.name ?? ""} ${error.message ?? ""}`.toLowerCase()
+  return text.includes("too many requests") || text.includes("rate limit")
+}
+
+/** Send one email, backing off and retrying while Resend reports rate limiting. */
+async function sendWithRetry(
+  client: Resend,
+  payload: Parameters<Resend["emails"]["send"]>[0],
+): Promise<Awaited<ReturnType<Resend["emails"]["send"]>>> {
+  let response = await client.emails.send(payload)
+  for (let attempt = 1; attempt <= MAX_RATE_LIMIT_RETRIES && isRateLimited(response.error); attempt++) {
+    await sleep(SEND_INTERVAL_MS * 2 ** attempt) // 440ms, 880ms, 1.76s, 3.5s
+    response = await client.emails.send(payload)
+  }
+  return response
+}
+
+/**
+ * Build an unsubscribe URL that cannot abort the send.
+ *
+ * The account-scoped token has a FK to the user row; two recipients in the
+ * 2026-08-16 campaign had a userId with no matching row, so the INSERT threw and
+ * the whole send for them was lost. Fall back to the email-scoped marketing
+ * token, which is what recipients without a userId already use.
+ */
+async function buildSafeUnsubscribeUrl(email: string, userId: string | null): Promise<string> {
+  if (userId) {
+    try {
+      return buildAccountUnsubscribeUrl(await generateUnsubscribeToken(userId, null))
+    } catch {
+      // orphaned/deleted user — fall through to the marketing-subscriber token
+    }
+  }
+  const subscriber = await upsertMarketingSubscriber({ email, source: "campaign" })
+  return buildMarketingUnsubscribeUrl(subscriber.unsubscribeToken)
+}
+
 const createCampaignSchema = z.object({
   name: z.string().min(1).max(160),
   subject: z.string().min(1).max(220),
@@ -207,13 +258,13 @@ export async function POST(request: Request) {
   let sent = 0
   let failed = 0
 
-  for (const { email, userId } of recipients) {
+  for (const [index, { email, userId }] of recipients.entries()) {
+    // Pace the loop under Resend's 10/sec ceiling. Skipped before the first
+    // send so a single-recipient campaign stays instant.
+    if (index > 0) await sleep(SEND_INTERVAL_MS)
+
     try {
-      const unsubscribeUrl = userId
-        ? buildAccountUnsubscribeUrl(await generateUnsubscribeToken(userId, null))
-        : buildMarketingUnsubscribeUrl(
-            (await upsertMarketingSubscriber({ email, source: "campaign" })).unsubscribeToken
-          )
+      const unsubscribeUrl = await buildSafeUnsubscribeUrl(email, userId ?? null)
 
       const html = `
         <div style="font-family:system-ui,-apple-system,sans-serif;max-width:620px;margin:0 auto;padding:24px;color:#0f172a;">
@@ -225,7 +276,7 @@ export async function POST(request: Request) {
         </div>
       `
 
-      const sendResponse = await resend.emails.send({
+      const sendResponse = await sendWithRetry(resend, {
         from: getSupportFromEmail(),
         to: [email],
         subject,
