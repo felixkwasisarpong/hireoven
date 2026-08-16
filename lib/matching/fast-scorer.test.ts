@@ -920,3 +920,77 @@ test("in-lane experience that ended years ago is still discounted for staleness"
     `expected the stale candidate to score lower, got ${stale.overall_score} vs ${current.overall_score}`
   )
 })
+
+// ── Target-field boost must not saturate ──────────────────────────────────────
+// Flat addition + clamp(0,100) collapsed distinct scores into a single 100: on a
+// real feed, five roles scoring 92/94/97/97/98 pre-boost all rendered as "100",
+// so a security role and a frontend role were indistinguishable for one resume.
+
+test("target-field boost never pushes a score past 100", () => {
+  const resume = makeHealthcareResume()
+  const job = makeJob({})
+  const ctx = buildFastScoreResumeContext(resume)
+  const boosted = computeFastScore({
+    resume, job, profile: baseProfile, resumeContext: ctx, targetField: "healthcare",
+  })
+  assert.ok(boosted.overall_score <= 100, `got ${boosted.overall_score}`)
+})
+
+test("target-field boost is applied into remaining headroom, not flat", () => {
+  const resume = makeHealthcareResume()
+  const job = makeJob({})
+  const ctx = buildFastScoreResumeContext(resume)
+  const plain = computeFastScore({ resume, job, profile: baseProfile, resumeContext: ctx })
+  const boosted = computeFastScore({
+    resume, job, profile: baseProfile, resumeContext: ctx, targetField: "healthcare",
+  })
+  // Never negative, never saturating, and near the top the lift must be small
+  // enough that ordering between strong matches survives.
+  assert.ok(boosted.overall_score >= plain.overall_score)
+  const headroom = 100 - plain.overall_score
+  assert.ok(
+    boosted.overall_score - plain.overall_score <= Math.max(1, headroom),
+    `boost exceeded available headroom: ${plain.overall_score} -> ${boosted.overall_score}`,
+  )
+})
+
+test("boost preserves ordering between two differently-scored jobs", () => {
+  const resume = makeHealthcareResume()
+  const ctx = buildFastScoreResumeContext(resume)
+  const strong = makeJob({})
+  const weak = makeJob({
+    id: "job-weak",
+    title: "Warehouse Associate",
+    description: "Pallet handling, forklift operation, shipping and receiving.",
+    skills: ["Forklift", "Shipping"],
+  })
+  const score = (job: Job) =>
+    computeFastScore({ resume, job, profile: baseProfile, resumeContext: ctx, targetField: "healthcare" }).overall_score
+  assert.ok(score(strong) > score(weak), "boost must not flatten a strong and a weak match together")
+})
+
+// ── Same-profession promotion needs real skill evidence ───────────────────────
+// hasUsableSkillEvidence admits scores from 0.55, so a candidate matching barely
+// half the stack used to be floor-promoted to 90 on same-profession signals.
+
+test("a thin skill match is not floor-promoted into the excellent band", () => {
+  const resume = makeHealthcareResume()
+  const ctx = buildFastScoreResumeContext(resume)
+  const thin = makeJob({
+    id: "job-thin",
+    title: "Staff Pharmacist (PRN) - Infectious Diseases",
+    description:
+      "Requirements: sterile compounding, chemotherapy preparation, IV admixture, " +
+      "antimicrobial stewardship, pharmacokinetic dosing, USP 797 compliance, " +
+      "hazardous drug handling, and residency training.",
+    skills: [
+      "Sterile Compounding", "Chemotherapy", "IV Admixture", "Antimicrobial Stewardship",
+      "Pharmacokinetics", "USP 797", "Hazardous Drug Handling", "Residency",
+    ],
+  })
+  const score = computeFastScore({ resume, job: thin, profile: baseProfile, resumeContext: ctx })
+  assert.ok(
+    score.overall_score < 90,
+    `a mostly-missing skill stack should not reach the excellent band, got ${score.overall_score}`,
+  )
+})
