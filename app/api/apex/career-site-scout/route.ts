@@ -10,7 +10,8 @@ import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { extractSkillsFromText } from "@/lib/skills/taxonomy"
 import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
 import { buildFastScoreResumeContext, computeFastScore } from "@/lib/matching/fast-scorer"
-import type { EmploymentType, Job, SeniorityLevel } from "@/types"
+import { employerSponsorshipPill } from "@/lib/jobs/sponsorship-employer-signal"
+import type { Company, EmploymentType, Job, SeniorityLevel } from "@/types"
 
 export const runtime = "nodejs"
 export const maxDuration = 60
@@ -32,6 +33,11 @@ type ScoutResponseJob = {
   matchScore: number | null
   applyUrl: string | null
   sponsorshipSignal: string | null
+  /**
+   * Semantic strength of the sponsorship signal, so the client can colour the
+   * pill without the API shipping CSS classes.
+   */
+  sponsorshipTone: "sponsors" | "strong" | "moderate" | "limited" | "unknown"
   location: string | null
   isRemote: boolean
   status: "pending"
@@ -472,6 +478,44 @@ async function scoreJobsForUser(userId: string, jobs: Job[]) {
   return new Map(scores.map((score) => [score.job_id, score]))
 }
 
+/** The company columns `employerSponsorshipPill` blends in. Single indexed lookup. */
+async function loadCompanySponsorship(companyId: string) {
+  const { rows } = await getPostgresPool().query<{
+    sponsors_h1b: boolean | null
+    sponsorship_confidence: number | null
+  }>(
+    `SELECT sponsors_h1b, sponsorship_confidence FROM companies WHERE id = $1 LIMIT 1`,
+    [companyId],
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * Map the shared employer pill to a scout signal.
+ *
+ * The route previously read `job.sponsors_h1b` alone, which is a tri-state that
+ * is NULL on every freshly scanned job — enrichment hasn't run yet — so the pill
+ * never rendered. `employerSponsorshipPill` is the same helper the job detail
+ * page uses and additionally reads `sponsorship_score`, `requires_authorization`
+ * and company history, all of which are populated at scan time.
+ */
+function sponsorshipSignalFor(
+  job: Job,
+  company: { sponsors_h1b: boolean | null; sponsorship_confidence: number | null } | null,
+): { label: string | null; tone: ScoutResponseJob["sponsorshipTone"] } {
+  const pill = employerSponsorshipPill({
+    ...job,
+    company: company as unknown as Company,
+  })
+  switch (pill.label) {
+    case "H-1B sponsorship likely":   return { label: "Sponsors H-1B", tone: "sponsors" }
+    case "Strong sponsorship signal": return { label: "Strong sponsor signal", tone: "strong" }
+    case "Moderate sponsorship signal": return { label: "Moderate signal", tone: "moderate" }
+    case "Limited sponsorship signal": return { label: "No sponsorship", tone: "limited" }
+    default:                          return { label: "Sponsorship unclear", tone: "unknown" }
+  }
+}
+
 async function trackedJobIds(userId: string, jobIds: string[]) {
   if (jobIds.length === 0) return new Set<string>()
   const pool = getPostgresPool()
@@ -589,6 +633,10 @@ export async function POST(request: NextRequest) {
   const persistedJobs = rawJobs.length > 0
     ? await upsertJobsForScout(company.id, companyName, rawJobs, careersUrl)
     : []
+  // employerSponsorshipPill blends the job row with company-level history.
+  // upsertCompanySource only returns id/name, so pull the two fields the
+  // blend needs — without them every scanned job looks unsponsored.
+  const sponsorshipCompany = await loadCompanySponsorship(company.id)
   const scoresByJob = await scoreJobsForUser(user.id, persistedJobs)
   const tracked = await trackedJobIds(user.id, persistedJobs.map((job) => job.id))
 
@@ -596,16 +644,15 @@ export async function POST(request: NextRequest) {
     .map((job) => {
       const score = scoresByJob.get(job.id)
       const breakdown = score?.score_breakdown
+      const sponsorship = sponsorshipSignalFor(job, sponsorshipCompany)
       return {
         jobId: job.id,
         jobTitle: job.title,
         company: company.name ?? companyName,
         matchScore: score?.overall_score ?? null,
         applyUrl: job.apply_url,
-        sponsorshipSignal:
-          job.sponsors_h1b === true ? "Sponsors H-1B"
-          : job.sponsors_h1b === false ? "No sponsorship"
-          : null,
+        sponsorshipSignal: sponsorship.label,
+        sponsorshipTone: sponsorship.tone,
         location: job.location,
         isRemote: job.is_remote,
         status: "pending" as const,
