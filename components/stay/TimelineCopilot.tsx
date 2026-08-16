@@ -12,10 +12,10 @@ import type {
 } from "@/types"
 
 const URGENCY_TONE: Record<OptTimelineUrgencyLevel, string> = {
-  Low: "#38e08a",
-  Medium: "#f5a623",
-  High: "#f5a623",
-  Emergency: "#e5695f",
+  Low: "var(--term-green)",
+  Medium: "var(--term-amber-text)",
+  High: "var(--term-amber-text)",
+  Emergency: "var(--term-danger)",
 }
 
 const FALLBACK_LABEL: Record<OptTimelineFallbackCategory, { label: string; href?: string }> = {
@@ -59,11 +59,11 @@ const TERM_SELECT_STYLE: React.CSSProperties = {
   WebkitAppearance: "none",
   MozAppearance: "none",
   appearance: "none",
-  backgroundColor: "#0a0e0c",
-  color: "#ccd6cf",
-  border: "1px solid rgba(120,200,160,0.2)",
+  backgroundColor: "var(--term-input-bg)",
+  color: "var(--term-fg)",
+  border: "1px solid var(--term-line-strong)",
   backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 0.65rem center",
   paddingRight: "1.9rem",
@@ -204,18 +204,18 @@ export default function TimelineCopilot() {
             <p className="term-label">Your lottery math</p>
             <p className="mt-3 text-[14px] leading-relaxed text-[#ccd6cf]/80">
               At <span className="text-white">${salary.toLocaleString()}</span> ({WAGE_LEVEL_META[odds.level].label}), each
-              draw is <span style={{ color: odds.singleDrawPct < 20 ? "#e5695f" : odds.singleDrawPct < 40 ? "#f5a623" : "#38e08a" }}>{odds.singleDrawPct}%</span>.{" "}
+              draw is <span style={{ color: odds.singleDrawPct < 20 ? "var(--term-danger)" : odds.singleDrawPct < 40 ? "var(--term-amber-text)" : "var(--term-green)" }}>{odds.singleDrawPct}%</span>.{" "}
               {seasons > 0 ? (
                 <>
                   You can register in <span className="text-white">{seasons}</span> more March{seasons === 1 ? "" : "s"} before your
                   runway ends → roughly{" "}
-                  <span style={{ color: (cumulativeOverRunway ?? 0) < 25 ? "#e5695f" : (cumulativeOverRunway ?? 0) < 45 ? "#f5a623" : "#38e08a" }}>
+                  <span style={{ color: (cumulativeOverRunway ?? 0) < 25 ? "var(--term-danger)" : (cumulativeOverRunway ?? 0) < 45 ? "var(--term-amber-text)" : "var(--term-green)" }}>
                     {cumulativeOverRunway}%
                   </span>{" "}
                   cumulative odds across them.
                 </>
               ) : (
-                <span className="text-[#e5695f]"> Your runway ends before the next registration — a cap-subject H-1B can&apos;t finish in time. Prioritize cap-exempt roles.</span>
+                <span className="text-[var(--term-danger)]"> Your runway ends before the next registration — a cap-subject H-1B can&apos;t finish in time. Prioritize cap-exempt roles.</span>
               )}
             </p>
           </div>
@@ -234,7 +234,7 @@ export default function TimelineCopilot() {
                 <li key={cat} className="flex items-start gap-2.5 text-[13.5px] text-[#ccd6cf]/80">
                   <span className="mt-1.5 h-1.5 w-1.5 shrink-0 bg-[#f5a623]" aria-hidden />
                   {item.href ? (
-                    <Link href={item.href} className="text-[#ccd6cf] underline decoration-[#f5a623]/40 underline-offset-4 hover:text-[#f5a623] hover:decoration-[#f5a623]">
+                    <Link href={item.href} className="text-[#ccd6cf] underline decoration-[#c2410c]/40 underline-offset-4 hover:text-[#f5a623] hover:decoration-[#c2410c]">
                       {item.label}
                     </Link>
                   ) : (
@@ -249,7 +249,7 @@ export default function TimelineCopilot() {
         {(dashboard.warnings.length > 0 || dashboard.dataGaps.length > 0) && (
           <div className="border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-4">
             {dashboard.dataGaps.map((g) => (
-              <p key={g} className="text-[12px] text-[#6c7a72]">
+              <p key={g} className="text-[12px] text-[var(--term-dim)]">
                 <span className="text-[#f5a623]">·</span> {g}
               </p>
             ))}
@@ -261,7 +261,7 @@ export default function TimelineCopilot() {
           </div>
         )}
 
-        <p className="text-[12px] leading-relaxed text-[#6c7a72]">{dashboard.disclaimer}</p>
+        <p className="text-[12px] leading-relaxed text-[var(--term-dim)]">{dashboard.disclaimer}</p>
       </div>
     </div>
   )
@@ -273,7 +273,7 @@ function Metric({ value, label, plain }: { value: number | null; label: string; 
       <p className={["text-[26px] font-semibold leading-none tabular-nums", plain ? "text-white" : "text-[#38e08a]"].join(" ")}>
         {value == null ? "—" : value}
       </p>
-      <p className="mt-1.5 text-[11px] leading-tight text-[#6c7a72]">{label}</p>
+      <p className="mt-1.5 text-[11px] leading-tight text-[var(--term-dim)]">{label}</p>
     </div>
   )
 }

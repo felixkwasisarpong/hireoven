@@ -467,7 +467,7 @@ function AnnouncementBar() {
       href="/extension"
       prefetch
     >
-      <Chrome className="h-4 w-4 shrink-0 text-[#ff5c18]" aria-hidden />
+      <Chrome className="h-4 w-4 shrink-0 text-[var(--term-amber-on-ink)]" aria-hidden />
       The Hireoven extension is live on Chrome
       <ArrowRight className="h-3.5 w-3.5 shrink-0" aria-hidden />
     </Link>
@@ -483,7 +483,7 @@ function JobFeedPreview() {
           <Search className="h-4 w-4 text-[var(--term-dim)]" aria-hidden />
           <span className="text-[14px] font-semibold text-[var(--term-strong)]">Your job feed</span>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-[rgba(5,118,66,0.1)] px-2.5 py-1 text-[11px] font-semibold text-[var(--term-green)]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--term-green-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--term-green)]">
           <span className="h-1.5 w-1.5 rounded-full bg-[var(--term-green)]" aria-hidden />
           Live
         </span>
@@ -502,7 +502,7 @@ function JobFeedPreview() {
               />
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[15px] font-semibold text-[var(--term-amber)]">{job.title}</p>
+                <p className="truncate text-[15px] font-semibold text-[var(--term-strong)]">{job.title}</p>
                 <p className="mt-0.5 truncate text-[13.5px] text-[var(--term-strong)]">{job.company}</p>
                 <p className="mt-0.5 flex items-center gap-1.5 truncate text-[12.5px] text-[var(--term-dim)]">
                   <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -510,7 +510,7 @@ function JobFeedPreview() {
                 </p>
 
                 <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-[rgba(5,118,66,0.1)] px-2 py-0.5 text-[11px] font-semibold text-[var(--term-green)]">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--term-green-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--term-green)]">
                     <BadgeCheck className="h-3 w-3" aria-hidden />
                     {job.sponsor}
                   </span>
@@ -594,15 +594,15 @@ function HeroSection({ stats }: { stats: { jobs: number; companies: number } }) 
 
 function ImageCarouselSection() {
   return (
-    <section className="bg-[#12100e] py-16">
+    <section className="bg-[var(--term-ink)] py-16">
       <div className="mx-auto w-full max-w-[80rem] px-5 lg:px-8">
         <div className="grid gap-8 lg:grid-cols-[0.78fr_1.22fr] lg:items-end">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[#ff5c18]">Product workflow</p>
-            <h2 className="mt-3 max-w-[28rem] text-[1.8rem] font-semibold leading-[1.12] tracking-tight text-[#fff7ed] md:text-[2.35rem]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--term-amber-on-ink)]">Product workflow</p>
+            <h2 className="mt-3 max-w-[28rem] text-[1.8rem] font-semibold leading-[1.12] tracking-tight text-[var(--term-on-ink)] md:text-[2.35rem]">
               A job search cockpit, not another list of stale posts
             </h2>
-            <p className="mt-4 max-w-[31rem] text-[15px] leading-7 text-[#cfc6bd]">
+            <p className="mt-4 max-w-[31rem] text-[15px] leading-7 text-[var(--term-on-ink-dim)]">
               The carousel shows the three surfaces that matter most: freshness, proof, and application speed.
             </p>
           </div>
@@ -610,16 +610,16 @@ function ImageCarouselSection() {
           <div className="-mx-5 flex snap-x gap-4 overflow-x-auto px-5 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:px-0">
             {carouselSlides.map(({ body, image, kicker, title }) => (
               <article
-                className="min-w-[82%] snap-start overflow-hidden rounded-lg border border-white/12 bg-[#1b1815] shadow-[0_18px_44px_-26px_rgba(0,0,0,0.9)] sm:min-w-[25rem] lg:min-w-[31rem]"
+                className="min-w-[82%] snap-start overflow-hidden rounded-lg border border-white/12 bg-[var(--term-ink-2)] shadow-[0_18px_44px_-26px_rgba(16,24,40,0.55)] sm:min-w-[25rem] lg:min-w-[31rem]"
                 key={title}
               >
                 <div className="relative aspect-[3/2] border-b border-white/10">
                   <Image alt="" className="object-cover" fill sizes="(min-width: 1024px) 32rem, 82vw" src={image} />
                 </div>
                 <div className="p-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[#ff5c18]">{kicker}</p>
-                  <h3 className="mt-2 text-[1.05rem] font-semibold leading-snug text-[#fff7ed]">{title}</h3>
-                  <p className="mt-2 text-[13.5px] leading-6 text-[#bfb6ad]">{body}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.07em] text-[var(--term-amber-on-ink)]">{kicker}</p>
+                  <h3 className="mt-2 text-[1.05rem] font-semibold leading-snug text-[var(--term-on-ink)]">{title}</h3>
+                  <p className="mt-2 text-[13.5px] leading-6 text-[var(--term-on-ink-dim)]">{body}</p>
                 </div>
               </article>
             ))}
@@ -689,7 +689,7 @@ function CompanyTile({ company, priority }: { company: LogoCompany; priority: bo
       </span>
 
       {/* Hover card: real crawl and public H-1B figures for this employer. */}
-      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] z-50 hidden w-[17rem] -translate-x-1/2 translate-y-1 rounded-lg border border-[var(--term-line-strong)] bg-[var(--term-panel)] p-4 text-left opacity-0 shadow-[0_18px_42px_rgba(17,16,15,0.18)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 sm:block">
+      <span className="pointer-events-none absolute left-1/2 top-[calc(100%+0.5rem)] z-50 hidden w-[17rem] -translate-x-1/2 translate-y-1 rounded-lg border border-[var(--term-line-strong)] bg-[var(--term-panel)] p-4 text-left opacity-0 shadow-[0_18px_42px_rgba(16,24,40,0.12)] transition duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100 sm:block">
         <span className="flex items-center gap-3 border-b border-[var(--term-line)] pb-3">
           {isLocalCompanyLogo(company.logo_url) ? (
             <Image alt="" className="h-8 w-8 object-contain" height={32} src={company.logo_url ?? ""} width={32} />
@@ -724,7 +724,7 @@ function CompanyTile({ company, priority }: { company: LogoCompany; priority: bo
 
         <span className="mt-3 flex items-center justify-between gap-3 text-[11.5px] text-[var(--term-dim)]">
           <span>{proof.footer}</span>
-          <span className="inline-flex items-center gap-1 font-semibold text-[var(--term-amber)]">
+          <span className="inline-flex items-center gap-1 font-semibold text-[var(--term-amber-text)]">
             View
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           </span>
@@ -790,7 +790,7 @@ function HowItWorksSection() {
 
             <div className="flex flex-1 flex-col p-6">
               <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
+                <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--term-amber-soft)] text-[var(--term-amber)]">
                   <Icon className="h-5 w-5" aria-hidden />
                 </span>
                 <span className="term-label">Step {index + 1}</span>
@@ -832,7 +832,7 @@ function SponsorshipSection() {
         <div className="grid gap-4">
           {sponsorshipProofPoints.map(({ body, title }) => (
             <div className={`${CARD} flex gap-4 p-5`} key={title}>
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[rgba(5,118,66,0.1)] text-[var(--term-green)]">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--term-green-soft)] text-[var(--term-green)]">
                 <ShieldCheck className="h-5 w-5" aria-hidden />
               </span>
               <div>
@@ -891,7 +891,7 @@ function FeatureCard({ body, category, href, icon: Icon, tags, title }: (typeof 
   return (
     <Link className={`${CARD} term-panel-hover group flex flex-col p-6`} href={href}>
       <div className="flex items-start justify-between gap-4">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--term-amber-soft)] text-[var(--term-amber)]">
           <Icon className="h-5 w-5" aria-hidden />
         </span>
         <ArrowRight
@@ -1000,7 +1000,7 @@ function FinalCtaSection() {
   return (
     <section className={`${SHELL} py-16`}>
       <div className={`${CARD} mx-auto flex max-w-[46rem] flex-col items-center p-8 text-center sm:p-12`}>
-        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[rgba(var(--term-amber-rgb),0.12)] text-[var(--term-amber)]">
+        <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--term-amber-soft)] text-[var(--term-amber)]">
           <Building2 className="h-5 w-5" aria-hidden />
         </span>
         <h2 className="mt-6 text-[1.9rem] font-semibold leading-[1.12] tracking-tight text-[var(--term-strong)] md:text-[2.5rem]">
@@ -1025,7 +1025,7 @@ function FooterColumn({ links, title }: { links: { href: string; label: string }
       <ul className="space-y-2.5">
         {links.map(({ href, label }) => (
           <li key={href}>
-            <Link className="text-[13.5px] text-[var(--term-fg)] transition hover:text-[var(--term-amber)]" href={href}>
+            <Link className="text-[13.5px] text-[var(--term-fg)] transition hover:text-[var(--term-amber-text)]" href={href}>
               {label}
             </Link>
           </li>

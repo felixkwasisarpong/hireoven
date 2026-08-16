@@ -8,11 +8,11 @@ const TERM_SELECT_STYLE: React.CSSProperties = {
   WebkitAppearance: "none",
   MozAppearance: "none",
   appearance: "none",
-  backgroundColor: "#0a0e0c",
-  color: "#ccd6cf",
-  border: "1px solid rgba(120,200,160,0.2)",
+  backgroundColor: "var(--term-input-bg)",
+  color: "var(--term-fg)",
+  border: "1px solid var(--term-line-strong)",
   backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 0.65rem center",
   paddingRight: "1.9rem",
@@ -142,7 +142,7 @@ export default function TalentSignup({
       </div>
 
       <div className="mt-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="max-w-md text-[11px] leading-relaxed text-[#6c7a72]">
+        <p className="max-w-md text-[11px] leading-relaxed text-[var(--term-dim)]">
           Only employers with verified DOL sponsorship history can see this. We never sell your data; re-submit to
           update or withdraw.
         </p>

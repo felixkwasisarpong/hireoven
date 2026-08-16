@@ -3,6 +3,7 @@ import test from "node:test"
 import type { QueryResult, QueryResultRow } from "pg"
 import type { MatchScoreBreakdown, Resume } from "@/types"
 import { getResumeVersion } from "@/lib/matching/fast-scorer"
+import { FAST_SCORE_CACHE_EPOCH_MS } from "@/lib/matching/score-freshness"
 import {
   ApplicationXRayLoadError,
   buildApplicationXRayInput,
@@ -24,6 +25,12 @@ import type {
 } from "./records"
 
 const NOW = "2026-08-13T12:00:00.000Z"
+// Score freshness is measured against the scoring epoch, which moves every time
+// the matching algorithm changes. Derive these from the epoch rather than
+// pinning calendar dates, so a bump doesn't quietly flip a "fresh" fixture into
+// a stale one and assert the opposite of what the test is named for.
+const FRESH_SCORE_AT = new Date(FAST_SCORE_CACHE_EPOCH_MS + 60_000).toISOString()
+const STALE_SCORE_AT = new Date(FAST_SCORE_CACHE_EPOCH_MS - 60_000).toISOString()
 const USER_ID = "11111111-1111-4111-8111-111111111111"
 const JOB_ID = "22222222-2222-4222-8222-222222222222"
 const CANONICAL_ID = "33333333-3333-4333-8333-333333333333"
@@ -224,7 +231,7 @@ test("fresh careerFit is used while stale match scores are degraded to unknown",
       jobs: [job()],
       resumes: [resume()],
       profile: profile(),
-      matchScores: [scoreRow({ computed_at: "2026-08-12T00:00:00.000Z", careerFitScore: 88 })],
+      matchScores: [scoreRow({ computed_at: STALE_SCORE_AT, careerFitScore: 88 })],
     }),
     loadNetworkingContacts: async () => [],
   }))
@@ -870,7 +877,7 @@ function scoreRow(overrides: Partial<XRayScoreRow & { careerFitScore: number }> 
     skills_match_rate: 1,
     score_method: "fast",
     score_breakdown: breakdown,
-    computed_at: NOW,
+    computed_at: FRESH_SCORE_AT,
     resume_version: getResumeVersion(baseResume),
     resume_updated_at: baseResume.updated_at,
     ...overrides,

@@ -74,7 +74,7 @@ export function WaitlistInlineForm() {
         </button>
       </div>
       {state === "error" && (
-        <p className="mt-2 text-sm text-red-400">{error}</p>
+        <p className="mt-2 text-sm text-red-700">{error}</p>
       )}
     </form>
   )

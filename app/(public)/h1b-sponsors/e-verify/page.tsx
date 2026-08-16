@@ -47,7 +47,7 @@ export default async function EverifyPage() {
             href="https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-extension-for-stem-students-stem-opt"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
           >
             E-Verify
           </a>
@@ -62,7 +62,7 @@ export default async function EverifyPage() {
               href="https://www.e-verify.gov/e-verify-employer-search"
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="font-medium text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               employer search tool
             </a>
@@ -72,7 +72,7 @@ export default async function EverifyPage() {
           <p className="mt-2">
             <Link
               href="/h1b-sponsors/leaderboard/methodology#e-verify"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               How we source this
             </Link>
@@ -94,7 +94,7 @@ export default async function EverifyPage() {
         ) : (
           <p className="mt-5 text-sm text-[#ccd6cf]/55">
             Our matched E-Verify list is being compiled. In the meantime, check any employer in the{" "}
-            <a href="https://www.e-verify.gov/e-verify-employer-search" target="_blank" rel="noopener noreferrer" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+            <a href="https://www.e-verify.gov/e-verify-employer-search" target="_blank" rel="noopener noreferrer" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
               USCIS E-Verify employer search
             </a>
             .

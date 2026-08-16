@@ -20,11 +20,11 @@ export async function generateMetadata({ params }: { params: { category: string 
 // Semantic per-category accents in the terminal palette: distinct-but-muted
 // dark-tinted chips + a thin accent bar, kept visually separable on the dark canvas.
 const CATEGORY_COLORS: Record<string, { bar: string; chip: string; accent: string }> = {
-  "h1b-visa-intel":     { bar: "bg-blue-400/70",    chip: "border-blue-500/25 bg-blue-500/12 text-blue-300",       accent: "text-blue-300" },
-  "job-market-pulse":   { bar: "bg-violet-400/70",  chip: "border-violet-500/25 bg-violet-500/12 text-violet-300", accent: "text-violet-300" },
-  "career-strategy":    { bar: "bg-emerald-400/70", chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-300", accent: "text-emerald-300" },
-  "tech-company-watch": { bar: "bg-orange-400/70",  chip: "border-orange-500/25 bg-orange-500/12 text-orange-300", accent: "text-orange-300" },
-  "interview-offers":   { bar: "bg-rose-400/70",    chip: "border-rose-500/25 bg-rose-500/12 text-rose-300",       accent: "text-rose-300" },
+  "h1b-visa-intel":     { bar: "bg-blue-400/70",    chip: "border-blue-500/25 bg-blue-500/12 text-blue-700",       accent: "text-blue-700" },
+  "job-market-pulse":   { bar: "bg-violet-400/70",  chip: "border-violet-500/25 bg-violet-500/12 text-violet-700", accent: "text-violet-700" },
+  "career-strategy":    { bar: "bg-emerald-400/70", chip: "border-emerald-500/25 bg-emerald-500/12 text-emerald-700", accent: "text-emerald-700" },
+  "tech-company-watch": { bar: "bg-orange-400/70",  chip: "border-orange-500/25 bg-orange-500/12 text-orange-700", accent: "text-orange-700" },
+  "interview-offers":   { bar: "bg-rose-400/70",    chip: "border-rose-500/25 bg-rose-500/12 text-rose-700",       accent: "text-rose-700" },
 }
 
 function categoryColor(slug: string) {
@@ -127,7 +127,7 @@ export default async function CategoryPage({ params }: { params: { category: str
           <div className="flex flex-col items-center justify-center py-24 text-center">
             <p className="text-lg font-semibold text-white">No posts yet in this category</p>
             <p className="mt-1 text-sm text-[#ccd6cf]/45">Check back soon — new posts publish every weekday.</p>
-            <Link href="/blog" className="mt-6 text-sm font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+            <Link href="/blog" className="mt-6 text-sm font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
               ← Browse all posts
             </Link>
           </div>

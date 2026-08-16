@@ -17,7 +17,7 @@ const JOBS: FeedJob[] = [
   {
     id: "1",
     initial: "S",
-    logoBg: "bg-[#FF5C18]",
+    logoBg: "bg-[var(--term-amber)]",
     title: "Software Engineer, Backend",
     location: "San Francisco - Hybrid",
     freshness: "Just now",

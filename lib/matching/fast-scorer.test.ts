@@ -661,3 +661,262 @@ test("skill overlap alone cannot make a cross-domain resume ATS-ready", () => {
     "expected relevant-experience gate to be surfaced"
   )
 })
+
+test("a same-lane senior with a partially dated timeline is not gated on relevant experience", () => {
+  // Regression: relevant experience used to be a SUM of recency-discounted role
+  // years compared against the JD's undiscounted "5+ years" ask. An 8-year
+  // backend engineer whose parsed roles only account for ~6 dated years topped
+  // out near 3 "relevant years", tripping insufficient_relevant_experience on
+  // essentially every senior posting despite a fully same-lane history.
+  const year = new Date().getFullYear()
+  const resume = makeHealthcareResume({
+    id: "resume-tech-partial-dates",
+    file_name: "backend.pdf",
+    name: "Backend Candidate",
+    summary: "Senior backend engineer building payment and banking platform services.",
+    work_experience: [
+      {
+        company: "Dreamline AI",
+        title: "Generative AI Specialist",
+        start_date: `Mar ${year}`,
+        end_date: null,
+        is_current: true,
+        description: "Building LLM-backed services in Python on AWS with API development and code review.",
+        achievements: [],
+      },
+      {
+        company: "Sepurux LLC",
+        title: "Principal Engineer",
+        start_date: `Oct ${year - 1}`,
+        end_date: `Mar ${year}`,
+        is_current: false,
+        description: "Led backend platform architecture in Python and TypeScript on AWS, distributed systems, and code review.",
+        achievements: [],
+      },
+      {
+        company: "EFT Corporation",
+        title: "Software Engineer - Payments Platform",
+        start_date: `Aug ${year - 5}`,
+        end_date: `Dec ${year - 3}`,
+        is_current: false,
+        description: "Built payment platform APIs in Python and TypeScript on AWS with distributed systems and code review.",
+        achievements: [],
+      },
+      {
+        company: "Republic Bank",
+        title: "Software Engineer - Core Banking Integration",
+        start_date: `Oct ${year - 6}`,
+        end_date: `Jul ${year - 5}`,
+        is_current: false,
+        description: "Core banking integration services in Python with API development and distributed systems.",
+        achievements: [],
+      },
+      {
+        company: "Passmall",
+        title: "Backend Developer",
+        start_date: `Dec ${year - 8}`,
+        end_date: `Sep ${year - 6}`,
+        is_current: false,
+        description: "Backend development in Python and TypeScript with API development on AWS.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: `${year - 12}`,
+        end_date: `${year - 8}`,
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["Python", "TypeScript", "AWS", "API Development", "Distributed Systems", "Code Review"],
+      soft: ["Mentoring"],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "senior",
+    years_of_experience: 8,
+    primary_role: "Backend Software Engineer",
+    industries: ["Financial Services"],
+    top_skills: ["Python", "TypeScript", "AWS", "API Development", "Distributed Systems"],
+    raw_text: "Backend Software Engineer Python TypeScript AWS API Development Distributed Systems Code Review",
+  })
+  const job = makeJob({
+    id: "job-backend-senior-1",
+    title: "Senior Backend Engineer",
+    description: "Requirements: 5+ years of backend experience. Python, TypeScript, AWS, API development, distributed systems, and code review.",
+    skills: ["Python", "TypeScript", "AWS", "API Development", "Distributed Systems", "Code Review"],
+    seniority_level: "senior",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  const relevantYears = score.score_breakdown?.careerFit?.relevantYears ?? 0
+  assert.ok(
+    relevantYears >= 5,
+    `expected relevant years to reflect the 8-year same-lane history, got ${relevantYears}`
+  )
+  assert.ok(
+    !score.score_breakdown?.concerns.some((concern) => concern.includes("relevant_experience")),
+    `expected no relevant-experience gate, got ${JSON.stringify(score.score_breakdown?.concerns)}`
+  )
+  assert.ok(
+    score.overall_score >= 75,
+    `expected a same-lane senior match above the strong band, got ${score.overall_score}`
+  )
+})
+
+test("a current sub-year role still contributes relevant experience", () => {
+  // roleYears() was year-only arithmetic, so a role started earlier in the
+  // current calendar year measured 0.0 years and carried no weight at all --
+  // even though it is the strongest evidence of what the candidate does now.
+  const year = new Date().getFullYear()
+  const resume = makeHealthcareResume({
+    id: "resume-tech-current-only",
+    file_name: "current.pdf",
+    name: "Current Role Candidate",
+    summary: "Software engineer working on backend platform services.",
+    work_experience: [
+      {
+        company: "Platform Co",
+        title: "Software Engineer",
+        start_date: `Jan ${year}`,
+        end_date: null,
+        is_current: true,
+        description: "Backend platform services in TypeScript and Node.js on AWS with API development.",
+        achievements: [],
+      },
+    ],
+    education: [
+      {
+        institution: "University",
+        degree: "Bachelor of Science",
+        field: "Computer Science",
+        start_date: `${year - 6}`,
+        end_date: `${year - 2}`,
+        gpa: null,
+      },
+    ],
+    skills: {
+      technical: ["TypeScript", "Node.js", "AWS", "API Development"],
+      soft: [],
+      languages: [],
+      certifications: [],
+    },
+    projects: [],
+    seniority_level: "mid",
+    years_of_experience: 3,
+    primary_role: "Software Engineer",
+    industries: ["Technology"],
+    top_skills: ["TypeScript", "Node.js", "AWS", "API Development"],
+    raw_text: "Software Engineer TypeScript Node.js AWS API Development",
+  })
+  const job = makeJob({
+    id: "job-backend-mid-1",
+    title: "Software Engineer - Backend",
+    description: "Requirements: 3+ years of backend experience. TypeScript, Node.js, AWS, and API development.",
+    skills: ["TypeScript", "Node.js", "AWS", "API Development"],
+    seniority_level: "mid",
+  })
+
+  const score = computeFastScore({
+    resume,
+    job,
+    profile: baseProfile,
+    resumeContext: buildFastScoreResumeContext(resume),
+  })
+
+  assert.ok(
+    (score.score_breakdown?.careerFit?.relevantYears ?? 0) > 0,
+    "expected the current sub-year role to count toward relevant experience"
+  )
+})
+
+test("in-lane experience that ended years ago is still discounted for staleness", () => {
+  // The mean-relevance fix must not erase the currency signal: someone who last
+  // did the work eight years ago should not read as fully current.
+  const year = new Date().getFullYear()
+  const makeBackendResume = (endYear: number, id: string) =>
+    makeHealthcareResume({
+      id,
+      file_name: "backend.pdf",
+      name: "Backend Candidate",
+      summary: "Backend engineer building platform services.",
+      work_experience: [
+        {
+          company: "Platform Co",
+          title: "Backend Engineer",
+          start_date: `Jan ${endYear - 8}`,
+          end_date: `Dec ${endYear}`,
+          is_current: false,
+          description: "Backend platform services in TypeScript and Node.js on AWS with API development.",
+          achievements: [],
+        },
+      ],
+      education: [
+        {
+          institution: "University",
+          degree: "Bachelor of Science",
+          field: "Computer Science",
+          start_date: `${endYear - 12}`,
+          end_date: `${endYear - 8}`,
+          gpa: null,
+        },
+      ],
+      skills: {
+        technical: ["TypeScript", "Node.js", "AWS", "API Development"],
+        soft: [],
+        languages: [],
+        certifications: [],
+      },
+      projects: [],
+      seniority_level: "senior",
+      years_of_experience: 8,
+      primary_role: "Backend Engineer",
+      industries: ["Technology"],
+      top_skills: ["TypeScript", "Node.js", "AWS", "API Development"],
+      raw_text: "Backend Engineer TypeScript Node.js AWS API Development",
+    })
+
+  const job = makeJob({
+    id: "job-backend-currency-1",
+    title: "Senior Backend Engineer",
+    description: "Requirements: 5+ years of backend experience. TypeScript, Node.js, AWS, and API development.",
+    skills: ["TypeScript", "Node.js", "AWS", "API Development"],
+    seniority_level: "senior",
+  })
+
+  const scoreFor = (endYear: number, id: string) => {
+    const resume = makeBackendResume(endYear, id)
+    return computeFastScore({
+      resume,
+      job,
+      profile: baseProfile,
+      resumeContext: buildFastScoreResumeContext(resume),
+    })
+  }
+
+  const current = scoreFor(year, "resume-backend-current")
+  const stale = scoreFor(year - 8, "resume-backend-stale")
+
+  const currentYears = current.score_breakdown?.careerFit?.relevantYears ?? 0
+  const staleYears = stale.score_breakdown?.careerFit?.relevantYears ?? 0
+
+  assert.ok(
+    staleYears < currentYears,
+    `expected stale experience to count for less, got ${staleYears} vs ${currentYears}`
+  )
+  assert.ok(
+    stale.overall_score < current.overall_score,
+    `expected the stale candidate to score lower, got ${stale.overall_score} vs ${current.overall_score}`
+  )
+})

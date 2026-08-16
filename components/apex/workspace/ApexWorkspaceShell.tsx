@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { usePathname, useSearchParams } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import dynamic from "next/dynamic"
 import { MoreHorizontal, Sparkles, Target, X } from "lucide-react"
 import { ApexAlertBadge } from "@/components/apex/ApexAlertBadge"
@@ -67,6 +67,7 @@ import {
   type ApexSearchProfile,
 } from "@/lib/apex/search-profile"
 import { getPersonalizedChips } from "@/lib/apex/mode"
+import { extractCareerSiteUrlFromMessage } from "@/lib/apex/career-site-intent"
 import { readPermissions, type ApexPermissionState } from "@/lib/apex/permissions"
 import { getApexSuggestionChips } from "@/lib/apex/mode"
 import { getApexNudges } from "@/lib/apex/nudges"
@@ -347,6 +348,7 @@ function readTrimmedParam(searchParams: ReturnType<typeof useSearchParams>, key:
 
 export function ApexWorkspaceShell() {
   const pathname   = usePathname()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const { primaryResume } = useResumeContext()
   const { user, profile } = useAuth()
@@ -1857,6 +1859,18 @@ export function ApexWorkspaceShell() {
       event.preventDefault()
       const message = (overrideMessage ?? query).trim()
       if (!message || isSubmittingRef.current || isLoading || apexStream.isStreaming || researchStream.isRunning) return
+
+      const careerSiteUrl = extractCareerSiteUrlFromMessage(message)
+      if (careerSiteUrl) {
+        pendingVoiceReplyRef.current = false
+        setQuery("")
+        const updatedCmds = appendCommand(recentCommands, message)
+        setRecentCommands(updatedCmds)
+        setHasSession(true)
+        router.push(`/dashboard/site-scout?url=${encodeURIComponent(careerSiteUrl)}`)
+        return
+      }
+
       const executableMessage = resolveExecutableApexCommand(message)
       isSubmittingRef.current = true
       pendingVoiceReplyRef.current = source === "voice"

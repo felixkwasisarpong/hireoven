@@ -96,7 +96,7 @@ export default function ContactPage() {
           <div className="mx-auto mt-10 max-w-3xl border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-6 py-5 text-center text-[13px] text-[#ccd6cf]/55 sm:flex sm:items-center sm:justify-between sm:gap-4 sm:text-left">
             <p>
               Looking for quick answers first? Our{" "}
-              <Link href="/support" className="font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <Link href="/support" className="font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 Support &amp; FAQ
               </Link>{" "}
               covers the extension, billing, and account questions.

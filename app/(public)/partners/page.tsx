@@ -183,14 +183,14 @@ export default async function PartnersPage() {
             Prefer email? Reach us at{" "}
             <a
               href="mailto:hello@hireoven.com"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               hello@hireoven.com
             </a>{" "}
             — or see other ways to{" "}
             <Link
               href="/contact"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               get in touch
             </Link>

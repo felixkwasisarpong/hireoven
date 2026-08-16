@@ -28,19 +28,19 @@ const VERDICT_COPY: Record<H1BVerdict, { label: string; accent: string; ring: st
   strong: {
     label: "Strong",
     accent: "text-emerald-700",
-    ring: "stroke-emerald-500",
+    ring: "stroke-emerald-600",
   },
-  good: { label: "Good", accent: "text-cyan-700", ring: "stroke-cyan-500" },
+  good: { label: "Good", accent: "text-cyan-700", ring: "stroke-cyan-600" },
   moderate: {
     label: "Moderate",
     accent: "text-amber-700",
-    ring: "stroke-amber-500",
+    ring: "stroke-amber-600",
   },
   risky: { label: "Risky", accent: "text-red-700", ring: "stroke-red-500" },
   unknown: {
     label: "Unknown",
     accent: "text-slate-600",
-    ring: "stroke-slate-400",
+    ring: "stroke-slate-500",
   },
 }
 
@@ -52,7 +52,7 @@ function ScoreRing({ value, verdict }: { value: number; verdict: H1BVerdict }) {
   return (
     <div className="relative h-28 w-28 flex-shrink-0">
       <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
-        <circle cx="60" cy="60" r="48" className="fill-none stroke-slate-100" strokeWidth="10" />
+        <circle cx="60" cy="60" r="48" className="fill-none stroke-slate-200" strokeWidth="10" />
         <circle
           cx="60"
           cy="60"
@@ -76,9 +76,9 @@ function ScoreRing({ value, verdict }: { value: number; verdict: H1BVerdict }) {
 }
 
 function ImpactIcon({ impact }: { impact: PredictionSignal["impact"] }) {
-  if (impact === "positive") return <ArrowUp className="h-4 w-4 text-emerald-600" />
+  if (impact === "positive") return <ArrowUp className="h-4 w-4 text-emerald-700" />
   if (impact === "negative") return <ArrowDown className="h-4 w-4 text-red-600" />
-  return <Minus className="h-4 w-4 text-slate-400" />
+  return <Minus className="h-4 w-4 text-slate-500" />
 }
 
 function WeightBadge({ weight }: { weight: PredictionSignal["weight"] }) {
@@ -122,7 +122,7 @@ function YearBars({ statsByYear }: { statsByYear: Record<string, { rate: number;
           <span className="w-12 text-right text-xs font-medium tabular-nums text-slate-600">
             {Math.round(y.rate * 100)}%
           </span>
-          <span className="w-14 text-right text-[11px] tabular-nums text-slate-400">
+          <span className="w-14 text-right text-[11px] tabular-nums text-slate-500">
             n={y.total}
           </span>
         </div>
@@ -209,7 +209,7 @@ export default function H1BPredictionDrawer({
           <button
             type="button"
             onClick={onClose}
-            className="-mr-1.5 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            className="-mr-1.5 rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
             aria-label="Close drawer"
           >
             <X className="h-4 w-4" />
@@ -241,7 +241,7 @@ export default function H1BPredictionDrawer({
                   {verdictCopy.label}
                 </p>
                 <p className="text-sm leading-6 text-slate-600">{prediction.summary}</p>
-                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-400">
+                <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-slate-500">
                   Prediction confidence: {prediction.confidenceLevel}
                   {prediction.confidenceLevel === "low" && " - limited data"}
                 </p>
@@ -249,7 +249,7 @@ export default function H1BPredictionDrawer({
                   Derived from the employer&apos;s USCIS H-1B filing history and this posting&apos;s
                   language — weighted in the key signals below.
                 </p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-[11px] text-slate-500">
                   {prediction.dataRecency?.asOfDate
                     ? `Data as of ${new Date(prediction.dataRecency.asOfDate).toLocaleDateString()}`
                     : "Recency unknown"}
@@ -285,7 +285,7 @@ export default function H1BPredictionDrawer({
                   </li>
                 ))}
               </ul>
-              <p className="text-[11px] text-slate-400">
+              <p className="text-[11px] text-slate-500">
                 Sample size: {prediction.roleFamilyEvidence?.sampleSize ?? "unavailable"} · Evidence strength:{" "}
                 {prediction.roleFamilyEvidence?.confidence ?? "partial"}
               </p>
@@ -300,7 +300,7 @@ export default function H1BPredictionDrawer({
               </h3>
               <div className="grid grid-cols-2 gap-2">
                 <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-slate-200">
-                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">
+                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
                     Total apps
                   </p>
                   <p className="text-base font-semibold text-slate-800 tabular-nums">
@@ -308,7 +308,7 @@ export default function H1BPredictionDrawer({
                   </p>
                 </div>
                 <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-slate-200">
-                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">
+                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
                     Approval rate
                   </p>
                   <p className="text-base font-semibold text-slate-800 tabular-nums">
@@ -316,7 +316,7 @@ export default function H1BPredictionDrawer({
                   </p>
                 </div>
                 <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-slate-200">
-                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">
+                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
                     Trend
                   </p>
                   <p className="text-base font-semibold capitalize text-slate-800">
@@ -324,7 +324,7 @@ export default function H1BPredictionDrawer({
                   </p>
                 </div>
                 <div className="rounded-md bg-white px-3 py-2 ring-1 ring-inset ring-slate-200">
-                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-400">
+                  <p className="text-[11px] uppercase tracking-[0.1em] text-slate-500">
                     Years of data
                   </p>
                   <p className="text-sm font-semibold text-slate-800 tabular-nums">
@@ -363,7 +363,7 @@ export default function H1BPredictionDrawer({
               <h3 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
                 Deep H1B analysis
               </h3>
-              {!subLoading && !isProInternational && <Lock className="h-3.5 w-3.5 text-slate-400" />}
+              {!subLoading && !isProInternational && <Lock className="h-3.5 w-3.5 text-slate-500" />}
             </div>
 
             {subLoading ? (

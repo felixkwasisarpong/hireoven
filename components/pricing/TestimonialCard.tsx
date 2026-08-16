@@ -13,7 +13,7 @@ export default function TestimonialCard({ quote, name, role, stars = 5 }: Testim
     <div className="term-panel flex flex-col p-6">
       <div className="mb-4 flex gap-0.5">
         {Array.from({ length: stars }).map((_, i) => (
-          <Star key={i} className="h-4 w-4 fill-[#f5a623] text-[#f5a623]" />
+          <Star key={i} className="h-4 w-4 fill-[var(--term-amber)] text-[#f5a623]" />
         ))}
       </div>
       <blockquote className="flex-1 text-[15px] leading-relaxed text-[#ccd6cf]/80">

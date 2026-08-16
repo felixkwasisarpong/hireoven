@@ -20,14 +20,16 @@ import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { siteBaseUrl } from "@/lib/seo/site-url"
 import type { ScoreHue } from "@/types/h1b-scorecard"
 
-// Grade hues stay semantically distinct (A+ → F), dark-adapted surfaces.
+// Grade hues stay semantically distinct (A+ → F) on the light surface these
+// pages now render on. The previous -300-on-tint set was dark-adapted and ran
+// ~1.5:1 once the canvas turned white.
 const GRADE_PILL: Record<ScoreHue, string> = {
-  emerald: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300",
-  green: "border-green-500/30 bg-green-500/12 text-green-300",
-  lime: "border-lime-500/30 bg-lime-500/12 text-lime-300",
-  amber: "border-amber-500/30 bg-amber-500/12 text-amber-300",
-  orange: "border-orange-500/30 bg-orange-500/12 text-orange-300",
-  red: "border-red-500/30 bg-red-500/12 text-red-300",
+  emerald: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  green: "border-green-200 bg-green-50 text-green-700",
+  lime: "border-lime-200 bg-lime-50 text-lime-700",
+  amber: "border-amber-200 bg-amber-50 text-amber-700",
+  orange: "border-orange-200 bg-orange-50 text-orange-700",
+  red: "border-red-200 bg-red-50 text-red-700",
 }
 
 async function getPathways(companyId: string) {
@@ -170,12 +172,12 @@ export default async function ScorecardPage({ params }: Props) {
               {pathways && (
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   {pathways.is_cap_exempt && (
-                    <span className="inline-flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/12 px-3 py-1 text-xs font-semibold text-amber-300">
+                    <span className="inline-flex items-center gap-1.5 border border-amber-500/30 bg-amber-500/12 px-3 py-1 text-xs font-semibold text-amber-700">
                       <Unlock className="h-3.5 w-3.5" /> Cap-exempt · files outside the lottery
                     </span>
                   )}
                   {pathways.is_e_verify && (
-                    <span className="inline-flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/12 px-3 py-1 text-xs font-semibold text-emerald-300">
+                    <span className="inline-flex items-center gap-1.5 border border-emerald-500/30 bg-emerald-500/12 px-3 py-1 text-xs font-semibold text-emerald-700">
                       <ShieldCheck className="h-3.5 w-3.5" /> E-Verify · STEM OPT eligible
                     </span>
                   )}
@@ -283,7 +285,7 @@ export default async function ScorecardPage({ params }: Props) {
                 <h2 className="text-[15px] font-semibold text-white">H-1B salaries</h2>
                 <p className="mt-0.5 text-[13px] text-[#ccd6cf]/55">Median prevailing wage by role, filed with the DOL.</p>
               </div>
-              <Link href="/h1b-salaries" className="shrink-0 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <Link href="/h1b-salaries" className="shrink-0 text-[13px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 Explore →
               </Link>
             </div>

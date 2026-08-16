@@ -33,10 +33,22 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import type { AlertFrequency, Job, NotificationChannel, NotificationType } from "@/types"
 
 // Minimum resume-match score for a job to be included in an instant alert email
-// (env-tunable). Lowered back 85 -> 75.
+// (env-tunable). 85 -> 75 -> 60.
+//
+// The 75 -> 60 move is a RECALIBRATION, not a loosening. The career-fit scorer
+// (#495, merged 2026-08-13) re-based overall_score: new caps + a career-fit
+// blend pulled the mean from ~55 down to ~40, so the share of scores clearing 75
+// collapsed from ~14.7% to ~1.5% and instant alert EMAILS effectively stopped
+// platform-wide (pushes kept flowing — they aren't score-gated — which is why it
+// read as "email is broken"). Measured on 2026-08-15 over the post-#495 scores,
+// >= 60 reproduces the old pass rate (434/2981 = 14.6%), so this restores the
+// pre-#495 email volume rather than changing the bar for what's worth sending.
+//
+// If the scorer is re-based again, re-measure: the equivalent cutoff is the
+// score at the ~85th percentile of recent job_match_scores.overall_score.
 const INSTANT_EMAIL_MIN_MATCH_SCORE = (() => {
-  const n = Number(process.env.INSTANT_EMAIL_MIN_MATCH_SCORE ?? "75")
-  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 75
+  const n = Number(process.env.INSTANT_EMAIL_MIN_MATCH_SCORE ?? "60")
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : 60
 })()
 
 // Accumulation window: after an alert notifies a user, hold further matches for
@@ -262,6 +274,25 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
               userId,
               jobCount: emailCandidates.length,
               error: error instanceof Error ? error.message : String(error),
+            })
+          }
+
+          // A silent score gate is how instant emails died unnoticed for two
+          // days after the #495 scorer re-base: every candidate was dropped
+          // here, nothing was logged, and pushes kept going out so the pipeline
+          // looked healthy. Leave a trace with the best score we saw, so the
+          // next re-base shows up as "gate dropped everything", not as silence.
+          if (emailCandidates.length > 0 && emailJobs.length === 0) {
+            const best = emailCandidates.reduce(
+              (max, j) => Math.max(max, scores?.get(j.id)?.overall_score ?? 0),
+              0,
+            )
+            console.info("[instant-notify] alert email suppressed by score gate", {
+              userId,
+              candidates: emailCandidates.length,
+              bestScore: best,
+              threshold: INSTANT_EMAIL_MIN_MATCH_SCORE,
+              scored: scores ? scores.size : 0,
             })
           }
         }

@@ -11,8 +11,10 @@ import Link from "next/link"
 import {
   ArrowUpRight,
   BookOpen,
+  Check,
   GraduationCap,
   Loader2,
+  Plus,
   Sparkles,
   Target,
   TrendingUp,
@@ -53,6 +55,33 @@ const BAR_COLOR = ["bg-emerald-400", "bg-sky-400", "bg-violet-400", "bg-slate-30
 export default function SkillGapEngine() {
   const [data, setData] = useState<Data | null>(null)
   const [loading, setLoading] = useState(true)
+  // Skills the user has claimed from this page. These are gaps, so the action
+  // is "I actually have this" — a correction to the analysis, not an aspiration.
+  // It appends to the résumé's top_skills, which is what the matcher scores on.
+  const [claimed, setClaimed] = useState<Set<string>>(new Set())
+  const [claiming, setClaiming] = useState<string | null>(null)
+  const [claimError, setClaimError] = useState<string | null>(null)
+
+  async function claimSkill(skill: string) {
+    setClaiming(skill)
+    setClaimError(null)
+    try {
+      const res = await fetch("/api/resume/skills/affirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skills: [skill] }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `Failed (${res.status})`)
+      }
+      setClaimed((prev) => new Set(prev).add(skill))
+    } catch (err) {
+      setClaimError(err instanceof Error ? err.message : "Could not save that skill.")
+    } finally {
+      setClaiming(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -239,6 +268,29 @@ export default function SkillGapEngine() {
                     in {g.jobsRequiring.toLocaleString()} postings
                     {g.medianSalary ? ` · median ${k(g.medianSalary)}` : ""}
                   </p>
+
+                  {/* Correct the analysis: claiming adds the skill to the résumé
+                      the matcher scores against, so the feed re-ranks. */}
+                  {claimed.has(g.skill) ? (
+                    <p className="mt-2 inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-emerald-700">
+                      <Check className="h-3 w-3 shrink-0" aria-hidden />
+                      Added to your resume — jobs needing {g.skill} will rank higher
+                    </p>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => claimSkill(g.skill)}
+                      disabled={claiming === g.skill}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-[11.5px] font-semibold text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
+                    >
+                      {claiming === g.skill ? (
+                        <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                      ) : (
+                        <Plus className="h-3 w-3 shrink-0" aria-hidden />
+                      )}
+                      I already have {g.skill}
+                    </button>
+                  )}
                 </div>
 
                 {/* Course link */}
@@ -259,6 +311,11 @@ export default function SkillGapEngine() {
             )
           })}
         </ul>
+        {claimError && (
+          <p className="border-t border-slate-100 px-5 py-3 text-[12.5px] font-medium text-rose-700">
+            {claimError}
+          </p>
+        )}
       </div>
 
       <p className="px-1 text-[11px] text-slate-400">

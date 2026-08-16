@@ -12,11 +12,11 @@ const TERM_SELECT_STYLE: React.CSSProperties = {
   WebkitAppearance: "none",
   MozAppearance: "none",
   appearance: "none",
-  backgroundColor: "#0a0e0c",
-  color: "#ccd6cf",
-  border: "1px solid rgba(120,200,160,0.2)",
+  backgroundColor: "var(--term-input-bg)",
+  color: "var(--term-fg)",
+  border: "1px solid var(--term-line-strong)",
   backgroundImage:
-    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
+    "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
   backgroundRepeat: "no-repeat",
   backgroundPosition: "right 0.65rem center",
   paddingRight: "1.9rem",
@@ -34,11 +34,11 @@ const SAL_MIN = 55_000
 const SAL_MAX = 185_000
 
 const TONE_COLOR: Record<StayTone, string> = {
-  good: "#38e08a",
-  warn: "#f5a623",
-  crit: "#e5695f",
-  brand: "#5b9bff",
-  neutral: "#6c7a72",
+  good: "var(--term-green)",
+  warn: "var(--term-amber-text)",
+  crit: "var(--term-danger)",
+  brand: "var(--term-info)",
+  neutral: "var(--term-dim)",
 }
 
 function fmtUsd(n: number): string {
@@ -46,7 +46,7 @@ function fmtUsd(n: number): string {
 }
 
 function oddsColor(pct: number): string {
-  return pct < 20 ? "#e5695f" : pct < 40 ? "#f5a623" : "#38e08a"
+  return pct < 20 ? "var(--term-danger)" : pct < 40 ? "var(--term-amber-text)" : "var(--term-green)"
 }
 
 export default function StayDemo({
@@ -150,7 +150,7 @@ export default function StayDemo({
                 {socGroup && stateAbbr && (
                   <span
                     className="text-[10px] font-semibold uppercase tracking-wide"
-                    style={{ color: bandsPending ? "#6c7a72" : bands ? "#38e08a" : "#f5a623" }}
+                    style={{ color: bandsPending ? "var(--term-dim)" : bands ? "var(--term-green)" : "var(--term-amber-text)" }}
                   >
                     {bandsPending ? "modeling…" : bands ? `modeled · ${bands.sampleSize.toLocaleString()} filings` : "national estimate"}
                   </span>
@@ -223,7 +223,7 @@ export default function StayDemo({
         <div className="flex flex-col items-center justify-center border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-5">
           <div className="relative h-[150px] w-[230px]">
             <svg width="230" height="150" viewBox="0 0 230 150" aria-hidden>
-              <path d="M20 140 A95 95 0 0 1 210 140" fill="none" stroke="rgba(120,200,160,0.14)" strokeWidth="16" strokeLinecap="round" />
+              <path d="M20 140 A95 95 0 0 1 210 140" fill="none" stroke="var(--term-line-strong)" strokeWidth="16" strokeLinecap="round" />
               <path
                 d="M20 140 A95 95 0 0 1 210 140"
                 fill="none"
@@ -241,14 +241,14 @@ export default function StayDemo({
             >
               {single}%
             </div>
-            <div className="absolute inset-x-0 text-center text-[11px] uppercase tracking-[0.08em] text-[#6c7a72]" style={{ top: 124 }}>
+            <div className="absolute inset-x-0 text-center text-[11px] uppercase tracking-[0.08em] text-[var(--term-dim)]" style={{ top: 124 }}>
               H-1B odds / draw
             </div>
           </div>
 
           <div className="mt-3 flex items-center gap-2 text-[13px] text-[#ccd6cf]/70">
-            old lottery: <s className="text-[#6c7a72]">~{odds?.legacySingleDrawPct ?? 35}%</s>
-            <span className="font-bold text-[#e5695f]">→</span>
+            old lottery: <s className="text-[var(--term-dim)]">~{odds?.legacySingleDrawPct ?? 35}%</s>
+            <span className="font-bold text-[var(--term-danger)]">→</span>
             <span style={{ color: oddsColor(single) }}>{single}% now</span>
           </div>
 
@@ -260,7 +260,7 @@ export default function StayDemo({
                   "border px-2 py-1 text-[11px] font-semibold tabular-nums",
                   lv === level
                     ? "border-[#f5a623]/50 bg-[#f5a623]/12 text-[#f5a623]"
-                    : "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[#6c7a72]",
+                    : "border-[rgba(120,200,160,0.2)] bg-[#0e1411] text-[var(--term-dim)]",
                 ].join(" ")}
               >
                 L{lv} · {Math.round(WAGE_LEVEL_META[lv].singleDrawOdds * 100)}%
@@ -314,7 +314,7 @@ function CapExemptCounter({ roles }: { roles: number }) {
       <p className="mt-1 text-[13px] text-[#ccd6cf]/70">
         open roles that <span className="text-white">skip the lottery entirely</span>
       </p>
-      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[#6c7a72]">
+      <p className="mt-2 flex items-center gap-1.5 text-[11px] text-[var(--term-dim)]">
         <span className="h-1.5 w-1.5 rounded-full bg-[#38e08a]" aria-hidden />
         universities · research nonprofits · hospitals · national labs
       </p>
@@ -351,7 +351,7 @@ function JobChecker({ salary, isStem }: { salary: number; isStem: boolean }) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && run(query)}
           placeholder="e.g. Stanford, Google, Mayo Clinic…"
-          className="min-w-0 flex-1 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2.5 text-[14px] text-[#ccd6cf] outline-none placeholder:text-[#6c7a72] focus:border-[#38e08a]"
+          className="min-w-0 flex-1 border border-[rgba(120,200,160,0.2)] bg-[#0e1411] px-3 py-2.5 text-[14px] text-[#ccd6cf] outline-none placeholder:text-[var(--term-dim)] focus:border-[#38e08a]"
         />
         <button type="button" onClick={() => run(query)} disabled={pending} className="term-btn term-btn-amber justify-center disabled:opacity-60">
           {pending ? "scoring…" : "Score it"}
@@ -376,7 +376,7 @@ function JobChecker({ salary, isStem }: { salary: number; isStem: boolean }) {
             <div className="min-w-0">
               <p className="truncate text-[15px] font-semibold text-white">
                 {lookup?.name}
-                {lookup && !lookup.found && <span className="text-[#6c7a72]"> · unrated</span>}
+                {lookup && !lookup.found && <span className="text-[var(--term-dim)]"> · unrated</span>}
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -390,8 +390,8 @@ function JobChecker({ salary, isStem }: { salary: number; isStem: boolean }) {
                 className="border px-2 py-1 text-[11px] font-semibold"
                 style={{
                   color: TONE_COLOR[result.badgeTone],
-                  borderColor: TONE_COLOR[result.badgeTone] + "66",
-                  background: TONE_COLOR[result.badgeTone] + "18",
+                  borderColor: `color-mix(in srgb, ${TONE_COLOR[result.badgeTone]} 40%, transparent)`,
+                  background: `color-mix(in srgb, ${TONE_COLOR[result.badgeTone]} 9%, transparent)`,
                 }}
               >
                 {result.band}

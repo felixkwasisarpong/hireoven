@@ -37,7 +37,7 @@ const CARD_STYLES: Record<PlanKey, CardStyle> = {
     badgeBg: "",
     badgeText: "",
     ctaClass: "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:border-slate-300",
-    featureAccent: "text-emerald-500",
+    featureAccent: "text-emerald-700",
   },
   pro: {
     border: "border-[#0369A1]/30 ring-1 ring-[#0369A1]/20",
@@ -126,7 +126,7 @@ export default function PricingCard({
   const rounded = t ? "" : "rounded-full"
   const disabledCta = t
     ? "cursor-default border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] text-[#ccd6cf]/40"
-    : "cursor-default border border-slate-200 bg-slate-50 text-slate-400"
+    : "cursor-default border border-slate-200 bg-slate-50 text-slate-500"
 
   return (
     <div className={cardClass}>
@@ -153,17 +153,17 @@ export default function PricingCard({
       </div>
 
       {/* Plan name */}
-      <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${t ? "text-[#ccd6cf]/45" : "text-slate-400"}`}>{data.name}</p>
+      <p className={`text-[11px] font-bold uppercase tracking-[0.2em] ${t ? "text-[#ccd6cf]/45" : "text-slate-500"}`}>{data.name}</p>
 
       {/* Price */}
       <div className="mt-3 flex items-end gap-1.5">
         {interval === "yearly" && plan !== "free" && (
-          <span className={`mb-1 text-lg font-medium line-through ${t ? "text-[#ccd6cf]/35 tabular-nums" : "text-slate-300"}`}>${monthlyPrice}</span>
+          <span className={`mb-1 text-lg font-medium line-through ${t ? "text-[#ccd6cf]/35 tabular-nums" : "text-slate-500"}`}>${monthlyPrice}</span>
         )}
         <span className={`text-4xl tracking-tight ${t ? "font-semibold tabular-nums text-white" : "font-bold text-slate-900"}`}>
           {price === 0 ? "Free" : `$${price}`}
         </span>
-        {price > 0 && <span className={`mb-1.5 text-sm ${t ? "text-[#ccd6cf]/45" : "text-slate-400"}`}>/mo</span>}
+        {price > 0 && <span className={`mb-1.5 text-sm ${t ? "text-[#ccd6cf]/45" : "text-slate-500"}`}>/mo</span>}
       </div>
 
       {/* Yearly billing note */}

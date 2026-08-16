@@ -51,7 +51,7 @@ function WidgetCard({
       </div>
       <Link
         href={`/embed/docs#${docsAnchor}`}
-        className="mt-4 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+        className="mt-4 text-[13px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
       >
         Get the embed code →
       </Link>
@@ -114,7 +114,7 @@ export default async function EmbedGalleryPage() {
           </p>
           <Link
             href="/signup?next=%2Fdashboard%2Fscorecard"
-            className="mt-4 inline-block text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            className="mt-4 inline-block text-[13px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
           >
             Publish &amp; embed your scorecard →
           </Link>

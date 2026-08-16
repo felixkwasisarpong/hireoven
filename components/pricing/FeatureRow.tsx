@@ -18,13 +18,13 @@ function Cell({ value, terminal }: { value: boolean | string | number; terminal:
   if (value === true)
     return (
       <div className="flex justify-center">
-        <Check className={terminal ? "h-4.5 w-4.5 text-[#38e08a]" : "h-4.5 w-4.5 text-emerald-500"} strokeWidth={2.5} />
+        <Check className={terminal ? "h-4.5 w-4.5 text-[#38e08a]" : "h-4.5 w-4.5 text-emerald-700"} strokeWidth={2.5} />
       </div>
     )
   if (value === false)
     return (
       <div className="flex justify-center">
-        <Minus className={terminal ? "h-4 w-4 text-[#ccd6cf]/30" : "h-4 w-4 text-slate-300"} />
+        <Minus className={terminal ? "h-4 w-4 text-[#ccd6cf]/30" : "h-4 w-4 text-slate-500"} />
       </div>
     )
   return (
@@ -77,7 +77,7 @@ export default function FeatureRow({
                 onMouseEnter={() => setShowTooltip(true)}
                 onMouseLeave={() => setShowTooltip(false)}
                 aria-label={`More info about ${feature}`}
-                className={t ? "text-[#ccd6cf]/35 hover:text-[#38e08a] transition-colors" : "text-slate-300 hover:text-slate-500 transition-colors"}
+                className={t ? "text-[#ccd6cf]/35 hover:text-[#38e08a] transition-colors" : "text-slate-500 hover:text-slate-500 transition-colors"}
               >
                 <HelpCircle className="h-3.5 w-3.5" aria-hidden />
               </button>

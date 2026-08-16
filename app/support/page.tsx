@@ -23,7 +23,7 @@ export default function SupportPage() {
             <h2 className="mb-3 text-[1.05rem] font-semibold text-white">Contact us</h2>
             <p>
               For any questions, issues, or feedback, email us at{" "}
-              <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 support@hireoven.com
               </a>
               . We typically respond within one business day.
@@ -53,7 +53,7 @@ export default function SupportPage() {
                 <p className="mt-1 text-[13px] text-[#ccd6cf]/80">
                   Search for &quot;Hireoven Apex Bridge&quot; in the Chrome Web Store and click Add to Chrome. You&apos;ll
                   need a Hireoven account — sign up free at{" "}
-                  <Link href="/" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">hireoven.com</Link>.
+                  <Link href="/" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">hireoven.com</Link>.
                 </p>
               </div>
             </div>
@@ -73,7 +73,7 @@ export default function SupportPage() {
                 <h3 className="font-semibold text-white">I was charged incorrectly</h3>
                 <p className="mt-1 text-[13px] text-[#ccd6cf]/80">
                   Email{" "}
-                  <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+                  <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                     support@hireoven.com
                   </a>{" "}
                   with your account email and a description of the charge. We&apos;ll resolve it within 2 business days.
@@ -83,7 +83,7 @@ export default function SupportPage() {
                 <h3 className="font-semibold text-white">How do I delete my account?</h3>
                 <p className="mt-1 text-[13px] text-[#ccd6cf]/80">
                   Email{" "}
-                  <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+                  <a href="mailto:support@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                     support@hireoven.com
                   </a>{" "}
                   from your registered address and request account deletion. We&apos;ll process it within 7 days.
@@ -98,7 +98,7 @@ export default function SupportPage() {
               The Hireoven Apex Bridge extension only reads job listing data from pages you actively visit and
               uses your session cookie to authenticate saves to your account. We do not track your browsing
               history or collect data from non-job pages. See our{" "}
-              <Link href="/privacy" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">Privacy Policy</Link> for full details.
+              <Link href="/privacy" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">Privacy Policy</Link> for full details.
             </p>
           </section>
 
@@ -106,11 +106,11 @@ export default function SupportPage() {
 
         <div className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-8 text-[13px] text-[#ccd6cf]/55">
           Also see our{" "}
-          <Link href="/privacy" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">Privacy Policy</Link>
+          <Link href="/privacy" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">Privacy Policy</Link>
           {" "}or{" "}
-          <Link href="/terms" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">Terms of Service</Link>
+          <Link href="/terms" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">Terms of Service</Link>
           {", "}or return to{" "}
-          <Link href="/" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">Hireoven</Link>.
+          <Link href="/" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">Hireoven</Link>.
         </div>
       </main>
       <MarketingFooter />

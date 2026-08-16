@@ -91,6 +91,7 @@ export default function ResumeSignalView() {
   const [briefLoading, setBriefLoading] = useState(false)
   const [savedTarget, setSavedTarget] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -126,14 +127,23 @@ export default function ResumeSignalView() {
   // side, so the matcher re-scores the feed with the new positioning.
   function saveTarget(key: string | null) {
     setSaving(true)
+    setSaveError(null)
     fetch("/api/resume/signal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ target: key }),
     })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`Failed (${r.status})`))))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `Failed (${r.status})`)
+        }
+        return r.json()
+      })
       .then(() => setSavedTarget(key))
-      .catch(() => {})
+      // Swallowing this made a failed save look identical to a successful one —
+      // the single most likely reason positioning felt like a no-op.
+      .catch((e: Error) => setSaveError(e.message))
       .finally(() => setSaving(false))
   }
 
@@ -327,6 +337,12 @@ export default function ResumeSignalView() {
                 </>
               )}
             </div>
+
+            {saveError && (
+              <p className="mt-2 text-[12.5px] font-medium text-rose-700">
+                Couldn&apos;t save that lane: {saveError}
+              </p>
+            )}
 
             {brief.leadWith.length > 0 && (
               <BriefBlock

@@ -233,8 +233,17 @@ export default function AdminMarketingPage() {
               value={bodyHtml}
               onChange={(event) => setBodyHtml(event.target.value)}
               spellCheck={false}
-              style={{ colorScheme: "dark" }}
-              className="dark-surface-editor min-h-[260px] w-full rounded-2xl border border-gray-200 bg-slate-950 px-3 py-2.5 font-mono text-xs text-slate-100 outline-none shadow-[0_8px_20px_rgba(15,23,42,0.03)] focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
+              /*
+               * Colours are inline, not utilities, on purpose. A global
+               * `textarea { background-color: hsl(var(--surface)) }` base rule
+               * in globals.css competes with `bg-slate-950` here; if the class
+               * ever loses that fight (or a stale stylesheet drops it), the
+               * result is slate-100 text on a white field — invisible. Inline
+               * styles can't be overridden by either, so the editor stays
+               * readable no matter what the cascade does.
+               */
+              style={{ colorScheme: "dark", backgroundColor: "#020617", color: "#e2e8f0", caretColor: "#38bdf8" }}
+              className="dark-surface-editor min-h-[260px] w-full rounded-2xl border border-gray-200 px-3 py-2.5 font-mono text-xs leading-relaxed outline-none shadow-[0_8px_20px_rgba(15,23,42,0.03)] focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15"
             />
           )}
           {editorMode === "html" ? (

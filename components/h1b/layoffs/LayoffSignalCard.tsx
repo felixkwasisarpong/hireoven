@@ -48,7 +48,7 @@ export function LayoffSignalCard({ signal }: { signal: LayoffSignal }) {
           <ul className="mt-3 space-y-2 text-sm">
             {signal.source_refs.map((ref, i) => (
               <li key={i} className="flex items-baseline gap-2">
-                <span className="text-xs uppercase tracking-wide text-slate-400">{ref.kind}</span>
+                <span className="text-xs uppercase tracking-wide text-slate-500">{ref.kind}</span>
                 {ref.url ? (
                   <a
                     href={ref.url}
@@ -61,7 +61,7 @@ export function LayoffSignalCard({ signal }: { signal: LayoffSignal }) {
                 ) : (
                   <span className="text-slate-700">{ref.title}</span>
                 )}
-                <span className="ml-auto text-xs text-slate-400">{fmtDate(ref.date)}</span>
+                <span className="ml-auto text-xs text-slate-500">{fmtDate(ref.date)}</span>
               </li>
             ))}
           </ul>

@@ -89,6 +89,7 @@ export interface FastScoreResumeContext {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CURRENT_YEAR = new Date().getFullYear()
+const CURRENT_DECIMAL_YEAR = CURRENT_YEAR + new Date().getMonth() / 12
 
 const W = {
   skills:     0.36,
@@ -112,6 +113,36 @@ const TARGET_FIELD_BOOST_MAX = 8
 function extractYear(s: string | null | undefined): number | null {
   const m = /\b(20\d{2}|19\d{2})\b/.exec(s ?? "")
   return m ? parseInt(m[1], 10) : null
+}
+
+const MONTH_PREFIXES = [
+  "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
+]
+
+/** 0-based month from "Mar 2026", "2026-03-01" or "03/2026"; null when absent. */
+function extractMonthIndex(s: string | null | undefined): number | null {
+  if (!s) return null
+  const lower = s.toLowerCase()
+
+  const iso = /\b(?:20\d{2}|19\d{2})-(0[1-9]|1[0-2])\b/.exec(lower)
+  if (iso) return parseInt(iso[1], 10) - 1
+
+  for (let i = 0; i < MONTH_PREFIXES.length; i++) {
+    if (lower.includes(MONTH_PREFIXES[i])) return i
+  }
+
+  const slashed = /\b(0?[1-9]|1[0-2])[/.-](?:20\d{2}|19\d{2})\b/.exec(lower)
+  if (slashed) return parseInt(slashed[1], 10) - 1
+
+  return null
+}
+
+/** Year as a decimal (2026.25 for Apr 2026) so sub-year roles aren't worth zero. */
+function decimalYear(s: string | null | undefined): number | null {
+  const year = extractYear(s)
+  if (year === null) return null
+  const month = extractMonthIndex(s)
+  return year + (month === null ? 0 : month / 12)
 }
 
 function tokenize(text: string | null | undefined): string[] {
@@ -563,11 +594,14 @@ function extractMinYears(desc: string | null | undefined): number {
 }
 
 function roleYears(exp: { start_date: string; end_date: string | null; is_current: boolean }): number {
-  const start = extractYear(exp.start_date)
-  if (!start) return 0
-  if (exp.is_current) return CURRENT_YEAR - start
-  const end = extractYear(exp.end_date)
-  if (!end) return 1
+  const start = decimalYear(exp.start_date)
+  if (start === null) return 0
+  // Month precision matters here: year-only arithmetic made every role shorter
+  // than a calendar year worth 0.0 years, so a current role started earlier
+  // this year carried no weight at all — despite being the strongest evidence
+  // of what the candidate does now.
+  const end = exp.is_current ? CURRENT_DECIMAL_YEAR : decimalYear(exp.end_date)
+  if (end === null) return 1
   return Math.max(0, end - start)
 }
 
@@ -651,8 +685,8 @@ const WEAK_SINGLE_TITLE_TOKENS = new Set([
 ])
 
 const STRONG_PROFESSION_TITLE_TOKENS = new Set([
-  "developer",
-  "programmer",
+  // Canonical form of the developer/programmer/SWE cluster — see TITLE_SYNONYMS.
+  "engineer",
   "pharmacist",
   "nurse",
   "physician",
@@ -689,10 +723,26 @@ function seniorityTier(title: string): number {
   return 2
 }
 
+// Title matching is literal token overlap, so exact synonyms for the same job
+// scored as unrelated: "Software Engineer" and "Backend Developer" share no
+// token at all. Collapsing the engineer/developer cluster to one token is
+// enough to fix the overwhelmingly common case without a general synonym
+// engine. Cross-family pairs this newly connects ("Chemical Engineer" vs
+// "Backend Developer") are still held down by the role-family gate.
+const TITLE_SYNONYMS: Record<string, string> = {
+  dev: "engineer",
+  developer: "engineer",
+  engineering: "engineer",
+  programmer: "engineer",
+  sde: "engineer",
+  swe: "engineer",
+}
+
 function titleTokens(t: string): Set<string> {
   return new Set(
     t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
       .filter(w => w.length > 1 && !TITLE_STOP.has(w))
+      .map(w => TITLE_SYNONYMS[w] ?? w)
   )
 }
 
@@ -1049,13 +1099,25 @@ function hardSkillCoverageForExperience(
   return hits / hardSkills.length
 }
 
+/**
+ * Splits a past role's relevance into two independent axes:
+ * - `quality`: how much this role is in the job's lane (0–1), time-invariant.
+ * - `recency`: how current that evidence is (0–1).
+ *
+ * They are returned separately because they answer different questions and are
+ * applied at different points. Multiplying them together to discount a role's
+ * calendar years — the previous behaviour — conflates "this experience is old"
+ * with "this experience did not happen", and the caller then compared the
+ * result against a JD's undiscounted years requirement.
+ */
 function relevanceFactorForExperience(
   exp: ResumeExperienceSnapshot,
   job: Job,
   jobFamily: RoleFamily,
   hardSkills: string[]
-): number {
-  const titleSim = titleSimilarity(titleTokens(job.title), exp.titleTokens)
+): { quality: number; recency: number } {
+  const jobTitleTokens = titleTokens(job.title)
+  const titleSim = titleSimilarity(jobTitleTokens, exp.titleTokens)
   const titleFactor =
     titleSim >= 0.8 ? 0.95 :
     titleSim >= 0.45 ? 0.75 :
@@ -1074,21 +1136,42 @@ function relevanceFactorForExperience(
   // A broad family match alone is not enough. "Pharmacist" and "RN" are both
   // healthcare, but the relevant-years credit should depend on title or skill
   // evidence that proves the same lane, not the family label by itself.
+  //
+  // The evidence bars here are deliberately far below the whole-resume bars.
+  // Skill coverage measures ONE role's bullet text against every hard skill in
+  // the JD, and a few lines of prose will not name 60% of a job description's
+  // stack even for an exact-lane role. titleFactor needs jaccard >= 0.25, which
+  // "Software Engineer - Payments Platform" vs "Senior Data Engineer" misses
+  // (0.20) because "engineer" — unlike "developer" or "programmer" — is not a
+  // strong-profession token. Requiring either bar collapsed genuinely same-lane
+  // engineering careers to the 0.35 floor on nearly every posting.
+  //
+  // A shared profession noun WITHIN an already-matching family is real lane
+  // evidence, so it earns partial credit instead of the floor. Roles sharing
+  // neither a title token nor a fifth of the stack still hit 0.35, which is
+  // what keeps the pharmacist-vs-RN case honest.
+  const sharedTitleTokens = [...exp.titleTokens].filter(
+    (token) => jobTitleTokens.has(token) && !WEAK_SINGLE_TITLE_TOKENS.has(token)
+  )
   if (
     exp.roleFamily === jobFamily &&
     jobFamily !== "unknown" &&
     titleFactor === 0 &&
     skillFactor < 0.6
   ) {
-    factor = Math.min(factor, 0.35)
+    const laneEvidence = sharedTitleTokens.length > 0 || skillCoverage >= 0.2
+    factor = Math.min(factor, laneEvidence ? 0.6 : 0.35)
   }
 
   if (!isRoleFamilyCompatible(exp.roleFamily, jobFamily) && skillFactor < 0.8 && titleFactor < 0.8) {
     factor = Math.min(factor, 0.35)
   }
 
-  return factor * experienceRecencyMultiplier(exp)
+  return { quality: factor, recency: experienceRecencyMultiplier(exp) }
 }
+
+/** A role counts as lane evidence once it is at least half in the job's lane. */
+const IN_LANE_QUALITY_FLOOR = 0.5
 
 function scoreRelevantExperience(
   resumeContext: FastScoreResumeContext,
@@ -1098,22 +1181,53 @@ function scoreRelevantExperience(
   totalExperience: ReturnType<typeof scoreExperience>
 ): RelevantExperienceResult {
   const requiredYears = totalExperience.required
-  let relevantYears = 0
+  let datedYears = 0
+  let weightedQuality = 0
   let bestFactor = 0
+  let laneCurrency = 0
 
   for (const exp of resumeContext.experienceByRecency) {
-    const factor = relevanceFactorForExperience(exp, job, roleFamily.jobFamily, hardSkills)
-    bestFactor = Math.max(bestFactor, factor)
-    relevantYears += exp.years * factor
+    const { quality, recency } = relevanceFactorForExperience(
+      exp,
+      job,
+      roleFamily.jobFamily,
+      hardSkills
+    )
+    bestFactor = Math.max(bestFactor, quality * recency)
+    datedYears += exp.years
+    weightedQuality += exp.years * quality
+    if (quality >= IN_LANE_QUALITY_FLOOR) laneCurrency = Math.max(laneCurrency, recency)
   }
 
-  // Some parses provide total years but incomplete role dates. Avoid treating
-  // a clear same-lane resume as zero relevant years just because dates failed.
-  if (relevantYears === 0 && resumeContext.years > 0 && bestFactor > 0) {
-    relevantYears = resumeContext.years * bestFactor
-  }
-
-  relevantYears = Math.min(resumeContext.years, relevantYears)
+  // `relevantYears` is the candidate's TRUE total years scaled by two bounded
+  // multipliers, rather than a sum of individually discounted role years:
+  //
+  //   laneQuality  — years-weighted mean of how in-lane each parsed role is.
+  //   laneCurrency — recency of the most recent role that is actually in-lane.
+  //
+  // Summing discounted role years made the result incomparable to
+  // `requiredYears`, which is an undiscounted "5+ years" ask from the JD. Every
+  // role was shrunk by a relevance factor (<=0.95) AND a recency multiplier (as
+  // low as 0.35), and any experience missing from the parsed timeline vanished
+  // outright — so an 8-year engineer with a fully same-lane history topped out
+  // near 3 "relevant years" and tripped the shortfall gates below on essentially
+  // every senior posting. Applying the mean to the real total keeps both sides
+  // of the ratio on the same scale, and keeps the cross-domain intent intact:
+  // a resume in a different lane still earns a low mean.
+  //
+  // Currency is measured once, from the freshest in-lane role, instead of
+  // per-role. Staleness should ask "when did you last do this work?", not
+  // erase the calendar years of everything before it — an unbroken in-lane
+  // career was otherwise penalised for its own length.
+  const laneQuality =
+    datedYears > 0 ? clamp(weightedQuality / datedYears) : clamp(bestFactor)
+  // No in-lane role at all: laneQuality already reflects the mismatch, so don't
+  // also apply a staleness penalty on top of it.
+  const currency = laneCurrency > 0 ? laneCurrency : 1
+  const relevantYears = Math.min(
+    resumeContext.years,
+    resumeContext.years * laneQuality * currency
+  )
   const ratio = requiredYears > 0 ? relevantYears / requiredYears : null
   const score =
     requiredYears <= 0
