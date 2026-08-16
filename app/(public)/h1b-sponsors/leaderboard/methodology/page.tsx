@@ -25,7 +25,7 @@ export default function MethodologyPage() {
       <main className="mx-auto max-w-3xl px-4 py-10">
         <Link
           href="/h1b-sponsors/leaderboard"
-          className="text-[13px] text-[#ccd6cf]/60 underline decoration-[rgba(120,200,160,0.2)] underline-offset-4 hover:text-[#38e08a]"
+          className="text-[13px] text-[#ccd6cf]/60 underline decoration-[var(--term-line-strong)] underline-offset-4 hover:text-[#38e08a]"
         >
           ← Back to leaderboard
         </Link>
@@ -131,7 +131,7 @@ export default function MethodologyPage() {
               </li>
             </ul>
             <p>
-              Spotted an error? <a href="/support" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">Let us know</a> and we&rsquo;ll correct it.
+              Spotted an error? <a href="/support" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">Let us know</a> and we&rsquo;ll correct it.
             </p>
           </div>
         </section>
@@ -175,7 +175,7 @@ export default function MethodologyPage() {
           <div className="mt-2 space-y-2 text-[14px] leading-relaxed text-[#ccd6cf]/70">
             <p>
               The leaderboard, company scorecards, and personal scorecards are available as{" "}
-              <Link href="/embed" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <Link href="/embed" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 embeddable widgets
               </Link>{" "}
               for any site. They render server-side, set no cookies, and run no tracking script on
@@ -242,8 +242,8 @@ export default function MethodologyPage() {
               annual cap. We classify employers from public signals:
             </p>
             <ul className="list-disc space-y-1 pl-5">
-              <li><strong className="text-emerald-300">High</strong> — a <code className="text-[#38e08a]">.edu</code> domain, an unambiguous university name, or a federal research lab.</li>
-              <li><strong className="text-amber-300">Medium</strong> — &ldquo;College&rdquo; in the name or an education industry.</li>
+              <li><strong className="text-emerald-700">High</strong> — a <code className="text-[#38e08a]">.edu</code> domain, an unambiguous university name, or a federal research lab.</li>
+              <li><strong className="text-amber-700">Medium</strong> — &ldquo;College&rdquo; in the name or an education industry.</li>
               <li><strong className="text-[#ccd6cf]/70">Low</strong> — a research-mission name signal we can&rsquo;t fully confirm. Shown with a &ldquo;verify with employer&rdquo; note.</li>
             </ul>
             <p>
@@ -263,7 +263,7 @@ export default function MethodologyPage() {
                 href="https://www.e-verify.gov/e-verify-employer-search"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+                className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
               >
                 employer search tool
               </a>
@@ -278,7 +278,7 @@ export default function MethodologyPage() {
         <Section title="Corrections">
           <p>
             Spotted something off? We publish corrections.{" "}
-            <Link href="/support" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+            <Link href="/support" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
               Contact us
             </Link>
             .

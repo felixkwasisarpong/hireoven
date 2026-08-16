@@ -78,7 +78,7 @@ export default function PrivacyPage() {
             </p>
             <p className="mt-3">
               To request a data export or ask questions, email us at{" "}
-              <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+              <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
                 privacy@hireoven.com
               </a>.
             </p>
@@ -124,11 +124,11 @@ export default function PrivacyPage() {
 
         <div className="mt-12 border-t border-[rgba(120,200,160,0.2)] pt-8 text-[13px] text-[#ccd6cf]/55">
           Questions? Email{" "}
-          <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+          <a href="mailto:privacy@hireoven.com" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
             privacy@hireoven.com
           </a>{" "}
           or return to{" "}
-          <Link href="/" className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+          <Link href="/" className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
             Hireoven
           </Link>.
         </div>

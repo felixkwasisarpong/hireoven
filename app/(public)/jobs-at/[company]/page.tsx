@@ -126,7 +126,7 @@ export default async function JobsAtPage({ params }: Props) {
               {total.toLocaleString()} open roles at {company.name} in the US, refreshed continuously. Set an alert and apply the moment a new one drops.
             </p>
             <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
-              <Link href={salariesPath(company.id, company.name)} className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">What {company.name} pays →</Link>
+              <Link href={salariesPath(company.id, company.name)} className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">What {company.name} pays →</Link>
             </div>
           </div>
         </header>

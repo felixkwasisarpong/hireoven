@@ -51,6 +51,11 @@ export default function PivotView() {
   const [bridgeLoading, setBridgeLoading] = useState(false)
   const [reasoning, setReasoning] = useState<BridgeReasoning | null>(null)
   const [reasoningLoading, setReasoningLoading] = useState(false)
+  // The matching lane is a single value on the résumé (`resumes.target_field`),
+  // shared with the Positioning tab — committing a pivot here replaces it.
+  const [savedField, setSavedField] = useState<string | null>(null)
+  const [committing, setCommitting] = useState(false)
+  const [commitError, setCommitError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
@@ -62,6 +67,21 @@ export default function PivotView() {
       .then((d: InitResponse) => alive && setData(d))
       .catch((e: Error) => alive && setError(e.message))
       .finally(() => alive && setLoading(false))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Read the lane the résumé is currently matched as, so this page can show
+  // whether a target is already committed rather than offering a blind action.
+  useEffect(() => {
+    let alive = true
+    fetch("/api/resume/signal")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { targetField?: string | null } | null) => {
+        if (alive && d) setSavedField(d.targetField ?? null)
+      })
+      .catch(() => {})
     return () => {
       alive = false
     }
@@ -96,6 +116,34 @@ export default function PivotView() {
         setEvidence(null)
       })
       .finally(() => setBridgeLoading(false))
+  }
+
+  /**
+   * Commit the selected pivot as the résumé's matching lane.
+   *
+   * Writes `resumes.target_field` through the same endpoint the Positioning tab
+   * uses — there is one lane per résumé, so this replaces whatever was set
+   * there. The write also bumps `updated_at`, which is what makes the batch
+   * scorer re-score the feed against the new positioning.
+   */
+  function commitLane(key: string) {
+    setCommitting(true)
+    setCommitError(null)
+    fetch("/api/resume/signal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: key }),
+    })
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = (await r.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `Failed (${r.status})`)
+        }
+        return r.json()
+      })
+      .then((d: { targetField?: string | null }) => setSavedField(d.targetField ?? key))
+      .catch((e: Error) => setCommitError(e.message))
+      .finally(() => setCommitting(false))
   }
 
   function getPlan() {
@@ -172,6 +220,45 @@ export default function PivotView() {
             )
           })}
         </div>
+
+        {/* Commit bar — turns an explored pivot into the lane the matcher uses. */}
+        {to && (
+          <div className="mt-4 border-t border-slate-100 pt-4">
+            {savedField === to ? (
+              <p className="flex items-center gap-2 text-[13px] font-semibold text-emerald-700">
+                <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
+                Matching you as {FIELDS.find((f) => f.key === to)?.label ?? to}. Your feed re-scores on the
+                next refresh.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-[12.5px] leading-relaxed text-slate-600">
+                  {savedField
+                    ? `You're currently matched as ${
+                        FIELDS.find((f) => f.key === savedField)?.label ?? savedField
+                      }. Switching replaces it — there's one lane per résumé.`
+                    : "Commit this and the matcher starts ranking jobs in this field higher for you."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => commitLane(to)}
+                  disabled={committing}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  {committing ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                  {savedField ? "Switch my lane" : "Match me as this"}
+                </button>
+              </div>
+            )}
+            {commitError && (
+              <p className="mt-2 text-[12.5px] font-medium text-rose-700">{commitError}</p>
+            )}
+          </div>
+        )}
       </section>
 
       {bridgeLoading && (

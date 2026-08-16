@@ -2,23 +2,23 @@ import { scoreBucket } from "@/lib/h1b/scorecard"
 import type { ScoreHue } from "@/types/h1b-scorecard"
 
 const STROKE: Record<ScoreHue, string> = {
-  emerald: "stroke-emerald-500",
-  green: "stroke-green-500",
-  lime: "stroke-lime-500",
-  amber: "stroke-amber-500",
-  orange: "stroke-orange-500",
-  red: "stroke-red-500",
+  emerald: "stroke-emerald-600",
+  green: "stroke-green-600",
+  lime: "stroke-lime-600",
+  amber: "stroke-amber-600",
+  orange: "stroke-orange-600",
+  red: "stroke-red-600",
 }
 
-// Lightened per-hue text so each grade stays legible AND distinct on the dark
-// terminal canvas (strokes stay saturated in STROKE above).
+// Per-hue grade text, AA on the white surface these gauges now render on.
+// (Was a -300 tint tuned for the retired dark terminal canvas.)
 const TEXT: Record<ScoreHue, string> = {
-  emerald: "text-emerald-300",
-  green: "text-green-300",
-  lime: "text-lime-300",
-  amber: "text-amber-300",
-  orange: "text-orange-300",
-  red: "text-red-300",
+  emerald: "text-emerald-700",
+  green: "text-green-700",
+  lime: "text-lime-700",
+  amber: "text-amber-700",
+  orange: "text-orange-700",
+  red: "text-red-700",
 }
 
 const R = 52
@@ -35,7 +35,7 @@ export function ConfidenceRing({ score }: { score: number }) {
     <div className="flex flex-col items-center">
       <div className="relative h-32 w-32">
         <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90">
-          <circle cx="60" cy="60" r={R} className="stroke-[rgba(120,200,160,0.14)]" strokeWidth="9" fill="none" />
+          <circle cx="60" cy="60" r={R} className="stroke-[var(--term-line-strong)]" strokeWidth="9" fill="none" />
           <circle
             cx="60"
             cy="60"
@@ -50,10 +50,10 @@ export function ConfidenceRing({ score }: { score: number }) {
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <span className={"text-[28px] font-bold leading-none " + TEXT[b.hue]}>{b.grade}</span>
-          <span className="mt-1 text-xs font-medium tabular-nums text-[#ccd6cf]/45">{clamped}/100</span>
+          <span className="mt-1 text-xs font-medium tabular-nums text-[var(--term-dim)]">{clamped}/100</span>
         </div>
       </div>
-      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[#ccd6cf]/45">
+      <p className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--term-dim)]">
         Sponsorship confidence
       </p>
       <p className={"text-[13px] font-semibold " + TEXT[b.hue]}>{b.label}</p>

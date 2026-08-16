@@ -13,10 +13,12 @@ export default function JobTimingSection({
   jobId,
   applyUrl,
   jobTitle,
+  onApplyNow,
 }: {
   jobId: string
   applyUrl?: string | null
   jobTitle?: string
+  onApplyNow?: () => void
 }) {
   const [data, setData] = useState<TimingPanelData | null>(null)
   const [failed, setFailed] = useState(false)
@@ -38,6 +40,10 @@ export default function JobTimingSection({
     <TimingPanel
       data={data}
       onApplyNow={() => {
+        if (onApplyNow) {
+          onApplyNow()
+          return
+        }
         if (applyUrl) window.open(applyUrl, "_blank", "noopener,noreferrer")
       }}
     />

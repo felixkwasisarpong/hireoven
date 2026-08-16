@@ -84,7 +84,7 @@ export default function LeaderboardTable({
                 </td>
                 <td className="px-4 py-3.5">
                   <Link href={`${row.profile_url}/scorecard`}>
-                    <ScorecardBadge score={row.sponsorship_confidence ?? 0} tone="dark" />
+                    <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
                   </Link>
                 </td>
                 <td className="px-4 py-3.5 text-right font-semibold tabular-nums text-[#38e08a]">
@@ -130,7 +130,7 @@ export default function LeaderboardTable({
               <CompanyCell row={row} priority={i < 6} />
               <div className="mt-1 flex items-center gap-1.5">
                 <Link href={`${row.profile_url}/scorecard`} className="inline-block">
-                  <ScorecardBadge score={row.sponsorship_confidence ?? 0} tone="dark" />
+                  <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
                 </Link>
                 {layoffSignals?.get(row.company.id) &&
                   layoffSignals.get(row.company.id)!.level !== "stable" && (

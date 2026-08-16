@@ -470,9 +470,9 @@ export default async function PublicCompanyPage({ params }: Props) {
                         <span
                           className="text-lg font-bold tabular-nums"
                           style={{
-                            color: healthSnapshot.verdict === "strong" ? "#38e08a"
+                            color: healthSnapshot.verdict === "strong" ? "var(--term-green)"
                               : healthSnapshot.verdict === "healthy" ? "#5DCAA5"
-                              : healthSnapshot.verdict === "caution" ? "#f5a623"
+                              : healthSnapshot.verdict === "caution" ? "var(--term-amber-text)"
                               : "#E24B4A"
                           }}
                         >
@@ -489,9 +489,9 @@ export default async function PublicCompanyPage({ params }: Props) {
                               : healthSnapshot.verdict === "healthy" ? "rgba(93,202,165,0.3)"
                               : healthSnapshot.verdict === "caution" ? "rgba(245,166,35,0.3)"
                               : "rgba(226,75,74,0.3)",
-                            color: healthSnapshot.verdict === "strong" ? "#38e08a"
+                            color: healthSnapshot.verdict === "strong" ? "var(--term-green)"
                               : healthSnapshot.verdict === "healthy" ? "#5DCAA5"
-                              : healthSnapshot.verdict === "caution" ? "#f5a623"
+                              : healthSnapshot.verdict === "caution" ? "var(--term-amber-text)"
                               : "#E24B4A",
                           }}
                         >
@@ -562,13 +562,13 @@ export default async function PublicCompanyPage({ params }: Props) {
                 {(jobs.length > 0 ? jobs.slice(0, 3) : Array.from({ length: 3 })).map((_, i) => (
                   <div key={i} className="flex items-center justify-between border-b border-[rgba(120,200,160,0.12)] bg-[#0e1411] px-4 py-3.5 last:border-0 select-none">
                     <div className="space-y-1.5">
-                      <div className={cn("h-3.5 bg-[#1a221d]", i === 0 ? "w-52" : i === 1 ? "w-40" : "w-48")} />
+                      <div className={cn("h-3.5 bg-[var(--term-line-strong)]", i === 0 ? "w-52" : i === 1 ? "w-40" : "w-48")} />
                       <div className="flex gap-3">
-                        <div className="h-2.5 w-20 bg-[#141c17]" />
-                        <div className="h-2.5 w-16 bg-[#141c17]" />
+                        <div className="h-2.5 w-20 bg-[var(--term-line)]" />
+                        <div className="h-2.5 w-16 bg-[var(--term-line)]" />
                       </div>
                     </div>
-                    <div className="h-7 w-16 bg-[#1a221d]" />
+                    <div className="h-7 w-16 bg-[var(--term-line-strong)]" />
                   </div>
                 ))}
 
@@ -671,12 +671,12 @@ export default async function PublicCompanyPage({ params }: Props) {
                                 <td className="py-2.5 pr-6 font-semibold text-white">{row.year}</td>
                                 <td className="py-2.5 pr-6">{row.total_petitions.toLocaleString()}</td>
                                 <td className="py-2.5 pr-6 font-medium text-[#38e08a]">{row.approved.toLocaleString()}</td>
-                                <td className="py-2.5 pr-6 text-red-400">{row.denied}</td>
+                                <td className="py-2.5 pr-6 text-red-700">{row.denied}</td>
                                 <td className="py-2.5">
                                   {rate != null ? (
                                     <span className={cn(
                                       "font-semibold",
-                                      rate >= 90 ? "text-[#38e08a]" : rate >= 70 ? "text-[#f5a623]" : "text-red-400"
+                                      rate >= 90 ? "text-[#38e08a]" : rate >= 70 ? "text-[#f5a623]" : "text-red-700"
                                     )}>
                                       {rate}%
                                     </span>
@@ -691,7 +691,7 @@ export default async function PublicCompanyPage({ params }: Props) {
                             <td className="pt-2.5 pr-6">Total</td>
                             <td className="pt-2.5 pr-6">{h1bRecords.reduce((s, r) => s + r.total_petitions, 0).toLocaleString()}</td>
                             <td className="pt-2.5 pr-6 text-[#38e08a]">{h1bRecords.reduce((s, r) => s + r.approved, 0).toLocaleString()}</td>
-                            <td className="pt-2.5 pr-6 text-red-400">{h1bRecords.reduce((s, r) => s + r.denied, 0)}</td>
+                            <td className="pt-2.5 pr-6 text-red-700">{h1bRecords.reduce((s, r) => s + r.denied, 0)}</td>
                             <td className="pt-2.5">
                               {(() => {
                                 const total = h1bRecords.reduce((s, r) => s + r.total_petitions, 0)

@@ -163,12 +163,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-// Verdict badges keep three distinct semantic hues (dark-adapted surfaces):
-// yes = green (positive), likely = amber, unknown = neutral slate.
+// Verdict badges keep three distinct semantic hues, light-adapted:
+// yes = green (positive), likely = amber, unknown = neutral.
 const VERDICT_UI: Record<Verdict, { label: string; tone: string; Icon: typeof CheckCircle2 }> = {
-  yes: { label: "Sponsors H-1B", tone: "border-emerald-500/30 bg-emerald-500/12 text-emerald-300", Icon: CheckCircle2 },
-  likely: { label: "Likely sponsors", tone: "border-amber-500/30 bg-amber-500/12 text-amber-300", Icon: ShieldCheck },
-  unknown: { label: "No public record", tone: "border-slate-500/30 bg-slate-500/12 text-slate-300", Icon: FileQuestion },
+  yes: { label: "Sponsors H-1B", tone: "border-emerald-200 bg-emerald-50 text-emerald-700", Icon: CheckCircle2 },
+  likely: { label: "Likely sponsors", tone: "border-amber-200 bg-amber-50 text-amber-700", Icon: ShieldCheck },
+  unknown: { label: "No public record", tone: "border-[var(--term-line-strong)] bg-[var(--term-panel-2)] text-[var(--term-dim)]", Icon: FileQuestion },
 }
 
 export default async function H1bSponsorPage({ params }: Props) {
@@ -375,7 +375,7 @@ export default async function H1bSponsorPage({ params }: Props) {
               <div className="grid grid-cols-2 gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] sm:grid-cols-4">
                 {([1, 2, 3, 4] as WageLevel[]).map((lv) => {
                   const pct = Math.round(WAGE_LEVEL_META[lv].singleDrawOdds * 100)
-                  const color = pct < 20 ? "#e5695f" : pct < 40 ? "#f5a623" : "#38e08a"
+                  const color = pct < 20 ? "var(--term-danger)" : pct < 40 ? "var(--term-amber-text)" : "var(--term-green)"
                   return (
                     <div key={lv} className="bg-[#0e1411] p-4">
                       <p className="term-label">{WAGE_LEVEL_META[lv].label}</p>
@@ -395,7 +395,7 @@ export default async function H1bSponsorPage({ params }: Props) {
 
           <Link
             href="/stay/timeline"
-            className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+            className="mt-5 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
           >
             Get your personalized odds — salary + OPT clock
             <ArrowRight className="h-3.5 w-3.5" aria-hidden />

@@ -97,7 +97,7 @@ export default async function StayTalentPage() {
             Request employer access
           </Link>
         </div>
-        <p className="mt-6 text-[12px] leading-relaxed text-[#6c7a72]">
+        <p className="mt-6 text-[12px] leading-relaxed text-[var(--term-dim)]">
           Individual profiles are never shown publicly — only these aggregate counts. Contact details are released only
           to verified employers. Not legal or immigration advice.
         </p>

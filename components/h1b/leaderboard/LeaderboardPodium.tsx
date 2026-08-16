@@ -12,9 +12,9 @@ function fmtPct(rate: number | null): string {
 const ORDER_CLASS = ["sm:order-2", "sm:order-1", "sm:order-3"] as const
 
 const MEDAL: Record<number, { ring: string; text: string; label: string }> = {
-  1: { ring: "ring-amber-400/40", text: "text-amber-300", label: "Gold" },
-  2: { ring: "ring-slate-400/40", text: "text-slate-300", label: "Silver" },
-  3: { ring: "ring-orange-400/40", text: "text-orange-300", label: "Bronze" },
+  1: { ring: "ring-amber-400/40", text: "text-amber-700", label: "Gold" },
+  2: { ring: "ring-slate-400/40", text: "text-slate-500", label: "Silver" },
+  3: { ring: "ring-orange-400/40", text: "text-orange-700", label: "Bronze" },
 }
 
 function Stat({
@@ -103,7 +103,7 @@ function PodiumCard({
 
       <div className="mt-4 flex items-center justify-between gap-2">
         <Link href={`${row.profile_url}/scorecard`}>
-          <ScorecardBadge score={row.sponsorship_confidence ?? 0} tone="dark" />
+          <ScorecardBadge score={row.sponsorship_confidence ?? 0} />
         </Link>
         <Link
           href={row.profile_url}

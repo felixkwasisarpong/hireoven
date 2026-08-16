@@ -2,11 +2,11 @@ import Link from "next/link"
 import type { StayScoreResult, StayTone } from "@/lib/stay/stay-score"
 
 const TONE_COLOR: Record<StayTone, string> = {
-  good: "#38e08a",
-  warn: "#f5a623",
-  crit: "#e5695f",
-  brand: "#5b9bff",
-  neutral: "#6c7a72",
+  good: "var(--term-green)",
+  warn: "var(--term-amber-text)",
+  crit: "var(--term-danger)",
+  brand: "var(--term-info)",
+  neutral: "var(--term-dim)",
 }
 
 /**
@@ -35,7 +35,11 @@ export default function StayScorePanel({
           </span>
           <span
             className="border px-2 py-1 text-[11px] font-semibold"
-            style={{ color, borderColor: color + "66", background: color + "18" }}
+            style={{
+              color,
+              borderColor: `color-mix(in srgb, ${color} 40%, transparent)`,
+              background: `color-mix(in srgb, ${color} 9%, transparent)`,
+            }}
           >
             {result.band}
           </span>
@@ -59,10 +63,10 @@ export default function StayScorePanel({
       </p>
 
       <div className="mt-3 flex items-center justify-between gap-3">
-        <p className="text-[11px] text-[#6c7a72]">Lottery odds assume a STEM candidate.</p>
+        <p className="text-[11px] text-[var(--term-dim)]">Lottery odds assume a STEM candidate.</p>
         <Link
           href={personalizeHref}
-          className="text-[12px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+          className="text-[12px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
         >
           Personalize to your clock →
         </Link>

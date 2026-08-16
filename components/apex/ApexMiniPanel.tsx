@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useEffect, useRef, useState } from "react"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { Loader2, RefreshCw, Send, X, SlidersHorizontal, Star, MessageSquare } from "lucide-react"
 import { ApexIcon } from "@/components/apex/ApexIcon"
 import { ApexMessageBubble } from "@/components/apex/ApexMessageBubble"
@@ -9,6 +9,7 @@ import { ApexActivityTimeline } from "@/components/apex/ApexActivityTimeline"
 import { ApexContextChip } from "@/components/apex/ApexContextChip"
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import { useApexActionExecutor } from "@/components/apex/useApexActionExecutor"
+import { extractCareerSiteUrlFromMessage } from "@/lib/apex/career-site-intent"
 import { normalizeApexResponse } from "@/lib/apex/normalize"
 import { cn } from "@/lib/utils"
 import type { ApexAction, ApexResponse } from "@/lib/apex/types"
@@ -95,6 +96,7 @@ export function ApexMiniPanel({
   suggestionChips,
 }: ApexMiniPanelProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const { primaryResume } = useResumeContext()
   const { executeAction } = useApexActionExecutor()
 
@@ -154,6 +156,13 @@ export function ApexMiniPanel({
   async function sendMessage(message: string) {
     const trimmed = message.trim()
     if (!trimmed || isLoading) return
+
+    const careerSiteUrl = extractCareerSiteUrlFromMessage(trimmed)
+    if (careerSiteUrl) {
+      setQuery("")
+      router.push(`/dashboard/site-scout?url=${encodeURIComponent(careerSiteUrl)}`)
+      return
+    }
 
     setMessages((prev) => [...prev, { id: `u-${Date.now()}`, role: "user", text: trimmed }])
     setQuery("")

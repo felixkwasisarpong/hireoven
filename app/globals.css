@@ -142,7 +142,7 @@
   }
 
   ::selection {
-    background: rgba(255, 92, 24, 0.12);
+    background: var(--term-amber-soft-line);
   }
 
   /* The global ::selection above is tuned for light surfaces — its low-alpha
@@ -303,33 +303,82 @@
      ever missing (layout.tsx sets it statically on <html>). */
   :root,
   :root[data-marketing-theme="light"] {
+    /* ── Surfaces ────────────────────────────────────────────────────
+       The page is always white. Depth comes from a tight neutral ramp
+       plus soft shadow, never from a tinted page canvas. */
     --term-bg: #ffffff;
     --term-panel: #ffffff;
-    --term-panel-2: #f7f7f7;
-    --term-line: rgba(17, 16, 15, 0.08);
-    --term-line-strong: #ded4ca;
-    --term-fg: #3b332d;
-    --term-strong: #12100e;
-    --term-dim: #746b64;
-    --term-amber: #ff5c18;
-    --term-green: #15803d;
-    --term-amber-rgb: 255, 92, 24;
-    --term-green-rgb: 21, 128, 61;
+    --term-panel-2: #f9fafb;
+
+    /* ── Ink ramp ────────────────────────────────────────────────────
+       Cool neutral greys. The previous ramp was warm tan (#3b332d /
+       #ded4ca), which is what made the site read handmade rather than
+       like an analytics product. Every step below is AA on white AND on
+       --term-panel-2 (the only two light surfaces text ever lands on). */
+    --term-strong: #101828;
+    --term-fg: #344054;
+    --term-dim: #667085;
+    /* Non-text only: placeholders, disabled state, decorative rules. */
+    --term-faint: #98a2b3;
+
+    --term-line: #e4e7ec;
+    --term-line-strong: #d0d5dd;
+
+    /* ── Inverted surface ────────────────────────────────────────────
+       The one dark band (proof/testimonial section, announcement bar).
+       Semantic colours are NOT legible here, so each has an -on-ink
+       counterpart; use those inside anything painted --term-ink. */
+    --term-ink: #101828;
+    --term-ink-2: #0c111d;
+    --term-on-ink: #eaecf0;
+    --term-on-ink-dim: #98a2b3;
+    --term-ink-line: rgba(255, 255, 255, 0.12);
+
+    /* ── Brand accent ────────────────────────────────────────────────
+       A deep orange carries primary actions: white-on-#c2410c is 5.18:1,
+       where the old vivid #ff5c18 was 3.09:1 and failed as a button fill.
+       The vivid tone survives only as --term-amber-on-ink, where the dark
+       band gives it room to be loud (7.60:1 there). */
+    --term-amber: #c2410c;
+    --term-amber-hover: #9a3412;
+    --term-amber-text: #c2410c;
+    --term-amber-on-ink: #ff8a4c;
+    --term-amber-fg: #ffffff;
+    --term-amber-soft: #fef6ee;
+    --term-amber-soft-line: #fdead7;
+
+    /* ── Semantic ────────────────────────────────────────────────────
+       Green = freshness / verification proof. Reserved, never decorative. */
+    --term-green: #067647;
+    --term-green-on-ink: #47cd89;
+    --term-green-soft: #ecfdf3;
+    --term-danger: #b42318;
+    --term-danger-on-ink: #f97066;
+    --term-info: #175cd3;
+    --term-info-on-ink: #84caff;
+
+    --term-amber-rgb: 194, 65, 12;
+    --term-green-rgb: 6, 118, 71;
+    --term-danger-rgb: 180, 35, 24;
+
     --term-nav-bg: #ffffff;
     --term-button-bg: #ffffff;
-    --term-amber-fg: #ffffff;
     --term-input-bg: #ffffff;
     --term-input-fill: #ffffff;
-    --term-muted-surface: #f7f7f7;
-    --term-muted-line: #ded4ca;
+    --term-muted-surface: #f9fafb;
+    --term-muted-line: #d0d5dd;
     --term-logo-filter: none;
     --term-selection-fg: #ffffff;
-    --term-particle-bg: rgba(255, 92, 24, 0.08);
-    --term-particle-opacity: 0.4;
+    --term-particle-bg: rgba(194, 65, 12, 0.07);
+    --term-particle-opacity: 0.35;
     --term-particle-blend: normal;
+
+    /* ── Elevation ───────────────────────────────────────────────────
+       Two-layer, low-alpha, neutral-tinted. The old shadow was a hard
+       8px/0.08 drop plus an orange ring on hover, which read cheap. */
     --term-radius: 8px;
-    --term-shadow: 0 0 0 1px rgba(17, 16, 15, 0.02), 0 2px 8px rgba(17, 16, 15, 0.08);
-    --term-shadow-hover: 0 0 0 1px rgba(255, 92, 24, 0.12), 0 8px 24px rgba(17, 16, 15, 0.14);
+    --term-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+    --term-shadow-hover: 0 2px 4px -2px rgba(16, 24, 40, 0.06), 0 8px 16px -4px rgba(16, 24, 40, 0.1);
   }
 
   .marketing-logo {
@@ -382,9 +431,9 @@
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    border-bottom: 1px solid rgba(255, 92, 24, 0.32);
-    background: #090807;
-    color: rgba(255, 247, 237, 0.86);
+    border-bottom: 1px solid var(--term-ink-line);
+    background: var(--term-ink-2);
+    color: var(--term-on-ink);
     padding: 0.45rem 1rem;
     text-align: center;
     font-size: 0.8125rem;
@@ -395,7 +444,7 @@
   .marketing-announcement-link:hover,
   .marketing-announcement-link:focus-visible {
     color: #ffffff;
-    background: #12100e;
+    background: var(--term-ink);
   }
 
   .marketing-nav-brand {
@@ -413,13 +462,13 @@
 
   .marketing-nav-brand:hover,
   .marketing-nav-brand:focus-visible {
-    background: rgba(255, 92, 24, 0.07);
-    box-shadow: 0 0 0 1px rgba(255, 92, 24, 0.2);
+    background: var(--term-panel-2);
+    box-shadow: none;
     outline: none;
   }
 
   .marketing-brand-hire {
-    color: #ff5c18;
+    color: var(--term-amber);
   }
 
   .marketing-brand-oven {
@@ -435,24 +484,26 @@
     border: 1px solid transparent;
     border-radius: 8px;
     padding: 0 0.75rem;
-    color: rgba(18, 16, 14, 0.78);
+    color: var(--term-fg);
     font-size: 0.875rem;
-    font-weight: 650;
+    font-weight: 600;
     text-decoration: none;
-    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   .marketing-nav-link svg {
-    color: rgba(18, 16, 14, 0.55);
+    color: var(--term-dim);
     transition: color 0.15s ease;
   }
 
+  /* Neutral hover, neutral active. Tinting every nav item orange put six
+     competing accent blocks in the masthead; the accent belongs on the one
+     primary action. */
   .marketing-nav-link:hover,
   .marketing-nav-link:focus-visible,
   .marketing-nav-link.is-active,
   .marketing-nav-link.is-pending {
-    border-color: rgba(255, 92, 24, 0.38);
-    background: rgba(255, 92, 24, 0.13);
+    background: var(--term-panel-2);
     color: var(--term-strong);
     outline: none;
   }
@@ -461,7 +512,7 @@
   .marketing-nav-link:focus-visible svg,
   .marketing-nav-link.is-active svg,
   .marketing-nav-link.is-pending svg {
-    color: #ff8a4c;
+    color: var(--term-strong);
   }
 
   .marketing-nav-link:active {
@@ -476,7 +527,7 @@
     left: 0.75rem;
     height: 2px;
     border-radius: 999px;
-    background: linear-gradient(90deg, rgba(255, 92, 24, 0.12), #ff5c18, rgba(255, 92, 24, 0.12));
+    background: linear-gradient(90deg, transparent, var(--term-amber), transparent);
     background-size: 180% 100%;
     animation: marketing-nav-pending 0.75s linear infinite;
   }
@@ -485,11 +536,11 @@
     display: flex;
     align-items: center;
     gap: 0.25rem;
-    border: 1px solid rgba(255, 92, 24, 0.34);
+    border: 1px solid transparent;
     border-radius: 9999px;
-    background: #ffffff;
+    background: transparent;
     padding: 0.25rem;
-    box-shadow: 0 1px 2px rgba(17, 16, 15, 0.08);
+    box-shadow: none;
   }
 
   .marketing-auth-login,
@@ -508,26 +559,30 @@
   }
 
   .marketing-auth-login {
-    color: rgba(18, 16, 14, 0.78);
+    color: var(--term-fg);
+    font-weight: 600;
   }
 
   .marketing-auth-login:hover,
   .marketing-auth-login:focus-visible {
-    background: rgba(255, 92, 24, 0.08);
+    background: var(--term-panel-2);
     color: var(--term-strong);
     outline: none;
   }
 
+  /* No coloured glow. A tinted drop-shadow under a CTA is the single most
+     reliable tell of a consumer template rather than a hiring platform. */
   .marketing-auth-primary {
-    background: #ff5c18;
-    color: #ffffff;
-    box-shadow: 0 7px 18px rgba(255, 92, 24, 0.28);
+    background: var(--term-amber);
+    color: var(--term-amber-fg);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
   }
 
   .marketing-auth-primary:hover,
   .marketing-auth-primary:focus-visible {
-    background: #e14e0e;
-    color: #ffffff;
+    background: var(--term-amber-hover);
+    color: var(--term-amber-fg);
     outline: none;
   }
 
@@ -542,11 +597,11 @@
     height: 2.5rem;
     align-items: center;
     justify-content: center;
-    border: 1px solid rgba(255, 92, 24, 0.38);
+    border: 1px solid var(--term-line-strong);
     border-radius: 9999px;
-    background: #ffffff;
+    background: var(--term-panel);
     color: var(--term-strong);
-    box-shadow: 0 1px 2px rgba(17, 16, 15, 0.08);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 
   .marketing-mobile-link {
@@ -555,7 +610,7 @@
     gap: 0.75rem;
     border-radius: 10px;
     padding: 0.82rem 0.75rem;
-    color: rgba(255, 247, 237, 0.86);
+    color: var(--term-on-ink);
     font-size: 0.9375rem;
     font-weight: 700;
     text-decoration: none;
@@ -566,7 +621,7 @@
   .marketing-mobile-link:focus-visible,
   .marketing-mobile-link.is-active,
   .marketing-mobile-link.is-pending {
-    background: rgba(255, 92, 24, 0.16);
+    background: rgba(255, 255, 255, 0.08);
     color: #ffffff;
     outline: none;
   }
@@ -622,10 +677,10 @@
   .term-select {
     -webkit-appearance: none;
     appearance: none;
-    border: 1px solid rgba(120, 200, 160, 0.2);
+    border: 1px solid var(--term-line-strong);
     background-color: var(--term-input-bg);
     color: var(--term-fg);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23ccd6cf' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.65rem center;
     padding-right: 1.9rem;
@@ -677,8 +732,12 @@
      skin using `text-white`. In the current light skin those sections render on
      cream/white surfaces, so map legacy white copy to readable dark text while
      preserving explicit orange CTA/button text. */
-  :root[data-marketing-theme="light"] .term-page .text-white,
-  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-white"] {
+  :root[data-marketing-theme="light"] .term-page .text-white {
+    color: var(--term-strong) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page .group:hover [class~="group-hover:text-white"],
+  :root[data-marketing-theme="light"] .term-page [class~="hover:text-white"]:hover {
     color: var(--term-strong) !important;
   }
 
@@ -693,78 +752,83 @@
     color: #ffffff !important;
   }
 
+  /* Legacy body copy. The dark skin faded #ccd6cf with an opacity modifier to
+     get its text tiers; translating those literally to a light background gave
+     1.8:1–4.4:1 washed-out grey (and in a COLD blue-green hue that clashed with
+     the warm --term-fg ramp). Collapse the whole range onto the two real text
+     tokens instead: primary copy and secondary copy, both AA on white. */
   :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]"] {
     color: var(--term-fg) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/80"] {
-    color: rgba(35, 52, 43, 0.8) !important;
+  /* Secondary tier: everything the dark skin faded to 65% or below. */
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/65"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/60"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/55"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/50"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/45"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/40"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/35"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/30"],
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/25"] {
+    color: var(--term-dim) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/70"] {
-    color: rgba(35, 52, 43, 0.7) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/65"] {
-    color: rgba(35, 52, 43, 0.65) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/60"] {
-    color: rgba(35, 52, 43, 0.6) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/55"] {
-    color: rgba(35, 52, 43, 0.55) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/50"] {
-    color: rgba(35, 52, 43, 0.5) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/45"] {
-    color: rgba(35, 52, 43, 0.45) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/40"] {
-    color: rgba(35, 52, 43, 0.4) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/35"] {
-    color: rgba(35, 52, 43, 0.35) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#ccd6cf]/30"] {
-    color: rgba(35, 52, 43, 0.3) !important;
-  }
-
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#38e08a]"],
-  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-[#38e08a]"] {
+  /* NOTE ON `~=` vs `*=` BELOW.
+     `[class*="text-[#38e08a]"]` also matches the substring inside
+     `hover:text-[#38e08a]`, which made ~118 links, rows and buttons render in
+     their HOVER colour permanently. Any legacy colour that appears in a variant
+     form must be matched with `~=` (exact space-delimited class token) and get
+     its own state rule. */
+  :root[data-marketing-theme="light"] .term-page [class~="text-[#38e08a]"] {
     color: var(--term-green) !important;
   }
 
+  :root[data-marketing-theme="light"] .term-page [class~="hover:text-[#38e08a]"]:hover,
+  :root[data-marketing-theme="light"] .term-page [class~="focus:text-[#38e08a]"]:focus,
+  :root[data-marketing-theme="light"] .term-page .group:hover [class~="group-hover:text-[#38e08a]"] {
+    color: var(--term-green) !important;
+  }
+
+  /* Legacy hairlines were a cold mint rgba; use the warm line tokens so a
+     legacy page's borders match a migrated one's. */
   :root[data-marketing-theme="light"] .term-page [class*="border-[rgba(120,200,160"] {
-    border-color: rgba(31, 41, 37, 0.13) !important;
+    border-color: var(--term-line-strong) !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="divide-[rgba(120,200,160"] > :not([hidden]) ~ :not([hidden]) {
-    border-color: rgba(31, 41, 37, 0.1) !important;
+    border-color: var(--term-line) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#0e1411]"],
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#111a15]"] {
-    background-color: #ffffff !important;
+  /* The dark skin stacked surfaces upward (#0a0e0c page → #0e1411 raised →
+     #111a15 highest). Flattening all three to #ffffff erased that hierarchy and
+     left panels indistinguishable from the page. Invert the ramp instead:
+     on white, "raised" means slightly darker. */
+  :root[data-marketing-theme="light"] .term-page [class~="bg-[#0e1411]"],
+  :root[data-marketing-theme="light"] .term-page [class~="bg-[#111a15]"] {
+    background-color: var(--term-panel-2) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#0a0e0c]"] {
-    background-color: #ffffff !important;
+  :root[data-marketing-theme="light"] .term-page [class~="hover:bg-[#111a15]"]:hover,
+  :root[data-marketing-theme="light"] .term-page [class~="hover:bg-[#0e1411]"]:hover {
+    background-color: var(--term-panel-2) !important;
   }
 
+  :root[data-marketing-theme="light"] .term-page [class~="bg-[#0a0e0c]"] {
+    background-color: var(--term-panel) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="hover:bg-[#0a0e0c]"]:hover {
+    background-color: var(--term-panel) !important;
+  }
+
+  /* Almost always a 1px grid-gap parent showing through as hairlines. */
   :root[data-marketing-theme="light"] .term-page [class*="bg-[rgba(120,200,160"] {
-    background-color: rgba(31, 41, 37, 0.075) !important;
+    background-color: var(--term-line) !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class*="bg-[#ccd6cf]"] {
-    background-color: rgba(35, 52, 43, 0.26) !important;
+    background-color: var(--term-line-strong) !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class~="bg-[#38e08a]"] {
@@ -773,30 +837,99 @@
 
   /* Tint variants only — an element carrying the solid class too (e.g.
      `bg-[#38e08a] hover:bg-[#38e08a]/90`) must keep the solid fill. */
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#38e08a]/"]:not([class~="bg-[#38e08a]"]) {
-    background-color: rgba(5, 118, 66, 0.09) !important;
+  /* Tints derive from --term-green-rgb, not a second hardcoded green: the old
+     rgba(5,118,66) is a teal-leaning green and read as a different colour next
+     to the #15803d text it was paired with. */
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#38e08a]/"]:not([class~="bg-[#38e08a]"]):not([class*="hover:bg-[#38e08a]/"]) {
+    background-color: rgba(var(--term-green-rgb), 0.1) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="border-[#38e08a]"] {
-    border-color: rgba(5, 118, 66, 0.28) !important;
+  :root[data-marketing-theme="light"] .term-page [class~="hover:bg-[#38e08a]"]:hover {
+    background-color: var(--term-green) !important;
   }
 
-  /* Legacy amber hexes map to the single orange brand accent. */
-  :root[data-marketing-theme="light"] .term-page [class*="text-[#f5a623]"],
-  :root[data-marketing-theme="light"] .term-page [class*="group-hover:text-[#f5a623]"] {
-    color: var(--term-amber) !important;
+  :root[data-marketing-theme="light"] .term-page [class~="border-[#38e08a]"] {
+    border-color: rgba(var(--term-green-rgb), 0.28) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="hover:border-[#38e08a]"]:hover,
+  :root[data-marketing-theme="light"] .term-page [class~="focus:border-[#38e08a]"]:focus,
+  :root[data-marketing-theme="light"] .term-page [class~="focus-visible:border-[#38e08a]"]:focus-visible {
+    border-color: var(--term-green) !important;
+  }
+
+  /* Legacy amber hexes map to the single orange brand accent — but as TEXT they
+     need the darkened variant; --term-amber itself is only 3.09:1 on white. */
+  :root[data-marketing-theme="light"] .term-page [class~="text-[#f5a623]"] {
+    color: var(--term-amber-text) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="hover:text-[#f5a623]"]:hover,
+  :root[data-marketing-theme="light"] .term-page .group:hover [class~="group-hover:text-[#f5a623]"] {
+    color: var(--term-amber-text) !important;
   }
 
   :root[data-marketing-theme="light"] .term-page [class~="bg-[#f5a623]"] {
     background-color: var(--term-amber) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="bg-[#f5a623]/"]:not([class~="bg-[#f5a623]"]) {
-    background-color: rgba(255, 92, 24, 0.1) !important;
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#f5a623]/"]:not([class~="bg-[#f5a623]"]):not([class*="hover:bg-[#f5a623]/"]) {
+    background-color: rgba(var(--term-amber-rgb), 0.1) !important;
   }
 
-  :root[data-marketing-theme="light"] .term-page [class*="border-[#f5a623]"] {
-    border-color: rgba(255, 92, 24, 0.4) !important;
+  /* Solid amber on hover needs white label text, same as the resting fill. */
+  :root[data-marketing-theme="light"] .term-page [class~="hover:bg-[#f5a623]"]:hover {
+    background-color: var(--term-amber) !important;
+    color: var(--term-amber-fg) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="border-[#f5a623]"] {
+    border-color: rgba(var(--term-amber-rgb), 0.4) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class~="hover:border-[#f5a623]"]:hover {
+    border-color: var(--term-amber) !important;
+  }
+
+  /* ── Opacity-modified legacy classes ──────────────────────────────
+     `~=` above matches whole class tokens, so `border-[#38e08a]/30` and
+     friends need their own `*=` rules. Each excludes the variant-prefixed
+     spelling so a hover tint does not leak into the resting state. */
+  :root[data-marketing-theme="light"] .term-page [class*="text-[#f5a623]/"]:not([class*="hover:text-[#f5a623]/"]):not([class*="group-hover:text-[#f5a623]/"]) {
+    color: var(--term-amber-text) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-[#38e08a]/"]:not([class*="hover:border-[#38e08a]/"]):not([class*="focus:border-[#38e08a]/"]) {
+    border-color: rgba(var(--term-green-rgb), 0.28) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="border-[#f5a623]/"]:not([class*="hover:border-[#f5a623]/"]) {
+    border-color: rgba(var(--term-amber-rgb), 0.4) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="bg-[#0a0e0c]/"]:not([class*="hover:bg-[#0a0e0c]/"]) {
+    background-color: var(--term-panel) !important;
+  }
+
+  /* Hover-state spellings of the tint/solid classes. */
+  :root[data-marketing-theme="light"] .term-page [class*="hover:bg-[#f5a623]/"]:hover {
+    background-color: var(--term-amber) !important;
+    color: var(--term-amber-fg) !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="hover:bg-[#38e08a]/"]:hover {
+    background-color: var(--term-green) !important;
+    color: #ffffff !important;
+  }
+
+  :root[data-marketing-theme="light"] .term-page [class*="hover:border-[#38e08a]/"]:hover {
+    border-color: var(--term-green) !important;
+  }
+
+  /* Typography-plugin variant: the colour lands on descendant <a>, not the
+     element carrying the class, so it needs its own descendant rule. */
+  :root[data-marketing-theme="light"] .term-page [class~="prose-a:text-[#f5a623]"] a {
+    color: var(--term-amber-text) !important;
   }
 
   /* These near-black hexes are only ever used as label text sitting on a solid
@@ -822,57 +955,70 @@
   }
 
   :root[data-marketing-theme="light"] .term-page ::selection {
-    background: rgba(255, 92, 24, 0.2);
+    background: var(--term-amber-soft-line);
     color: var(--term-strong);
   }
 
   :root[data-marketing-theme="light"] .term-panel {
     border-radius: var(--term-radius);
+    border-color: var(--term-line);
     box-shadow: var(--term-shadow);
   }
 
   :root[data-marketing-theme="light"] .term-panel-hover {
-    transition: box-shadow 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    transition: box-shadow 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
   }
 
+  /* Lift, don't recolour. Tinting the border on hover was reading as a
+     state change rather than as affordance. */
   :root[data-marketing-theme="light"] .term-panel-hover:hover {
-    border-color: #d0cfcc;
+    border-color: var(--term-line-strong);
     background: var(--term-panel);
     box-shadow: var(--term-shadow-hover);
   }
 
+  /* A hairline and a whisper of shadow. The orange bottom rule plus a
+     0.35-alpha black drop was the single loudest element on every page. */
   :root[data-marketing-theme="light"] .term-nav {
     font-family: inherit;
-    border-bottom-color: rgba(255, 92, 24, 0.26);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    border-bottom-color: var(--term-line);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 
+  /* Default = quiet neutral button. Previously EVERY button was a vivid
+     orange outline pill, so nothing on the page could out-rank anything
+     else. Orange is now spent only on .term-btn-amber. */
   :root[data-marketing-theme="light"] .term-btn {
     font-family: inherit;
-    border-radius: 9999px;
-    padding: 0.6rem 1.25rem;
+    border-radius: var(--term-radius);
+    padding: 0.625rem 1.125rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: var(--term-amber);
-    border-color: var(--term-amber);
-    border-width: 1.5px;
+    letter-spacing: -0.005em;
+    color: var(--term-strong);
+    background: var(--term-button-bg);
+    border-color: var(--term-line-strong);
+    border-width: 1px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
   }
 
   :root[data-marketing-theme="light"] .term-btn:hover {
-    color: #c2410c;
-    border-color: #c2410c;
-    background: rgba(255, 92, 24, 0.08);
+    color: var(--term-strong);
+    border-color: var(--term-faint);
+    background: var(--term-panel-2);
   }
 
   :root[data-marketing-theme="light"] .term-btn-amber {
     background: var(--term-amber);
-    color: #ffffff;
+    border-color: var(--term-amber);
+    color: var(--term-amber-fg);
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
   }
 
   :root[data-marketing-theme="light"] .term-btn-amber:hover {
-    background: #12100e;
-    border-color: #12100e;
-    color: #ffffff;
+    background: var(--term-amber-hover);
+    border-color: var(--term-amber-hover);
+    color: var(--term-amber-fg);
   }
 
   /* Eyebrow labels: uppercase sans caption instead of a lowercase mono
@@ -917,7 +1063,7 @@
     height: 6px;
     border-radius: 999px;
     outline: none;
-    background: linear-gradient(90deg, var(--term-amber) var(--pct, 30%), rgba(120, 200, 160, 0.18) var(--pct, 30%));
+    background: linear-gradient(90deg, var(--term-amber) var(--pct, 30%), var(--term-line-strong) var(--pct, 30%));
   }
   .stay-range::-webkit-slider-thumb {
     -webkit-appearance: none;

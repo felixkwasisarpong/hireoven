@@ -17,7 +17,6 @@ import {
   Timer,
 } from "lucide-react"
 import JobDetailPanel from "@/components/jobs/JobDetailPanel"
-import JobTimingSection from "@/components/jobs/JobTimingSection"
 import NotificationClickPing from "@/components/notifications/NotificationClickPing"
 import { ApexMiniPanel } from "@/components/apex/ApexMiniPanel"
 import CompanyLogo from "@/components/ui/CompanyLogo"
@@ -605,7 +604,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
           {/* Back */}
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-500 transition hover:text-slate-200"
+            className="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-400 transition hover:text-slate-200"
           >
             <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
             Back to jobs
@@ -734,7 +733,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                     href={`#${tab.id}`}
                     className={cn(
                       "relative inline-flex h-10 items-center gap-1.5 px-4 text-[12.5px] font-semibold transition",
-                      index === 0 ? "text-white" : "text-slate-500 hover:text-slate-200"
+                      index === 0 ? "text-white" : "text-slate-400 hover:text-slate-200"
                     )}
                   >
                     <Icon className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
@@ -803,7 +802,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                             )}
                           >
                             {matched && (
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" strokeWidth={2} aria-hidden />
+                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-700" strokeWidth={2} aria-hidden />
                             )}
                             {skill}
                           </span>
@@ -901,7 +900,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                           href={company.careers_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-700 hover:underline"
                         >
                           <FileText className="h-3.5 w-3.5" aria-hidden />
                           Careers page
@@ -910,7 +909,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                       {company?.id && (
                         <Link
                           href={`/companies/${company.id}`}
-                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-700 hover:underline"
                         >
                           <Building2 className="h-3.5 w-3.5" aria-hidden />
                           Immigration profile
@@ -928,7 +927,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                     <SectionHead>Similar jobs</SectionHead>
                     <Link
                       href="/dashboard"
-                      className="text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-500 hover:underline"
+                      className="text-[12.5px] font-semibold text-orange-600 transition hover:text-orange-700 hover:underline"
                     >
                       View all →
                     </Link>
@@ -966,7 +965,7 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
                               {cardSalary}
                             </span>
                           )}
-                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-300" aria-hidden />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
                         </Link>
                       )
                     })}
@@ -987,9 +986,6 @@ export default async function DashboardJobDetailPage({ params, searchParams }: P
               sponsorsConfirmed={sponsorsConfirmed}
               sponsorshipPill={sponsorshipPill}
             />
-            <div className="mt-4">
-              <JobTimingSection jobId={canonicalJobId} applyUrl={page.apply_url} jobTitle={displayTitle} />
-            </div>
           </aside>
         </div>
       </div>

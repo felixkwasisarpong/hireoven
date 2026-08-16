@@ -45,7 +45,7 @@ export default function LotteryRescuePage() {
               href="https://www.uscis.gov/working-in-the-united-states/h-1b-specialty-occupations"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               INA 214(g)(5)
             </a>
@@ -79,7 +79,7 @@ export default function LotteryRescuePage() {
               href="https://www.uscis.gov/working-in-the-united-states/students-and-exchange-visitors/optional-practical-training-extension-for-stem-students-stem-opt"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               E-Verify
             </a>
@@ -93,7 +93,7 @@ export default function LotteryRescuePage() {
               href="https://www.e-verify.gov/e-verify-employer-search"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               USCIS E-Verify employer search
             </a>

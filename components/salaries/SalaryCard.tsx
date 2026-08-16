@@ -73,7 +73,7 @@ export function SalaryCard({
         <div className="mt-5 border border-[rgba(120,200,160,0.2)] bg-[#0a0e0c] p-5 text-sm text-[#ccd6cf]/70">
           <p>We don&rsquo;t have enough public filings (fewer than 5) to estimate this reliably.</p>
           {broaderHref && (
-            <Link href={broaderHref} className="mt-2 inline-block font-medium text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+            <Link href={broaderHref} className="mt-2 inline-block font-medium text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
               {broaderLabel ?? "Show data with fewer filters →"}
             </Link>
           )}

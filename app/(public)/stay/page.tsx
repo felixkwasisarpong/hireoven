@@ -117,13 +117,13 @@ export default async function StayPage() {
         <div className="mt-8 grid gap-px overflow-hidden border border-[rgba(120,200,160,0.2)] bg-[rgba(120,200,160,0.2)] md:grid-cols-3">
           {SHOCKS.map((s) => (
             <div key={s.title} className="bg-[#0e1411] p-6">
-              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[#e5695f]">{s.when}</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--term-danger)]">{s.when}</p>
               <h3 className="mt-2 text-[18px] font-semibold text-white">{s.title}</h3>
               <p className="mt-2 text-[14px] leading-relaxed text-[#ccd6cf]/70">{s.body}</p>
             </div>
           ))}
         </div>
-        <Link href="/stay/rules" className="mt-4 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]">
+        <Link href="/stay/rules" className="mt-4 inline-flex items-center gap-2 text-[13px] font-semibold text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]">
           Which of these actually apply to you? Check your case
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
         </Link>
@@ -163,19 +163,19 @@ export default async function StayPage() {
                 />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-white">{c.name}</p>
-                  <p className="truncate text-[11px] text-[#6c7a72]">
+                  <p className="truncate text-[11px] text-[var(--term-dim)]">
                     {c.cap_exempt_reason ? REASON_LABEL[c.cap_exempt_reason] ?? "Cap-exempt" : "Cap-exempt"}
                   </p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-[15px] font-semibold tabular-nums text-[#38e08a]">{c.open_roles.toLocaleString()}</p>
-                  <p className="text-[10px] uppercase text-[#6c7a72]">roles</p>
+                  <p className="text-[10px] uppercase text-[var(--term-dim)]">roles</p>
                 </div>
               </Link>
             ))}
           </div>
         ) : (
-          <p className="mt-6 text-[13px] text-[#6c7a72]">Cap-exempt employer list is loading from the sponsorship graph.</p>
+          <p className="mt-6 text-[13px] text-[var(--term-dim)]">Cap-exempt employer list is loading from the sponsorship graph.</p>
         )}
       </section>
 
@@ -223,7 +223,7 @@ export default async function StayPage() {
             </Link>
           </div>
         </div>
-        <p className="mt-6 text-center text-[12px] leading-relaxed text-[#6c7a72]">
+        <p className="mt-6 text-center text-[12px] leading-relaxed text-[var(--term-dim)]">
           Odds and scores are modeled from public DOL/USCIS data and the 2026 rule changes (weighted-selection final rule
           eff. Feb 27 2026; Duration-of-Status final rule eff. Sep 15 2026). Not legal or immigration advice.
         </p>

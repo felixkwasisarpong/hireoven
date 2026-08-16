@@ -12,11 +12,11 @@ export function ScorecardHero({ data }: { data: ScorecardPayload }) {
         <Link href="/h1b-sponsors/leaderboard" className="hover:text-slate-800">
           All sponsors
         </Link>
-        <span className="text-slate-300">/</span>
+        <span className="text-slate-500">/</span>
         <Link href={data.profile_url} className="hover:text-slate-800">
           {data.company.name}
         </Link>
-        <span className="text-slate-300">/</span>
+        <span className="text-slate-500">/</span>
         <span className="text-slate-700">Scorecard</span>
       </nav>
 

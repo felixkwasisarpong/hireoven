@@ -36,7 +36,7 @@ export default function EmbedDocsPage() {
       <main className="mx-auto max-w-3xl px-4 py-10">
         <Link
           href="/embed"
-          className="text-[13px] text-[#ccd6cf]/55 underline decoration-[#ccd6cf]/20 underline-offset-4 hover:text-[#38e08a]"
+          className="text-[13px] text-[#ccd6cf]/55 underline decoration-[#98a2b3]/20 underline-offset-4 hover:text-[#38e08a]"
         >
           ← Back to widgets
         </Link>
@@ -102,7 +102,7 @@ export default function EmbedDocsPage() {
             Your own sponsorability scorecard. Publish it from your{" "}
             <Link
               href="/signup?next=%2Fdashboard%2Fscorecard"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               dashboard
             </Link>{" "}
@@ -148,7 +148,7 @@ export default function EmbedDocsPage() {
             disclosures; see the{" "}
             <Link
               href="/h1b-sponsors/leaderboard/methodology"
-              className="text-[#f5a623] underline decoration-[#f5a623]/40 underline-offset-4 hover:decoration-[#f5a623]"
+              className="text-[#f5a623] underline decoration-[#c2410c]/40 underline-offset-4 hover:decoration-[#c2410c]"
             >
               methodology
             </Link>

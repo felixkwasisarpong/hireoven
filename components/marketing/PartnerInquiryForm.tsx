@@ -140,7 +140,7 @@ export default function PartnerInquiryForm() {
         className={`${inputClass} resize-y`}
       />
 
-      {state === "error" && <p className="text-[13px] font-medium text-red-400">{error}</p>}
+      {state === "error" && <p className="text-[13px] font-medium text-red-700">{error}</p>}
 
       <button
         type="submit"

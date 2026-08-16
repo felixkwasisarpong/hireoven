@@ -5,6 +5,7 @@ import Link from "next/link"
 import { ApplicationXRayPanel } from "@/components/application-xray/ApplicationXRayPanel"
 import VisaIntelTrigger from "@/components/jobs/VisaIntelTrigger"
 import RecruiterMessageDrawer from "@/components/jobs/RecruiterMessageDrawer"
+import JobTimingSection from "@/components/jobs/JobTimingSection"
 import {
   AlertTriangle,
   ArrowRight,
@@ -39,13 +40,13 @@ import { resolveH1BSponsorshipDisplay } from "@/lib/jobs/sponsorship-employer-si
 import {
   JOB_APPLICATION_SAVED_EVENT,
   JOB_APPLICATION_UNSAVED_EVENT,
-  fetchJobSavedState,
   saveJobToPipeline,
   unsaveJobFromPipeline,
   markJobApplied,
 } from "@/lib/applications/save-job-client"
 import { getApplyVariant } from "@/lib/jobs/apply-cta"
 import { jobSourceFallbackLogo } from "@/lib/jobs/source-fallback-logo"
+import { trackApply } from "@/lib/analytics/session-events"
 import { useToast } from "@/components/ui/ToastProvider"
 import { cn } from "@/lib/utils"
 import { normalizeSkillList } from "@/lib/skills/taxonomy"
@@ -111,7 +112,7 @@ function CircleScore({ value }: { value: number | null }) {
           {value == null ? "–" : `${pct}`}
         </span>
         {value != null && (
-          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-400">%</span>
+          <span className="mt-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">%</span>
         )}
       </div>
     </div>
@@ -186,13 +187,100 @@ const SALARY_LABEL_CONFIG: Record<
 function IntelLabel({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
-      <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-400">{children}</p>
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.1em] text-slate-500">{children}</p>
       {action}
     </div>
   )
 }
 
-const sectionCls = "border-t border-slate-100 px-5 py-5"
+// `empty:hidden` collapses the card when its child renders nothing. Several
+// sidebar panels (X-Ray, ghost detector, rejection intel, employer insider)
+// return null while loading or when a company has no data, which otherwise
+// leaves a bare white card floating in the rail.
+const sectionCls =
+  "rounded-2xl bg-white p-5 shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60 empty:hidden"
+
+const US_STATE_CODES = new Set([
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID", "IL", "IN", "IA", "KS", "KY",
+  "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND",
+  "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+])
+
+const US_STATE_NAMES: Record<string, string> = {
+  alabama: "AL",
+  alaska: "AK",
+  arizona: "AZ",
+  arkansas: "AR",
+  california: "CA",
+  colorado: "CO",
+  connecticut: "CT",
+  delaware: "DE",
+  florida: "FL",
+  georgia: "GA",
+  hawaii: "HI",
+  idaho: "ID",
+  illinois: "IL",
+  indiana: "IN",
+  iowa: "IA",
+  kansas: "KS",
+  kentucky: "KY",
+  louisiana: "LA",
+  maine: "ME",
+  maryland: "MD",
+  massachusetts: "MA",
+  michigan: "MI",
+  minnesota: "MN",
+  mississippi: "MS",
+  missouri: "MO",
+  montana: "MT",
+  nebraska: "NE",
+  nevada: "NV",
+  "new hampshire": "NH",
+  "new jersey": "NJ",
+  "new mexico": "NM",
+  "new york": "NY",
+  "north carolina": "NC",
+  "north dakota": "ND",
+  ohio: "OH",
+  oklahoma: "OK",
+  oregon: "OR",
+  pennsylvania: "PA",
+  "rhode island": "RI",
+  "south carolina": "SC",
+  "south dakota": "SD",
+  tennessee: "TN",
+  texas: "TX",
+  utah: "UT",
+  vermont: "VT",
+  virginia: "VA",
+  washington: "WA",
+  "washington dc": "DC",
+  "district of columbia": "DC",
+  "west virginia": "WV",
+  wisconsin: "WI",
+  wyoming: "WY",
+}
+
+function inferStateCodeFromLocation(location: string | null | undefined): string | null {
+  if (!location) return null
+  const normalized = location
+    .toLowerCase()
+    .replace(/\b(remote|hybrid|onsite|on-site|united states|usa|us)\b/g, " ")
+    .replace(/[^a-z\s,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+
+  for (const token of location.match(/\b[A-Z]{2}\b/g) ?? []) {
+    const code = token.toUpperCase()
+    if (US_STATE_CODES.has(code)) return code
+  }
+
+  for (const [name, code] of Object.entries(US_STATE_NAMES)) {
+    if (normalized.includes(name)) return code
+  }
+
+  return null
+}
 
 // ─── Main component ─────────────────────────────────────────────────────────
 
@@ -242,7 +330,24 @@ export default function JobDetailPanel({
 
   useEffect(() => {
     let cancelled = false
-    void fetchJobSavedState(job.id).then((v) => { if (!cancelled) setSaved(v) })
+    fetch(`/api/applications?jobId=${encodeURIComponent(job.id)}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+      .then(async (response) => {
+        if (!response.ok) return null
+        return (await response.json()) as {
+          hasApplied?: boolean
+          application?: { status?: string | null } | null
+        }
+      })
+      .then((data) => {
+        if (cancelled) return
+        const status = data?.application?.status ?? null
+        setSaved(Boolean(data?.hasApplied && data.application))
+        setApplied(status === "applied")
+      })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [job.id])
 
@@ -315,6 +420,11 @@ export default function JobDetailPanel({
   }
 
   function handleApply() {
+    if (!applyUrl) {
+      pushToast({ tone: "error", title: "Apply link unavailable", description: "This job does not have a usable apply URL yet." })
+      return
+    }
+    trackApply()
     window.open(applyUrl, "_blank", "noopener,noreferrer")
     if (applyClicked) return
     setApplyClicked(true)
@@ -400,41 +510,23 @@ export default function JobDetailPanel({
     : null
   const SalaryIcon = salaryLabelConf?.icon
 
-  const ghostRisk = intel.ghostJobRisk
-  const showGhostRisk = ghostRisk?.freshnessDays != null || ghostRisk?.riskLevel !== "unknown"
-  const ghostRiskLevel = ghostRisk?.riskLevel
-  const ghostTone =
-    ghostRiskLevel === "high"   ? "bg-red-50 text-red-800 ring-red-200"
-    : ghostRiskLevel === "medium" ? "bg-amber-50 text-amber-800 ring-amber-200"
-    : ghostRiskLevel === "low"    ? "bg-emerald-50 text-emerald-800 ring-emerald-200"
-    : "bg-slate-50 text-slate-600 ring-slate-200"
-  const ghostLabel =
-    ghostRiskLevel === "high"   ? "High risk"
-    : ghostRiskLevel === "medium" ? "Medium risk"
-    : ghostRiskLevel === "low"    ? "Low risk"
-    : "Unknown"
-
-  const hiringHealth = intel.companyHiringHealth
-  const showHiringHealth =
-    (hiringHealth?.status && hiringHealth.status !== "unknown") ||
-    (hiringHealth?.activeJobCount != null && hiringHealth.activeJobCount > 0)
-
   const resolvedSponsorshipDisplay = useMemo(
     () => resolveH1BSponsorshipDisplay({ ...job, company: job.company ?? undefined }),
     [job]
   )
   const applyVariant = getApplyVariant(applyUrl)
+  const locationStateCode = useMemo(() => inferStateCodeFromLocation(job.location), [job.location])
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <>
-      <div className="overflow-hidden rounded-2xl bg-white shadow-[0_1px_4px_rgba(15,23,42,0.06)] ring-1 ring-slate-200/60">
+      <div className="space-y-4">
 
         {/* ── Actions ── */}
-        <div className="space-y-2.5 p-5">
+        <div className={cn(sectionCls, "space-y-2.5")}>
           {applied ? (
-            <div className="flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold text-emerald-500">
+            <div className="flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold text-emerald-700">
               <CheckCircle2 className="h-4 w-4" strokeWidth={2} />
               Applied — tracked in pipeline
             </div>
@@ -517,7 +609,7 @@ export default function JobDetailPanel({
               ) : (
                 <Bookmark className="h-3.5 w-3.5" aria-hidden />
               )}
-              <span className={saved ? "group-hover:hidden" : undefined}>{saved ? "Saved" : "Save"}</span>
+              <span className={saved ? "group-hover:hidden" : undefined}>{saved ? "Tracked" : "Track"}</span>
               {saved ? <span className="hidden group-hover:inline">Remove</span> : null}
             </button>
             <button
@@ -526,17 +618,19 @@ export default function JobDetailPanel({
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-[12.5px] font-medium text-slate-600 transition hover:bg-slate-50"
             >
               <MessageSquare className="h-3.5 w-3.5" aria-hidden />
-              Message
+              Draft message
             </button>
           </div>
 
-          <Link
-            href="/dashboard/applications"
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-[12px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
-          >
-            Track in pipeline
-            <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-          </Link>
+          {(saved || applied) && (
+            <Link
+              href="/dashboard/applications"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-[12px] font-medium text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+            >
+              Open pipeline
+              <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          )}
 
           {resolvedSponsorshipDisplay ? (
             <div
@@ -576,24 +670,15 @@ export default function JobDetailPanel({
           ) : null}
         </div>
 
-        {/* ── Application X-Ray ── */}
-        <div className={sectionCls}>
-          <ApplicationXRayPanel
-            jobId={job.id}
-            resumeId={resumeId}
-            applyUrl={applyUrl}
-          />
-        </div>
-
         {/* ── Match Score ── */}
         <div className={sectionCls}>
           {resumeId === null ? (
             <div className="flex flex-col items-center py-2 text-center">
               <div className="flex h-[80px] w-[80px] items-center justify-center rounded-full bg-slate-50 ring-2 ring-slate-200 ring-dashed">
-                <span className="text-[28px] font-bold text-slate-300">–</span>
+                <span className="text-[28px] font-bold text-slate-400">–</span>
               </div>
               <p className="mt-3 text-[13.5px] font-semibold text-slate-800">See your match score</p>
-              <p className="mt-1 max-w-[200px] text-[12px] leading-relaxed text-slate-400">
+              <p className="mt-1 max-w-[200px] text-[12px] leading-relaxed text-slate-500">
                 Upload a resume to get a personalized fit score for this role.
               </p>
               <Link
@@ -614,7 +699,7 @@ export default function JobDetailPanel({
                     {verdict.label}
                   </p>
                   {analyzedFactors.length > 0 && (
-                    <p className="mt-0.5 text-[11.5px] text-slate-400">
+                    <p className="mt-0.5 text-[11.5px] text-slate-500">
                       {analyzedFactors.length} factor{analyzedFactors.length !== 1 ? "s" : ""} analyzed
                     </p>
                   )}
@@ -653,6 +738,22 @@ export default function JobDetailPanel({
           )}
         </div>
 
+        <JobTimingSection
+          jobId={job.id}
+          applyUrl={applyUrl}
+          jobTitle={displayTitle}
+          onApplyNow={handleApply}
+        />
+
+        {/* ── Application X-Ray ── */}
+        <div className={sectionCls}>
+          <ApplicationXRayPanel
+            jobId={job.id}
+            resumeId={resumeId}
+            applyUrl={applyUrl}
+          />
+        </div>
+
         {/* ── Visa Intelligence — always shown, full detail lives in the drawer ── */}
         <div className={sectionCls}>
           <IntelLabel>Visa intelligence</IntelLabel>
@@ -667,7 +768,7 @@ export default function JobDetailPanel({
                       <p className="mt-0.5 text-[11.5px] text-slate-500">Review posting before applying</p>
                     </div>
                   </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 transition group-hover:text-orange-700" aria-hidden />
                 </div>
               ) : visaLabelConfig && VisaIcon ? (
                 <div className="flex items-start justify-between gap-2">
@@ -678,7 +779,7 @@ export default function JobDetailPanel({
                         {visaLabelConfig.verdict}
                       </span>
                       {visaFitScore != null && (
-                        <span className="text-[11px] font-semibold tabular-nums text-slate-400">
+                        <span className="text-[11px] font-semibold tabular-nums text-slate-500">
                           {visaFitScore}/100
                         </span>
                       )}
@@ -690,15 +791,15 @@ export default function JobDetailPanel({
                     )}
                     <p className="mt-2 text-[11.5px] font-semibold text-orange-600">Full analysis →</p>
                   </div>
-                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
+                  <ChevronRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-500 transition group-hover:text-orange-700" aria-hidden />
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2">
                   <div>
                     <p className="text-[13px] font-medium text-slate-700">Visa fit analysis</p>
-                    <p className="mt-0.5 text-[11.5px] text-slate-400">Tap to view full intelligence report</p>
+                    <p className="mt-0.5 text-[11.5px] text-slate-500">Tap to view full intelligence report</p>
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 transition group-hover:text-orange-400" aria-hidden />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition group-hover:text-orange-700" aria-hidden />
                 </div>
               )}
             </div>
@@ -712,7 +813,7 @@ export default function JobDetailPanel({
             <IntelLabel>Est. take-home</IntelLabel>
             <TakeHomeBadge
               annualSalary={job.salary_min}
-              stateCode={job.company?.domain ? undefined : undefined}
+              stateCode={locationStateCode}
             />
           </div>
         )}
@@ -728,16 +829,16 @@ export default function JobDetailPanel({
               </span>
             </div>
             {salaryIntel?.historicalRangeMin != null && salaryIntel.historicalRangeMax != null && (
-              <p className="mt-1.5 text-[11px] text-slate-400">
+              <p className="mt-1.5 text-[11px] text-slate-500">
                 LCA range: ${(salaryIntel.historicalRangeMin / 1000).toFixed(0)}k–${(salaryIntel.historicalRangeMax / 1000).toFixed(0)}k
                 {salaryIntel.medianWage != null && ` · median $${(salaryIntel.medianWage / 1000).toFixed(0)}k`}
               </p>
             )}
             {salaryIntel?.commonWageLevel && (
-              <p className="mt-0.5 text-[11px] text-slate-400">Common level: {salaryIntel.commonWageLevel}</p>
+              <p className="mt-0.5 text-[11px] text-slate-500">Common level: {salaryIntel.commonWageLevel}</p>
             )}
             {salaryIntel?.explanation && (
-              <p className="mt-1.5 text-[11px] italic leading-relaxed text-slate-400 line-clamp-2">
+              <p className="mt-1.5 text-[11px] italic leading-relaxed text-slate-500 line-clamp-2">
                 {salaryIntel.explanation}
               </p>
             )}
@@ -745,10 +846,9 @@ export default function JobDetailPanel({
         )}
 
         {/* ── Ghost Job Detector (full detail view) ── */}
-        <div className="px-5 py-4 border-t border-slate-100">
+        <div className={sectionCls}>
           <GhostJobDetector
             jobId={job.id}
-            onSkip={() => window.open(applyUrl, "_blank", "noopener,noreferrer")}
           />
         </div>
 
@@ -756,7 +856,7 @@ export default function JobDetailPanel({
 
         {/* ── Rejection Intelligence ── */}
         {job.company?.id && (
-          <div className="border-t border-slate-100 px-5 py-5">
+          <div className={sectionCls}>
             <RejectionIntelligence
               companyId={job.company.id}
               jobTitle={job.title}
@@ -767,7 +867,7 @@ export default function JobDetailPanel({
 
         {/* ── Employer insider view (post-hire check-in data) ── */}
         {job.company?.id && (
-          <div className="border-t border-slate-100 px-5 py-5">
+          <div className={sectionCls}>
             <EmployerInsiderView companyId={job.company.id} />
           </div>
         )}
