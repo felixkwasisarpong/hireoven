@@ -662,9 +662,17 @@ export default function JobDetailPanel({
                 <span className="text-[12px] font-semibold text-emerald-800">Historical H-1B signal</span>
               </div>
             ) : (
+              // The pill and the "NN/100" in Visa intelligence below are now the
+              // same number banded, so show the score here too — one value, one
+              // scale, rather than two readouts a rail apart that can disagree.
               <div className={cn("flex items-center gap-1.5 rounded-xl px-3.5 py-2.5 ring-1 ring-inset", sponsorshipPill.className)}>
                 <Plane className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="text-[12px] font-semibold">{sponsorshipPill.label}</span>
+                {visaFitScore != null && (
+                  <span className="ml-auto text-[12px] font-semibold tabular-nums opacity-80">
+                    {visaFitScore}/100
+                  </span>
+                )}
               </div>
             )
           ) : null}
