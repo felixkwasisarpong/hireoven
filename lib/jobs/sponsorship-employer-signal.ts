@@ -1,5 +1,6 @@
-import type { Company, Job } from "@/types"
+import type { Company, Job, VisaFitScoreLabel } from "@/types"
 import { isStaffingIntermediaryListing } from "@/lib/jobs/hiring-entity"
+import { createVisaIntelligenceFallback } from "@/lib/jobs/intelligence"
 
 /** Job row plus joined company (nullable when join missing). */
 export type EmployerSponsorshipJobInput = Job & { company?: Company | null }
@@ -184,7 +185,46 @@ const PILL_UNSPECIFIED: EmployerSponsorshipPill = {
  * Blends job row + company and honors normalized `sponsorship_badge` so a strong canonical signal is not
  * overridden by a stale `jobs.sponsorship_score` column.
  */
+/**
+ * Pills for each visa-fit band. The wording deliberately mirrors the band names
+ * used by the score itself, so a rail showing "Strong sponsorship signal" and
+ * "Strong · 78/100" cannot disagree.
+ */
+const PILL_BY_BAND: Record<VisaFitScoreLabel, EmployerSponsorshipPill> = {
+  "Very Strong": PILL_LIKELY,
+  Strong: PILL_STRONG,
+  Medium: PILL_MODERATE,
+  Weak: PILL_LIMITED,
+  Blocked: PILL_LIMITED,
+}
+
+/**
+ * Employer / posting sponsorship signal.
+ *
+ * CANONICAL SOURCE: `calculateVisaFitScore`, reached through
+ * `createVisaIntelligenceFallback`. This pill and the "visa fit NN/100" readout
+ * on the job rail used to be two independent models — the pill read three
+ * inputs (sponsors_h1b, requires_authorization, a blended score) while the
+ * score reads about nine including LCA filing history, wage level, E-Verify and
+ * cap-exempt status. They routinely disagreed on the same screen: "Moderate
+ * sponsorship signal" a hundred lines above "Very strong visa signal 92/100".
+ * The pill is now a band of the same number.
+ *
+ * The legacy ladder survives only as a fallback for rows too thin to score.
+ */
 export function employerSponsorshipPill(job: EmployerSponsorshipJobInput): EmployerSponsorshipPill {
+  const visa = createVisaIntelligenceFallback(job)
+  if (visa.label && typeof visa.visaFitScore === "number") {
+    return PILL_BY_BAND[visa.label] ?? PILL_UNSPECIFIED
+  }
+  return legacyEmployerSponsorshipPill(job)
+}
+
+/**
+ * Pre-consolidation ladder. Retained for rows where the visa-fit model has no
+ * score to give; do not add new callers.
+ */
+export function legacyEmployerSponsorshipPill(job: EmployerSponsorshipJobInput): EmployerSponsorshipPill {
   const badge = deriveSponsorshipBadge(job)
   const s = effectiveEmployerSponsorshipScore(job)
   const sponsors = employerLikelySponsorsH1b(job)

@@ -17,6 +17,7 @@
 
 import { loadEnvConfig } from '@next/env'
 import { createClient } from '@supabase/supabase-js'
+import { reconcileLcaCounts, rollupSponsorCounts } from '../lib/h1b/sponsor-counts'
 
 loadEnvConfig(process.cwd())
 
@@ -65,6 +66,8 @@ type CompanyPatch = {
 type UscisSnapshot = {
   latestYear: number
   approvals: number
+  /** Approvals across the three most recent years present, for the 3yr roll-up. */
+  approvals3y: number
   denials: number
   total: number
   approvalRate: number
@@ -178,9 +181,13 @@ async function buildUSCISSnapshots(): Promise<Map<string, UscisSnapshot>> {
     const latestYear = Math.max(...Array.from(byYear.keys()))
     const latest = byYear.get(latestYear) ?? { approvals: 0, denials: 0 }
     const total = latest.approvals + latest.denials
+    const { threeYear } = rollupSponsorCounts(
+      new Map(Array.from(byYear, ([year, v]) => [year, { approved: v.approvals }])),
+    )
     snapshots.set(companyId, {
       latestYear,
       approvals: latest.approvals,
+      approvals3y: threeYear,
       denials: latest.denials,
       total,
       approvalRate: total > 0 ? latest.approvals / total : 0,
@@ -275,7 +282,10 @@ function choosePatch(
     return {
       patch: {
         h1b_sponsor_count_1yr: uscis.approvals,
-        h1b_sponsor_count_3yr: lca3y,
+        // Was `lca3y` — pairing a USCIS 1-year count with an LCA 3-year count
+        // produced 3yr < 1yr on 37% of sponsors. Roll both from USCIS, keeping
+        // the LCA total only as a floor. See lib/h1b/sponsor-counts.ts.
+        h1b_sponsor_count_3yr: Math.max(uscis.approvals3y, lca3y),
         sponsors_h1b: uscis.approvals > 0 || lca3y > 0,
         sponsorship_confidence: calcUSCISConfidence(
           uscis.approvals,
@@ -292,8 +302,8 @@ function choosePatch(
     if (decided > 0 || lca.cert1y > 0 || lca.cert3y > 0) {
       return {
         patch: {
-          h1b_sponsor_count_1yr: lca.cert1y,
-          h1b_sponsor_count_3yr: lca.cert3y,
+          h1b_sponsor_count_1yr: reconcileLcaCounts(lca.cert1y, lca.cert3y).oneYear,
+          h1b_sponsor_count_3yr: reconcileLcaCounts(lca.cert1y, lca.cert3y).threeYear,
           sponsors_h1b: lca.cert1y > 0 || lca.cert3y > 0,
           sponsorship_confidence: calcLCAConfidence(lca.cert1y, lca.approvalRate),
         },

@@ -591,3 +591,30 @@ function action(kind: ApplicationXRay["actions"][number]["kind"]) {
     target: null,
   } as ApplicationXRay["actions"][number]
 }
+
+// ── §1.4: an INSUFFICIENT_DATA call must say what blocks it ───────────────────
+// Otherwise the hero reads "not enough to judge" while the dimension cards below
+// each render a verdict with their own confidence, which looks self-contradictory.
+
+test("presentFinalAction: INSUFFICIENT_DATA names the blocking gap", () => {
+  const presented = presentFinalAction(
+    "INSUFFICIENT_DATA",
+    undefined,
+    "Posting authorization wording is ambiguous.",
+  )
+  assert.match(presented.description, /Blocked on one input/)
+  assert.match(presented.description, /authorization wording is ambiguous/)
+  assert.match(presented.description, /Everything else below has been assessed/)
+})
+
+test("presentFinalAction: falls back to generic copy when no gap is known", () => {
+  const presented = presentFinalAction("INSUFFICIENT_DATA", undefined, null)
+  assert.equal(presented.description, "X-Ray needs more input before it can call this role.")
+  assert.equal(presentFinalAction("INSUFFICIENT_DATA").description,
+    "X-Ray needs more input before it can call this role.")
+})
+
+test("presentFinalAction: a blocking gap does not alter other actions", () => {
+  const presented = presentFinalAction("APPLY_NOW", undefined, "Some gap")
+  assert.equal(presented.description, presentFinalAction("APPLY_NOW").description)
+})

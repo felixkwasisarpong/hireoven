@@ -251,15 +251,39 @@ export function readHiringEntitySignalFromRawData(
   }
 
   const structured = asObject(rawData.structured_job)
-  const structuredName = cleanCandidate(structured?.hiringCompany as string | null | undefined)
-  if (structuredName) {
-    return {
-      display_name: structuredName,
-      end_client_name: structuredName,
-      staffing_company_name: null,
-      is_staffing_intermediary: true,
-      confidence: 0.6,
-      source: "structured_job_fallback",
+  if (structured) {
+    const structuredName = cleanCandidate(structured.hiringCompany as string | null | undefined)
+    const boardName = cleanCandidate(structured.company as string | null | undefined)
+    const staffingCompanyName = cleanCandidate(structured.staffingCompany as string | null | undefined)
+
+    // `structured_job.hiringCompany` is NOT evidence of an intermediary:
+    // normalize.ts sets it to `hiringEntity?.displayName ?? job.company.name`,
+    // so it is populated on essentially every row and equals the employer's own
+    // name in the ordinary case. Treating its mere presence as proof (and
+    // hard-coding is_staffing_intermediary: true) flagged every normalized job
+    // as staffing, which made employerLikelySponsorsH1b and
+    // effectiveEmployerSponsorshipScore discard company-level sponsorship —
+    // silently downgrading confirmed H-1B sponsors.
+    //
+    // The real flag sits alongside it. Trust that, and otherwise only infer an
+    // intermediary when the hiring company genuinely differs from the board.
+    const explicitStaffing = asBoolean(structured.staffingIntermediary) ?? false
+    const namesDiffer = Boolean(
+      structuredName &&
+      boardName &&
+      structuredName.toLowerCase() !== boardName.toLowerCase()
+    )
+    const isStaffing = explicitStaffing || namesDiffer
+
+    if (structuredName || staffingCompanyName || isStaffing) {
+      return {
+        display_name: structuredName ?? staffingCompanyName,
+        end_client_name: isStaffing ? structuredName : null,
+        staffing_company_name: staffingCompanyName ?? (namesDiffer ? boardName : null),
+        is_staffing_intermediary: isStaffing,
+        confidence: Math.max(0, Math.min(1, asNumber(structured.hiringEntityConfidence) ?? 0.6)),
+        source: "structured_job_fallback",
+      }
     }
   }
 

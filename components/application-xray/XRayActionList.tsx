@@ -30,20 +30,30 @@ export function XRayActionList({
   applyUrl,
   jobId,
   onActionClick,
+  /**
+   * Action already shown as "Next action" in the decision hero. It is excluded
+   * here so the same recommendation is not printed twice on one screen — the
+   * hero owns the single next step, this list owns everything after it.
+   */
+  primaryActionId = null,
 }: {
   actions: RecommendedAction[]
   accessRoutes: ActionableAccessRoute[]
   applyUrl: string | null
   jobId: string
   onActionClick?: (action: RecommendedAction) => void
+  primaryActionId?: string | null
 }) {
-  const visibleActions = actions.slice(0, 5).map(presentAction)
+  const remaining = primaryActionId
+    ? actions.filter((action) => action.id !== primaryActionId)
+    : actions
+  const visibleActions = remaining.slice(0, 5).map(presentAction)
 
   return (
     <section aria-labelledby="xray-actions-heading">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h4 id="xray-actions-heading" className="text-[12px] font-semibold text-slate-900 dark:text-slate-100">
-          Recommended actions
+          {primaryActionId ? "Then" : "Recommended actions"}
         </h4>
         <span className="text-[10.5px] font-semibold text-slate-400">
           Ranked
@@ -52,7 +62,9 @@ export function XRayActionList({
 
       {visibleActions.length === 0 ? (
         <p className="rounded-xl border border-slate-200 bg-white p-3 text-[12px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
-          No action is available from the current X-Ray data.
+          {primaryActionId
+            ? "No further action beyond the next step above."
+            : "No action is available from the current X-Ray data."}
         </p>
       ) : (
         <ol className="space-y-2.5">
