@@ -122,11 +122,46 @@ const CONTENT_RULES: Rule[] = [
   },
   {
     key: "benefits",
-    // `equity` is guarded against industry false-friends ("private equity",
-    // "home equity", "brand equity", etc.) which otherwise mis-route financial
-    // and real-estate JD content into the benefits section.
-    pattern:
-      /\b(health|dental|vision|401\s?\(k\)|retirement|pto|paid time off|parental leave|(?<!(?:private|home|brand|real\s+estate|venture)\s)equity|bonus|wellness|stipend)\b/i,
+    // Benefit words need benefit context. Bare `health`, `vision`, `bonus`,
+    // `retirement` and `wellness` are ordinary JD vocabulary — "monitor system
+    // health", "own the product vision", "bonus points if…", "retirement of
+    // legacy services" — and because classifyTextByHeuristic checks benefits
+    // FIRST, one loose keyword dragged responsibilities and preferred
+    // qualifications into Benefits & perks regardless of the rest of the line.
+    // `equity` was already guarded this way against "private equity" and
+    // friends; the same treatment now applies to every ambiguous term.
+    pattern: new RegExp(
+      [
+        // health / medical cover — never bare "health"
+        String.raw`\bhealth\s*(?:insurance|care|coverage|benefits?|plan|savings|screening)\b`,
+        String.raw`\bhealthcare\b`,
+        String.raw`\bmental\s+health\b`,
+        String.raw`\bmedical\s*(?:insurance|coverage|benefits?|plan)\b`,
+        // dental has no meaningful false friend in job descriptions
+        String.raw`\bdental\b`,
+        // vision only as cover, never "product/technical/long-term vision"
+        String.raw`\bvision\s*(?:insurance|coverage|benefits?|plan|care)\b`,
+        // retirement vehicles, not "retirement of legacy systems"
+        String.raw`\b401\s?\(k\)\b`,
+        String.raw`\b403\s?\(b\)\b`,
+        String.raw`\bpension\b`,
+        String.raw`\bretirement\s*(?:plan|savings|benefits?|contribution|match)\b`,
+        // leave and time off
+        String.raw`\bpto\b`,
+        String.raw`\bpaid\s+time\s+off\b`,
+        String.raw`\b(?:parental|maternity|paternity|family)\s+leave\b`,
+        // cash comp extras — not "bonus points if you have Rust"
+        String.raw`\b(?:signing|annual|performance|target|retention|referral|discretionary)\s+bonus\b`,
+        String.raw`\bbonus\s+(?:eligible|scheme|structure)\b`,
+        // wellbeing programmes, not "wellness of the codebase"
+        String.raw`\bwellness\s*(?:program|programme|stipend|allowance|benefits?|budget)\b`,
+        String.raw`\bwell-?being\b`,
+        String.raw`\bstipend\b`,
+        // equity keeps its existing industry guard
+        String.raw`(?<!(?:private|home|brand|real\s+estate|venture)\s)\bequity\b`,
+      ].join("|"),
+      "i",
+    ),
   },
   {
     key: "compensation",
