@@ -141,6 +141,52 @@ export async function getTransferFriendlyEmployers(query: TransferQuery = {}): P
   }
 }
 
+/**
+ * Minimum distinct employers before a role x state page is worth putting in the index.
+ * Below this the page is thin — a table with two rows ranking "who can transfer you" is not a
+ * useful answer, and thin programmatic pages are an indexing liability rather than an asset.
+ * Measured: 396 of the featured-role slices clear 5, and 292 clear 10.
+ */
+export const MIN_EMPLOYERS_FOR_INDEX = 5
+
+export interface TransferSlice {
+  socGroup: string
+  stateAbbr: string
+  employers: number
+}
+
+/**
+ * Role x state slices with enough transfer activity to justify a standalone page.
+ * Drives generateStaticParams and the sitemap, so both agree on what exists.
+ */
+export async function getIndexableTransferSlices(input: {
+  socGroups: string[]
+  sinceDays?: number
+}): Promise<TransferSlice[]> {
+  if (!hasPostgresEnv()) return []
+  const socs = (input.socGroups ?? []).filter((s) => /^\d{2}-\d{2,4}$/.test(s))
+  if (!socs.length) return []
+  const sinceDays = Math.min(Math.max(input.sinceDays ?? DEFAULT_SINCE_DAYS, 1), 365 * 5)
+
+  try {
+    const { rows } = await getPostgresPool().query<{ soc: string; st: string; employers: string }>(
+      `SELECT left(soc_code, 5) AS soc, worksite_state_abbr AS st,
+              count(DISTINCT employer_name_normalized)::text AS employers
+         FROM lca_records
+        WHERE change_employer > 0
+          AND decision_date >= (CURRENT_DATE - ($1::int || ' days')::interval)
+          AND worksite_state_abbr IS NOT NULL
+          AND left(soc_code, 5) = ANY($2::text[])
+        GROUP BY 1, 2
+       HAVING count(DISTINCT employer_name_normalized) >= $3`,
+      [sinceDays, socs, MIN_EMPLOYERS_FOR_INDEX]
+    )
+    return rows.map((r) => ({ socGroup: r.soc, stateAbbr: r.st, employers: Number(r.employers) }))
+  } catch {
+    return []
+  }
+}
+
 export interface CompanyTransferProfile {
   transferFilings: number
   transferPositions: number

@@ -67,6 +67,78 @@ export function attestationSummary(a: AcwiaAttestation): string {
   )
 }
 
+export interface CapExemptCompany {
+  id: string
+  name: string
+  domain: string | null
+  reason: string | null
+  /** 'acwia_attested' outranks every name/domain heuristic. */
+  source: string | null
+  jobCount: number
+}
+
+/**
+ * Cap-exempt employers we can name, best-evidenced first.
+ *
+ * Ordered so employer-attested records lead: those come from the employer's own ACWIA
+ * declaration on a wage determination, while the rest are inferred from a .edu domain or a name
+ * pattern. Restricted to companies with live jobs, because a directory of employers you cannot
+ * apply to is not useful.
+ */
+export async function listCapExemptCompanies(input: {
+  limit?: number
+  attestedOnly?: boolean
+} = {}): Promise<CapExemptCompany[]> {
+  if (!hasPostgresEnv()) return []
+  const limit = Math.min(Math.max(input.limit ?? 200, 1), 1000)
+
+  try {
+    const { rows } = await getPostgresPool().query<{
+      id: string; name: string; domain: string | null
+      cap_exempt_reason: string | null; cap_exempt_source: string | null; job_count: number | null
+    }>(
+      `SELECT id::text, name, domain, cap_exempt_reason, cap_exempt_source, job_count
+         FROM companies
+        WHERE is_cap_exempt
+          AND COALESCE(job_count, 0) > 0
+          AND duplicate_of_company_id IS NULL
+          ${input.attestedOnly ? "AND cap_exempt_source = 'acwia_attested'" : ""}
+        ORDER BY (cap_exempt_source = 'acwia_attested') DESC,
+                 COALESCE(job_count, 0) DESC,
+                 name ASC
+        LIMIT $1`,
+      [limit]
+    )
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      domain: r.domain,
+      reason: r.cap_exempt_reason,
+      source: r.cap_exempt_source,
+      jobCount: r.job_count ?? 0,
+    }))
+  } catch {
+    return []
+  }
+}
+
+/** Headline counts for the registry page. */
+export async function getCapExemptCounts(): Promise<{ total: number; attested: number; withJobs: number } | null> {
+  if (!hasPostgresEnv()) return null
+  try {
+    const { rows } = await getPostgresPool().query<{ total: string; attested: string; with_jobs: string }>(
+      `SELECT count(*)::text total,
+              count(*) FILTER (WHERE cap_exempt_source = 'acwia_attested')::text attested,
+              count(*) FILTER (WHERE COALESCE(job_count,0) > 0)::text with_jobs
+         FROM companies WHERE is_cap_exempt AND duplicate_of_company_id IS NULL`
+    )
+    const r = rows[0]
+    return r ? { total: Number(r.total), attested: Number(r.attested), withJobs: Number(r.with_jobs) } : null
+  } catch {
+    return null
+  }
+}
+
 export async function getAcwiaAttestation(input: {
   employerNormalized: string
 }): Promise<AcwiaAttestation | null> {
