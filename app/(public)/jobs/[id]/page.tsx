@@ -14,7 +14,13 @@ import { sqlSeoVisibleJob } from "@/lib/jobs/publication"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import StayScorePanel from "@/components/stay/StayScorePanel"
 import OutcomeReporter from "@/components/stay/OutcomeReporter"
+import LevelGapCard from "@/components/stay/LevelGapCard"
 import { computeStayScore } from "@/lib/stay/stay-score"
+import { getJobWageLevelContext, classifyTitleToSoc, parseUsLocation } from "@/lib/stay/oflc-wage-levels"
+import { computeLevelGap } from "@/lib/stay/level-gap"
+import { isSpecialtyOccupation } from "@/lib/salaries/soc-classifier"
+import ImmigrationIntelPanel from "@/components/h1b/ImmigrationIntelPanel"
+import { getJobImmigrationIntel } from "@/lib/h1b/employer-immigration-intel"
 import { getOutcomeSummary } from "@/lib/stay/outcomes"
 import { siteBaseUrl } from "@/lib/seo/site-url"
 import type { Company, Job } from "@/types"
@@ -214,6 +220,38 @@ export default async function PublicJobPage({ params }: Props) {
     ? await getOutcomeSummary({ companyId: company.id, employerName: company.name })
     : null
 
+  // Level Gap — the exact published DOL wage-level ladder for this occupation at this worksite,
+  // and what the next rung is worth in lottery entries. Shown only when we can ground all three
+  // of: a resolvable OEWS area, a confident SOC, and a posted salary band. Anything less and we
+  // say nothing rather than put an approximate number in a candidate's negotiation.
+  const wageLevelContext =
+    jobRow.salary_min != null || jobRow.salary_max != null
+      ? await getJobWageLevelContext({ title: jobRow.title, location: jobRow.location })
+      : null
+  const levelGap =
+    wageLevelContext && isSpecialtyOccupation(wageLevelContext.soc.socCode)
+      ? computeLevelGap({
+          levels: wageLevelContext.levels.levels,
+          salaryMin: jobRow.salary_min,
+          salaryMax: jobRow.salary_max,
+        })
+      : null
+
+  // Employer immigration record (§2/§3/§4/§6/§7). Reuses the SOC already resolved for the wage
+  // card when there was one, and otherwise classifies the title on its own — the DOL signals do
+  // not need a salary band, so they apply to far more postings than the Level Gap card does.
+  const intelSoc =
+    wageLevelContext?.soc.socCode ?? (await classifyTitleToSoc(jobRow.title))?.socCode ?? null
+  const immigrationIntel = company?.name
+    ? await getJobImmigrationIntel({
+        companyName: company.name,
+        socCode: intelSoc,
+        stateAbbr: parseUsLocation(jobRow.location).stateAbbr,
+        postedFrom: jobRow.first_detected_at ?? null,
+        postedTo: jobRow.last_seen_at ?? new Date(),
+      })
+    : null
+
   const normalized = resolveJobNormalization(
     job as unknown as PersistedJobForNormalization
   )
@@ -358,6 +396,17 @@ export default async function PublicJobPage({ params }: Props) {
 
           <div className="mb-6">
             <StayScorePanel result={stayScore} />
+            {levelGap && wageLevelContext && (
+              <LevelGapCard
+                gap={levelGap}
+                levels={wageLevelContext.levels.levels}
+                areaName={wageLevelContext.levels.areaName}
+                socCode={wageLevelContext.levels.socCode}
+                socLabel={wageLevelContext.levels.socLabel}
+                wageYear={wageLevelContext.levels.wageYear}
+              />
+            )}
+            {immigrationIntel?.hasAnything && <ImmigrationIntelPanel intel={immigrationIntel} />}
             {company && (
               <OutcomeReporter
                 companyId={company.id}
