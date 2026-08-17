@@ -82,10 +82,10 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/stay/rules`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
     { url: `${base}/stay/talent`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
     { url: `${base}/stay/timeline`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
-    // Transfer hub refreshes with each quarterly DOL drop; the cap-exempt registry is the only
-    // employer-attested list of its kind (no official cap-exempt list is published anywhere).
+    // Transfer hub refreshes with each quarterly DOL drop.
+    // NOTE: cap-exempt lives at /h1b-sponsors/cap-exempt (already listed above) — do not add a
+    // second cap-exempt page; two URLs competing for the same query split their own ranking.
     { url: `${base}/stay/transfers`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7 },
-    { url: `${base}/stay/cap-exempt`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7 },
     ...LEADERBOARD_STATES.map((s) => ({
       url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
       lastModified: new Date(),
