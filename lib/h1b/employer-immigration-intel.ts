@@ -28,6 +28,12 @@ import {
 import { getPlacementProfile, type PlacementProfile } from "@/lib/h1b/placement-graph"
 import { getCompanyTransferProfile, type CompanyTransferProfile } from "@/lib/h1b/transfer-velocity"
 import { getAcwiaAttestation, type AcwiaAttestation } from "@/lib/h1b/cap-exempt-registry"
+import {
+  getSocOverrideSignal,
+  getLayoffAttestations,
+  type SocOverrideSignal,
+  type LayoffAttestation,
+} from "@/lib/h1b/employer-filing-signals"
 import { normalizeEmployerName } from "@/lib/h1b/normalize-employer"
 
 export interface JobImmigrationIntel {
@@ -39,6 +45,10 @@ export interface JobImmigrationIntel {
   transfers: CompanyTransferProfile | null
   /** Employer-attested H-1B cap exemption (§5). Attested, not adjudicated. */
   capExempt: AcwiaAttestation | null
+  /** §9 — how often DOL reclassified this employer's requested occupation. */
+  socOverride: SocOverrideSignal | null
+  /** §10 — employer-attested layoffs in this occupation, point-in-time. */
+  layoffs: LayoffAttestation[]
   /** False when nothing is worth rendering — the caller should omit the panel entirely. */
   hasAnything: boolean
 }
@@ -70,7 +80,8 @@ export async function getJobImmigrationIntel(input: {
   const employerNormalized = normalizeEmployerName(name)
   if (!employerNormalized || employerNormalized.length < MIN_EMPLOYER_KEY_LENGTH) return null
 
-  const [testAd, radar, followThrough, placement, transfers, capExempt] = await Promise.all([
+  const [testAd, radar, followThrough, placement, transfers, capExempt, socOverride, layoffs] =
+    await Promise.all([
     input.postedFrom && input.postedTo
       ? assessTestAd({
           employerNormalized,
@@ -85,6 +96,8 @@ export async function getJobImmigrationIntel(input: {
     getPlacementProfile({ employerNormalized, topN: 4 }),
     getCompanyTransferProfile({ employerNormalized }),
     getAcwiaAttestation({ employerNormalized }),
+    getSocOverrideSignal({ employerNormalized }),
+    getLayoffAttestations({ employerNormalized, socCode: input.socCode, limit: 3 }),
   ])
 
   const hasAnything = Boolean(
@@ -93,10 +106,23 @@ export async function getJobImmigrationIntel(input: {
       (followThrough && followThrough.rate !== null) ||
       (placement && placement.placementShare >= PLACEMENT_SHARE_FLOOR && placement.topEndClients.length > 0) ||
       (transfers && transfers.transferFilings > 0) ||
-      Boolean(capExempt)
+      Boolean(capExempt) ||
+      Boolean(socOverride?.isElevated) ||
+      layoffs.length > 0
   )
 
-  return { employerNormalized, testAd, radar, followThrough, placement, transfers, capExempt, hasAnything }
+  return {
+    employerNormalized,
+    testAd,
+    radar,
+    followThrough,
+    placement,
+    transfers,
+    capExempt,
+    socOverride,
+    layoffs,
+    hasAnything,
+  }
 }
 
 export { PLACEMENT_SHARE_FLOOR }

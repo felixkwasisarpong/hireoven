@@ -1,4 +1,4 @@
-import { AlertTriangle, Building2, FileClock, GraduationCap, Repeat, ShieldCheck } from "lucide-react"
+import { AlertTriangle, Building2, FileClock, GraduationCap, Repeat, Scale, ShieldCheck, TrendingDown } from "lucide-react"
 import type { JobImmigrationIntel } from "@/lib/h1b/employer-immigration-intel"
 import { PLACEMENT_SHARE_FLOOR } from "@/lib/h1b/employer-immigration-intel"
 import { radarSummary } from "@/lib/h1b/green-card-radar"
@@ -46,7 +46,7 @@ function Row({
 export default function ImmigrationIntelPanel({ intel }: { intel: JobImmigrationIntel }) {
   if (!intel.hasAnything) return null
 
-  const { testAd, radar, followThrough, placement, transfers, capExempt } = intel
+  const { testAd, radar, followThrough, placement, transfers, capExempt, socOverride, layoffs } = intel
   const showPlacement =
     placement && placement.placementShare >= PLACEMENT_SHARE_FLOOR && placement.topEndClients.length > 0
 
@@ -130,6 +130,33 @@ export default function ImmigrationIntelPanel({ intel }: { intel: JobImmigration
             )}
             <span className="mt-1 block text-[11px] text-[#ccd6cf]/45">
               Only certifications past the 180-day window are counted — recent ones cannot have expired yet.
+            </span>
+          </Row>
+        )}
+
+        {/* §10 — rare, recent, and specific to the occupation. Point-in-time, never "is laying off". */}
+        {layoffs.length > 0 && (
+          <Row icon={<TrendingDown className="h-4 w-4" />} tone="var(--term-amber-text)" title="Reported a layoff in this occupation">
+            In a green-card filing decided {layoffs[0].decisionDate ?? "recently"}, this employer stated it had
+            laid off workers in {layoffs[0].socTitle ?? "this or a related occupation"}
+            {layoffs[0].worksiteState ? ` (${layoffs[0].worksiteState})` : ""} during the preceding six months.
+            {layoffs.length > 1 && ` ${layoffs.length} such filings on record.`}
+            <span className="mt-1 block text-[11px] text-[#ccd6cf]/45">
+              Describes the period before that filing, not necessarily today. Unlike WARN notices this is
+              occupation-specific and federal.
+            </span>
+          </Row>
+        )}
+
+        {/* §9 — context, explicitly not an accusation. Only shown when well above the norm. */}
+        {socOverride?.isElevated && (
+          <Row icon={<Scale className="h-4 w-4" />} tone="var(--term-amber-text)" title="DOL often reclassifies their job titles">
+            The Department of Labor assigned a different occupation than this employer requested on{" "}
+            {pctOf(socOverride.rate)} of its {socOverride.filings} wage determinations — against a{" "}
+            {pctOf(socOverride.baseline)} norm. The occupation sets the prevailing wage floor.
+            <span className="mt-1 block text-[11px] text-[#ccd6cf]/45">
+              Reclassification is routine and can reflect genuinely hybrid roles; it is not by itself evidence
+              of underpayment.
             </span>
           </Row>
         )}
