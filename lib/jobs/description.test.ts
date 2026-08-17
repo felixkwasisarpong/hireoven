@@ -266,3 +266,52 @@ test("looksLikeBlockedOrErrorPage keeps real JDs that mention security terms", (
     "Responsibilities include: ".padEnd(1200, "x")
   assert.equal(looksLikeBlockedOrErrorPage(realJd), false)
 })
+
+// ── Breezy renders its UI strings as untranslated %TOKEN% placeholders ────────
+// Every Breezy-sourced description carried them (16 of 16 in a recent sample),
+// so the job page showed lines like "- %BUTTON_APPLY_USING_LINKED_IN%".
+
+test("cleanJobDescription strips Breezy %PLACEHOLDER% chrome", () => {
+  const raw = [
+    "Dark Horse Tech",
+    "Senior Subject Matter Expert - Analytics Navy FGEN",
+    "- Norfolk, VA",
+    "- %LABEL_POSITION_TYPE_FULL_TIME%",
+    "- $120,000 - $135,000 / year",
+    "- %BREADCRUMB_JOB_OPENINGS%",
+    "- %BUTTON_APPLY_TO_POSITION%",
+    "- %BUTTON_APPLY_USING_INDEED%",
+    "- %BUTTON_APPLY_USING_LINKED_IN%",
+    "The Senior Subject Matter Expert supports Navy surface ship analytics across",
+    "the fleet, working with programme staff on requirements and sustainment.",
+    "Experience in the United States Navy as a post-Major Command Commander afloat.",
+    "Significant experience in Department of Defense major staffs, Echelon 2 or above.",
+    "Recent experience analysing Navy Surface Ship Class requirements including",
+    "manning, training, maintenance, equipping and life-cycle sustainment.",
+    "%FOOTER_POWERED_BY% breezy",
+  ].join("\n")
+
+  const cleaned = cleanJobDescription(raw)
+  assert.ok(cleaned, "description should survive cleaning")
+  assert.equal((cleaned!.match(/%[A-Z0-9_]+%/g) ?? []).length, 0, "no placeholders should remain")
+  // Trailing text after a token must not save the line from being stripped.
+  assert.ok(!cleaned!.includes("breezy"), "footer line should be removed entirely")
+  // Real content is preserved.
+  assert.match(cleaned!, /Echelon 2/)
+  assert.match(cleaned!, /life-cycle sustainment/)
+  assert.match(cleaned!, /\$120,000/)
+})
+
+test("cleanJobDescription keeps lines that merely contain a percent sign", () => {
+  const raw = [
+    "We are hiring a Senior Data Analyst to join the platform team in Austin.",
+    "Drive a 20% improvement in pipeline throughput across the reporting stack.",
+    "Own dashboards used by 100% of the revenue organisation every single week.",
+    "Partner with engineering on data quality, lineage and observability work.",
+    "Five years of analytics experience with SQL, dbt and a warehouse platform.",
+  ].join("\n")
+  const cleaned = cleanJobDescription(raw)
+  assert.ok(cleaned)
+  assert.match(cleaned!, /20% improvement/)
+  assert.match(cleaned!, /100% of the revenue/)
+})
