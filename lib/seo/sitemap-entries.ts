@@ -7,6 +7,7 @@ import { allCollectionSlugs } from "@/lib/jobs/collections"
 import { listTopPaths } from "@/lib/career/paths"
 import { industrySlug } from "@/lib/h1b/leaderboard"
 import { getFeaturedSocRoles } from "@/lib/salaries/soc-roles"
+import { getIndexableTransferSlices } from "@/lib/h1b/transfer-velocity"
 import { siteBaseUrl } from "@/lib/seo/site-url"
 
 export { siteBaseUrl }
@@ -81,6 +82,10 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
     { url: `${base}/stay/rules`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
     { url: `${base}/stay/talent`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
     { url: `${base}/stay/timeline`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.55 },
+    // Transfer hub refreshes with each quarterly DOL drop.
+    // NOTE: cap-exempt lives at /h1b-sponsors/cap-exempt (already listed above) — do not add a
+    // second cap-exempt page; two URLs competing for the same query split their own ranking.
+    { url: `${base}/stay/transfers`, lastModified: new Date(), changeFrequency: "weekly", priority: 0.7 },
     ...LEADERBOARD_STATES.map((s) => ({
       url: `${base}/h1b-sponsors/leaderboard/by-state/${s}`,
       lastModified: new Date(),
@@ -209,7 +214,23 @@ async function buildEntries(): Promise<{ entries: SitemapEntry[]; ok: boolean }>
       })),
     ])
 
-    return { entries: [...staticRoutes, ...blogCategoryRoutes, ...blogPostRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...careerPathRoutes, ...jobRoutes], ok: true }
+    // H-1B transfer pages, one per role x state slice that has enough employers to answer the
+    // question. Sourced from the same helper generateStaticParams uses, so the sitemap can never
+    // advertise a slice the page would render thin (and mark noindex).
+    const roleSlugBySoc = new Map(salaryRoles.map((r) => [r.soc_group, r.slug]))
+    const transferSlices = roleSlugBySoc.size
+      ? await getIndexableTransferSlices({ socGroups: [...roleSlugBySoc.keys()] }).catch(() => [])
+      : []
+    const transferRoutes: SitemapEntry[] = transferSlices
+      .filter((sl) => roleSlugBySoc.has(sl.socGroup))
+      .map((sl) => ({
+        url: `${base}/stay/transfers/${roleSlugBySoc.get(sl.socGroup)}/by-state/${sl.stateAbbr}`,
+        lastModified: new Date(),
+        changeFrequency: "weekly" as const,
+        priority: 0.6,
+      }))
+
+    return { entries: [...staticRoutes, ...blogCategoryRoutes, ...blogPostRoutes, ...companyRoutes, ...sponsorRoutes, ...industryRoutes, ...leaderboardIndustryRoutes, ...cityRoutes, ...roleRoutes, ...jobsAtRoutes, ...salaryRoutes, ...scorecardRoutes, ...salaryRoleRoutes, ...careerPathRoutes, ...transferRoutes, ...jobRoutes], ok: true }
   } catch {
     // DB unreachable (e.g. cold start). Return static-only but flag NOT ok so the
     // caller refuses to cache it or emit a truncated index — see getSitemapEntries.
