@@ -149,6 +149,13 @@ const NOISE_LINE_PATTERNS = [
   /^read more$/i,
   /^see more$/i,
   /^learn more$/i,
+  // Breezy renders its UI strings as %TOKEN% placeholders and the harvested
+  // text keeps them untranslated, so every Breezy description carried lines
+  // like "- %BUTTON_APPLY_USING_LINKED_IN%" and
+  // "- %LABEL_POSITION_TYPE_FULL_TIME%". 16 of 16 Breezy jobs in a recent
+  // sample were affected. Matches a leading list marker so the bulleted form
+  // is caught too.
+  /^[-*\u2022\u00b7]?\s*%[A-Z0-9_]+%(\s|$)/,
 ]
 
 /**
