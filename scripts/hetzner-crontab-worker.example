@@ -152,3 +152,24 @@ DATABASE_URL=REPLACE_ME
 # pass) so monitoring can alert. Needs the harness on this box — keep /opt/hireoven
 # `git pull`ed (the gate runs whatever tools/jobhive-ts is checked out).
  50 7 * * *        flock -n /tmp/hireoven-ats-gate.lock -c 'cd $HIREOVEN_REPO && C=$(docker ps --filter name=harvester --format "{{.Names}}" | head -1) && HARVESTER_PROXY_URL="$(docker exec $C printenv HARVESTER_PROXY_URL 2>/dev/null)" HARVESTER_PROXY_HOSTS="$(docker exec $C printenv HARVESTER_PROXY_HOSTS 2>/dev/null)" timeout 300 node_modules/.bin/tsx tools/jobhive-ts/benchmark.ts --ats greenhouse,lever,ashby,smartrecruiters,workable,workday,recruitee,teamtailor,personio,bamboohr,oraclecloud --per-ats 4 --timeout 120000 --shared-transport --gate >>/var/log/hireoven/ats-regression-gate.log 2>&1 && rm -f /var/log/hireoven/ats-regression-gate.FAILED || touch /var/log/hireoven/ats-regression-gate.FAILED'
+# ── OFLC disclosure refresh (LCA / PERM / PWD) ────────────────────────────────
+# Self-discovering: reads the DOL performance page, finds the newest published file per
+# dataset, and imports ONLY what is not already in oflc_ingest_log. Safe to run monthly —
+# it is a no-op between quarterly drops.
+#
+# WHY MONTHLY AND NOT "WHENEVER": the §2 Green Card Radar reads UNEXPIRED prevailing wage
+# determinations. Those are valid 90 days to 1 year, so once a file ages past that, every
+# row in it has expired and the radar returns NOTHING — it empties rather than degrades.
+# (At the FY2026 Q3 load: 15,640 live signals, all expiring within 0-41 days.)
+# OFLC publishes Feb/May/Aug/Dec, 5-7 weeks after quarter end; monthly catches each drop
+# within ~30 days. The script logs "RADAR IS EMPTY" if we ever fall behind.
+#
+# Heavy but infrequent: ~550 MB downloaded, ~3 GB of XML streamed, ~10 min total. Runs
+# HERE (harvester box) and never on the web box. Downloads are cached in .cache/ — prune
+# that directory if disk gets tight.
+ 15 4 3 * *        flock -n /tmp/hireoven-oflc.lock -c 'cd $HIREOVEN_REPO && timeout 3h nice -n 19 ionice -c3 npm run oflc:refresh:execute >>/var/log/hireoven/oflc-refresh.log 2>&1'
+
+# Annual OFLC wage tables (ALC_Export / Geography). Published 1 July; run mid-July to be
+# safe. These set the exact Level I-IV thresholds behind the Level Gap card, so a missed
+# year means quoting last year's numbers as this year's.
+ 40 4 14 7 *       flock -n /tmp/hireoven-oflc-wages.lock -c 'cd $HIREOVEN_REPO && timeout 1h npm run oflc:import:apply >>/var/log/hireoven/oflc-wages.log 2>&1'
