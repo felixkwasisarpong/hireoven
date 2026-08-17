@@ -11,7 +11,7 @@ export const revalidate = 86400
 export const metadata: Metadata = {
   title: "H-1B Cap-Exempt Employers (No Lottery Required)",
   description:
-    "Universities, federal research labs, and affiliated nonprofits that can file H-1B petitions outside the annual lottery cap. A path to status for applicants who lost the lottery.",
+    "Universities, federal research labs, and affiliated nonprofits that can file H-1B petitions outside the annual lottery cap. Employers that declared cap-exempt status on their own DOL filings are listed first. A path to status for applicants who lost the lottery.",
   alternates: { canonical: "/h1b-sponsors/cap-exempt" },
 }
 
@@ -23,6 +23,7 @@ type Row = {
   industry: string | null
   cap_exempt_reason: string
   cap_exempt_confidence: "high" | "medium" | "low"
+  cap_exempt_source: string | null
   h1b_sponsor_count_1yr: number | null
 }
 
@@ -47,9 +48,13 @@ async function getCompanies(reason: string | undefined): Promise<{ rows: Row[]; 
   }
   const [list, count] = await Promise.all([
     pool.query<Row>(
-      `SELECT id, name, domain, logo_url, industry, cap_exempt_reason, cap_exempt_confidence, h1b_sponsor_count_1yr
+      `SELECT id, name, domain, logo_url, industry, cap_exempt_reason, cap_exempt_confidence,
+              cap_exempt_source, h1b_sponsor_count_1yr
        FROM companies ${where}
-       ORDER BY h1b_sponsor_count_1yr DESC NULLS LAST, job_count DESC NULLS LAST
+       -- Employer-attested records lead: those come from the employer's own ACWIA declaration on
+       -- a DOL wage determination, the rest are inferred from a .edu domain or a name pattern.
+       ORDER BY (cap_exempt_source = 'acwia_attested') DESC,
+                h1b_sponsor_count_1yr DESC NULLS LAST, job_count DESC NULLS LAST
        LIMIT 100`,
       params
     ),
@@ -90,6 +95,12 @@ export default async function CapExemptPage({
           Under INA 214(g)(5), universities, government research organizations, and affiliated
           nonprofits can file H-1B petitions <strong className="text-white">outside the annual lottery</strong> — year-round,
           no cap. For applicants who lost the lottery, these employers are a path to status.
+        </p>
+        <p className="mt-2 text-[13px] leading-relaxed text-[#ccd6cf]/60">
+          There is no official cap-exempt list — exemption is decided per petition and never published. Employers
+          marked <span className="text-[#38e08a]">attested</span> declared ACWIA coverage on their own Department
+          of Labor wage determinations, which is the employer&apos;s own statement rather than a USCIS
+          determination. The rest are identified from a .edu domain or institution name.
         </p>
         <p className="mt-2 text-xs text-[#ccd6cf]/45">
           {total.toLocaleString()} cap-exempt employers ·{" "}
@@ -140,7 +151,17 @@ export default async function CapExemptPage({
                 >
                   {r.name}
                 </Link>
-                <div className="text-xs text-[#ccd6cf]/45">{r.industry ?? ""}</div>
+                <div className="flex items-center gap-2 text-xs text-[#ccd6cf]/45">
+                  {r.industry ? <span className="truncate">{r.industry}</span> : null}
+                  {r.cap_exempt_source === "acwia_attested" && (
+                    <span
+                      className="shrink-0 border border-[rgba(56,224,138,0.35)] px-1.5 py-0.5 text-[10px] text-[#38e08a]"
+                      title="This employer declared ACWIA cap-exempt coverage on a Department of Labor wage determination"
+                    >
+                      attested
+                    </span>
+                  )}
+                </div>
               </div>
               <span className="shrink-0">
                 <CapExemptBadge
@@ -154,7 +175,8 @@ export default async function CapExemptPage({
         </ul>
 
         <p className="mt-6 text-xs text-[#ccd6cf]/45">
-          Cap-exempt status here is classified from employer name, domain, and industry. Always
+          Rows marked &ldquo;attested&rdquo; come from the employer&apos;s own ACWIA declaration on a DOL wage
+          determination; the remainder are classified from employer name, domain, and industry. Always
           confirm with the employer before relying on it for a petition.
         </p>
       </main>
