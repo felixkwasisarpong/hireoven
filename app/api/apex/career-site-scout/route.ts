@@ -6,6 +6,7 @@ import { crawlCareersPage, type RawJob } from "@/lib/crawler"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
 import { cleanJobDescription, normalizeJobApplyUrl } from "@/lib/jobs/description"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
+import { isAllowedLocation } from "@/lib/jobs/location-filter"
 import { publicationStatusForJob } from "@/lib/jobs/publication"
 import { extractSkillsFromText } from "@/lib/skills/taxonomy"
 import { getScoringContextForUser, upsertMatchScores } from "@/lib/matching/batch-scorer"
@@ -59,6 +60,8 @@ type ScoutResponse = {
     directAtsUrl: string | null
     harvestQueued: boolean
     outcomeReason: string | null
+    /** Roles dropped for being outside the US/Canada coverage area. */
+    skippedOutsideRegion: number
   }
   jobs: ScoutResponseJob[]
 }
@@ -306,7 +309,11 @@ async function upsertCompanySource(args: {
          direct_ats_provider, direct_ats_identifier, direct_ats_url_resolved_at,
          raw_ats_config, created_at, updated_at
        ) VALUES (
-         $1,$2,$3,$4,$5,true,'active','tier_2','user_career_site_scout',now(),
+         -- Created dormant on purpose: is_active=false, no next_harvest_at.
+         -- A scan that returns nothing must not enrol a company for harvesting,
+         -- so enrolment happens in enrolCompanyForHarvest() only once usable
+         -- roles have actually been persisted.
+         $1,$2,$3,$4,$5,false,'unknown','tier_2','user_career_site_scout',NULL,
          $6,$4,$5,CASE WHEN $6::text IS NULL THEN NULL ELSE now() END,
          jsonb_build_object('career_site_scout', $7::jsonb), now(), now()
        )
@@ -315,9 +322,9 @@ async function upsertCompanySource(args: {
              careers_url = COALESCE(NULLIF(companies.careers_url, ''), EXCLUDED.careers_url),
              ats_type = COALESCE(EXCLUDED.ats_type, companies.ats_type),
              ats_identifier = COALESCE(EXCLUDED.ats_identifier, companies.ats_identifier),
-             is_active = true,
-             status = CASE WHEN companies.status = 'inactive' THEN 'active' ELSE companies.status END,
-             next_harvest_at = LEAST(COALESCE(companies.next_harvest_at, now()), now()),
+             -- Existing rows keep their current harvest state. Reactivating a
+             -- dead board because someone pasted its URL, before knowing whether
+             -- it still lists anything, is what put empty boards in the queue.
              direct_ats_url = COALESCE(EXCLUDED.direct_ats_url, companies.direct_ats_url),
              direct_ats_provider = COALESCE(EXCLUDED.direct_ats_provider, companies.direct_ats_provider),
              direct_ats_identifier = COALESCE(EXCLUDED.direct_ats_identifier, companies.direct_ats_identifier),
@@ -344,11 +351,10 @@ async function upsertCompanySource(args: {
     console.warn("[career-site-scout] extended company upsert failed, falling back", err)
     const { rows } = await pool.query<{ id: string; name: string }>(
       `INSERT INTO companies (name, domain, careers_url, ats_type, is_active, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,true,now(),now())
+       VALUES ($1,$2,$3,$4,false,now(),now())
        ON CONFLICT (domain) DO UPDATE
          SET careers_url = COALESCE(NULLIF(companies.careers_url, ''), EXCLUDED.careers_url),
              ats_type = COALESCE(EXCLUDED.ats_type, companies.ats_type),
-             is_active = true,
              updated_at = now()
        RETURNING id, name`,
       [args.name, args.domain, args.careersUrl, args.atsType],
@@ -357,16 +363,56 @@ async function upsertCompanySource(args: {
   }
 }
 
-async function upsertJobsForScout(companyId: string, companyName: string, rawJobs: RawJob[], sourceUrl: string): Promise<Job[]> {
+/**
+ * Enrol a company in the harvester — only called once a scan has actually
+ * persisted usable roles.
+ *
+ * Previously `upsertCompanySource` set is_active/next_harvest_at inline, so a
+ * careers page that returned nothing (dead board, JS-only listing, or every role
+ * outside US/Canada) still put the company in the crawl queue forever. The
+ * harvester then re-fetched an empty board on every cycle.
+ *
+ * Existing companies keep whatever tier and cadence they already had; this only
+ * ever activates and brings the next run forward.
+ */
+async function enrolCompanyForHarvest(companyId: string): Promise<void> {
+  await getPostgresPool().query(
+    `UPDATE companies
+        SET is_active = true,
+            status = CASE WHEN status = 'dead' THEN 'active' ELSE COALESCE(status, 'active') END,
+            next_harvest_at = LEAST(COALESCE(next_harvest_at, now()), now()),
+            updated_at = now()
+      WHERE id = $1`,
+    [companyId],
+  )
+}
+
+async function upsertJobsForScout(
+  companyId: string,
+  companyName: string,
+  rawJobs: RawJob[],
+  sourceUrl: string,
+): Promise<{ jobs: Job[]; skippedOutsideRegion: number }> {
   const pool = getPostgresPool()
   const now = new Date().toISOString()
   const rows: Job[] = []
+  let skippedOutsideRegion = 0
 
   for (const raw of rawJobs) {
     const title = raw.title?.trim()
     const applyUrl = normalizeJobApplyUrl(raw.url)
     if (!title || !applyUrl) continue
     if (isBlockedCrawlTitle(title) || isBlockedApplyUrl(applyUrl)) continue
+
+    // Site Scout covers US and Canada only. A global careers page otherwise
+    // returns roles the user cannot take, and every one of them still gets
+    // persisted, scored and counted in "N roles found".
+    // isAllowedLocation is conservative by design: ambiguous or bare "Remote"
+    // strings pass, so a real US role is never dropped for a vague location.
+    if (!isAllowedLocation({ location: raw.location, workMode: raw.workMode })) {
+      skippedOutsideRegion += 1
+      continue
+    }
 
     const description = cleanJobDescription(raw.description ?? null)
     const textForSkills = `${title} ${description ?? ""}`.trim()
@@ -456,7 +502,7 @@ async function upsertJobsForScout(companyId: string, companyName: string, rawJob
     if (result.rows[0]) rows.push(result.rows[0])
   }
 
-  return rows
+  return { jobs: rows, skippedOutsideRegion }
 }
 
 async function scoreJobsForUser(userId: string, jobs: Job[]) {
@@ -630,9 +676,18 @@ export async function POST(request: NextRequest) {
     })
   }
 
-  const persistedJobs = rawJobs.length > 0
+  const upserted = rawJobs.length > 0
     ? await upsertJobsForScout(company.id, companyName, rawJobs, careersUrl)
-    : []
+    : { jobs: [], skippedOutsideRegion: 0 }
+  const persistedJobs = upserted.jobs
+
+  // Enrol for harvesting ONLY when the scan produced usable roles. A board that
+  // returned nothing — dead, JS-only, or entirely outside US/Canada — is left
+  // dormant rather than queued for a crawler that would re-fetch it forever.
+  const harvestQueued = persistedJobs.length > 0
+  if (harvestQueued) {
+    await enrolCompanyForHarvest(company.id)
+  }
   // employerSponsorshipPill blends the job row with company-level history.
   // upsertCompanySource only returns id/name, so pull the two fields the
   // blend needs — without them every scanned job looks unsponsored.
@@ -674,8 +729,9 @@ export async function POST(request: NextRequest) {
       atsType: selectedDetection?.atsType ?? null,
       atsIdentifier: selectedIdentifier,
       directAtsUrl,
-      harvestQueued: true,
+      harvestQueued,
       outcomeReason,
+      skippedOutsideRegion: upserted.skippedOutsideRegion,
     },
     jobs,
   }

@@ -28,7 +28,10 @@ const SENIORITY_RULES: Array<{
   { level: "staff", pattern: /\bstaff\b/i },
   { level: "senior", pattern: /\b(senior|sr\.?)\b/i },
   { level: "mid", pattern: /\b(mid|intermediate|ii|iii)\b/i },
-  { level: "junior", pattern: /\b(junior|jr\.?|entry[\s-]?level)\b/i },
+  // "Graduate Software Engineer" and "New Grad SWE" are entry-level roles, but
+  // carried no seniority marker the rules recognised — so a senior candidate
+  // scored 97 against a new-grad posting.
+  { level: "junior", pattern: /\b(junior|jr\.?|entry[\s-]?level|new[\s-]?grad(?:uate)?|graduate|campus\s+hire|early\s+career)\b/i },
   { level: "intern", pattern: /\b(internship|intern|co[\s-]?op)\b/i },
 ]
 
@@ -212,6 +215,32 @@ export function inferEmploymentType(
   return null
 }
 
+/**
+ * Seniority implied by a stated years-of-experience requirement.
+ *
+ * Deliberately capped at "senior": this only runs when the title and any
+ * explicit level label gave nothing, so the posting is generic ("Software
+ * Engineer"). Reading 10 years as "principal" from a generic title over-promotes
+ * — but reading 1 year as junior and 6 as senior is safe and is what stops a
+ * senior candidate matching an entry-level req at full marks.
+ */
+function inferSeniorityFromYears(description: string | null | undefined): InferredSeniorityLevel | null {
+  const blob = toTextBlob(description)
+  if (!blob) return null
+
+  const range = EXPERIENCE_RANGE_RE.exec(blob)
+  const minimum = EXPERIENCE_MIN_RE.exec(blob)
+  const raw = range?.[1] ?? minimum?.[1]
+  if (!raw) return null
+
+  const years = Number.parseInt(raw, 10)
+  if (!Number.isFinite(years) || years < 0 || years > 40) return null
+
+  if (years < 2) return "junior"
+  if (years < 5) return "mid"
+  return "senior"
+}
+
 export function inferSeniorityLevel(
   title: string | null | undefined,
   description: string | null | undefined
@@ -230,7 +259,10 @@ export function inferSeniorityLevel(
     if (rule.pattern.test(descriptionBlob)) return rule.level
   }
 
-  return null
+  // Last resort. jobs.seniority_level is NULL on ~87% of rows (AI enrichment is
+  // off), which left the seniority gates unable to fire at all. A stated years
+  // requirement is the most common remaining signal.
+  return inferSeniorityFromYears(description)
 }
 
 export function inferWorkModel(

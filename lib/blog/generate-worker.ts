@@ -2,12 +2,15 @@ import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
 import { generateAndStoreBlogImage } from "@/lib/blog/image-generator"
 import {
-  getCategoryForToday,
-  getPostForCategoryOnBlogDay,
+  getAllCategories,
+  getBlogDayOfWeek,
+  getPostOnBlogDay,
+  getRecentPostDigests,
   insertDraftPost,
   recordBlogGenerationRun,
   updateBlogPostImage,
 } from "@/lib/blog/queries"
+import { scoutTrendingTopic, type TrendCandidate } from "@/lib/blog/trend-scout"
 import type { BlogCategory } from "@/types/blog"
 
 let anthropic: Anthropic | null = null
@@ -45,15 +48,26 @@ interface GeneratedPost {
   hero_image_alt?: string
 }
 
-async function generateForCategory(category: BlogCategory): Promise<GeneratedPost> {
+async function generateForCategory(
+  category: BlogCategory,
+  trend: TrendCandidate,
+): Promise<GeneratedPost> {
   const client = getClient()
   const today = new Date().toISOString().split("T")[0]
 
-  const userPrompt = `Today is ${today}. Write a blog post for the "${category.name}" section.
+  // The story is chosen before generation now, so the writer is told WHAT to
+  // cover rather than being asked to find something inside a fixed category.
+  // Previously a quiet news day still demanded a post in that day's category,
+  // which is what produced repeats.
+  const userPrompt = `Today is ${today}. Write a blog post about this specific development:
 
-Category focus: ${category.description}
+STORY: ${trend.headline}
+WHY IT MATTERS NOW: ${trend.whyNow}
+${trend.sources.length ? `SOURCES FOUND WHILE SCOUTING:\n${trend.sources.map((s) => `- ${s}`).join("\n")}` : ""}
 
-Search the web for the most relevant trending story, news, or development in this area right now. Base the post on what you find — cite sources naturally in the text where relevant. Make it useful to a tech professional or international job seeker.
+File it under the "${category.name}" section (${category.description}).
+
+Search the web to verify and deepen the story before writing — confirm the details above and pull in specifics, numbers and dates. Cite sources naturally in the text. Write about THIS development specifically; do not fall back to a general explainer about the category.
 
 Return only the JSON object described in the system prompt.`
 
@@ -112,9 +126,9 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
   let category: BlogCategory | null = null
 
   try {
-    category = await getCategoryForToday()
-    if (!category) {
-      // Weekend - no post scheduled.
+    // Weekends stay quiet, as before.
+    const day = getBlogDayOfWeek()
+    if (day === 0 || day === 6) {
       await recordBlogGenerationRun({
         status: "skipped_weekend",
         duration_ms: Date.now() - start,
@@ -122,10 +136,13 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
       return null
     }
 
-    const existingPost = await getPostForCategoryOnBlogDay(category.id)
+    // One post per day across ALL categories. The old guard was per-category
+    // because the weekday fixed the category; now that a trend picks it, a
+    // category-scoped guard would allow a second post on the same day.
+    const existingPost = await getPostOnBlogDay()
     if (existingPost) {
       const result: BlogGenerateResult = {
-        categorySlug: category.slug,
+        categorySlug: existingPost.category?.slug ?? "unknown",
         postId: existingPost.id,
         title: existingPost.title,
         imageGenerated: Boolean(existingPost.hero_image_url),
@@ -136,8 +153,8 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
 
       await recordBlogGenerationRun({
         status: "skipped_existing",
-        category_id: category.id,
-        category_slug: category.slug,
+        category_id: existingPost.category_id,
+        category_slug: existingPost.category?.slug ?? null,
         blog_post_id: existingPost.id,
         title: existingPost.title,
         image_generated: Boolean(existingPost.hero_image_url),
@@ -147,7 +164,34 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
       return result
     }
 
-    const generated = await generateForCategory(category)
+    // Scout across every category, then let the winning story pick the section.
+    const categories = await getAllCategories()
+    const recentPosts = await getRecentPostDigests(30)
+    const scouted = await scoutTrendingTopic({ categories, recentPosts })
+
+    if (scouted.status === "nothing_trending") {
+      // Publishing nothing beats republishing. This is the whole point of the
+      // change: a quiet day no longer forces a post in a pre-assigned category.
+      await recordBlogGenerationRun({
+        status: "skipped_no_trend",
+        duration_ms: Date.now() - start,
+        error_message: scouted.reason,
+      })
+      return null
+    }
+
+    const trend = scouted.candidate
+    category = categories.find((c) => c.slug === trend.categorySlug) ?? null
+    if (!category) {
+      await recordBlogGenerationRun({
+        status: "skipped_no_trend",
+        duration_ms: Date.now() - start,
+        error_message: `Scout chose unknown category "${trend.categorySlug}".`,
+      })
+      return null
+    }
+
+    const generated = await generateForCategory(category, trend)
 
     const postId = await insertDraftPost({
       category_id: category.id,
