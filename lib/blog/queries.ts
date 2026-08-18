@@ -70,6 +70,59 @@ export async function getPostForCategoryOnBlogDay(categoryId: number, date = new
   return rows[0] ?? null
 }
 
+/**
+ * Any post created today, regardless of category.
+ *
+ * The old guard was per-category-per-day, which made sense when the weekday
+ * decided the topic. Topic is now chosen by what is actually trending, so the
+ * daily guard has to be category-agnostic or a trend that lands in a different
+ * category would produce a second post on the same day.
+ */
+export async function getPostOnBlogDay(date = new Date()): Promise<BlogPost | null> {
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<BlogPost>(
+    `SELECT p.*, row_to_json(c.*) AS category
+     FROM blog_posts p
+     JOIN blog_categories c ON c.id = p.category_id
+     WHERE (p.created_at AT TIME ZONE $1)::date = ($2::timestamptz AT TIME ZONE $1)::date
+     ORDER BY p.created_at DESC
+     LIMIT 1`,
+    [BLOG_TIME_ZONE, date.toISOString()]
+  )
+  return rows[0] ?? null
+}
+
+/**
+ * Titles and excerpts of recent posts, used to keep the scout off ground the
+ * blog has already covered. Repetition was the original complaint: a fixed
+ * weekday topic forced an H-1B post every Monday whether or not anything had
+ * happened.
+ */
+export async function getRecentPostDigests(limit = 30): Promise<
+  Array<{ title: string; excerpt: string | null; categorySlug: string; createdAt: string }>
+> {
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<{
+    title: string
+    excerpt: string | null
+    category_slug: string
+    created_at: string
+  }>(
+    `SELECT p.title, p.excerpt, c.slug AS category_slug, p.created_at
+     FROM blog_posts p
+     JOIN blog_categories c ON c.id = p.category_id
+     ORDER BY p.created_at DESC
+     LIMIT $1`,
+    [limit]
+  )
+  return rows.map((r) => ({
+    title: r.title,
+    excerpt: r.excerpt,
+    categorySlug: r.category_slug,
+    createdAt: r.created_at,
+  }))
+}
+
 export async function getPublishedPosts(limit = 20): Promise<BlogPost[]> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<BlogPost>(
@@ -177,7 +230,13 @@ export async function updateBlogPostImage(post: {
   )
 }
 
-export type BlogGenerationRunStatus = "success" | "skipped_weekend" | "skipped_existing" | "failed"
+export type BlogGenerationRunStatus =
+  | "success"
+  | "skipped_weekend"
+  | "skipped_existing"
+  /** Scout found nothing genuinely new — publishing nothing beats republishing. */
+  | "skipped_no_trend"
+  | "failed"
 
 export async function recordBlogGenerationRun(run: {
   status: BlogGenerationRunStatus
