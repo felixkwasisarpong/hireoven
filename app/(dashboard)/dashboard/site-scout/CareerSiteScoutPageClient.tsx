@@ -42,6 +42,7 @@ type ScoutResponse = {
     directAtsUrl: string | null
     harvestQueued: boolean
     outcomeReason: string | null
+    skippedOutsideRegion?: number
   }
   jobs: ScoutJob[]
 }
@@ -219,7 +220,7 @@ export function CareerSiteScoutPageClient() {
       {/* ── URL bar ── */}
       <form onSubmit={scan}>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Career page URL
+          Career page URL · US &amp; Canada
         </p>
         <div className="flex gap-3">
           <div className="relative flex-1">
@@ -338,7 +339,11 @@ export function CareerSiteScoutPageClient() {
 
           {result.jobs.length === 0 ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-800">
-              No open roles came back from this scan. The source was recorded for the crawler.
+              {/* A scan with no usable roles no longer enrols the company for
+                  harvesting, so this copy must not promise that it did. */}
+              {result.source.skippedOutsideRegion
+                ? `No US or Canada roles on this careers page — ${result.source.skippedOutsideRegion} role${result.source.skippedOutsideRegion === 1 ? " was" : "s were"} outside the coverage area. Nothing was added to monitoring.`
+                : "No open roles came back from this scan. Nothing was added to monitoring — try the employer's direct job board if they have one."}
             </div>
           ) : (
             <>
@@ -347,6 +352,13 @@ export function CareerSiteScoutPageClient() {
                   {result.jobs.length} role{result.jobs.length === 1 ? "" : "s"} found
                 </span>
                 <span className="text-[13px] text-slate-500">· ranked by match to your profile</span>
+                {/* Explain a smaller count on a global careers page rather than
+                    leaving the user to wonder where the other roles went. */}
+                {result.source.skippedOutsideRegion ? (
+                  <span className="text-[13px] text-slate-500">
+                    · {result.source.skippedOutsideRegion} outside US/Canada hidden
+                  </span>
+                ) : null}
               </div>
 
               <div className="space-y-3">
