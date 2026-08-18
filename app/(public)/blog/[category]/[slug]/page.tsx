@@ -101,14 +101,28 @@ export default async function PostPage({ params }: { params: { category: string;
 
           {/* Body */}
           <div
-            className="prose prose-invert max-w-none
-              prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-white
+            /*
+             * Was `prose-invert` with prose-p:text-[#ccd6cf] and
+             * prose-headings/strong:text-white — the inverted Typography palette
+             * from the retired dark skin. On the current white page that put
+             * body copy at 1.49:1 and headings at 1.00:1 (white on white).
+             *
+             * The compatibility shim could not rescue it: Tailwind's
+             * `prose-p:` variants emit a DESCENDANT rule
+             * (`.prose-p\:text-\[\#ccd6cf\] :is(p)`), while the shim rewrites
+             * colour on the element carrying the class. Fixed at source instead.
+             */
+            className="prose max-w-none
+              prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-[var(--term-strong)]
               prose-h2:text-xl prose-h2:mt-8 prose-h2:mb-3
-              prose-p:text-[#ccd6cf] prose-p:leading-relaxed
-              prose-li:text-[#ccd6cf] prose-li:leading-relaxed
+              prose-p:text-[var(--term-fg)] prose-p:leading-relaxed
+              prose-li:text-[var(--term-fg)] prose-li:leading-relaxed
               prose-ul:my-4 prose-ul:space-y-1
-              prose-strong:text-white prose-strong:font-semibold
-              prose-a:text-[#f5a623] prose-a:no-underline hover:prose-a:underline"
+              prose-strong:text-[var(--term-strong)] prose-strong:font-semibold
+              prose-em:text-[var(--term-fg)]
+              prose-blockquote:text-[var(--term-dim)] prose-blockquote:border-[var(--term-line-strong)]
+              prose-code:text-[var(--term-strong)]
+              prose-a:text-[var(--term-amber-text)] prose-a:no-underline hover:prose-a:underline"
             dangerouslySetInnerHTML={{ __html: post.body }}
           />
         </article>
