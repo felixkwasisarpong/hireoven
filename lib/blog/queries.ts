@@ -163,6 +163,18 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
   return rows[0] ?? null
 }
 
+export async function getPostById(id: string): Promise<BlogPost | null> {
+  const pool = getPostgresPool()
+  const { rows } = await pool.query<BlogPost>(
+    `SELECT p.*, row_to_json(c.*) AS category
+     FROM blog_posts p
+     JOIN blog_categories c ON c.id = p.category_id
+     WHERE p.id = $1`,
+    [id]
+  )
+  return rows[0] ?? null
+}
+
 export async function insertDraftPost(post: {
   category_id: number
   slug: string

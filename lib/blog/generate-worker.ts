@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
-import { generateAndStoreBlogImage } from "@/lib/blog/image-generator"
+import { attachHeroImage } from "@/lib/blog/hero-image"
 import {
   getAllCategories,
   getBlogDayOfWeek,
@@ -8,7 +8,6 @@ import {
   getRecentPostDigests,
   insertDraftPost,
   recordBlogGenerationRun,
-  updateBlogPostImage,
 } from "@/lib/blog/queries"
 import { scoutTrendingTopic, type TrendCandidate } from "@/lib/blog/trend-scout"
 import type { BlogCategory } from "@/types/blog"
@@ -121,6 +120,28 @@ export interface BlogGenerateResult {
   skippedExisting?: boolean
 }
 
+/**
+ * Attach the hero image, turning failure into a recorded error rather than
+ * losing an otherwise good post. Logged at error level on purpose: this exact
+ * step failed on every run for weeks while the run still recorded `success`,
+ * and nothing surfaced it.
+ */
+async function attachHeroImageSafely(
+  postId: string,
+): Promise<{ imageGenerated: boolean; imageError: string | null }> {
+  try {
+    const outcome = await attachHeroImage(postId)
+    if (outcome.status === "not_configured") {
+      return { imageGenerated: false, imageError: "Blog image generation is not configured" }
+    }
+    return { imageGenerated: true, imageError: null }
+  } catch (error) {
+    const imageError = error instanceof Error ? error.message : String(error)
+    console.error("[blog/generate] hero image failed", { postId, message: imageError })
+    return { imageGenerated: false, imageError }
+  }
+}
+
 export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | null> {
   const start = Date.now()
   let category: BlogCategory | null = null
@@ -141,12 +162,20 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
     // category-scoped guard would allow a second post on the same day.
     const existingPost = await getPostOnBlogDay()
     if (existingPost) {
+      // Today's post is written, but its image may not have landed — storage can
+      // be briefly unreachable while text generation succeeds. Retry it here so a
+      // one-off storage failure self-heals on the next run instead of leaving the
+      // post imageless forever.
+      const image = existingPost.hero_image_url
+        ? { imageGenerated: true, imageError: null }
+        : await attachHeroImageSafely(existingPost.id)
+
       const result: BlogGenerateResult = {
         categorySlug: existingPost.category?.slug ?? "unknown",
         postId: existingPost.id,
         title: existingPost.title,
-        imageGenerated: Boolean(existingPost.hero_image_url),
-        imageError: null,
+        imageGenerated: image.imageGenerated,
+        imageError: image.imageError,
         durationMs: Date.now() - start,
         skippedExisting: true,
       }
@@ -157,7 +186,8 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
         category_slug: existingPost.category?.slug ?? null,
         blog_post_id: existingPost.id,
         title: existingPost.title,
-        image_generated: Boolean(existingPost.hero_image_url),
+        image_generated: image.imageGenerated,
+        image_error: image.imageError,
         duration_ms: result.durationMs,
       })
 
@@ -205,35 +235,7 @@ export async function generateTodaysBlogPost(): Promise<BlogGenerateResult | nul
       reading_time: generated.reading_time ?? null,
     })
 
-    let imageGenerated = false
-    let imageError: string | null = null
-    try {
-      const image = await generateAndStoreBlogImage({
-        postId,
-        category,
-        title: generated.title,
-        excerpt: generated.excerpt,
-        imagePrompt: generated.image_prompt,
-        alt: generated.hero_image_alt,
-      })
-
-      if (image) {
-        await updateBlogPostImage({
-          id: postId,
-          hero_image_url: image.url,
-          hero_image_key: image.key,
-          hero_image_alt: image.alt,
-          image_prompt: image.prompt,
-        })
-        imageGenerated = true
-      }
-    } catch (error) {
-      imageError = error instanceof Error ? error.message : String(error)
-      console.warn("[blog/generate] hero image generation skipped", {
-        postId,
-        message: imageError,
-      })
-    }
+    const { imageGenerated, imageError } = await attachHeroImageSafely(postId)
 
     const result: BlogGenerateResult = {
       categorySlug: category.slug,
