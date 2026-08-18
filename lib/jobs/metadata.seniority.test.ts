@@ -38,3 +38,52 @@ test("uses explicit seniority labels from descriptions", () => {
     "staff"
   )
 })
+
+// ── Entry-level titles ───────────────────────────────────────────────────────
+// jobs.seniority_level is NULL on ~87% of rows, so the seniority gates can only
+// fire on inference. "Graduate" carried no marker the rules recognised, and a
+// senior backend resume scored 97 against a new-grad posting.
+
+test("graduate and new-grad titles infer junior", () => {
+  for (const title of [
+    "New Graduate Software Engineer - Sunnyvale",
+    "UK Graduate Software Engineer",
+    "Software Engineer, New Grad",
+    "New Grad Backend Engineer 2026",
+    "Early Career Software Engineer",
+    "Campus Hire Software Engineer",
+  ]) {
+    assert.equal(inferSeniorityLevel(title, ""), "junior", `expected junior for "${title}"`)
+  }
+})
+
+test("an explicit title still beats an entry-level keyword elsewhere", () => {
+  assert.equal(
+    inferSeniorityLevel("Staff Software Engineer", "You will mentor our graduate cohort."),
+    "staff",
+  )
+})
+
+// ── Years-of-experience fallback ─────────────────────────────────────────────
+// Postings frequently state years instead of a level. Used only when title and
+// explicit level labels give nothing.
+
+test("years of experience infer a level when the title is generic", () => {
+  assert.equal(inferSeniorityLevel("Software Engineer", "We require 1+ years of experience."), "junior")
+  assert.equal(inferSeniorityLevel("Software Engineer", "3-5 years of experience building APIs."), "mid")
+  assert.equal(inferSeniorityLevel("Software Engineer", "Minimum of 8 years of experience."), "senior")
+})
+
+test("years inference is capped at senior so a generic title is not over-promoted", () => {
+  // 12 years on a generic title should not read as principal.
+  assert.equal(inferSeniorityLevel("Software Engineer", "12+ years of experience required."), "senior")
+})
+
+test("title wins over a conflicting years statement", () => {
+  assert.equal(inferSeniorityLevel("Senior Software Engineer", "2 years of experience."), "senior")
+  assert.equal(inferSeniorityLevel("Principal Engineer", "5+ years of experience."), "principal")
+})
+
+test("no seniority signal at all still returns null", () => {
+  assert.equal(inferSeniorityLevel("Software Engineer", "Join our team and build things."), null)
+})
