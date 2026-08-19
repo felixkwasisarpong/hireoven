@@ -1,0 +1,157 @@
+<!--
+  Referral email — marketing paste artifact (blue campaign style).
+
+  This is a body fragment, not a sendable email: no <html>/<head>, so it drops
+  into a campaign tool's HTML block.
+
+  MERGE TAGS DO NOT RESOLVE ON THEIR OWN. Verified 2026-08-19:
+
+  1. Hireoven's own pipeline has no merge-tag engine. lib/email/ contains no
+     {{ }} substitution and no handlebars/mustache/liquid/ejs dependency; every
+     send goes through resend.emails.send(), the transactional API, which ships
+     HTML byte-for-byte. Pasting this into the codebase mails a literal
+     "{{first_name}}" to the recipient.
+
+  2. Resend Broadcasts uses TRIPLE braces and namespaced fields:
+       {{{contact.first_name|there}}}   {{{contact.email}}}
+       {{{RESEND_UNSUBSCRIBE_URL}}}
+     The double-brace tags below are generic placeholders, not Resend syntax.
+
+  3. Even rewritten for Resend, {{referral_code}} has no equivalent — broadcasts
+     personalise only from Audience contact fields, and nothing in this repo
+     syncs profiles into a Resend Audience. Every recipient would get the same
+     link and no referral would be attributed.
+
+  For a correct per-recipient send use scripts/send-referral-invite.ts, which
+  reads the real code via getOrCreateReferralCode() and mints a real unsubscribe
+  token. Keep this file for design reference and for pasting into a tool that
+  does have the contact data.
+
+  Image: keep the &w=1120&h=420&fit=crop params. Mail clients ignore CSS
+  max-height on images, so the aspect ratio has to come from the URL.
+-->
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f9ff;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+  <tr>
+    <td align="center">
+      <table width="620" cellpadding="0" cellspacing="0" style="max-width:620px;background:#ffffff;border:1px solid #dbeafe;border-radius:18px;overflow:hidden;">
+
+        <!-- Header -->
+        <tr>
+          <td style="padding:28px 30px;background:linear-gradient(135deg,#0369a1 0%,#0ea5e9 100%);">
+            <div style="font-size:12px;font-weight:700;color:#dbeafe;letter-spacing:0.12em;text-transform:uppercase;">Hireoven &middot; Referral rewards</div>
+            <div style="margin-top:12px;font-size:30px;line-height:1.2;font-weight:800;color:#ffffff;">Give a friend 7 days.<br>Get 14 back.</div>
+            <div style="margin-top:10px;font-size:15px;line-height:1.6;color:#e0f2fe;">Up to 42 days of Pro, without paying for any of it.</div>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="padding:24px 30px;">
+
+            <!-- Swap this for your own image or GIF (public URL).
+                 Keep the w/h crop params: without them the source image keeps its
+                 own aspect ratio and a portrait photo renders taller than the
+                 whole message. Email clients ignore CSS max-height on images, so
+                 the ratio has to come from the URL. -->
+            <img src="https://images.unsplash.com/photo-1521737711867-e3b97375f902?q=80&w=1120&h=420&fit=crop&auto=format" alt="Two people talking over coffee" width="560" style="width:100%;max-width:560px;height:auto;border-radius:12px;display:block;" />
+
+            <h2 style="margin:18px 0 10px;font-size:22px;line-height:1.3;color:#0f172a;">{{first_name}}, your link is worth something</h2>
+            <p style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#334155;">
+              If you know someone job hunting right now, send them your referral link. They get <strong style="color:#0f172a;">7 days of Pro free</strong> the moment they sign up &mdash; no credit card. You get <strong style="color:#0f172a;">14 days</strong> once they have been around a week, for up to 3 friends.
+            </p>
+
+            <!-- Reward split -->
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 6px;">
+              <tr>
+                <td width="50%" valign="top" style="padding-right:6px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;">
+                    <tr><td style="padding:16px 18px;">
+                      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#0369a1;">They get</div>
+                      <div style="margin-top:6px;font-size:28px;font-weight:800;line-height:1.1;color:#0f172a;">7 days</div>
+                      <div style="margin-top:4px;font-size:13px;line-height:1.55;color:#475569;">Pro, free at signup.<br>No credit card.</div>
+                    </td></tr>
+                  </table>
+                </td>
+                <td width="50%" valign="top" style="padding-left:6px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;">
+                    <tr><td style="padding:16px 18px;">
+                      <div style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#0369a1;">You get</div>
+                      <div style="margin-top:6px;font-size:28px;font-weight:800;line-height:1.1;color:#0f172a;">14 days</div>
+                      <div style="margin-top:4px;font-size:13px;line-height:1.55;color:#475569;">Pro, once they stay<br>a week.</div>
+                    </td></tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Personal link -->
+            <div style="margin-top:20px;font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#64748b;">Your personal link</div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;">
+              <tr><td style="padding:14px 16px;">
+                <a href="https://hireoven.com/ref/{{referral_code}}" style="font-size:14px;font-weight:600;color:#0369a1;text-decoration:none;word-break:break-all;">https://hireoven.com/ref/{{referral_code}}</a>
+              </td></tr>
+            </table>
+            <p style="margin:8px 0 0;font-size:13px;line-height:1.6;color:#64748b;">Paste it anywhere &mdash; a text, a group chat, a cohort Slack.</p>
+
+            <!-- How it works -->
+            <h2 style="margin:24px 0 10px;font-size:18px;line-height:1.3;color:#0f172a;">How it works</h2>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr><td style="padding:9px 0;border-top:1px solid #eff6ff;">
+                <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                  <td width="32" valign="top"><div style="width:22px;height:22px;border-radius:11px;background:#0369a1;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:22px;">1</div></td>
+                  <td valign="top">
+                    <div style="font-size:15px;font-weight:700;color:#0f172a;">You share your link</div>
+                    <div style="margin-top:2px;font-size:14px;line-height:1.6;color:#475569;">Anyone job hunting is a good fit &mdash; it costs them nothing to try.</div>
+                  </td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:9px 0;border-top:1px solid #eff6ff;">
+                <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                  <td width="32" valign="top"><div style="width:22px;height:22px;border-radius:11px;background:#0369a1;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:22px;">2</div></td>
+                  <td valign="top">
+                    <div style="font-size:15px;font-weight:700;color:#0f172a;">They get 7 days of Pro</div>
+                    <div style="margin-top:2px;font-size:14px;line-height:1.6;color:#475569;">Applied the moment they sign up. No credit card, no trial trap.</div>
+                  </td>
+                </tr></table>
+              </td></tr>
+              <tr><td style="padding:9px 0;border-top:1px solid #eff6ff;">
+                <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                  <td width="32" valign="top"><div style="width:22px;height:22px;border-radius:11px;background:#0369a1;color:#ffffff;font-size:12px;font-weight:700;text-align:center;line-height:22px;">3</div></td>
+                  <td valign="top">
+                    <div style="font-size:15px;font-weight:700;color:#0f172a;">You get 14 days</div>
+                    <div style="margin-top:2px;font-size:14px;line-height:1.6;color:#475569;">Granted automatically once they have been around a week. Up to 3 friends.</div>
+                  </td>
+                </tr></table>
+              </td></tr>
+            </table>
+
+            <div style="margin-top:22px;">
+              <a href="https://hireoven.com/dashboard/referrals" style="display:inline-block;background:#0369A1;color:#ffffff;text-decoration:none;padding:12px 18px;border-radius:10px;font-size:14px;font-weight:700;">Share your link</a>
+            </div>
+
+            <p style="margin:16px 0 0;font-size:13px;line-height:1.6;color:#94a3b8;">
+              The 14 days are granted after your friend&rsquo;s first week, so the programme does not pay out for accounts that sign up and vanish. Nothing to claim &mdash; it lands on your account on its own.
+            </p>
+
+          </td>
+        </tr>
+
+        <!-- Footer: CAN-SPAM requires the address + a working unsubscribe -->
+        <tr>
+          <td style="padding:18px 30px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;">
+            <div style="font-size:12px;line-height:1.7;color:#64748b;">
+              Sent to <strong>{{email}}</strong> because you have a Hireoven account.<br>
+              <a href="{{unsubscribe_url}}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
+              &nbsp;&middot;&nbsp;
+              <a href="https://hireoven.com/dashboard/email-preferences" style="color:#64748b;text-decoration:underline;">Email preferences</a>
+              &nbsp;&middot;&nbsp;
+              <a href="https://hireoven.com" style="color:#64748b;text-decoration:underline;">Open Hireoven</a>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:#94a3b8;">&copy; 2026 &middot; Hireoven, 3130 4th St, Lubbock, TX 79415</div>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
