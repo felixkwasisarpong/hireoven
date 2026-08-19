@@ -1,16 +1,17 @@
-import type { Metadata } from "next"
-import PivotView from "@/components/resume/PivotView"
+import { redirect } from "next/navigation"
 
 export const dynamic = "force-dynamic"
 
-export const metadata: Metadata = {
-  title: "Career pivot — Hireoven",
-}
-
-export default function ResumePivotPage() {
-  return (
-    <main className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
-      <PivotView />
-    </main>
-  )
+// Career pivot is now a panel inside the review. The feed links here with
+// ?to=<field_key> to preselect a target, so that param is carried through.
+export default function ResumePivotRedirect({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>
+}) {
+  const raw = searchParams?.to
+  const to = Array.isArray(raw) ? raw[0] : raw
+  const params = new URLSearchParams({ panel: "pivot" })
+  if (to) params.set("to", to)
+  redirect(`/dashboard/resume/review?${params.toString()}#pivot`)
 }

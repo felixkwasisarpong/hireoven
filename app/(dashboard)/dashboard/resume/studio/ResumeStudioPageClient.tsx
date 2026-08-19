@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ElementType, type ReactNode } from "react"
 import { flushSync } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
+import StudioFindingBanner from "@/components/resume/StudioFindingBanner"
+import { studioSectionFor } from "@/lib/resume/fix-plan"
 import {
   closestCenter,
   DndContext,
@@ -1165,6 +1167,19 @@ export default function ResumeStudioPage() {
   useEffect(() => {
     setMode(validMode(searchParams.get("mode")))
   }, [searchParams])
+
+  // Arriving from a review finding: open the section that actually holds the
+  // problem, so the fix is on screen instead of behind a collapsed accordion.
+  const findingId = searchParams.get("finding")
+  const didFocusFinding = useRef(false)
+  useEffect(() => {
+    if (!findingId || didFocusFinding.current) return
+    didFocusFinding.current = true
+    const target = studioSectionFor(findingId, searchParams.get("section") as never)
+    setSections((current) =>
+      current.map((section) => (section.id === target ? { ...section, collapsed: false } : section)),
+    )
+  }, [findingId, searchParams])
 
   // Auto-select a job when navigating from the analyze page (?jobId=...)
   const didAutoSelectJob = useRef(false)
@@ -3000,6 +3015,8 @@ export default function ResumeStudioPage() {
                   ))}
                 </div>
               </section>
+
+              <StudioFindingBanner findingId={findingId} />
 
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
                 <SortableContext items={orderedSections.map((section) => section.id)} strategy={verticalListSortingStrategy}>
