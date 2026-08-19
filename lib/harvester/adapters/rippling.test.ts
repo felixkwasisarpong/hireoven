@@ -92,6 +92,29 @@ test("ripplingAdapter.detectFromUrl: matches ats.rippling.com job board", () => 
   )
 })
 
+test("ripplingAdapter.detectFromUrl: strips a locale prefix", () => {
+  // Rippling's own locale switcher emits /en-GB/<slug>/jobs, so pasted board
+  // URLs routinely carry a locale. Without stripping it the slug read "en-gb".
+  assert.deepEqual(
+    ripplingAdapter.detectFromUrl("https://ats.rippling.com/en-GB/uplinq/jobs"),
+    { slug: "uplinq" }
+  )
+  assert.deepEqual(
+    ripplingAdapter.detectFromUrl("https://ats.rippling.com/en-US/acme-corp/jobs"),
+    { slug: "acme-corp" }
+  )
+  assert.deepEqual(
+    ripplingAdapter.detectFromUrl("https://ats.rippling.com/fr/acme/jobs/aaa-111"),
+    { slug: "acme" }
+  )
+})
+
+test("ripplingAdapter.detectFromUrl: a two-letter company slug is not eaten as a locale", () => {
+  assert.deepEqual(ripplingAdapter.detectFromUrl("https://ats.rippling.com/hr/jobs"), {
+    slug: "hr",
+  })
+})
+
 test("ripplingAdapter.detectFromUrl: rejects non-rippling URLs", () => {
   assert.equal(ripplingAdapter.detectFromUrl("https://jobs.lever.co/acme"), null)
   assert.equal(ripplingAdapter.detectFromUrl("https://ats.rippling.com"), null)

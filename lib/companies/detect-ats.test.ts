@@ -70,3 +70,20 @@ test("detectAts returns null when nothing matches", () => {
   })
   assert.equal(detection, null)
 })
+
+test("detectAtsFromUrl recognises Rippling boards, with or without a locale prefix", () => {
+  assert.deepEqual(detectAtsFromUrl("https://ats.rippling.com/uplinq/jobs"), {
+    atsType: "rippling",
+    atsIdentifier: "uplinq",
+    confidence: "high",
+  })
+  // The form Rippling's own locale switcher hands out — previously undetected,
+  // so the Career Site Scout could not classify it as an ATS board at all.
+  assert.deepEqual(detectAtsFromUrl("https://ats.rippling.com/en-GB/uplinq/jobs"), {
+    atsType: "rippling",
+    atsIdentifier: "uplinq",
+    confidence: "high",
+  })
+  // A real two-letter slug must survive the locale strip.
+  assert.equal(detectAtsFromUrl("https://ats.rippling.com/hr/jobs")?.atsIdentifier, "hr")
+})

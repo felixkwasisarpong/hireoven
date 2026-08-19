@@ -5,6 +5,12 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { crawlCareersPage, type RawJob } from "@/lib/crawler"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
+import {
+  atsIdentifierFor,
+  extractUrlsFromHtml,
+  findAtsCandidate,
+  safeUrl,
+} from "@/lib/career-scan/ats-candidate"
 import { cleanJobDescription, normalizeJobApplyUrl } from "@/lib/jobs/description"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
@@ -67,18 +73,6 @@ type ScoutResponse = {
   jobs: ScoutResponseJob[]
 }
 
-function safeUrl(raw: string | null | undefined): URL | null {
-  if (!raw?.trim()) return null
-  try {
-    const parsed = new URL(raw.trim())
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-    parsed.hash = ""
-    return parsed
-  } catch {
-    return null
-  }
-}
-
 function normalizeSubmittedUrl(raw: string): string | null {
   const withScheme = /^https?:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`
   const parsed = safeUrl(withScheme)
@@ -123,18 +117,6 @@ function companyNameGuess(args: {
   return titleCase(hostBase(parsed?.hostname ?? "Company")) ?? "Company"
 }
 
-function fallbackAtsIdentifier(url: string, detection: AtsDetection | null): string | null {
-  if (detection?.atsIdentifier) return detection.atsIdentifier
-  const parsed = safeUrl(url)
-  if (!parsed || !detection) return null
-  const host = parsed.hostname.toLowerCase().replace(/^www\./, "")
-  const parts = parsed.pathname.split("/").filter(Boolean)
-  if (detection.atsType === "workday") return host.split(".")[0] || null
-  if (detection.atsType === "icims") return host.split(".")[0]?.replace(/^careers?-?/i, "") || null
-  if (parts[0]) return parts[0]
-  return host.split(".")[0] || null
-}
-
 function domainForSource(url: string, detection: AtsDetection | null, atsIdentifier: string | null): string {
   const parsed = safeUrl(url)
   const host = parsed?.hostname.toLowerCase().replace(/^www\./, "") ?? "unknown.local"
@@ -165,38 +147,6 @@ async function fetchHtml(url: string): Promise<{ html: string | null; status: nu
   } finally {
     clearTimeout(timeout)
   }
-}
-
-function extractUrlsFromHtml(html: string, baseUrl: string): string[] {
-  const urls: string[] = []
-  const seen = new Set<string>()
-  const re = /\b(?:href|src)=["']([^"']{1,1500})["']/gi
-  let match: RegExpExecArray | null
-  while ((match = re.exec(html)) !== null) {
-    const raw = match[1]
-    if (!raw || raw.startsWith("#") || raw.startsWith("mailto:") || raw.startsWith("tel:")) continue
-    try {
-      const url = new URL(raw, baseUrl)
-      if (url.protocol !== "http:" && url.protocol !== "https:") continue
-      url.hash = ""
-      const normalized = url.toString()
-      if (seen.has(normalized)) continue
-      seen.add(normalized)
-      urls.push(normalized)
-    } catch {
-      // ignore malformed links
-    }
-  }
-  return urls
-}
-
-function findAtsCandidate(urls: string[]): { url: string; detection: AtsDetection; identifier: string | null } | null {
-  for (const url of urls) {
-    const detection = detectAtsFromUrl(url)
-    if (!detection) continue
-    return { url, detection, identifier: fallbackAtsIdentifier(url, detection) }
-  }
-  return null
 }
 
 function inferEmploymentType(raw: string | null | undefined): EmploymentType | null {
@@ -608,7 +558,7 @@ export async function POST(request: NextRequest) {
   if (!submittedUrl) return NextResponse.json({ error: "A valid career site URL is required" }, { status: 400 })
 
   const directDetection = detectAtsFromUrl(submittedUrl)
-  const directIdentifier = fallbackAtsIdentifier(submittedUrl, directDetection)
+  const directIdentifier = atsIdentifierFor(submittedUrl, directDetection)
   const htmlFetch = directDetection ? { html: null, status: null, error: null } : await fetchHtml(submittedUrl)
   const html = htmlFetch.html
   const linkedAts = html ? findAtsCandidate(extractUrlsFromHtml(html, submittedUrl)) : null

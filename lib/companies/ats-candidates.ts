@@ -255,6 +255,11 @@ function candidateFromUrl(rawUrl: string, source: AtsCandidateSource): AtsCandid
   const host = hostOf(candidateUrl)
   if (!host) return null
   if (atsType === "icims" && ICIMS_INFRA_HOSTS.has(host)) return null
+  // AtsCandidateType is bounded by NormalizedAtsProvider, and Rippling has no
+  // URL-normalization rules — candidates here feed that layer. detectAtsFromUrl
+  // only started reporting "rippling" for the Career Site Scout, so dropping it
+  // keeps this discovery path behaving exactly as it did before.
+  if (atsType === "rippling") return null
 
   return {
     atsType,

@@ -110,6 +110,16 @@ function cleanSlug(value: string | undefined | null): string | null {
   return v
 }
 
+/**
+ * Rippling serves the same board under an optional locale prefix
+ * (`/en-GB/uplinq/jobs` renders identically to `/uplinq/jobs`), and that is the
+ * form its own locale switcher hands out — so user-pasted URLs routinely carry
+ * one. Without stripping it the slug would be read as "en-gb".
+ */
+function isLocaleSegment(segment: string): boolean {
+  return /^[a-z]{2}(-[a-z]{2,3})?$/i.test(segment)
+}
+
 function detectFromUrl(url: string): { slug: string } | null {
   let parsed: URL
   try {
@@ -118,7 +128,12 @@ function detectFromUrl(url: string): { slug: string } | null {
     return null
   }
   if (!BOARD_HOST_RE.test(parsed.hostname)) return null
-  const parts = parsed.pathname.split("/").filter(Boolean)
+  const all = parsed.pathname.split("/").filter(Boolean)
+  // Strip a leading locale segment (e.g. `en-GB`) — the board slug follows.
+  // Guarded on the next segment NOT being "jobs", so a genuine two-letter
+  // company slug (`/hr/jobs`) is not mistaken for a locale and eaten.
+  const hasLocalePrefix = all.length > 1 && isLocaleSegment(all[0]) && all[1] !== "jobs"
+  const parts = hasLocalePrefix ? all.slice(1) : all
   if (parts.length < 1) return null
   // Accept both /slug/jobs and /slug/jobs/{uuid}
   if (parts[1] && parts[1] !== "jobs") return null
