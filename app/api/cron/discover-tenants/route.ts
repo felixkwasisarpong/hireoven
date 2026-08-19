@@ -25,6 +25,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
+import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import pLimit from "p-limit"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
@@ -113,6 +114,12 @@ async function enroll(pool: Pool, args: { ats: AtsName; slug: string; name: stri
   if (!careersUrl) return false
   const domain = `${args.slug}.${args.ats}-discovered`
   try {
+    // A board already claimed by a company is that company. The synthetic
+    // `-discovered` domain below cannot collide with the `-tenant` or `-scout`
+    // domain another subsystem minted for the same board, so without this check
+    // the ON CONFLICT (domain) target never sees the duplicate it exists to stop.
+    if (await findCompanyIdByAtsPair(args.ats, args.slug, pool)) return false
+
     const r = await pool.query(
       `INSERT INTO companies
          (name, domain, careers_url, ats_type, ats_identifier,

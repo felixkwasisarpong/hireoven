@@ -2,8 +2,15 @@ import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { crawlCareersPage, type RawJob } from "@/lib/crawler"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
+import {
+  atsIdentifierFor,
+  extractUrlsFromHtml,
+  findAtsCandidate,
+  safeUrl,
+} from "@/lib/career-scan/ats-candidate"
 import { cleanJobDescription, normalizeJobApplyUrl } from "@/lib/jobs/description"
 import { isBlockedApplyUrl, isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { isAllowedLocation } from "@/lib/jobs/location-filter"
@@ -66,18 +73,6 @@ type ScoutResponse = {
   jobs: ScoutResponseJob[]
 }
 
-function safeUrl(raw: string | null | undefined): URL | null {
-  if (!raw?.trim()) return null
-  try {
-    const parsed = new URL(raw.trim())
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null
-    parsed.hash = ""
-    return parsed
-  } catch {
-    return null
-  }
-}
-
 function normalizeSubmittedUrl(raw: string): string | null {
   const withScheme = /^https?:\/\//i.test(raw.trim()) ? raw.trim() : `https://${raw.trim()}`
   const parsed = safeUrl(withScheme)
@@ -122,18 +117,6 @@ function companyNameGuess(args: {
   return titleCase(hostBase(parsed?.hostname ?? "Company")) ?? "Company"
 }
 
-function fallbackAtsIdentifier(url: string, detection: AtsDetection | null): string | null {
-  if (detection?.atsIdentifier) return detection.atsIdentifier
-  const parsed = safeUrl(url)
-  if (!parsed || !detection) return null
-  const host = parsed.hostname.toLowerCase().replace(/^www\./, "")
-  const parts = parsed.pathname.split("/").filter(Boolean)
-  if (detection.atsType === "workday") return host.split(".")[0] || null
-  if (detection.atsType === "icims") return host.split(".")[0]?.replace(/^careers?-?/i, "") || null
-  if (parts[0]) return parts[0]
-  return host.split(".")[0] || null
-}
-
 function domainForSource(url: string, detection: AtsDetection | null, atsIdentifier: string | null): string {
   const parsed = safeUrl(url)
   const host = parsed?.hostname.toLowerCase().replace(/^www\./, "") ?? "unknown.local"
@@ -164,38 +147,6 @@ async function fetchHtml(url: string): Promise<{ html: string | null; status: nu
   } finally {
     clearTimeout(timeout)
   }
-}
-
-function extractUrlsFromHtml(html: string, baseUrl: string): string[] {
-  const urls: string[] = []
-  const seen = new Set<string>()
-  const re = /\b(?:href|src)=["']([^"']{1,1500})["']/gi
-  let match: RegExpExecArray | null
-  while ((match = re.exec(html)) !== null) {
-    const raw = match[1]
-    if (!raw || raw.startsWith("#") || raw.startsWith("mailto:") || raw.startsWith("tel:")) continue
-    try {
-      const url = new URL(raw, baseUrl)
-      if (url.protocol !== "http:" && url.protocol !== "https:") continue
-      url.hash = ""
-      const normalized = url.toString()
-      if (seen.has(normalized)) continue
-      seen.add(normalized)
-      urls.push(normalized)
-    } catch {
-      // ignore malformed links
-    }
-  }
-  return urls
-}
-
-function findAtsCandidate(urls: string[]): { url: string; detection: AtsDetection; identifier: string | null } | null {
-  for (const url of urls) {
-    const detection = detectAtsFromUrl(url)
-    if (!detection) continue
-    return { url, detection, identifier: fallbackAtsIdentifier(url, detection) }
-  }
-  return null
 }
 
 function inferEmploymentType(raw: string | null | undefined): EmploymentType | null {
@@ -299,6 +250,27 @@ async function upsertCompanySource(args: {
     direct_ats_url: args.directAtsUrl,
     classification: args.classification,
     checked_at: new Date().toISOString(),
+  }
+
+  // A board another subsystem already claimed belongs to that company. Without
+  // this the scout mints its own `<identifier>.<ats>-scout` domain, which can
+  // never collide with the `-discovered` or `-tenant` domains minted for the very
+  // same board, so pasting a careers URL created a fresh duplicate of an employer
+  // already tracked. That is how Metropolis reached five records.
+  const claimedId = await findCompanyIdByAtsPair(args.atsType, args.atsIdentifier, pool)
+  if (claimedId) {
+    const { rows } = await pool.query<{ id: string; name: string }>(
+      `UPDATE companies
+          SET careers_url = COALESCE(NULLIF(careers_url, ''), $2),
+              direct_ats_url = COALESCE(direct_ats_url, $3),
+              raw_ats_config = COALESCE(raw_ats_config, '{}'::jsonb)
+                || jsonb_build_object('career_site_scout', $4::jsonb),
+              updated_at = now()
+        WHERE id = $1
+        RETURNING id, name`,
+      [claimedId, args.careersUrl, args.directAtsUrl, JSON.stringify(intake)],
+    )
+    return rows[0] ?? null
   }
 
   try {
@@ -586,7 +558,7 @@ export async function POST(request: NextRequest) {
   if (!submittedUrl) return NextResponse.json({ error: "A valid career site URL is required" }, { status: 400 })
 
   const directDetection = detectAtsFromUrl(submittedUrl)
-  const directIdentifier = fallbackAtsIdentifier(submittedUrl, directDetection)
+  const directIdentifier = atsIdentifierFor(submittedUrl, directDetection)
   const htmlFetch = directDetection ? { html: null, status: null, error: null } : await fetchHtml(submittedUrl)
   const html = htmlFetch.html
   const linkedAts = html ? findAtsCandidate(extractUrlsFromHtml(html, submittedUrl)) : null

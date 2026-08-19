@@ -20,6 +20,7 @@ export type AtsType =
   | "jobvite"
   | "workable"
   | "recruitee"
+  | "rippling"
   | "custom"
 
 export type AtsDetection = {
@@ -138,6 +139,19 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
   if (host.endsWith(".bamboohr.com") || host === "bamboohr.com") {
     const identifier = cleanIdentifier(host.split(".")[0])
     return { atsType: "bamboohr", atsIdentifier: identifier, confidence: "high" }
+  }
+
+  if (host === "ats.rippling.com") {
+    // Boards are served both as /slug/jobs and under a locale prefix
+    // (/en-GB/slug/jobs), which is the form Rippling's own locale switcher
+    // produces — so the first segment is not reliably the company slug.
+    const isLocale = (segment: string | undefined) =>
+      Boolean(segment) && /^[a-z]{2}(-[a-z]{2,3})?$/i.test(segment!)
+    const segments =
+      pathParts.length > 1 && isLocale(pathParts[0]) && pathParts[1] !== "jobs"
+        ? pathParts.slice(1)
+        : pathParts
+    return { atsType: "rippling", atsIdentifier: cleanIdentifier(segments[0]), confidence: "high" }
   }
 
   return null

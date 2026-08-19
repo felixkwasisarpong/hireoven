@@ -40,7 +40,10 @@ function defaultResponder(opts: {
 }): QueryResponder {
   return (sql) => {
     if (sql.includes("insert into ats_tenants")) return { rows: [{ id: TENANT_ID }] }
-    if (sql.includes("select id from companies where ats_type")) {
+    // Matches the ATS-pair lookup regardless of how it selects the id: it now
+    // resolves through duplicate_of_company_id rather than filtering flagged
+    // rows out, so it no longer starts "select id from companies".
+    if (sql.includes("from companies") && sql.includes("ats_type = $1")) {
       return { rows: opts.existingCompanyId ? [{ id: opts.existingCompanyId }] : [] }
     }
     if (sql.includes("insert into companies")) {
@@ -98,6 +101,21 @@ describe("enrollTenantAsCompany", () => {
     assert.equal(r.tenantId, TENANT_ID)
     // No company insert should have happened.
     assert.equal(find(calls, "insert into companies"), undefined)
+
+    // The lookup must not skip records flagged as duplicates. Requiring
+    // duplicate_of_company_id IS NULL made a board whose records were all
+    // flagged look unclaimed, so this path inserted yet another copy.
+    const lookup = find(calls, "ats_type = $1")
+    assert.ok(lookup)
+    const sql = lookup!.sql.toLowerCase()
+    assert.ok(
+      !/and\s+c?\.?duplicate_of_company_id is null/.test(sql),
+      "ATS-pair lookup must not filter out records flagged as duplicates",
+    )
+    assert.ok(
+      sql.includes("coalesce(c.duplicate_of_company_id, c.id)"),
+      "ATS-pair lookup must resolve a flagged record to its survivor",
+    )
     // Tenant linked to the existing company.
     const link = calls.find((c) => c.sql.toLowerCase().includes("update ats_tenants") && c.params[0] === "co-existing")
     assert.ok(link)

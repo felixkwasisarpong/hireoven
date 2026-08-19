@@ -52,6 +52,11 @@ DATABASE_URL=REPLACE_ME
   0 4 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh burnout-classify   >>/var/log/hireoven/burnout-classify.log 2>&1
   0 5 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh salary-digest      >>/var/log/hireoven/salary-digest.log 2>&1
   0 6 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh warn-act           >>/var/log/hireoven/warn-act.log 2>&1
+# process-referrals grants the referrer their 14-day Pro reward once a referral is
+# 7 days old. It is the ONLY caller of grantReferrerReward(), so without it every
+# referral stays 'pending' forever and no referrer is ever paid. Watch
+# /admin/referrals — a non-zero "awaiting payout" means this stopped running.
+  0 7 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh process-referrals  >>/var/log/hireoven/process-referrals.log 2>&1
   0 8 * * 1-5      cd $HIREOVEN_REPO && bash scripts/crons.sh blog-generate      >>/var/log/hireoven/blog-generate.log 2>&1
   0 9 * * *        cd $HIREOVEN_REPO && bash scripts/crons.sh deliver-checkins   >>/var/log/hireoven/deliver-checkins.log 2>&1
 # ── Growth / marketing / positioning (app-worker routes, same box) ───────────────

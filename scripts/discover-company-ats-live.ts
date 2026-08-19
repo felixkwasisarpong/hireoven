@@ -15,7 +15,7 @@
 import { loadEnvConfig } from "@next/env"
 import type { Pool } from "pg"
 import { detectAtsFromHtml } from "../lib/companies/ats-signatures"
-import { detectAtsFromUrl } from "../lib/companies/detect-ats"
+import { detectAtsFromUrl, type AtsType as DetectedAtsType } from "../lib/companies/detect-ats"
 import { getPostgresPool } from "../lib/postgres/server"
 
 loadEnvConfig(process.cwd())
@@ -332,7 +332,12 @@ async function runDiscovery({
       return
     }
 
-    let detection: ReturnType<typeof detectAtsFromHtml> = null
+    // Widened beyond AtsEvidence because detectAtsFromUrl covers providers that
+    // have no HTML signature rule (e.g. Rippling). Only `atsType` reaches the DB
+    // and it is written as text, so the extra members are safe here.
+    let detection:
+      | { atsType: DetectedAtsType; confidence: "high" | "medium" | "low"; reasons: string[] }
+      | null = null
 
     const applyHits = (applyUrlsByCompany.get(company.id) ?? [])
       .map((url) => detectAtsFromUrl(url))
