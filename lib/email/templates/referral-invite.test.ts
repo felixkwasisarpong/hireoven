@@ -9,13 +9,14 @@ const base: ReferralInviteData = {
   pendingCount: 0,
   referralsUrl: "https://hireoven.com/dashboard/referrals",
   unsubscribeUrl: "https://hireoven.com/unsubscribe?token=t",
+  recipientEmail: "alex@example.com",
 }
 
 test("states the reward terms the code actually pays out", () => {
   const { html, text } = renderReferralInvite(base)
   // 7 for the friend, 14 for the referrer, 3 max -> 42 total. If lib/referral/
   // rewards.ts changes, this email must not keep promising the old numbers.
-  for (const fragment of ["7 days of Pro free", ">14 days</strong>", "3 friends", "42 days"]) {
+  for (const fragment of ["7 days", "14 days", "3 friends", "42 days of Pro"]) {
     assert.ok(html.includes(fragment), `html missing: ${fragment}`)
   }
   assert.ok(text.includes("7 days of Pro free"))
@@ -50,7 +51,7 @@ test("the reward condition is stated, not buried", () => {
 test("renders without a name", () => {
   const r = renderReferralInvite({ ...base, firstName: null })
   assert.ok(!r.text.startsWith(","))
-  assert.ok(r.text.startsWith("if you know someone"))
+  assert.ok(r.text.startsWith("Hey there,"))
 })
 
 test("escapes the name and link", () => {

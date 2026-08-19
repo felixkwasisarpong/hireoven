@@ -96,6 +96,7 @@ async function main() {
       pendingCount: sample?.pending_count ?? 0,
       referralsUrl: `${origin}/dashboard/referrals`,
       unsubscribeUrl: `${origin}/unsubscribe?token=preview`,
+      recipientEmail: sample?.email ?? "you@example.com",
     })
     const out = "/tmp/referral-invite-preview.html"
     writeFileSync(out, rendered.html)
@@ -121,6 +122,7 @@ async function main() {
       pendingCount: r.pending_count,
       referralsUrl: `${origin}/dashboard/referrals`,
       unsubscribeUrl: `${origin}/unsubscribe?token=${token}`,
+      recipientEmail: r.email,
     })
 
     console.log(
