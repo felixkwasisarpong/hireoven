@@ -1,3 +1,18 @@
+/**
+ * Generate a resume from scratch (target role, experience level, style, tone,
+ * and optionally a job description to tailor toward).
+ *
+ * INTENTIONALLY RETAINED despite having no client caller today. This is not
+ * abandoned code: /dashboard/resume/generate now 301s to the Studio, which uses
+ * /api/resume/ai-write instead, but this route carries the JD-intelligence layer
+ * added in Aug 2026 — `tailorToJob`, `resolveTargetTitle`, `detectJdDomains` and
+ * `extractJdTechTerms` — whose UI toggle was never wired up. Deleting it would
+ * throw that work away, so it stays until either the toggle lands or the
+ * capability is folded into ai-write.
+ *
+ * If you are auditing for dead code: confirm `tailorToJob` still has no UI
+ * consumer before acting, and prefer migrating the JD logic over deleting it.
+ */
 import { NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_TIER_PRICING, SONNET_MODEL } from "@/lib/ai/anthropic-models"

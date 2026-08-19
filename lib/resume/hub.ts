@@ -339,67 +339,6 @@ export function restoreResumeFromSnapshot(resume: Resume, snapshot: ResumeSnapsh
   return next
 }
 
-export function parseResumeTextFallback(resume: Resume, textInput?: string | null) {
-  // TODO: Replace this deterministic fallback with robust PDF/DOCX extraction + AI structured parsing.
-  const text = cleanString(textInput) ?? getResumeSearchText(resume) ?? resume.file_name
-  const email = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0] ?? resume.email
-  const phone = text.match(/(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}/)?.[0] ?? resume.phone
-  const linkedinUrl = text.match(/https?:\/\/(?:www\.)?linkedin\.com\/[^\s)]+/i)?.[0] ?? resume.linkedin_url
-  const githubUrl = text.match(/https?:\/\/(?:www\.)?github\.com\/[^\s)]+/i)?.[0] ?? resume.github_url ?? null
-  const portfolioUrl = text.match(/https?:\/\/(?!.*(?:linkedin|github))[^\s)]+/i)?.[0] ?? resume.portfolio_url
-  const skills = normalizeSkillsBuckets({
-    technical: extractSkillsFromText(text).slice(0, 16),
-    soft: resume.skills?.soft ?? [],
-    languages: resume.skills?.languages ?? [],
-    certifications: resume.skills?.certifications ?? [],
-  })
-  const role = resume.primary_role ?? inferRole(text)
-  const fallbackName = resume.name ?? resume.file_name.replace(/\.[^.]+$/, "")
-  const fullName = resume.full_name ?? inferName(text) ?? fallbackName
-  const workExperience = resume.work_experience?.length
-    ? resume.work_experience
-    : role
-      ? [
-          {
-            company: "Experience",
-            title: role,
-            start_date: "",
-            end_date: null,
-            is_current: false,
-            description: firstSentence(text) ?? "",
-            achievements: [],
-          },
-        ]
-      : []
-  const education = resume.education ?? []
-  const projects = resume.projects ?? []
-  const nextResume: Resume = {
-    ...resume,
-    parse_status: "complete",
-    parse_error: null,
-    full_name: fullName,
-    email,
-    phone,
-    linkedin_url: linkedinUrl,
-    github_url: githubUrl,
-    portfolio_url: portfolioUrl,
-    summary: resume.summary ?? firstSentence(text),
-    work_experience: workExperience,
-    education,
-    skills,
-    projects,
-    primary_role: role,
-    raw_text: text,
-  }
-  const derived = deriveResumeFields(nextResume)
-  nextResume.years_of_experience = derived.years_of_experience
-  nextResume.primary_role = derived.primary_role
-  nextResume.top_skills = derived.top_skills
-  nextResume.resume_score = derived.resume_score
-  nextResume.ats_score = buildResumeScoreBreakdown(nextResume).atsReadability
-  return nextResume
-}
-
 export function createGeneratedResume(input: ResumeGenerationInput, userId: string): Omit<Resume, "id" | "created_at" | "updated_at"> {
   // TODO: Replace this mock-safe generator with a real AI generation workflow.
   const now = new Date().toISOString()
@@ -635,15 +574,6 @@ function inferRole(text: string) {
   if (lower.includes("designer")) return "Designer"
   if (lower.includes("analyst")) return "Analyst"
   return null
-}
-
-function inferName(text: string) {
-  const firstLines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, 6)
-  return firstLines.find((line) => /^[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3}$/.test(line)) ?? null
 }
 
 function experienceLevelYears(level: ResumeExperienceLevel) {

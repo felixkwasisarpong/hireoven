@@ -45,6 +45,7 @@ import {
 
 import { useResumeContext } from "@/components/resume/ResumeProvider"
 import ImportLinkedInButton from "@/components/resume/ImportLinkedInButton"
+import ResumeReviewBanner from "@/components/resume/ResumeReviewBanner"
 import ResumeViewModal from "@/components/resume/ResumeViewModal"
 import { useToast } from "@/components/ui/ToastProvider"
 import { publishLocalNotification } from "@/lib/hooks/useNotifications"
@@ -275,6 +276,7 @@ function ResumeUploadAction({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const { upsertResume, refresh } = useResumeContext()
   const { pushToast } = useToast()
+  const uploadRouter = useRouter()
   const [uploadPhase, setUploadPhase] = useState<"idle" | "uploading" | "processing">("idle")
 
   async function pollResumeStatus(resumeId: string) {
@@ -293,19 +295,20 @@ function ResumeUploadAction({
           pushToast({
             tone: "success",
             title: "Resume parsed",
-            description: status.ats_score != null
-              ? `ATS score is ready: ${status.ats_score}/100.`
-              : "Your resume is ready in the library.",
+            description: "Taking you to your review — here is what is costing you interviews.",
           })
           publishLocalNotification({
             type: "resume",
             tone: "success",
-            title: "Resume parsed",
+            title: "Resume reviewed",
             message: status.ats_score != null
-              ? `Your resume is ready. ATS score: ${status.ats_score}/100.`
-              : "Your resume is ready in the library.",
-            href: "/dashboard/resume/library",
+              ? `Your resume is ready. ATS score: ${status.ats_score}/100. Open your review to see what is costing you interviews.`
+              : "Your resume is ready. Open your review to see what is costing you interviews.",
+            href: "/dashboard/resume/review",
           })
+          // The whole point of the review: a parsed resume should never just sit
+          // in a library waiting to be acted on.
+          uploadRouter.push("/dashboard/resume/review")
           return
         }
 
@@ -650,6 +653,7 @@ function CleanOverviewPanel({ onTabChange }: { onTabChange: (tab: TabId) => void
       )}
     <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_400px]">
       <div className="space-y-3">
+        <ResumeReviewBanner />
         <section className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="px-4 pb-3 pt-3">
             <SectionHeading>Current Active Resume</SectionHeading>

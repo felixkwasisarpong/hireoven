@@ -3,6 +3,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Archive,
   CheckCircle2,
@@ -183,10 +184,45 @@ function FilterChip({ label, count, active, onClick }: { label: string; count: n
   )
 }
 
+/**
+ * Header "select all" box. `indeterminate` is a DOM property rather than an
+ * attribute, so React cannot set it declaratively — hence the ref.
+ */
+function SelectAllCheckbox({
+  checked,
+  indeterminate,
+  onChange,
+  count,
+}: {
+  checked: boolean
+  indeterminate: boolean
+  onChange: () => void
+  count: number
+}) {
+  const ref = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = indeterminate
+  }, [indeterminate])
+
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      disabled={count === 0}
+      aria-label={checked ? "Clear selection" : `Select all ${count} resumes`}
+      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-[#5B4DFF] focus:ring-2 focus:ring-[#5B4DFF]/30 disabled:cursor-not-allowed disabled:opacity-40"
+    />
+  )
+}
+
 export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) {
   const { resumes, isLoading, refresh, removeResume, upsertResume } = useResumeContext()
   const { data: hubData, refresh: refreshHubData } = useResumeHubData()
   const { pushToast } = useToast()
+  const router = useRouter()
   const [filter, setFilter] = useState<FilterValue>("all")
   const [search, setSearch] = useState("")
   const [sort, setSort] = useState<SortValue>("latest")
@@ -195,6 +231,10 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
   const [handoffResumes, setHandoffResumes] = useState<Resume[]>([])
   const [apiResumes, setApiResumes] = useState<Resume[]>([])
   const [isFetchingLibrary, setIsFetchingLibrary] = useState(true)
+  // Bulk selection. Holds ids only, so rows re-sorting or re-filtering never
+  // invalidates it; anything no longer visible is pruned below.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [bulkDeleting, setBulkDeleting] = useState(false)
 
   // Upload state
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -251,6 +291,8 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
           void refreshHubData()
           window.dispatchEvent(new Event("hireoven:resumes-changed"))
           setUploadPhase("done")
+          // A parsed resume should never just sit in the library.
+          router.push("/dashboard/resume/review")
           return
         }
         if (status.parse_status === "failed") {
@@ -399,6 +441,103 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
     })
     return result
   }, [enriched, filter, search, sort])
+
+  // Selection tracks what is actually on screen. Filtering to "Archived" and
+  // hitting Delete must never delete something the user can no longer see.
+  const visibleIds = useMemo(() => filtered.map((item) => item.resume.id), [filtered])
+
+  useEffect(() => {
+    setSelectedIds((current) => {
+      if (current.size === 0) return current
+      const visible = new Set(visibleIds)
+      const next = new Set([...current].filter((id) => visible.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [visibleIds])
+
+  const selectedResumes = useMemo(
+    () => filtered.filter((item) => selectedIds.has(item.resume.id)).map((item) => item.resume),
+    [filtered, selectedIds],
+  )
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const someVisibleSelected = selectedIds.size > 0 && !allVisibleSelected
+
+  function toggleOne(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAllVisible() {
+    setSelectedIds((current) => (visibleIds.every((id) => current.has(id)) ? new Set() : new Set(visibleIds)))
+  }
+
+  async function handleBulkDelete() {
+    const targets = selectedResumes
+    if (targets.length === 0 || bulkDeleting) return
+
+    const activeCount = targets.filter((r) => r.is_primary).length
+    const confirmed = window.confirm(
+      `Delete ${targets.length} resume${targets.length === 1 ? "" : "s"}?` +
+        (activeCount > 0 ? "\n\nThis includes your active resume." : "") +
+        "\n\nThis cannot be undone.",
+    )
+    if (!confirmed) return
+
+    setBulkDeleting(true)
+    const deleted: string[] = []
+    const failed: string[] = []
+
+    // Sequential on purpose. The DELETE route checks whether any other resume
+    // still points at the same storage_path before removing the file, and
+    // parallel deletes of copies that share one would race that check and orphan
+    // the object. It also keeps a large selection from spiking the web box.
+    for (const resume of targets) {
+      try {
+        const res = await fetch(`/api/resume/${resume.id}`, { method: "DELETE" })
+        if (res.ok) {
+          deleted.push(resume.id)
+          removeResume(resume.id)
+          removeResumeHandoff(resume.id)
+        } else {
+          failed.push(resume.id)
+        }
+      } catch {
+        failed.push(resume.id)
+      }
+    }
+
+    if (deleted.length > 0) {
+      const gone = new Set(deleted)
+      setApiResumes((current) => current.filter((item) => !gone.has(item.id)))
+    }
+    // Leave failures selected so the user can retry exactly those.
+    setSelectedIds(new Set(failed))
+    setBulkDeleting(false)
+
+    await refresh()
+    await refreshHubData()
+    await loadLibraryResumes()
+
+    if (failed.length === 0) {
+      pushToast({ tone: "success", title: `${deleted.length} resume${deleted.length === 1 ? "" : "s"} deleted` })
+    } else if (deleted.length === 0) {
+      pushToast({
+        tone: "error",
+        title: `Could not delete ${failed.length === 1 ? "that resume" : `those ${failed.length} resumes`}`,
+        description: "They are still selected — try again.",
+      })
+    } else {
+      pushToast({
+        tone: "error",
+        title: `Deleted ${deleted.length}, failed ${failed.length}`,
+        description: "The ones that failed are still selected.",
+      })
+    }
+  }
 
   async function handleSetPrimary(id: string) {
     setPendingId(id)
@@ -589,8 +728,45 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
         ) : filtered.length === 0 ? (
           <EmptyState hasFilter={filter !== "all" || search.trim().length > 0} />
         ) : (
-          <div className="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="grid min-w-[1320px] grid-cols-[minmax(340px,2fr)_minmax(190px,1fr)_120px_130px_170px_120px_250px] items-center border-b border-slate-100 bg-white px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+          <div className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm">
+            {selectedIds.size > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-[#5B4DFF]/[0.04] px-5 py-3">
+                <p className="text-[13px] font-semibold text-slate-800">
+                  {selectedIds.size} selected
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedIds(new Set())}
+                    disabled={bulkDeleting}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[12.5px] font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+                  >
+                    Clear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleBulkDelete()}
+                    disabled={bulkDeleting}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-3 py-1.5 text-[12.5px] font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {bulkDeleting
+                      ? "Deleting…"
+                      : `Delete ${selectedIds.size} resume${selectedIds.size === 1 ? "" : "s"}`}
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="w-full overflow-x-auto">
+            <div className="grid min-w-[1364px] grid-cols-[44px_minmax(340px,2fr)_minmax(190px,1fr)_120px_130px_170px_120px_250px] items-center border-b border-slate-100 bg-white px-5 py-2.5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">
+              <div className="flex items-center">
+                <SelectAllCheckbox
+                  checked={allVisibleSelected}
+                  indeterminate={someVisibleSelected}
+                  onChange={toggleAllVisible}
+                  count={visibleIds.length}
+                />
+              </div>
               <div>Resume</div>
               <div>Target Role</div>
               <div className="text-center">ATS Score</div>
@@ -604,8 +780,21 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
               {filtered.map(({ resume, status, name, role, matchScore, atsScore, updated }) => (
                 <div
                   key={resume.id}
-                  className="grid min-w-[1320px] grid-cols-[minmax(340px,2fr)_minmax(190px,1fr)_120px_130px_170px_120px_250px] items-center px-5 py-3 transition hover:bg-slate-50/80"
+                  className={`grid min-w-[1364px] grid-cols-[44px_minmax(340px,2fr)_minmax(190px,1fr)_120px_130px_170px_120px_250px] items-center px-5 py-3 transition ${
+                    selectedIds.has(resume.id) ? "bg-[#5B4DFF]/[0.04]" : "hover:bg-slate-50/80"
+                  }`}
                 >
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(resume.id)}
+                      onChange={() => toggleOne(resume.id)}
+                      disabled={bulkDeleting}
+                      aria-label={`Select ${name}`}
+                      className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[#5B4DFF] accent-[#5B4DFF] focus:ring-2 focus:ring-[#5B4DFF]/30 disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+                  </div>
+
                   <div className="flex min-w-0 items-center gap-3">
                     <ResumeThumb resume={resume} />
                     <div className="min-w-0">
@@ -719,7 +908,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
               ))}
             </div>
 
-            <div className="min-w-[1320px] flex items-center justify-between border-t border-slate-100 px-5 py-3">
+            <div className="min-w-[1364px] flex items-center justify-between border-t border-slate-100 px-5 py-3">
               <p className="text-[12px] text-slate-500">
                 Showing 1 to {filtered.length} of {visibleResumes.length} resumes
               </p>
@@ -745,6 +934,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
+            </div>
             </div>
           </div>
         )}

@@ -23,6 +23,7 @@ async function ensureResumeColumns(pool: ReturnType<typeof getPostgresPool>) {
        ADD COLUMN IF NOT EXISTS parse_error TEXT,
        ADD COLUMN IF NOT EXISTS github_url TEXT,
        ADD COLUMN IF NOT EXISTS certifications JSONB,
+       ADD COLUMN IF NOT EXISTS additional_sections JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER,
        ALTER COLUMN file_url DROP NOT NULL,
        ALTER COLUMN storage_path DROP NOT NULL`
@@ -91,13 +92,15 @@ export async function POST(request: Request) {
         is_primary, parse_status, parse_error, full_name, email, phone, location,
         linkedin_url, portfolio_url, github_url, summary, work_experience, education,
         skills, projects, certifications, seniority_level, years_of_experience,
-        primary_role, industries, top_skills, resume_score, ats_score, raw_text
+        primary_role, industries, top_skills, resume_score, ats_score, raw_text,
+        additional_sections
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8,
         $9, $10, $11, $12, $13, $14, $15,
         $16, $17, $18, $19::jsonb, $20::jsonb,
         $21::jsonb, $22::jsonb, $23::jsonb, $24,
-        $25, $26, $27::text[], $28::text[], $29, $30, $31
+        $25, $26, $27::text[], $28::text[], $29, $30, $31,
+        $32::jsonb
       )
       RETURNING *`,
       [
@@ -132,6 +135,7 @@ export async function POST(request: Request) {
         parsed.resume_score,
         atsScore,
         parsed.raw_text,
+        JSON.stringify(parsed.additional_sections ?? []),
       ]
     )
 

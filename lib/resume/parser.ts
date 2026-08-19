@@ -495,12 +495,35 @@ export async function extractTextFromDOCX(buffer: Buffer): Promise<string> {
   return result.value.trim()
 }
 
-async function parseWithClaude(extractedText: string) {
+/**
+ * Output budget for a parse, scaled to the document.
+ *
+ * The prompt asks the model to copy every section verbatim, so output length
+ * tracks input length. A fixed 4k ceiling silently decapitated long documents:
+ * an academic CV with forty publications would blow the budget, return truncated
+ * JSON, fail JSON.parse, and fall through to the regex heuristic — which yields
+ * no work experience, no education and no publications at all. The user was
+ * never told; they just got a gutted record.
+ *
+ * Budget generously against the estimate, floor it so short resumes are
+ * unaffected, and cap it at the model's output ceiling.
+ */
+const MIN_PARSE_TOKENS = 4_000
+const MAX_PARSE_TOKENS = 32_000
+
+export function parseTokenBudget(extractedText: string): number {
+  const estimatedInputTokens = Math.ceil(extractedText.length / 3.5)
+  return Math.min(MAX_PARSE_TOKENS, Math.max(MIN_PARSE_TOKENS, Math.round(estimatedInputTokens * 1.6)))
+}
+
+async function parseWithClaude(extractedText: string, maxTokens?: number) {
   if (!anthropic) return null
+
+  const budget = maxTokens ?? parseTokenBudget(extractedText)
 
   const message = await anthropic.messages.create({
     model: MODEL,
-    max_tokens: 4000,
+    max_tokens: budget,
     system:
       "You are a professional resume parser. Extract structured data from the resume text provided. Return ONLY valid JSON with no explanation or markdown.",
     messages: [
@@ -585,7 +608,28 @@ ${extractedText}`,
     .map((block) => block.text)
     .join("\n")
 
+  // The model ran out of room mid-JSON. Parsing this would throw and drop us into
+  // the heuristic fallback, losing every structured section — so retry once with
+  // the full ceiling and only then give up. Never parse a known-truncated body.
+  if (message.stop_reason === "max_tokens") {
+    if (budget < MAX_PARSE_TOKENS) {
+      return parseWithClaude(extractedText, MAX_PARSE_TOKENS)
+    }
+    throw new ResumeTooLongError(
+      "This document is longer than the parser can extract in one pass. Its full text is preserved, but some sections may not be structured.",
+    )
+  }
+
   return JSON.parse(extractJsonObject(text))
+}
+
+/** Thrown when even the maximum output budget could not hold the whole document. */
+export class ResumeTooLongError extends Error {
+  readonly code = "RESUME_TOO_LONG"
+  constructor(message: string) {
+    super(message)
+    this.name = "ResumeTooLongError"
+  }
 }
 
 export async function parseResume(
@@ -617,6 +661,7 @@ export async function parseResume(
     const parsed = await parseWithClaude(extractedText)
     return normalizeParsedResume(parsed, extractedText)
   } catch (error) {
+    if (error instanceof ResumeTooLongError) throw error
     console.error("Resume parsing fell back to heuristic extraction", error)
     return normalizeParsedResume(null, extractedText)
   }
@@ -637,6 +682,7 @@ export async function parseResumeFromText(rawText: string): Promise<ParsedResume
     const parsed = await parseWithClaude(text)
     return normalizeParsedResume(parsed, text)
   } catch (error) {
+    if (error instanceof ResumeTooLongError) throw error
     console.error("Text resume parsing fell back to heuristic extraction", error)
     return normalizeParsedResume(null, text)
   }

@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Linkedin, Loader2, X } from "lucide-react"
 import { useToast } from "@/components/ui/ToastProvider"
 import { useActiveBrowserContext } from "@/lib/apex/browser-context"
@@ -23,6 +24,7 @@ type Props = {
 export default function ImportLinkedInButton({ onImported, className, compact = false }: Props) {
   const { pushToast } = useToast()
   const { isExtensionConnected, requestSync } = useActiveBrowserContext()
+  const router = useRouter()
 
   const [phase, setPhase] = useState<Phase>("idle")
   const [pasteOpen, setPasteOpen] = useState(false)
@@ -67,6 +69,9 @@ export default function ImportLinkedInButton({ onImported, className, compact = 
         setPasteOpen(false)
         setPasteText("")
         onImported(data.resume)
+        // Imported profiles get the same treatment as uploads: go straight to
+        // the review rather than leaving the record sitting in the library.
+        router.push("/dashboard/resume/review")
       } catch (error) {
         pushToast({
           tone: "error",
@@ -77,7 +82,7 @@ export default function ImportLinkedInButton({ onImported, className, compact = 
         setPhase("idle")
       }
     },
-    [onImported, pushToast]
+    [onImported, pushToast, router]
   )
 
   // Trigger the extension to open a LinkedIn profile in the user's logged-in
