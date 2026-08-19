@@ -7,9 +7,6 @@ import {
   Stethoscope,
   Library,
   Sparkles,
-  Radar,
-  GitBranch,
-  GraduationCap,
   Mails,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -45,21 +42,6 @@ const TABS: Tab[] = [
     icon: Sparkles,
   },
   {
-    label: "Positioning",
-    href: "/dashboard/resume/positioning",
-    icon: Radar,
-  },
-  {
-    label: "Career Pivot",
-    href: "/dashboard/resume/pivot",
-    icon: GitBranch,
-  },
-  {
-    label: "Skill Gaps",
-    href: "/dashboard/resume/skills",
-    icon: GraduationCap,
-  },
-  {
     label: "Cover Letters",
     href: "/dashboard/resume/cover-letters",
     icon: Mails,
@@ -67,6 +49,10 @@ const TABS: Tab[] = [
 ]
 
 const HIDDEN_PREFIXES = ["/dashboard/resume/analyze"]
+
+// Positioning / Career Pivot / Skill Gaps used to be their own tabs. They are
+// now panels inside Review, and their old routes redirect here — so the eight
+// tabs became five without breaking any existing link.
 
 function isTabActive(pathname: string, tab: Tab) {
   if (tab.exact) {

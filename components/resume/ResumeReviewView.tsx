@@ -18,6 +18,7 @@ import {
   Wrench,
 } from "lucide-react"
 import type { FindingSeverity, ResumeFinding } from "@/lib/resume/review"
+import ResumeFixFlow, { type FixPlanPayload } from "@/components/resume/ResumeFixFlow"
 
 type Step = ResumeFinding & { explanation: string; doThis: string }
 
@@ -41,6 +42,7 @@ type ReviewResponse = {
   opening?: string
   firstMove?: string
   narrated?: boolean
+  fixPlan?: FixPlanPayload
 }
 
 const SEVERITY: Record<
@@ -78,6 +80,8 @@ export default function ResumeReviewView() {
   const [narrating, setNarrating] = useState(false)
   const [index, setIndex] = useState(0)
   const [mode, setMode] = useState<"walkthrough" | "all">("walkthrough")
+  // Bumped after AI Fix applies, so the findings reflect what just changed.
+  const [reloadKey, setReloadKey] = useState(0)
 
   // Two-phase load: the deterministic diagnosis paints immediately, then the
   // narration pass swaps in richer explanations. A slow or capped model changes
@@ -122,7 +126,7 @@ export default function ResumeReviewView() {
       alive = false
       if (timer) clearTimeout(timer)
     }
-  }, [])
+  }, [reloadKey])
 
   const steps = useMemo(() => data?.steps ?? [], [data])
   const total = steps.length
@@ -269,6 +273,16 @@ export default function ResumeReviewView() {
           </p>
         )}
       </header>
+
+      {data.fixPlan && (
+        <ResumeFixFlow
+          plan={data.fixPlan}
+          onApplied={() => {
+            setIndex(0)
+            setReloadKey((k) => k + 1)
+          }}
+        />
+      )}
 
       {total === 0 ? (
         <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-6">

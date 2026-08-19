@@ -27,6 +27,7 @@
  */
 
 import { profileFor, type DocumentKindResult, type ReviewProfile } from "@/lib/resume/document-kind"
+import { studioHrefForFinding } from "@/lib/resume/fix-plan"
 import type { PositioningBrief, ResumeSignal } from "@/lib/resume/signal"
 import type { PivotSuggestion } from "@/lib/resume/pivot-suggest"
 import type { Resume, WorkExperience } from "@/types"
@@ -236,6 +237,11 @@ function blob(resume: ReviewResume): string {
   return [resume.raw_text, resume.summary].filter(Boolean).join("\n").toLowerCase()
 }
 
+/** A decision resolved in one of the review's own panels — never a navigation away. */
+function panelAction(panel: "positioning" | "pivot" | "skills", label: string): FindingAction {
+  return { label, href: `/dashboard/resume/review?panel=${panel}#${panel}` }
+}
+
 // ── The checks ───────────────────────────────────────────────────────────────
 // Each returns a finding or null. Kept as small named functions so a check can
 // be argued with, tested, or removed on its own.
@@ -257,7 +263,7 @@ function checkAuthorizationSilence(resume: ReviewResume): ResumeFinding | null {
     evidence: ["No work-authorization statement found in the resume text"],
     fix:
       "Add one line under your name stating your status and how long it runs. If you are on OPT with a STEM-eligible degree, say so explicitly and name the end date — an employer reading 'no petition or lottery required' is being told this hire is cheap and certain, which is the opposite of what they assumed.",
-    action: { label: "Open Resume Studio", href: "/dashboard/resume/studio" },
+    action: { label: "Open Resume Studio", href: studioHrefForFinding("authorization_silent", "summary") },
   }
 }
 
@@ -278,7 +284,7 @@ function checkSplitSignal(signal: ResumeSignal | null | undefined): ResumeFindin
     ],
     fix:
       "Keep one master resume, but send targeted versions. Pick the lane per application and cut the other lane down to a supporting line or two — not shrunk, deleted. The material you cut is what the second version leads with.",
-    action: { label: "Pick your lane", href: "/dashboard/resume/positioning" },
+    action: panelAction("positioning", "Pick your lane"),
   }
 }
 
@@ -304,7 +310,7 @@ function checkTargetingSponsorship(pivot: PivotSuggestion | null | undefined): R
     ],
     fix:
       "Shift a meaningful share of your applications toward the higher-density field before touching your bullets. You are not starting over — the overlap is why this target was selected rather than a random one.",
-    action: { label: "See the bridge", href: "/dashboard/resume/pivot" },
+    action: panelAction("pivot", "See the bridge"),
   }
 }
 
@@ -323,7 +329,7 @@ function checkConcurrentCurrentRoles(roles: WorkExperience[]): ResumeFinding | n
     evidence: current.map(roleLabel),
     fix:
       "Leave one role as current. Close-date the others, or move a venture or side project into a projects section where it reads as evidence you ship rather than as a competing employer. Make sure your summary says plainly that you are looking.",
-    action: { label: "Edit your roles", href: "/dashboard/resume/edit" },
+    action: { label: "Edit your roles", href: studioHrefForFinding("concurrent_current_roles", "work_experience") },
   }
 }
 
@@ -341,7 +347,7 @@ function checkBuriedSignal(brief: PositioningBrief | null | undefined): ResumeFi
     evidence: brief.surface.slice(0, 8),
     fix:
       "Pull these up. Put them in your skills section and work the two or three that matter most into your summary and a role title where they are honest. Nothing new gets claimed — this only relocates what you already earned.",
-    action: { label: "Fix positioning", href: "/dashboard/resume/positioning" },
+    action: panelAction("positioning", "Fix positioning"),
   }
 }
 
@@ -362,7 +368,7 @@ function checkNoLane(
       "Every match score, pivot suggestion, and tailoring pass is computed against the field we think you want. Guessing wrong quietly degrades all of them at once, and you would have no way to see that it happened.",
     evidence: signal.fields.slice(0, 3).map((f) => `${f.label}: ${f.score}%`),
     fix: "Confirm your target field so matching, tailoring, and pivot suggestions all aim at the same thing.",
-    action: { label: "Set your target field", href: "/dashboard/resume/positioning" },
+    action: panelAction("positioning", "Set your target field"),
   }
 }
 
@@ -415,7 +421,7 @@ function checkEmploymentGap(roles: WorkExperience[], asOf?: string): ResumeFindi
     evidence: [`${worst.after} → ${worst.before}: ${worst.months} months`],
     fix:
       "Fill it with what was actually happening. A degree, a contract, a wound-down venture, and caregiving all read fine when stated. Give it a dated entry like any other role so the eye never lands on empty space.",
-    action: { label: "Edit your timeline", href: "/dashboard/resume/edit" },
+    action: { label: "Edit your timeline", href: studioHrefForFinding("employment_gap", "work_experience") },
   }
 }
 
@@ -435,7 +441,7 @@ function checkLength(resume: ReviewResume, profile: ReviewProfile): ResumeFindin
     evidence: [`${count.toLocaleString()} words`, `roughly ${pages} pages`],
     fix:
       "Cut to two pages by deleting whole sections rather than trimming every line. A master resume this long is the right thing to keep and the wrong thing to send — the version you send should drop the material that does not serve the specific role.",
-    action: { label: "Trim in Studio", href: "/dashboard/resume/studio" },
+    action: { label: "Trim in Studio", href: studioHrefForFinding("too_long", "work_experience") },
   }
 }
 
@@ -458,7 +464,7 @@ function checkDenseBullets(roles: WorkExperience[]): ResumeFinding | null {
     evidence: longest.map((b) => `${words(b)} words: “${truncate(b)}”`),
     fix:
       "Get every bullet under 25 words, verb first, result in the first half of the line. Where a bullet carries two ideas, split it or drop the weaker one.",
-    action: { label: "Rewrite bullets", href: "/dashboard/resume/studio" },
+    action: { label: "Rewrite bullets", href: studioHrefForFinding("dense_bullets", "work_experience") },
   }
 }
 
@@ -480,7 +486,7 @@ function checkQuantification(roles: WorkExperience[]): ResumeFinding | null {
     evidence: [`${quantified.length}/${bullets.length} bullets quantified`],
     fix:
       "Add a figure to your strongest bullets. Throughput, latency, cost, revenue, users, tickets, team size, and time saved are all fair. Approximate is fine when it is honest — an approximation you can defend beats a vague claim you cannot.",
-    action: { label: "Quantify bullets", href: "/dashboard/resume/studio" },
+    action: { label: "Quantify bullets", href: studioHrefForFinding("unquantified", "work_experience") },
   }
 }
 
@@ -508,7 +514,7 @@ function checkSummary(resume: ReviewResume): ResumeFinding | null {
     evidence: missing ? ["No summary section"] : [truncate(summary, 180)],
     fix:
       "Three or four lines: what you are, the single most impressive concrete thing you have done, your credential, and what you are looking for. The last clause matters more than people expect — it tells the reader you are actually available.",
-    action: { label: "Write your summary", href: "/dashboard/resume/studio" },
+    action: { label: "Write your summary", href: studioHrefForFinding("weak_summary", "summary") },
   }
 }
 
@@ -526,7 +532,7 @@ function checkSkillGaps(brief: PositioningBrief | null | undefined): ResumeFindi
     evidence: brief.closeGaps.slice(0, 6),
     fix:
       "Check these against what you have genuinely touched but never wrote down; that subset is free. For the rest, treat it as a learning queue ranked by how many roles each one unlocks.",
-    action: { label: "See skill gaps", href: "/dashboard/resume/skills" },
+    action: panelAction("skills", "See skill gaps"),
   }
 }
 
@@ -548,7 +554,7 @@ function checkContact(resume: ReviewResume): ResumeFinding | null {
     evidence: missing.map((m) => `No ${m} detected`),
     fix:
       "Put all contact details as plain text in the body at the top of page one. Never inside a header, footer, table, or text box — those are the three layout choices that most reliably break parsing.",
-    action: { label: "Fix contact details", href: "/dashboard/resume/edit" },
+    action: { label: "Fix contact details", href: studioHrefForFinding("contact_incomplete") },
   }
 }
 
@@ -572,7 +578,7 @@ function checkAcademicFormatForIndustry(
     evidence: kind.signals.length ? kind.signals : ["Academic CV conventions detected"],
     fix:
       "Keep this CV for academic, research, and national-lab applications, where it is exactly right. For industry roles, cut a separate two-page resume from it: lead with engineering and impact, compress publications to a single line with a count, and drop teaching and service entirely.",
-    action: { label: "Build an industry version", href: "/dashboard/resume/studio" },
+    action: { label: "Build an industry version", href: studioHrefForFinding("academic_cv_for_industry") },
   }
 }
 
