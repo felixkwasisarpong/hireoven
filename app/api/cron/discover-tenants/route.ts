@@ -118,7 +118,7 @@ async function enroll(pool: Pool, args: { ats: AtsName; slug: string; name: stri
          (name, domain, careers_url, ats_type, ats_identifier,
           is_active, status, freshness_tier, discovered_via, next_harvest_at)
        VALUES ($1,$2,$3,$4,$5,true,'active','tier_2',$6,now())
-       ON CONFLICT (domain) DO NOTHING
+       ON CONFLICT (ats_type, ats_identifier) DO NOTHING
        RETURNING id`,
       [args.name, domain, careersUrl, args.ats, args.slug, `cron:discover-tenants:${args.ats}`]
     )

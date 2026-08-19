@@ -2,6 +2,7 @@ import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
+import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { crawlCareersPage, type RawJob } from "@/lib/crawler"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
 import { cleanJobDescription, normalizeJobApplyUrl } from "@/lib/jobs/description"
@@ -299,6 +300,27 @@ async function upsertCompanySource(args: {
     direct_ats_url: args.directAtsUrl,
     classification: args.classification,
     checked_at: new Date().toISOString(),
+  }
+
+  // A board another subsystem already claimed belongs to that company. Without
+  // this the scout mints its own `<identifier>.<ats>-scout` domain, which can
+  // never collide with the `-discovered` or `-tenant` domains minted for the very
+  // same board, so pasting a careers URL created a fresh duplicate of an employer
+  // already tracked. That is how Metropolis reached five records.
+  const claimedId = await findCompanyIdByAtsPair(args.atsType, args.atsIdentifier, pool)
+  if (claimedId) {
+    const { rows } = await pool.query<{ id: string; name: string }>(
+      `UPDATE companies
+          SET careers_url = COALESCE(NULLIF(careers_url, ''), $2),
+              direct_ats_url = COALESCE(direct_ats_url, $3),
+              raw_ats_config = COALESCE(raw_ats_config, '{}'::jsonb)
+                || jsonb_build_object('career_site_scout', $4::jsonb),
+              updated_at = now()
+        WHERE id = $1
+        RETURNING id, name`,
+      [claimedId, args.careersUrl, args.directAtsUrl, JSON.stringify(intake)],
+    )
+    return rows[0] ?? null
   }
 
   try {

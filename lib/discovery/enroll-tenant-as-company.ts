@@ -18,6 +18,7 @@
 
 import type { Pool } from "pg"
 import type { AtsName } from "@/lib/harvester/adapters"
+import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { canonicalCareersUrl } from "@/lib/harvester/canonical-url"
 import { resolveRealDomainFromCareers } from "@/lib/companies/company-domain-extractor"
 import { counter } from "@/lib/observability/metrics"
@@ -116,18 +117,16 @@ export async function enrollTenantAsCompany(
   counter("tenant.discovered", { atsType, sourceType })
 
   // 2. Existing company by the real ATS identity?
-  const existing = await pool.query<{ id: string }>(
-    `SELECT id FROM companies
-      WHERE ats_type = $1 AND ats_identifier = $2
-        AND duplicate_of_company_id IS NULL
-      ORDER BY created_at ASC
-      LIMIT 1`,
-    [atsType, atsIdentifier],
-  )
+  //
+  // This used to require `duplicate_of_company_id IS NULL`, which made a board
+  // whose records were all flagged as duplicates look unclaimed — so this path
+  // inserted yet another copy, and the group grew by one every time a subsystem
+  // looked. findCompanyIdByAtsPair resolves through the flag to the survivor.
+  const existingCompanyId = await findCompanyIdByAtsPair(atsType, atsIdentifier, pool)
 
   // 3. Link the tenant to the existing company; no duplicate company created.
-  if (existing.rows[0]) {
-    const companyId = existing.rows[0].id
+  if (existingCompanyId) {
+    const companyId = existingCompanyId
     await pool.query(
       `UPDATE ats_tenants SET status = 'enrolled', company_id = $1, updated_at = now() WHERE id = $2`,
       [companyId, tenantId],
