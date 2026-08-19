@@ -139,8 +139,17 @@ services:
       STRIPE_PRICE_PRO_MAX_YEARLY: ${STRIPE_PRICE_PRO_MAX_YEARLY}
       STRIPE_PRICE_PRO_INTERNATIONAL_MONTHLY: ${STRIPE_PRICE_PRO_INTERNATIONAL_MONTHLY}
       STRIPE_STUDENT_PROMOTION_CODE_ID: ${STRIPE_STUDENT_PROMOTION_CODE_ID}
+    # Bound to loopback, not 0.0.0.0. Traefik does not use this mapping — it
+    # discovers the container through the Docker provider (traefik.enable=true
+    # plus the Host(`hireoven.com`) router labels Coolify attaches) and connects
+    # over the shared network, so publishing on all interfaces bought nothing and
+    # served the app to the public internet over plain HTTP, TLS and proxy
+    # bypassed. Verified before this change:
+    #   curl http://5.161.53.248:3000/api/health  ->  200
+    # Keep it on 127.0.0.1 for local debugging via an SSH tunnel:
+    #   ssh -L 3000:127.0.0.1:3000 root@<web-box>
     ports:
-      - "${APP_PORT:-3000}:3000"
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
 
   # There is intentionally no `harvester` or `app-worker` service here. Use
   # docker-compose.harvester.yml on the worker box for ATS harvesting, Workable/
