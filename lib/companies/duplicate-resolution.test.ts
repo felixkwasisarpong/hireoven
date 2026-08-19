@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert"
 import { test } from "node:test"
 import {
+  isPlaceholderName,
   isSyntheticDomain,
   registrableDomain,
   resolveDuplicates,
@@ -188,4 +189,44 @@ test("a vendor host is never promoted onto a survivor", () => {
     candidate({ id: "vendor", domain: "acme.bamboohr.com", jobCount: 1 }),
   ])
   assert.equal(merged(result).promoteDomain, null)
+})
+
+test("isPlaceholderName rejects board coordinates, title fragments and taglines", () => {
+  // All three shapes were live employer names created by the Career Site Scout.
+  assert.equal(isPlaceholderName("Conocophillips:Wd1:External"), true)
+  assert.equal(isPlaceholderName("bakerhughes/BakerHughes"), true)
+  assert.equal(isPlaceholderName("Global Payments  |"), true)
+  assert.equal(isPlaceholderName("Make your next move matter"), true)
+  assert.equal(isPlaceholderName(""), true)
+  assert.equal(isPlaceholderName(null), true)
+})
+
+test("isPlaceholderName keeps real company names", () => {
+  for (const name of ["ConocoPhillips", "Baker Hughes", "Global Payments", "Deel", "U.S. Bank", "Metropolis Technologies"]) {
+    assert.equal(isPlaceholderName(name), false, name)
+  }
+})
+
+test("resolveDuplicates promotes a real name onto a coordinate-named survivor", () => {
+  // The ConocoPhillips shape: the shadow wins on job count but is named after
+  // the board, so the real name must follow the merge onto it.
+  const plan = resolveDuplicates([
+    { id: "shadow", name: "Conocophillips:Wd1:External", domain: "conocophillips:wd1:External.workday-scout", isActive: true, jobCount: 77, createdAt: "2026-08-19" },
+    { id: "real", name: "ConocoPhillips", domain: "conocophillips.com", isActive: true, jobCount: 41, createdAt: "2026-04-25" },
+  ])
+  assert.equal(plan?.status, "merge")
+  if (plan?.status !== "merge") return
+  assert.equal(plan.survivor.id, "shadow")
+  assert.equal(plan.promoteName, "ConocoPhillips")
+  assert.equal(plan.promoteDomain, "conocophillips.com")
+})
+
+test("resolveDuplicates leaves a good survivor name alone", () => {
+  const plan = resolveDuplicates([
+    { id: "real", name: "ConocoPhillips", domain: "conocophillips.com", isActive: true, jobCount: 90, createdAt: "2026-04-25" },
+    { id: "shadow", name: "Conocophillips:Wd1:External", domain: "x.workday-scout", isActive: true, jobCount: 10, createdAt: "2026-08-19" },
+  ])
+  assert.equal(plan?.status, "merge")
+  if (plan?.status !== "merge") return
+  assert.equal(plan.promoteName, null)
 })
