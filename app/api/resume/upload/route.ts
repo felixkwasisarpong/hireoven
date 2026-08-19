@@ -26,6 +26,7 @@ async function ensureResumeUploadColumns(pool: ReturnType<typeof getPostgresPool
        ADD COLUMN IF NOT EXISTS parse_error TEXT,
        ADD COLUMN IF NOT EXISTS github_url TEXT,
        ADD COLUMN IF NOT EXISTS certifications JSONB,
+       ADD COLUMN IF NOT EXISTS additional_sections JSONB,
        ADD COLUMN IF NOT EXISTS ats_score INTEGER`
   )
 }
@@ -86,9 +87,10 @@ async function processResumeInBackground({
          resume_score = $19,
          ats_score = $20,
          raw_text = $21,
+         additional_sections = $22::jsonb,
          updated_at = now()
-       WHERE id = $22
-         AND user_id = $23`,
+       WHERE id = $23
+         AND user_id = $24`,
       [
         refreshedUrl,
         "complete",
@@ -111,6 +113,7 @@ async function processResumeInBackground({
         parsed.resume_score,
         atsScore,
         parsed.raw_text,
+        JSON.stringify(parsed.additional_sections ?? []),
         resumeId,
         userId,
       ]

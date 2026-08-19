@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
+  Stethoscope,
   Library,
   Sparkles,
   Radar,
@@ -27,6 +28,11 @@ const TABS: Tab[] = [
     href: "/dashboard/resume",
     icon: LayoutDashboard,
     exact: true,
+  },
+  {
+    label: "Review",
+    href: "/dashboard/resume/review",
+    icon: Stethoscope,
   },
   {
     label: "Library",

@@ -12,6 +12,7 @@ export type ApexFeature =
   | "resume_ai_write"
   | "resume_tailor_analyze"
   | "resume_bridge_reasoning"
+  | "resume_review"
   | "cover_letter"
   | "cover_letter_extension"
   | "interview_prep"
