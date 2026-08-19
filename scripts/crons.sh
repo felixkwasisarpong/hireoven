@@ -76,6 +76,7 @@ run_many() {
 # timing-refresh     0 */6 * * *       run api/cron/timing-refresh
 # cohort-refresh     10 */6 * * *      run cohort detect -> match -> aggregate
 # layoffs-fyi        0 1 * * *         run api/cron/layoffs-fyi
+# process-referrals  0 7 * * *         run api/cron/process-referrals   # grants referrer rewards
 # health-scores      0 2 * * *         run api/cron/health-scores
 # rejection-patterns 0 3 * * *         run api/cron/rejection-patterns
 # burnout-classify   0 4 * * *         run api/cron/burnout-classify
@@ -133,6 +134,7 @@ case "${1:-}" in
       api/cron/cohort-aggregate
     ;;
   layoffs-fyi)       run api/cron/layoffs-fyi ;;
+  process-referrals) run api/cron/process-referrals ;;
   health-scores)     run api/cron/health-scores ;;
   rejection-patterns) run api/cron/rejection-patterns ;;
   burnout-classify)  run api/cron/burnout-classify ;;
@@ -198,6 +200,7 @@ case "${1:-}" in
     run api/cron/timing-refresh
     run_many "cohort-refresh" api/cron/cohort-detect api/cron/cohort-match api/cron/cohort-aggregate
     run api/cron/layoffs-fyi
+    run api/cron/process-referrals
     run api/cron/health-scores
     run api/cron/rejection-patterns
     run api/cron/burnout-classify
@@ -227,7 +230,7 @@ case "${1:-}" in
     echo ""
     echo "Available:"
     echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
-    echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  health-scores"
+    echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  process-referrals  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  company-time-to-fill  mine-transitions  nightly-maintenance"
     echo "  fresh-job-ingest  dice-ingest  adzuna-ingest  jsearch-ingest  waas-ingest"

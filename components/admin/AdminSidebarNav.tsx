@@ -20,12 +20,14 @@ import {
   Quote,
   Tag,
   TrendingUp,
+  Gift,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const LINKS = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/growth", label: "Growth", icon: TrendingUp },
+  { href: "/admin/referrals", label: "Referrals", icon: Gift },
   { href: "/admin/waitlist", label: "Waitlist", icon: ClipboardList },
   { href: "/admin/companies", label: "Companies", icon: Building2 },
   { href: "/admin/jobs", label: "Jobs", icon: Briefcase },
