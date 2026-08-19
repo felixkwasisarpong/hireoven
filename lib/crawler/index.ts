@@ -467,22 +467,37 @@ function isLocaleSegment(part: string) {
   return /^[a-z]{2}(?:-[a-z]{2})?$/i.test(part)
 }
 
-function parseWorkdayContext(url: URL): {
-  tenantHost: string
-  tenant: string
-  sites: string[]
-} | null {
+function parseWorkdayContext(url: URL): WorkdayContext | null {
   const host = url.hostname.toLowerCase()
-  if (!host.includes("myworkdayjobs.com")) return null
-
-  const tenant = host.split(".")[0]
-  if (!tenant) return null
+  const isSiteHost = /^wd\d{1,3}\.myworkdaysite\.com$/i.test(host)
+  if (!host.includes("myworkdayjobs.com") && !isSiteHost) return null
 
   const parts = url.pathname
     .split("/")
     .filter(Boolean)
     .map((p) => decodeURIComponent(p).trim())
     .filter(Boolean)
+
+  // wd5.myworkdaysite.com/recruiting/<tenant>/<site> — Workday's other careers
+  // host puts the tenant in the path, so the subdomain is just the datacentre.
+  // Taking host.split(".")[0] here would use "wd5" as the tenant and every CXS
+  // call would 404, which is why these URLs returned zero jobs.
+  if (isSiteHost) {
+    const start = parts.length > 0 && isLocaleSegment(parts[0]) ? 1 : 0
+    if (parts[start]?.toLowerCase() !== "recruiting") return null
+    const pathTenant = parts[start + 1]
+    const pathSite = parts[start + 2]
+    if (!pathTenant || !pathSite) return null
+    return {
+      tenantHost: host,
+      tenant: pathTenant,
+      sites: [pathSite],
+      basePath: `/recruiting/${encodeURIComponent(pathTenant)}/`,
+    }
+  }
+
+  const tenant = host.split(".")[0]
+  if (!tenant) return null
 
   const siteCandidates = new Set<string>()
   for (let i = 0; i < Math.min(parts.length, 8); i++) {
@@ -512,6 +527,7 @@ function parseWorkdayContext(url: URL): {
     tenantHost: host,
     tenant,
     sites,
+    basePath: "/",
   }
 }
 
@@ -519,6 +535,13 @@ type WorkdayContext = {
   tenantHost: string
   tenant: string
   sites: string[]
+  /**
+   * Path the site name is relative to when building apply URLs. "/" on
+   * myworkdayjobs.com; "/recruiting/<tenant>/" on myworkdaysite.com, where the
+   * board lives under that prefix. Without it apply links on that host drop the
+   * prefix and 404.
+   */
+  basePath: string
 }
 
 type WorkdayPosting = {
@@ -765,7 +788,7 @@ function mapWorkdayPostings(
       url: normalizeJobApplyUrl(
         new URL(
           `${site}${posting.externalPath}`.replace(/([^:]\/)\/+/g, "$1"),
-          `https://${context.tenantHost}/`
+          `https://${context.tenantHost}${context.basePath}`
         ).toString()
       ),
       description:
@@ -887,6 +910,9 @@ async function crawlWorkdayByHeuristic(
             tenantHost,
             tenant,
             sites: [],
+            // This fallback only ever probes myworkdayjobs.com hosts, which serve
+            // the board at the root.
+            basePath: "/",
           }
 
           for (const site of siteCandidates) {

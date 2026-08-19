@@ -69,7 +69,15 @@ export function detectAtsFromUrl(rawUrl: string): AtsDetection | null {
     return { atsType: "ashby", atsIdentifier: identifier, confidence: "high" }
   }
 
-  if (host.includes("myworkdayjobs.com") || host.endsWith(".workdayjobs.com")) {
+  // myworkdaysite.com is Workday's other careers host — same boards, tenant in
+  // the path (wd5.myworkdaysite.com/recruiting/<tenant>/<site>) instead of the
+  // subdomain. Without it these URLs looked like an unknown vendor and the
+  // Career Site Scout could not classify them at all.
+  if (
+    host.includes("myworkdayjobs.com") ||
+    host.endsWith(".workdayjobs.com") ||
+    host.endsWith(".myworkdaysite.com")
+  ) {
     return { atsType: "workday", atsIdentifier: null, confidence: "high" }
   }
 

@@ -110,19 +110,65 @@ function companyNameGuess(args: {
     .replace(/\b(careers?|jobs?|open roles?|opportunities)\b/gi, "")
     .replace(/[|:;-]+$/g, "")
     .trim()
-  if (fromTitle && fromTitle.length >= 2 && fromTitle.length <= 90) return fromTitle
-  const fromAts = titleCase(args.atsIdentifier)
-  if (fromAts) return fromAts
+  if (looksLikeCompanyName(fromTitle)) return fromTitle!
+  // The ATS identifier is a board coordinate, not a name. Feeding a Workday slug
+  // through titleCase produced live employers called "Conocophillips:Wd1:External"
+  // — only the bare tenant form is name-shaped enough to show a user.
+  const fromAts = looksLikeBoardCoordinate(args.atsIdentifier) ? null : titleCase(args.atsIdentifier)
   const parsed = safeUrl(args.submittedUrl)
-  return titleCase(hostBase(parsed?.hostname ?? "Company")) ?? "Company"
+  const fromHost = titleCase(hostBase(parsed?.hostname ?? ""))
+  return fromHost ?? fromAts ?? "Company"
 }
 
-function domainForSource(url: string, detection: AtsDetection | null, atsIdentifier: string | null): string {
-  const parsed = safeUrl(url)
-  const host = parsed?.hostname.toLowerCase().replace(/^www\./, "") ?? "unknown.local"
-  const isKnownAts = Boolean(detection)
-  if (isKnownAts && atsIdentifier) return `${atsIdentifier}.${detection!.atsType}-scout`
-  return host
+/** Board coordinates (`tenant:wd1:Site`, `tenant/Site`) must never become names. */
+function looksLikeBoardCoordinate(value: string | null | undefined): boolean {
+  if (!value) return false
+  return value.includes(":") || value.includes("/")
+}
+
+/**
+ * A page <title> is only a name if it reads like one. Career sites put taglines
+ * there ("Make your next move matter" became a company), and leftover separators
+ * survive the cleanup ("Global Payments  |").
+ */
+function looksLikeCompanyName(value: string | null | undefined): boolean {
+  if (!value) return false
+  const trimmed = value.replace(/[\s|·—–-]+$/g, "").trim()
+  if (trimmed.length < 2 || trimmed.length > 60) return false
+  // Taglines are sentences; names are not.
+  if (trimmed.split(/\s+/).length > 5) return false
+  if (/\b(your|our|we|us|you|make|join|find|build|next move|welcome|search)\b/i.test(trimmed)) return false
+  return true
+}
+
+/**
+ * Vendor hosts that identify the ATS, not the employer — a domain taken from one
+ * of these would attach every customer of that vendor to the same record.
+ */
+const ATS_VENDOR_HOST_RE =
+  /(^|\.)(myworkdayjobs\.com|workdayjobs\.com|greenhouse\.io|lever\.co|ashbyhq\.com|icims\.com|taleo\.net|successfactors\.(com|eu)|oraclecloud\.com|phenompeople\.com|eightfold\.ai|avature\.net|adp\.com|ultipro\.com|ukg\.net|smartrecruiters\.com|jobvite\.com|workable\.com|recruitee\.com|bamboohr\.com|rippling\.com|paylocity\.com|dayforcehcm\.com)$/i
+
+function domainForSource(
+  submittedUrl: string,
+  detection: AtsDetection | null,
+  atsIdentifier: string | null
+): string {
+  const parsed = safeUrl(submittedUrl)
+  const host = parsed?.hostname.toLowerCase().replace(/^www\./, "") ?? ""
+
+  // A branded careers host IS the employer's domain (careers.frostbank.com →
+  // frostbank.com), and a real domain is what makes logo lookup work at all.
+  if (host && !ATS_VENDOR_HOST_RE.test(host)) {
+    return host.replace(/^(careers?|jobs?|talent|apply|recruiting|hire|hiring)\./, "")
+  }
+
+  // Submitted URL was the vendor's own host, so it tells us nothing about the
+  // employer. Fall back to a synthetic key — but built from the board coordinate
+  // so it stays stable, and it is only a placeholder: these rows get no logo
+  // until a real domain is resolved. Keeping the old `<identifier>.<ats>-scout`
+  // shape means existing rows still match on the domain unique key.
+  if (detection && atsIdentifier) return `${atsIdentifier}.${detection.atsType}-scout`
+  return host || "unknown.local"
 }
 
 async function fetchHtml(url: string): Promise<{ html: string | null; status: number | null; error: string | null }> {

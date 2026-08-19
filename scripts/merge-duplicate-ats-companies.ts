@@ -24,6 +24,7 @@
 import { loadEnvConfig } from "@next/env"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { resolveDuplicates, type DuplicateCandidate } from "@/lib/companies/duplicate-resolution"
+import { atsIdentifierKey, atsIdentifierKeySqlAnyType } from "@/lib/companies/ats-identifier-key"
 
 loadEnvConfig(process.cwd())
 
@@ -37,6 +38,17 @@ const execute = process.argv.includes("--execute")
 const limit = Number(flag("limit") ?? "25")
 const onlyIdentifier = flag("ats-identifier")
 const promoteDomains = process.argv.includes("--promote-domains")
+/**
+ * Explicit company ids to treat as one group, for employers whose duplicate rows
+ * cannot be grouped automatically — either they carry no ats pair at all, or the
+ * pair is already held by the record they duplicate (uq_companies_ats_pair_active
+ * makes it unique, so the copy cannot simply be stamped with it). Survivor choice
+ * and every merge step stay exactly the same as an auto-detected group.
+ */
+const explicitIds = (flag("ids") ?? "")
+  .split(",")
+  .map((v) => v.trim())
+  .filter(Boolean)
 
 if (!Number.isFinite(limit) || limit <= 0) throw new Error("--limit must be a positive number")
 
@@ -52,7 +64,10 @@ const REPOINT_TABLES = [
 type GroupRow = {
   ats_type: string
   ats_identifier: string
+  /** Canonical board key the group was formed on — see ats-identifier-key.ts. */
+  ats_key: string
   id: string
+  name: string | null
   domain: string | null
   is_active: boolean
   job_count: number
@@ -74,33 +89,42 @@ type Totals = {
 async function loadGroups(): Promise<Map<string, GroupRow[]>> {
   const pool = getPostgresPool()
   const params: unknown[] = [limit]
-  const identifierClause = onlyIdentifier ? "AND g.ats_identifier = $2" : ""
+  const identifierClause = onlyIdentifier ? "AND g.ats_key = $2" : ""
   if (onlyIdentifier) params.push(onlyIdentifier)
 
   // Job counts come from jobs itself; companies.job_count is a cached column and
   // is exactly the kind of thing that drifts on records nobody crawls any more.
+  // Grouped on the canonical board key, not the raw identifier. One Workday board
+  // reaches us as `conocophillips/External`, `conocophillips:wd1:External` and
+  // `conocophillips:wd1:external`; grouping on the raw string treats those as
+  // three separate employers, which is exactly how the shadow records survived
+  // the previous pass.
+  const keyExpr = atsIdentifierKeySqlAnyType("ats_type", "ats_identifier")
   const { rows } = await pool.query<GroupRow>(
     `WITH g AS (
-       SELECT ats_type, ats_identifier
+       SELECT ats_type, ${keyExpr} AS ats_key
          FROM companies
         WHERE ats_type IS NOT NULL AND ats_identifier IS NOT NULL
         GROUP BY 1, 2
        HAVING count(*) > 1
      ),
      picked AS (
-       SELECT * FROM g WHERE true ${identifierClause} ORDER BY ats_type, ats_identifier LIMIT $1
+       SELECT * FROM g WHERE true ${identifierClause} ORDER BY ats_type, ats_key LIMIT $1
      )
-     SELECT c.ats_type, c.ats_identifier, c.id, c.domain, c.is_active,
+     SELECT c.ats_type, c.ats_identifier, c.id, c.name, c.domain, c.is_active,
+            p.ats_key,
             c.created_at::text AS created_at,
             (SELECT count(*)::int FROM jobs j WHERE j.company_id = c.id AND j.is_active) AS job_count
        FROM companies c
-       JOIN picked p ON p.ats_type = c.ats_type AND p.ats_identifier = c.ats_identifier`,
+       JOIN picked p
+         ON p.ats_type = c.ats_type
+        AND p.ats_key = ${atsIdentifierKeySqlAnyType("c.ats_type", "c.ats_identifier")}`,
     params,
   )
 
   const groups = new Map<string, GroupRow[]>()
   for (const row of rows) {
-    const key = `${row.ats_type}:${row.ats_identifier}`
+    const key = `${row.ats_type}:${row.ats_key}`
     const list = groups.get(key) ?? []
     list.push(row)
     groups.set(key, list)
@@ -115,6 +139,7 @@ async function mergeGroup(key: string, rows: GroupRow[], totals: Totals): Promis
     isActive: r.is_active,
     jobCount: r.job_count,
     createdAt: r.created_at,
+    name: r.name,
   }))
 
   const plan = resolveDuplicates(candidates)
@@ -133,6 +158,9 @@ async function mergeGroup(key: string, rows: GroupRow[], totals: Totals): Promis
   // and a wrong-but-real domain drives wrong logos and enrichment, where a
   // synthetic one merely drives none.
   const promoteDomain = promoteDomains ? plan.promoteDomain : null
+  // A board coordinate left as the employer name is user-visible damage, not a
+  // cosmetic nicety, so unlike the domain this is not gated behind a flag.
+  const promoteName = plan.promoteName
   const loserIds = losers.map((l) => l.id)
 
   console.log(`\n${key}  (${rows.length} records)`)
@@ -140,6 +168,7 @@ async function mergeGroup(key: string, rows: GroupRow[], totals: Totals): Promis
   for (const l of losers) {
     console.log(`  merge    ${l.id.slice(0, 8)}  ${l.domain ?? "-"}  ${l.jobCount} jobs`)
   }
+  if (promoteName) console.log(`  promote name   -> ${promoteName}`)
   if (promoteDomain) console.log(`  promote domain -> ${promoteDomain}`)
   else if (plan.promoteDomain) console.log(`  real domain available (--promote-domains to apply): ${plan.promoteDomain}`)
   const anyActive = rows.some((r) => r.is_active)
@@ -239,6 +268,13 @@ async function mergeGroup(key: string, rows: GroupRow[], totals: Totals): Promis
       )
     }
 
+    if (promoteName) {
+      await client.query(
+        `UPDATE companies SET name = $2, updated_at = now() WHERE id = $1`,
+        [survivor.id, promoteName],
+      )
+    }
+
     // Carry over facts the survivor lacks rather than losing them with the row.
     //
     // Crawl state matters as much as the data here. The fullest record is often an
@@ -330,8 +366,24 @@ async function mergeGroup(key: string, rows: GroupRow[], totals: Totals): Promis
   }
 }
 
+async function loadExplicitGroup(): Promise<Map<string, GroupRow[]>> {
+  const { rows } = await getPostgresPool().query<GroupRow>(
+    `SELECT c.ats_type, c.ats_identifier, c.id, c.name, c.domain, c.is_active,
+            'explicit' AS ats_key,
+            c.created_at::text AS created_at,
+            (SELECT count(*)::int FROM jobs j WHERE j.company_id = c.id AND j.is_active) AS job_count
+       FROM companies c
+      WHERE c.id = ANY($1::uuid[])`,
+    [explicitIds],
+  )
+  if (rows.length !== explicitIds.length) {
+    throw new Error(`--ids: expected ${explicitIds.length} companies, found ${rows.length}`)
+  }
+  return new Map([["explicit:" + explicitIds.map((id) => id.slice(0, 8)).join("+"), rows]])
+}
+
 async function main(): Promise<void> {
-  const groups = await loadGroups()
+  const groups = explicitIds.length > 0 ? await loadExplicitGroup() : await loadGroups()
   console.log(`${execute ? "EXECUTING" : "DRY RUN"} — ${groups.size} duplicate group(s)`)
 
   const totals: Totals = {

@@ -147,6 +147,21 @@ type ParsedSlug = {
 // tolerates it — verified directly against the live cxs API and subdomain).
 const WD_HOST_RE = /^([a-z0-9_-]+)\.(wd\d{1,3})\.myworkdayjobs\.com$/i
 
+/**
+ * Workday's other careers host. Same boards, different shape: the tenant moves
+ * out of the subdomain and into the path.
+ *
+ *   sysco.wd5.myworkdayjobs.com/syscocareers
+ *   wd5.myworkdaysite.com/recruiting/sysco/syscocareers
+ *
+ * Both answer the same CXS endpoint with the same payload — verified live: each
+ * returns total=2000 with an identical first posting for Sysco. So this form is
+ * normalised onto the existing `tenant:wd:site` slug rather than given its own,
+ * which also means pasting either URL resolves to one company record instead of
+ * two.
+ */
+const WD_SITE_HOST_RE = /^(wd\d{1,3})\.myworkdaysite\.com$/i
+
 function isLocaleSegment(segment: string): boolean {
   return /^[a-z]{2}(-[a-z]{2,3})?$/i.test(segment)
 }
@@ -170,24 +185,41 @@ function detectFromUrl(url: string): { slug: string } | null {
     return null
   }
 
-  const m = parsed.hostname.toLowerCase().match(WD_HOST_RE)
-  if (!m) return null
-  const tenant = m[1]
-  const wd = m[2]
-
+  const host = parsed.hostname.toLowerCase()
   const parts = parsed.pathname
     .split("/")
     .filter(Boolean)
     .map((p) => decodeURIComponent(p).trim())
     .filter(Boolean)
 
-  // Strip leading locale segment (e.g. `en-US`) — the site name follows.
-  const startIdx = parts.length > 0 && isLocaleSegment(parts[0]) ? 1 : 0
-  const site = parts[startIdx]
-  if (!site) return null
-  if (!/^[A-Za-z0-9_-]+$/.test(site)) return null
+  const m = host.match(WD_HOST_RE)
+  if (m) {
+    const tenant = m[1]
+    const wd = m[2]
+    // Strip leading locale segment (e.g. `en-US`) — the site name follows.
+    const startIdx = parts.length > 0 && isLocaleSegment(parts[0]) ? 1 : 0
+    const site = parts[startIdx]
+    if (!site) return null
+    if (!/^[A-Za-z0-9_-]+$/.test(site)) return null
+    return { slug: `${tenant}:${wd}:${site}` }
+  }
 
-  return { slug: `${tenant}:${wd}:${site}` }
+  // wd5.myworkdaysite.com/recruiting/<tenant>/<site>, optionally locale-prefixed
+  // (/en-US/recruiting/...). The tenant lives in the path here, not the host.
+  const site = host.match(WD_SITE_HOST_RE)
+  if (site) {
+    const wd = site[1]
+    const start = parts.length > 0 && isLocaleSegment(parts[0]) ? 1 : 0
+    if (parts[start]?.toLowerCase() !== "recruiting") return null
+    const tenant = parts[start + 1]
+    const boardSite = parts[start + 2]
+    if (!tenant || !boardSite) return null
+    if (!/^[a-z0-9_-]+$/i.test(tenant)) return null
+    if (!/^[A-Za-z0-9_-]+$/.test(boardSite)) return null
+    return { slug: `${tenant}:${wd}:${boardSite}` }
+  }
+
+  return null
 }
 
 function listingUrl(parsed: ParsedSlug): string {

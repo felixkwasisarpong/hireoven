@@ -34,6 +34,30 @@ export type DuplicateCandidate = {
   isActive: boolean
   jobCount: number
   createdAt: string
+  /** Display name, when known. Used only to promote a real one onto the survivor. */
+  name?: string | null
+}
+
+/**
+ * A "name" that is really a board coordinate or a scraped page fragment.
+ *
+ * The Career Site Scout derived company names from the ATS identifier and the
+ * page <title>, which put live employers called `Conocophillips:Wd1:External`,
+ * `Global Payments  |` and `Make your next move matter` in the feed. When such a
+ * row wins a merge on job count, the group's real name should move onto it — the
+ * same way a real domain does.
+ */
+export function isPlaceholderName(name: string | null | undefined): boolean {
+  const value = name?.trim()
+  if (!value) return true
+  // Board coordinates: tenant:wd1:Site, tenant/Site.
+  if (/[:/]/.test(value)) return true
+  // Leftover title separators, e.g. "Global Payments  |".
+  if (/[|·—–-]\s*$/.test(value)) return true
+  // Taglines rather than names.
+  if (value.split(/\s+/).length > 5) return true
+  if (/\b(your|our|we|us|you|make|join|find|build|welcome|search)\b/i.test(value)) return true
+  return false
 }
 
 export type DuplicateResolution =
@@ -43,6 +67,8 @@ export type DuplicateResolution =
       losers: DuplicateCandidate[]
       /** Real domain that could be promoted onto the survivor, or null. */
       promoteDomain: string | null
+      /** Real name that could be promoted onto the survivor, or null. */
+      promoteName: string | null
       reason: string
     }
   | { status: "ambiguous"; reason: string; realDomains: string[] }
@@ -143,11 +169,18 @@ export function resolveDuplicates(candidates: DuplicateCandidate[]): DuplicateRe
     ? (losers.find((c) => registrableDomain(c.domain) !== null)?.domain ?? null)
     : null
 
+  // Same reasoning as the domain: a name is a field the survivor can inherit, so
+  // it must not decide identity — but a merge should never leave a board
+  // coordinate as the employer name shown in the feed.
+  const promoteName = isPlaceholderName(survivor.name)
+    ? (losers.find((c) => !isPlaceholderName(c.name))?.name?.trim() ?? null)
+    : null
+
   const reason = [
     `${survivor.jobCount} jobs`,
     registrableDomain(survivor.domain) ? "real domain" : "no identifying domain",
     survivor.isActive ? "active" : "inactive",
   ].join(", ")
 
-  return { status: "merge", survivor, losers, promoteDomain, reason }
+  return { status: "merge", survivor, losers, promoteDomain, promoteName, reason }
 }
