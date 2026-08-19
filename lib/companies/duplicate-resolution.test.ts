@@ -162,3 +162,30 @@ test("one real domain among synthetics still merges", () => {
   assert.equal(merged(result).survivor.id, "real")
   assert.equal(merged(result).losers.length, 2)
 })
+
+test("an ATS vendor host does not identify the employer", () => {
+  for (const d of ["myworkdayjobs.com", "bamboohr.com", "icims.com", "oraclecloud.com", "jobs.lever.co"]) {
+    assert.equal(registrableDomain(d), null, `${d} should not identify an employer`)
+  }
+})
+
+test("a vendor host does not make a group look ambiguous", () => {
+  // workday/ZOLLMedicalCorp was held apart on myworkdayjobs.com vs zoll.com.
+  // The vendor host is shared by every member of the group by definition, so it
+  // says nothing about who the employer is — this is one company.
+  const result = resolveDuplicates([
+    candidate({ id: "vendor", domain: "zoll.wd5.myworkdayjobs.com", jobCount: 3 }),
+    candidate({ id: "real", domain: "zoll.com", jobCount: 40 }),
+  ])
+
+  assert.equal(merged(result).survivor.id, "real")
+  assert.equal(merged(result).losers.length, 1)
+})
+
+test("a vendor host is never promoted onto a survivor", () => {
+  const result = resolveDuplicates([
+    candidate({ id: "keep", domain: "acme.bamboohr-tenant", jobCount: 9 }),
+    candidate({ id: "vendor", domain: "acme.bamboohr.com", jobCount: 1 }),
+  ])
+  assert.equal(merged(result).promoteDomain, null)
+})

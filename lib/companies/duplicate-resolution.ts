@@ -48,17 +48,45 @@ export type DuplicateResolution =
   | { status: "ambiguous"; reason: string; realDomains: string[] }
 
 /**
- * Approximate registrable domain — the last two labels.
+ * Domains belonging to the ATS vendor rather than the employer.
  *
- * Wrong for multi-part suffixes like `.co.uk`, which it treats as registrable.
- * That error is in the safe direction here: it can only make two domains look
- * *different*, which holds a group back for review rather than merging it.
+ * A record whose domain is `bamboohr.com` or `myworkdayjobs.com` is not telling
+ * us who the employer is — it is telling us who hosts their board, which every
+ * member of the group shares by definition. Treating those as identity held
+ * `workday/ZOLLMedicalCorp` apart on `myworkdayjobs.com` vs `zoll.com`, which is
+ * one company. Grounded in what actually appears inside the held groups:
+ * bamboohr.com (505 records), icims.com (75), myworkdayjobs.com (30),
+ * oraclecloud.com (4), plus the other vendors we crawl.
+ */
+const ATS_VENDOR_DOMAINS = new Set([
+  "bamboohr.com", "icims.com", "myworkdayjobs.com", "oraclecloud.com",
+  "greenhouse.io", "lever.co", "ashbyhq.com", "smartrecruiters.com",
+  "workable.com", "teamtailor.com", "breezy.hr", "recruitee.com",
+  "jobvite.com", "taleo.net", "successfactors.com", "applytojob.com",
+  "paycomonline.com", "paylocity.com", "ultipro.com", "adp.com",
+  "dayforcehcm.com", "clearcompany.com", "catsone.com", "pinpointhq.com",
+  "rippling.com", "eightfold.ai", "avature.net", "phenompeople.com",
+  "brassring.com", "jazz.co", "workdayjobs.com",
+])
+
+/**
+ * The registrable domain, when it actually identifies the employer.
+ *
+ * Null for anything that does not: a subsystem-minted placeholder, or an ATS
+ * vendor host that says nothing about who the employer is.
+ *
+ * Approximates registrable as the last two labels, which is wrong for
+ * multi-part suffixes like `.co.uk`. That error is in the safe direction: it can
+ * only make two domains look *different*, which holds a group for review rather
+ * than merging it.
  */
 export function registrableDomain(domain: string | null | undefined): string | null {
   if (isSyntheticDomain(domain)) return null
   const parts = domain!.trim().toLowerCase().split(".").filter(Boolean)
   if (parts.length < 2) return null
-  return parts.slice(-2).join(".")
+  const registrable = parts.slice(-2).join(".")
+  if (ATS_VENDOR_DOMAINS.has(registrable)) return null
+  return registrable
 }
 
 /**
@@ -96,9 +124,11 @@ export function resolveDuplicates(candidates: DuplicateCandidate[]): DuplicateRe
 
   const ranked = [...candidates].sort((a, b) => {
     if (b.jobCount !== a.jobCount) return b.jobCount - a.jobCount
-    const aSynthetic = isSyntheticDomain(a.domain)
-    const bSynthetic = isSyntheticDomain(b.domain)
-    if (aSynthetic !== bSynthetic) return aSynthetic ? 1 : -1
+    // A vendor host is no more identifying than a placeholder, so both rank below
+    // a record carrying the employer's own domain.
+    const aAnonymous = registrableDomain(a.domain) === null
+    const bAnonymous = registrableDomain(b.domain) === null
+    if (aAnonymous !== bAnonymous) return aAnonymous ? 1 : -1
     if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
     return a.createdAt.localeCompare(b.createdAt)
   })
@@ -109,13 +139,13 @@ export function resolveDuplicates(candidates: DuplicateCandidate[]): DuplicateRe
   // The survivor keeps a real domain it already has. Otherwise the best real
   // domain in the group is promoted onto it, so merging never discards the one
   // fact that makes logos and enrichment work.
-  const promoteDomain = isSyntheticDomain(survivor.domain)
-    ? (losers.find((c) => !isSyntheticDomain(c.domain))?.domain ?? null)
+  const promoteDomain = registrableDomain(survivor.domain) === null
+    ? (losers.find((c) => registrableDomain(c.domain) !== null)?.domain ?? null)
     : null
 
   const reason = [
     `${survivor.jobCount} jobs`,
-    isSyntheticDomain(survivor.domain) ? "synthetic domain" : "real domain",
+    registrableDomain(survivor.domain) ? "real domain" : "no identifying domain",
     survivor.isActive ? "active" : "inactive",
   ].join(", ")
 
