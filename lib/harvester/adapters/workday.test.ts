@@ -277,3 +277,31 @@ test("workday: change-detection returns notModified + skips crawl on unchanged b
   assert.equal(second.etag, first.etag)
   assert.equal(listingPosts - afterFirst, 1, "second crawl does exactly one page-0 probe POST, no pagination")
 })
+
+test("workday: detectFromUrl normalises the myworkdaysite host onto the same slug", () => {
+  // wd5.myworkdaysite.com/recruiting/<tenant>/<site> is Workday's other careers
+  // host — the tenant sits in the path rather than the subdomain. It serves the
+  // same board as <tenant>.wd5.myworkdayjobs.com/<site> (verified live for
+  // Sysco: identical CXS payload), so it maps onto the existing slug instead of
+  // getting its own, keeping one company record per board.
+  assert.deepEqual(
+    workdayAdapter.detectFromUrl("https://wd5.myworkdaysite.com/recruiting/sysco/syscocareers"),
+    { slug: "sysco:wd5:syscocareers" }
+  )
+  assert.deepEqual(
+    workdayAdapter.detectFromUrl("https://wd5.myworkdaysite.com/en-US/recruiting/sysco/syscocareers"),
+    { slug: "sysco:wd5:syscocareers" }
+  )
+  assert.deepEqual(
+    workdayAdapter.detectFromUrl("https://wd103.myworkdaysite.com/recruiting/acme/External"),
+    { slug: "acme:wd103:External" }
+  )
+})
+
+test("workday: detectFromUrl rejects malformed myworkdaysite paths", () => {
+  // Without the /recruiting/ segment the tenant is unknown; guessing it would
+  // point every CXS call at the wrong board.
+  assert.equal(workdayAdapter.detectFromUrl("https://wd5.myworkdaysite.com/sysco/syscocareers"), null)
+  assert.equal(workdayAdapter.detectFromUrl("https://wd5.myworkdaysite.com/recruiting/sysco"), null)
+  assert.equal(workdayAdapter.detectFromUrl("https://wd5.myworkdaysite.com/"), null)
+})

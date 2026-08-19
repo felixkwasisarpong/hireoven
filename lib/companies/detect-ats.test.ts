@@ -87,3 +87,12 @@ test("detectAtsFromUrl recognises Rippling boards, with or without a locale pref
   // A real two-letter slug must survive the locale strip.
   assert.equal(detectAtsFromUrl("https://ats.rippling.com/hr/jobs")?.atsIdentifier, "hr")
 })
+
+test("detectAtsFromUrl recognises Workday's myworkdaysite host", () => {
+  // Same boards as myworkdayjobs.com, tenant in the path. Previously undetected,
+  // so the Career Site Scout could not classify these URLs as an ATS board.
+  assert.equal(
+    detectAtsFromUrl("https://wd5.myworkdaysite.com/recruiting/sysco/syscocareers")?.atsType,
+    "workday"
+  )
+})

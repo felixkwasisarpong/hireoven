@@ -62,3 +62,28 @@ test("atsIdentifierKeySql picks the board-aware expression only for Workday", ()
   assert.match(atsIdentifierKeySql("c.ats_identifier", "workday"), /regexp_replace/)
   assert.equal(atsIdentifierKeySql("c.ats_identifier", "greenhouse"), "lower(c.ats_identifier)")
 })
+
+test("workdayBoardKey handles the myworkdaysite host, where the tenant is in the path", () => {
+  // wd5.myworkdaysite.com/recruiting/<tenant>/<site> serves the same board as
+  // <tenant>.wd5.myworkdayjobs.com/<site> — verified live for Sysco, identical
+  // CXS payload — so both must reduce to one key or the same employer gets two
+  // company records.
+  assert.equal(
+    workdayBoardKey("https://wd5.myworkdaysite.com/recruiting/sysco/syscocareers"),
+    "sysco/syscocareers"
+  )
+  assert.equal(
+    workdayBoardKey("https://wd5.myworkdaysite.com/en-US/recruiting/sysco/syscocareers"),
+    "sysco/syscocareers"
+  )
+  assert.equal(
+    workdayBoardKey("https://sysco.wd5.myworkdayjobs.com/syscocareers"),
+    workdayBoardKey("https://wd5.myworkdaysite.com/recruiting/sysco/syscocareers")
+  )
+})
+
+test("workdayBoardKey rejects malformed myworkdaysite paths", () => {
+  assert.equal(workdayBoardKey("https://wd5.myworkdaysite.com/sysco/syscocareers"), null)
+  assert.equal(workdayBoardKey("https://wd5.myworkdaysite.com/recruiting/sysco"), null)
+  assert.equal(workdayBoardKey("https://wd5.myworkdaysite.com/"), null)
+})

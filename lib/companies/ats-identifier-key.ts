@@ -24,6 +24,8 @@
 const WORKDAY_SLUG_RE = /^([a-z0-9_-]+):(wd\d{1,3}):([A-Za-z0-9_-]+)$/i
 const WORKDAY_PATH_RE = /^([a-z0-9_-]+)\/([A-Za-z0-9_-]+)$/i
 const WORKDAY_HOST_RE = /^([a-z0-9_-]+)\.(wd\d{1,3})\.myworkdayjobs\.com$/i
+/** Workday's other careers host — tenant in the path, not the subdomain. */
+const WORKDAY_SITE_HOST_RE = /^wd\d{1,3}\.myworkdaysite\.com$/i
 
 function isLocaleSegment(segment: string): boolean {
   return /^[a-z]{2}(-[a-z]{2,3})?$/i.test(segment)
@@ -43,13 +45,28 @@ export function workdayBoardKey(value: string | null | undefined): string | null
   if (/^https?:\/\//i.test(raw)) {
     try {
       const url = new URL(raw)
-      const host = url.hostname.toLowerCase().match(WORKDAY_HOST_RE)
-      if (!host) return null
+      const hostname = url.hostname.toLowerCase()
       const parts = url.pathname.split("/").filter(Boolean)
       const start = parts.length > 0 && isLocaleSegment(parts[0]) ? 1 : 0
-      const site = parts[start]
-      if (!site || !/^[A-Za-z0-9_-]+$/.test(site)) return null
-      return `${host[1].toLowerCase()}/${site.toLowerCase()}`
+
+      const host = hostname.match(WORKDAY_HOST_RE)
+      if (host) {
+        const site = parts[start]
+        if (!site || !/^[A-Za-z0-9_-]+$/.test(site)) return null
+        return `${host[1].toLowerCase()}/${site.toLowerCase()}`
+      }
+
+      // wd5.myworkdaysite.com/recruiting/<tenant>/<site>
+      if (WORKDAY_SITE_HOST_RE.test(hostname)) {
+        if (parts[start]?.toLowerCase() !== "recruiting") return null
+        const tenant = parts[start + 1]
+        const site = parts[start + 2]
+        if (!tenant || !site) return null
+        if (!/^[a-z0-9_-]+$/i.test(tenant) || !/^[A-Za-z0-9_-]+$/.test(site)) return null
+        return `${tenant.toLowerCase()}/${site.toLowerCase()}`
+      }
+
+      return null
     } catch {
       return null
     }
