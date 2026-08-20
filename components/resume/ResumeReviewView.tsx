@@ -69,6 +69,9 @@ const SEVERITY: Record<
   },
 }
 
+/** One card treatment across the page, matching the AI Fix surface. */
+const CARD = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]"
+
 function Shell({ children }: { children: React.ReactNode }) {
   return <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">{children}</div>
 }
@@ -135,7 +138,7 @@ export default function ResumeReviewView() {
   if (loading) {
     return (
       <Shell>
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-6 text-slate-600">
+        <div className={`flex items-center gap-3 p-6 text-slate-600 ${CARD}`}>
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           <span className="text-[14px]">Reading your resume the way a recruiter would…</span>
         </div>
@@ -160,7 +163,7 @@ export default function ResumeReviewView() {
   if (data && !data.hasResume && data.parsing) {
     return (
       <Shell>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+        <div className={`p-8 text-center ${CARD}`}>
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-orange-600" aria-hidden />
           <h2 className="mt-4 text-[17px] font-bold text-slate-900">Reading your resume</h2>
           <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-relaxed text-slate-600">
@@ -197,7 +200,7 @@ export default function ResumeReviewView() {
   if (!data?.hasResume) {
     return (
       <Shell>
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
+        <div className={`p-8 text-center ${CARD}`}>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-orange-50">
             <Upload className="h-5 w-5 text-orange-600" aria-hidden />
           </div>
@@ -223,7 +226,11 @@ export default function ResumeReviewView() {
   return (
     <Shell>
       {/* ── Verdict ─────────────────────────────────────────────────── */}
-      <header className="rounded-xl border border-slate-200 bg-white p-6">
+      <header className={`relative overflow-hidden p-6 ${CARD}`}>
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-0.5"
+          style={{ background: "linear-gradient(90deg, #FF5C18, #FF9A3C, #f97316)" }}
+        />
         <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-orange-600">
           <Stethoscope className="h-3.5 w-3.5" aria-hidden />
           Resume review
@@ -396,7 +403,7 @@ function FindingCard({
 }) {
   const sev = SEVERITY[step.severity]
   return (
-    <article className={`rounded-xl border border-slate-200 bg-white p-6 ${compact ? "" : "mt-3"}`}>
+    <article className={`p-6 ${CARD} ${compact ? "" : "mt-3"}`}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12px] font-bold tabular-nums text-slate-400">#{ordinal}</span>
         <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${sev.chip}`}>
@@ -452,7 +459,7 @@ function FinalCard({
   onRestart: () => void
 }) {
   return (
-    <article className="mt-3 rounded-xl border border-slate-200 bg-white p-6">
+    <article className="mt-3 p-6 rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_12px_rgba(15,23,42,0.06)]">
       <div className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wide text-emerald-600">
         <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> That is the whole review
       </div>

@@ -54,7 +54,7 @@ export default function ResumeViewModal({ fileUrl, title, onClose }: Props) {
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
             aria-label="Close"
           >
-            <X className="h-4.5 w-4.5" />
+            <X className="h-5 w-5" />
           </button>
         </div>
         <div className="relative min-h-0 flex-1 bg-slate-100">

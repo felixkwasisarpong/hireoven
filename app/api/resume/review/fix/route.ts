@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { requireFeature } from "@/lib/gates/server-gate"
 import { getPostgresPool, hasPostgresEnv } from "@/lib/postgres/server"
 import { buildReviewContext, currentMonth, loadPrimaryResume } from "@/lib/resume/review-context"
 import { planFixes } from "@/lib/resume/fix-plan"
@@ -164,18 +164,19 @@ async function buildProposals(
   return out
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   if (!hasPostgresEnv()) return NextResponse.json({ error: "Unavailable" }, { status: 503 })
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  // Pro-gated, and enforced here rather than only in the UI — the review that
+  // names the problems stays free, applying the fixes is the paid step.
+  // pro_max clears a "pro" gate through the access-level ranking.
+  const gate = await requireFeature("resume_ai_fix", request)
+  if (gate instanceof NextResponse) return gate
+  const { userId } = gate
 
   const body = (await request.json().catch(() => ({}))) as Body
   const pool = getPostgresPool()
-  const resume = await loadPrimaryResume(pool, user.id)
+  const resume = await loadPrimaryResume(pool, userId)
   if (!resume) return NextResponse.json({ error: "No parsed resume" }, { status: 404 })
 
   // ── Apply ────────────────────────────────────────────────────────────────
@@ -207,7 +208,7 @@ export async function POST(request: Request) {
         next.linkedin_url,
         next.target_field ?? null,
         resume.id,
-        user.id,
+        userId,
       ],
     )
 
