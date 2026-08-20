@@ -2,6 +2,11 @@ node_modules
 .next
 out
 .env*.local
+# Backup/copy variants too. `.env*.local` only matches names ENDING in `.local`,
+# so `.env.local.bak`, `.env.local.20260820` and `.env.local.save` were all
+# committable while holding production credentials.
+.env*.local.*
+.env.local.bak*
 .vercel
 .DS_Store
 
