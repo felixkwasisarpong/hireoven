@@ -134,3 +134,48 @@ jobs:
           labels: ${{ steps.meta-harvester.outputs.labels }}
           cache-from: type=gha,scope=harvester
           cache-to: type=gha,mode=max,scope=harvester
+
+      # Deploy only after the image is in the registry.
+      #
+      # Previously nothing here told Coolify to deploy — a separate GitHub webhook
+      # fired at push time, concurrently with this build. Coolify usually won,
+      # pulled `:latest` before the new image existed, and redeployed the PREVIOUS
+      # build. Deploys were effectively non-deterministic.
+      #
+      # Triggering here removes the race: the image is pushed, then the deploy is
+      # requested. Disable the push webhook on the Coolify application so this is
+      # the only trigger, otherwise the old race persists alongside this.
+      #
+      # Skipped rather than failed when the secrets are absent, so forks and
+      # anyone re-running the workflow without deploy access still get a green
+      # build. A failed deploy call itself is NOT ignored.
+      - name: Trigger Coolify deploy
+        if: >-
+          github.ref == 'refs/heads/main' &&
+          github.event_name != 'pull_request'
+        env:
+          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          set -euo pipefail
+          if [ -z "${COOLIFY_URL:-}" ] || [ -z "${COOLIFY_TOKEN:-}" ] || [ -z "${COOLIFY_APP_UUID:-}" ]; then
+            echo "::notice::Coolify deploy secrets not set — skipping deploy trigger."
+            exit 0
+          fi
+          case "$COOLIFY_URL" in
+            https://*) ;;
+            *) echo "::error::COOLIFY_URL must be https — the API token must not cross plain HTTP."; exit 1 ;;
+          esac
+          echo "Requesting deploy of ${COOLIFY_APP_UUID}"
+          code=$(curl -sS -o /tmp/deploy.json -w '%{http_code}' \
+            --max-time 60 --retry 3 --retry-delay 5 --retry-connrefused \
+            -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
+            "${COOLIFY_URL%/}/api/v1/deploy?uuid=${COOLIFY_APP_UUID}&force=false")
+          echo "HTTP $code"
+          cat /tmp/deploy.json || true
+          echo
+          if [ "$code" -lt 200 ] || [ "$code" -ge 300 ]; then
+            echo "::error::Coolify deploy request failed with HTTP $code"
+            exit 1
+          fi
