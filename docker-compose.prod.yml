@@ -1,4 +1,15 @@
-# Web-box compose: public Next app + stateful services only.
+# Web-box compose: stateful services only — Postgres and MinIO.
+#
+# The Next app is NOT here any more. It runs as its own Coolify application
+# (Docker Image build pack, image ghcr.io/felixkwasisarpong/hireoven) precisely
+# so that deploying it does not touch this stack. Coolify cannot roll a Compose
+# deployment — Compose pins container names, so old and new cannot coexist — which
+# meant every app deploy stopped the whole stack and recreated production
+# Postgres, severing every connection. See docs/deploy/zero-downtime-coolify.md.
+#
+# That app reaches these services over the external `coolify` network, using the
+# aliases declared below: hireoven-postgres and hireoven-minio.
+#
 # Do not run harvester, crawler crons, enrichment, or app-worker from this file.
 # Those live in docker-compose.harvester.yml on the worker box so web repairs and
 # worker repairs can happen independently.
@@ -110,72 +121,9 @@ services:
       /usr/bin/mc anonymous set none local/$$MINIO_BUCKET || true
       "
 
-  app:
-    # Pre-built by GitHub Actions — Coolify just pulls, no build on server
-    image: ghcr.io/felixkwasisarpong/hireoven:${WEB_IMAGE_TAG:-latest}
-    pull_policy: always
-    container_name: hireoven-app
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
-    environment:
-      NODE_ENV: production
-      HIREOVEN_RUNTIME_ROLE: web
-      DATABASE_URL: postgres://${POSTGRES_USER:-hireoven}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-hireoven}
-      PGSSLMODE: disable
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_BUCKET: ${MINIO_BUCKET:-hireoven-resumes}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
-      NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
-      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_APP_URL}
-      AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      RESEND_API_KEY: ${RESEND_API_KEY}
-      RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
-      LOGO_DEV_TOKEN: ${LOGO_DEV_TOKEN}
-      NEXT_PUBLIC_LOGO_DEV_TOKEN: ${NEXT_PUBLIC_LOGO_DEV_TOKEN}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
-      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
-      VAPID_EMAIL: ${VAPID_EMAIL}
-      WAITLIST_ONLY: ${WAITLIST_ONLY:-true}
-      # No CRON_SECRET is passed to the public web runtime. Scheduled jobs run
-      # only on the harvester box's private app-worker.
-      # Public feed flag — optional (code defaults apply when unset).
-      # FEED_USE_NEW_STATUS must be passed through here for the Phase-5 feed flip
-      # to take effect (explicit env allowlist; Coolify alone is not enough).
-      FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
-      # Stripe
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
-      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
-      STRIPE_CURRENCY: ${STRIPE_CURRENCY:-usd}
-      STRIPE_PRICE_PRO_MONTHLY: ${STRIPE_PRICE_PRO_MONTHLY}
-      STRIPE_PRICE_PRO_YEARLY: ${STRIPE_PRICE_PRO_YEARLY}
-      STRIPE_PRICE_PRO_MAX_MONTHLY: ${STRIPE_PRICE_PRO_MAX_MONTHLY}
-      STRIPE_PRICE_PRO_MAX_YEARLY: ${STRIPE_PRICE_PRO_MAX_YEARLY}
-      STRIPE_PRICE_PRO_INTERNATIONAL_MONTHLY: ${STRIPE_PRICE_PRO_INTERNATIONAL_MONTHLY}
-      STRIPE_STUDENT_PROMOTION_CODE_ID: ${STRIPE_STUDENT_PROMOTION_CODE_ID}
-    # Bound to loopback, not 0.0.0.0. Traefik does not use this mapping — it
-    # discovers the container through the Docker provider (traefik.enable=true
-    # plus the Host(`hireoven.com`) router labels Coolify attaches) and connects
-    # over the shared network, so publishing on all interfaces bought nothing and
-    # served the app to the public internet over plain HTTP, TLS and proxy
-    # bypassed. Verified before this change:
-    #   curl http://5.161.53.248:3000/api/health  ->  200
-    # Keep it on 127.0.0.1 for local debugging via an SSH tunnel:
-    #   ssh -L 3000:127.0.0.1:3000 root@<web-box>
-    ports:
-      - "127.0.0.1:${APP_PORT:-3000}:3000"
-
-  # There is intentionally no `harvester` or `app-worker` service here. Use
-  # docker-compose.harvester.yml on the worker box for ATS harvesting, Workable/
-  # Workday crawls, enrichment, discovery, and every scheduled cron.
+  # There is intentionally no `app`, `harvester` or `app-worker` service here.
+  # The web app is a separate Coolify application (see the header); harvesting and
+  # every scheduled cron run from docker-compose.harvester.yml on the worker box.
 
 networks:
   # Created and owned by Coolify, so declared external — Compose must attach to
