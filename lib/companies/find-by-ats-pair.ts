@@ -63,3 +63,33 @@ export async function findCompanyIdByAtsPair(
 
   return canonical.rows[0]?.id ?? null
 }
+
+/**
+ * ATS pair already recorded for a domain, if we hold one.
+ *
+ * Lets the Career Site Scout reuse a board coordinate we already know rather than
+ * probing for it — the only practical route to ATSes whose identifier cannot be
+ * guessed from a name (Workday needs `tenant:wd5:Site`, Oracle a pod and a site).
+ * Callers must still corroborate it against the domain: records get mis-attached,
+ * and `cloudflare.com` is stored here as `greenhouse/builtin`.
+ */
+export async function findAtsPairForDomain(
+  domain: string | null | undefined,
+  db?: Queryable,
+): Promise<{ atsType: string; atsIdentifier: string } | null> {
+  if (!domain?.trim()) return null
+
+  const { rows } = await (db ?? getPostgresPool()).query<{ ats_type: string; ats_identifier: string }>(
+    `SELECT ats_type, ats_identifier
+       FROM companies
+      WHERE domain = $1
+        AND ats_type IS NOT NULL
+        AND ats_identifier IS NOT NULL
+      ORDER BY (duplicate_of_company_id IS NULL) DESC, is_active DESC, created_at ASC
+      LIMIT 1`,
+    [domain.trim().toLowerCase()],
+  )
+
+  const row = rows[0]
+  return row ? { atsType: row.ats_type, atsIdentifier: row.ats_identifier } : null
+}
