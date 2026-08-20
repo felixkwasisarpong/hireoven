@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
 import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { crawlCareersPage, type RawJob } from "@/lib/crawler"
+import { scanBoardWithAdapter } from "@/lib/career-scan/adapter-scan"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
 import {
   atsIdentifierFor,
@@ -25,6 +26,10 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 const HTML_FETCH_TIMEOUT_MS = 8000
+// Adapter fetches are the slow part of a scan (a 409-job Oracle board with
+// descriptions takes ~18s); the route budget is 60s, so leave room for
+// scoring and persistence after it.
+const SCAN_TIMEOUT_MS = 25_000
 const ATS_SCAN_LIMIT = Math.max(10, Number.parseInt(process.env.CAREER_SITE_SCOUT_ATS_LIMIT ?? "100", 10))
 const BRANDED_SCAN_LIMIT = Math.max(10, Number.parseInt(process.env.CAREER_SITE_SCOUT_BRANDED_LIMIT ?? "50", 10))
 
@@ -656,26 +661,47 @@ export async function POST(request: NextRequest) {
 
   let rawJobs: RawJob[] = []
   let outcomeReason: string | null = null
+  /** Out-of-region roles dropped before the scan cap, so the count stays honest. */
+  let droppedBeforeCap = 0
   const scanUrl = directAtsUrl ?? null
   if (scanUrl && selectedDetection) {
+    const limit = Math.min(
+      body?.maxJobs && Number.isFinite(body.maxJobs) ? Math.max(1, Math.min(ATS_SCAN_LIMIT, body.maxJobs)) : ATS_SCAN_LIMIT,
+      classification === "branded_site_resolved_to_ats" ? BRANDED_SCAN_LIMIT : ATS_SCAN_LIMIT,
+    )
     try {
-      const result = await crawlCareersPage({
-        id: company.id,
-        companyName,
-        careersUrl: scanUrl,
-        lastCrawledAt: null,
-        atsType: selectedDetection.atsType,
-        atsIdentifier: selectedIdentifier,
-        domain,
-      })
-      const limit = Math.min(
-        body?.maxJobs && Number.isFinite(body.maxJobs) ? Math.max(1, Math.min(ATS_SCAN_LIMIT, body.maxJobs)) : ATS_SCAN_LIMIT,
-        classification === "branded_site_resolved_to_ats" ? BRANDED_SCAN_LIMIT : ATS_SCAN_LIMIT,
-      )
-      rawJobs = result.jobs.slice(0, limit)
-      outcomeReason = result.outcomeReason ?? result.outcomeStatus ?? null
+      // Prefer the harvester's adapter. crawlCareersPage is a generic HTML/JSON-LD
+      // scraper with no adapter dispatch, so a board that is a JavaScript app over
+      // a JSON API reads as empty — Oracle Cloud HCM returned `empty_job_list` for
+      // a site with 409 live roles. The adapter reads the same API the harvester
+      // will use after enrolment, so what the scan shows matches what gets crawled.
+      const viaAdapter = await scanBoardWithAdapter(scanUrl, { timeoutMs: SCAN_TIMEOUT_MS })
+      if (viaAdapter) {
+        // Region-filter before the cap, not after. An adapter returns the whole
+        // board, so slicing first spends the scan budget on roles that are then
+        // discarded — this Oracle board is 409 roles of which 152 are outside
+        // US/CA, so a naive slice(0,100) surfaced barely 60 usable ones.
+        const inRegion = viaAdapter.jobs.filter((job) =>
+          isAllowedLocation({ location: job.location, workMode: job.workMode }),
+        )
+        droppedBeforeCap = viaAdapter.jobs.length - inRegion.length
+        rawJobs = inRegion.slice(0, limit)
+        outcomeReason = viaAdapter.jobs.length > 0 ? null : "empty_job_list"
+      } else {
+        const result = await crawlCareersPage({
+          id: company.id,
+          companyName,
+          careersUrl: scanUrl,
+          lastCrawledAt: null,
+          atsType: selectedDetection.atsType,
+          atsIdentifier: selectedIdentifier,
+          domain,
+        })
+        rawJobs = result.jobs.slice(0, limit)
+        outcomeReason = result.outcomeReason ?? result.outcomeStatus ?? null
+      }
     } catch (err) {
-      console.warn("[career-site-scout] crawl failed", err)
+      console.warn("[career-site-scout] scan failed", err)
       outcomeReason = err instanceof Error ? err.message : "crawl_failed"
     }
   } else {
@@ -749,7 +775,7 @@ export async function POST(request: NextRequest) {
       directAtsUrl,
       harvestQueued,
       outcomeReason,
-      skippedOutsideRegion: upserted.skippedOutsideRegion,
+      skippedOutsideRegion: upserted.skippedOutsideRegion + droppedBeforeCap,
     },
     jobs,
   }
