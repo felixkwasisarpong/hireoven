@@ -9,8 +9,19 @@
  * mine-transitions, …).
  *
  * Runs as plain Node (no tsx) because the Next standalone image ships only
- * server.js + traced node_modules; `pg` is a static app dependency so it's
- * traced in. The Dockerfile CMD invokes this before `node server.js`.
+ * server.js + traced node_modules. The Dockerfile CMD invokes this before
+ * `node server.js`.
+ *
+ * `pg` is loaded through createRequire rather than `import pg from "pg"`. pg's
+ * exports map sends an ESM import to ./esm/index.mjs, and Next's output file
+ * tracing never copies that file — the traced app graph only ever reaches pg
+ * through CJS, so the standalone image contains pg/lib and pg/package.json and
+ * nothing else. The ESM import therefore resolved to a path that does not exist
+ * in the image and every container start died with ERR_MODULE_NOT_FOUND,
+ * silently skipping all migrations for as long as that went unnoticed (the CMD
+ * swallows the failure by design so the app still boots). createRequire takes
+ * the "require" condition instead, which resolves to pg/lib/index.js — the half
+ * tracing does copy.
  *
  * Safety:
  *  - Bounded pg_try_advisory_lock so concurrent replicas/containers serialize
@@ -22,10 +33,13 @@
  *    logged loudly but never blocks the app from starting.
  */
 
-import pg from "pg"
+import { createRequire } from "node:module"
 import { readFileSync, readdirSync, existsSync } from "node:fs"
 import { createHash } from "node:crypto"
 import { join } from "node:path"
+
+const require = createRequire(import.meta.url)
+const pg = require("pg")
 
 const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR || join(process.cwd(), "scripts", "migrations")
 const LOCK_KEY = 8412764 // arbitrary, stable advisory-lock id for this runner
