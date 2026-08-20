@@ -2,8 +2,10 @@ import crypto from "crypto"
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
+import { findAtsPairForDomain, findCompanyIdByAtsPair } from "@/lib/companies/find-by-ats-pair"
 import { crawlCareersPage, type RawJob } from "@/lib/crawler"
+import { scanBoardWithAdapter } from "@/lib/career-scan/adapter-scan"
+import { resolveCareerBoard } from "@/lib/career-scan/resolve-board"
 import { detectAtsFromUrl, type AtsDetection } from "@/lib/companies/detect-ats"
 import {
   atsIdentifierFor,
@@ -25,6 +27,10 @@ export const runtime = "nodejs"
 export const maxDuration = 60
 
 const HTML_FETCH_TIMEOUT_MS = 8000
+// Adapter fetches are the slow part of a scan (a 409-job Oracle board with
+// descriptions takes ~18s); the route budget is 60s, so leave room for
+// scoring and persistence after it.
+const SCAN_TIMEOUT_MS = 25_000
 const ATS_SCAN_LIMIT = Math.max(10, Number.parseInt(process.env.CAREER_SITE_SCOUT_ATS_LIMIT ?? "100", 10))
 const BRANDED_SCAN_LIMIT = Math.max(10, Number.parseInt(process.env.CAREER_SITE_SCOUT_BRANDED_LIMIT ?? "50", 10))
 
@@ -627,11 +633,54 @@ export async function POST(request: NextRequest) {
     atsIdentifier: selectedIdentifier,
   })
   const domain = domainForSource(submittedUrl, directDetection, selectedIdentifier)
-  const careersUrl = directAtsUrl ?? submittedUrl
+
+  // Resolve the board before recording anything.
+  //
+  // People paste `company.com/careers`, not a board URL. Of ten real careers
+  // pages, only three carried an ATS link in their served HTML — the rest are
+  // JavaScript apps, and following the obvious next hop (`careers.zoll.com`)
+  // lands on another one. The resolver guesses the board coordinate from the
+  // domain and company name and confirms each guess by actually fetching jobs,
+  // which is what stops a wrong guess attaching another employer's roles here.
+  const knownAts = await findAtsPairForDomain(domain).catch(() => null)
+  const resolution = await resolveCareerBoard({
+    submittedUrl,
+    pageLinkUrl: linkedAts?.url ?? null,
+    submittedIsAts: Boolean(directDetection),
+    domain,
+    companyName,
+    knownAts,
+    timeoutMs: SCAN_TIMEOUT_MS,
+  }).catch((err) => {
+    console.warn("[career-site-scout] board resolution failed", err)
+    return { board: null, pending: null }
+  })
+
+  const resolvedBoard = resolution.board
+  // A board we identified but could not finish reading inside the budget still
+  // gets recorded, so the employer is enrolled and the harvester fills the roles
+  // in shortly instead of the paste looking like a failure.
+  const pendingBoard = resolution.pending
+
+  // What the resolver confirmed outranks what the URL looked like, because it is
+  // backed by a board that actually returned jobs.
+  // A board found by probing or from a record we hold is still a branded site
+  // that we resolved — the user pasted a careers page, not the board.
+  const effectiveClassification: IntakeClassification =
+    classification === "ats_board"
+      ? "ats_board"
+      : resolvedBoard
+        ? "branded_site_resolved_to_ats"
+        : classification
+
+  const boardAtsType = resolvedBoard?.atsType ?? pendingBoard?.atsType ?? selectedDetection?.atsType ?? null
+  const boardIdentifier = resolvedBoard?.slug ?? pendingBoard?.slug ?? selectedIdentifier
+  const boardUrl = resolvedBoard?.url ?? pendingBoard?.url ?? directAtsUrl
+  const careersUrl = boardUrl ?? submittedUrl
 
   await upsertAtsTenant({
-    atsType: selectedDetection?.atsType ?? null,
-    atsIdentifier: selectedIdentifier,
+    atsType: boardAtsType,
+    atsIdentifier: boardIdentifier,
     sourceUrl: careersUrl,
     sourceType: "user_career_site_scout",
     companyName,
@@ -644,10 +693,10 @@ export async function POST(request: NextRequest) {
     domain,
     submittedUrl,
     careersUrl,
-    atsType: selectedDetection?.atsType ?? null,
-    atsIdentifier: selectedIdentifier,
-    directAtsUrl,
-    classification,
+    atsType: boardAtsType,
+    atsIdentifier: boardIdentifier,
+    directAtsUrl: boardUrl,
+    classification: effectiveClassification,
   })
 
   if (!company) {
@@ -656,36 +705,63 @@ export async function POST(request: NextRequest) {
 
   let rawJobs: RawJob[] = []
   let outcomeReason: string | null = null
-  const scanUrl = directAtsUrl ?? null
-  if (scanUrl && selectedDetection) {
+  /** Out-of-region roles dropped before the scan cap, so the count stays honest. */
+  let droppedBeforeCap = 0
+  const scanUrl = boardUrl ?? null
+  // `pendingBoard` means resolution already spent its budget on this board without
+  // finishing. Re-scanning it here would spend the rest of the request the same way.
+  if (scanUrl && !pendingBoard && (resolvedBoard || selectedDetection)) {
+    const limit = Math.min(
+      body?.maxJobs && Number.isFinite(body.maxJobs) ? Math.max(1, Math.min(ATS_SCAN_LIMIT, body.maxJobs)) : ATS_SCAN_LIMIT,
+      effectiveClassification === "branded_site_resolved_to_ats" ? BRANDED_SCAN_LIMIT : ATS_SCAN_LIMIT,
+    )
     try {
-      const result = await crawlCareersPage({
-        id: company.id,
-        companyName,
-        careersUrl: scanUrl,
-        lastCrawledAt: null,
-        atsType: selectedDetection.atsType,
-        atsIdentifier: selectedIdentifier,
-        domain,
-      })
-      const limit = Math.min(
-        body?.maxJobs && Number.isFinite(body.maxJobs) ? Math.max(1, Math.min(ATS_SCAN_LIMIT, body.maxJobs)) : ATS_SCAN_LIMIT,
-        classification === "branded_site_resolved_to_ats" ? BRANDED_SCAN_LIMIT : ATS_SCAN_LIMIT,
-      )
-      rawJobs = result.jobs.slice(0, limit)
-      outcomeReason = result.outcomeReason ?? result.outcomeStatus ?? null
+      // Prefer the harvester's adapter. crawlCareersPage is a generic HTML/JSON-LD
+      // scraper with no adapter dispatch, so a board that is a JavaScript app over
+      // a JSON API reads as empty — Oracle Cloud HCM returned `empty_job_list` for
+      // a site with 409 live roles. The adapter reads the same API the harvester
+      // will use after enrolment, so what the scan shows matches what gets crawled.
+      // The resolver already fetched this board to prove it lists jobs; refetching
+      // would double the slowest part of the request for no new information.
+      const viaAdapter = resolvedBoard ?? (await scanBoardWithAdapter(scanUrl, { timeoutMs: SCAN_TIMEOUT_MS }))
+      if (viaAdapter) {
+        // Region-filter before the cap, not after. An adapter returns the whole
+        // board, so slicing first spends the scan budget on roles that are then
+        // discarded — this Oracle board is 409 roles of which 152 are outside
+        // US/CA, so a naive slice(0,100) surfaced barely 60 usable ones.
+        const inRegion = viaAdapter.jobs.filter((job) =>
+          isAllowedLocation({ location: job.location, workMode: job.workMode }),
+        )
+        droppedBeforeCap = viaAdapter.jobs.length - inRegion.length
+        rawJobs = inRegion.slice(0, limit)
+        outcomeReason = viaAdapter.jobs.length > 0 ? null : "empty_job_list"
+      } else {
+        const result = await crawlCareersPage({
+          id: company.id,
+          companyName,
+          careersUrl: scanUrl,
+          lastCrawledAt: null,
+          atsType: boardAtsType,
+          atsIdentifier: boardIdentifier,
+          domain,
+        })
+        rawJobs = result.jobs.slice(0, limit)
+        outcomeReason = result.outcomeReason ?? result.outcomeStatus ?? null
+      }
     } catch (err) {
-      console.warn("[career-site-scout] crawl failed", err)
+      console.warn("[career-site-scout] scan failed", err)
       outcomeReason = err instanceof Error ? err.message : "crawl_failed"
     }
+  } else if (pendingBoard) {
+    outcomeReason = "board_too_large_harvest_queued"
   } else {
     outcomeReason = htmlFetch.error ?? "no_ats_board_detected"
   }
 
   if (rawJobs.length > 0) {
     await upsertAtsTenant({
-      atsType: selectedDetection?.atsType ?? null,
-      atsIdentifier: selectedIdentifier,
+      atsType: boardAtsType,
+      atsIdentifier: boardIdentifier,
       sourceUrl: careersUrl,
       sourceType: "user_career_site_scout",
       companyName,
@@ -702,7 +778,12 @@ export async function POST(request: NextRequest) {
   // Enrol for harvesting ONLY when the scan produced usable roles. A board that
   // returned nothing — dead, JS-only, or entirely outside US/Canada — is left
   // dormant rather than queued for a crawler that would re-fetch it forever.
-  const harvestQueued = persistedJobs.length > 0
+  // Enrol when the scan produced roles, and also when we identified a real board
+  // that was simply too large to read inside the request budget — AutoZone's
+  // Oracle site is 10,000 roles. Enrolling hands it to the harvester, which has
+  // no such budget. An empty or unidentified board still enrols nothing, which is
+  // what keeps dead boards out of the crawl queue.
+  const harvestQueued = persistedJobs.length > 0 || Boolean(pendingBoard)
   if (harvestQueued) {
     await enrolCompanyForHarvest(company.id)
   }
@@ -744,12 +825,12 @@ export async function POST(request: NextRequest) {
       companyId: company.id,
       companyName: company.name ?? companyName,
       domain,
-      atsType: selectedDetection?.atsType ?? null,
-      atsIdentifier: selectedIdentifier,
+      atsType: boardAtsType,
+      atsIdentifier: boardIdentifier,
       directAtsUrl,
       harvestQueued,
       outcomeReason,
-      skippedOutsideRegion: upserted.skippedOutsideRegion,
+      skippedOutsideRegion: upserted.skippedOutsideRegion + droppedBeforeCap,
     },
     jobs,
   }
