@@ -61,6 +61,8 @@ export const toIntelligenceRiskLevel = (
     : fallback
 }
 
+import { detectPostingSponsorshipBlocker } from "@/lib/jobs/posting-sponsorship-blocker"
+
 export const createSponsorshipBlockerFallback = (
   overrides: Partial<SponsorshipBlocker> = {}
 ): SponsorshipBlocker => ({
@@ -76,17 +78,27 @@ export const createSponsorshipBlockerFallback = (
 export const createVisaIntelligenceFallback = (
   job?: (Partial<Job> & { company?: Partial<Company> | null }) | null
 ): VisaIntelligence => {
-  const blocker = job?.requires_authorization
-    ? [
-        createSponsorshipBlockerFallback({
-          detected: true,
-          kind: "requires_unrestricted_work_authorization",
-          severity: "medium",
-          source: "job_description",
-          confidence: "medium",
-        }),
-      ]
-    : []
+  // Read the posting's own text first. `requires_authorization` is an enrichment
+  // boolean and it is unreliable in both directions: across a sample of 8,000
+  // recent active postings it was true on 1,127 whose text contains no
+  // exclusion at all, and false on 93 that plainly exclude — including the ones
+  // reading "This position is ineligible for immigration sponsorship". Relying
+  // on it alone let a posting-level bar stay invisible behind a high
+  // employer-level sponsorship score.
+  const textBlocker = detectPostingSponsorshipBlocker(job?.description)
+  const blocker = textBlocker
+    ? [textBlocker]
+    : job?.requires_authorization
+      ? [
+          createSponsorshipBlockerFallback({
+            detected: true,
+            kind: "requires_unrestricted_work_authorization",
+            severity: "medium",
+            source: "job_description",
+            confidence: "low",
+          }),
+        ]
+      : []
   const company = job?.company
   const companyProfile = getCompanyImmigrationProfile(company)
   const capExemptSignal = capExemptDetectionToSignal(detectCapExemptSignal(company, job))

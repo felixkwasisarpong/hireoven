@@ -205,6 +205,20 @@ function scopeForSentence(sentence: string): {
   if (/\bno\s+sponsorship\s+(?:is\s+)?available\s+for\s+initial\s+work\s+authorization\b/.test(lower)) {
     return { category: "NO_CURRENT_SPONSORSHIP", temporalScope: "initial_work_authorization" }
   }
+  // A categorical eligibility bar states a property of the ROLE, not a timing
+  // constraint: "this position is ineligible for immigration sponsorship" is
+  // true now and later. There is no temporal marker to find, but that does not
+  // make the scope ambiguous — and treating it as ambiguous made the conflict
+  // matrix answer "needs_clarification" to precisely the candidates the posting
+  // rules out. temporalScope stays "none_present" because no marker was in fact
+  // present; only the semantic verdict is sharpened.
+  if (
+    /\b(?:in\s?eligible|not\s+eligible|ineligible)\b[^.]{0,40}\b(?:immigration|visa|employment|work)\s+sponsorship\b/.test(lower) ||
+    /\b(?:this|the)\s+(?:position|role|job|opening|req(?:uisition)?)\b[^.]{0,60}\b(?:in\s?eligible|not\s+eligible|ineligible)\b[^.]{0,60}\bsponsor(?:ship)?\b/.test(lower)
+  ) {
+    return { category: "NO_CURRENT_OR_FUTURE_SPONSORSHIP", temporalScope: "none_present" }
+  }
+
   return { category: "SPONSORSHIP_SCOPE_AMBIGUOUS", temporalScope: "none_present" }
 }
 
@@ -286,7 +300,10 @@ export function categorizePostingAuthorizationLanguage(input: {
 
   const unrestricted = firstSentenceContaining(
     text,
-    /\bunrestricted\b[^.]{0,80}\b(?:work|employment)\s+authorization\b|(?:temporary visas?|f-?1|opt|cpt|stem|h-?1b|tn)[^.]{0,120}\bwill\s+not\s+be\s+considered\b/i,
+    // "unrestricted work authorization" was the only phrasing covered, so the
+    // equally common "unrestricted right to work" / "unrestricted authorization
+    // to work" slipped through — a hard exclusion reading as no signal at all.
+    /\bunrestricted\b[^.]{0,80}\b(?:(?:work|employment)\s+authorization|right\s+to\s+work|authorization\s+to\s+work)\b|(?:temporary visas?|f-?1|opt|cpt|stem|h-?1b|tn)[^.]{0,120}\bwill\s+not\s+be\s+considered\b/i,
   )
   if (unrestricted) {
     return [{
@@ -302,7 +319,12 @@ export function categorizePostingAuthorizationLanguage(input: {
 
   const sponsorshipBar = firstSentenceContainingWhere(
     text,
-    /\b(?:without|no|not able to|unable to|cannot|can not|won'?t|will not|do(?:es)? not|sponsorship\s+(?:is|will)?\s*(?:not|unavailable|not available))\b[^.]{0,120}\bsponsor(?:ship)?\b|\bsponsorship\s+(?:is|will\s+be)\s+(?:unavailable|not available)\b|\bsponsorship\b[^.]{0,80}\bwill\s+not\s+be\s+(?:provided|available|offered)\b|\b(?:candidate|applicant|individual)s?\s+(?:who\s+)?(?:require|requiring|requires)\s+sponsorship[^.]{0,120}\bwill\s+not\s+be\s+considered\b|\btemporary\s+visas?\b[^.]{0,180}\bwill\s+not\s+be\s+considered\b/i,
+    // "(in)eligible for ... sponsorship" carries no negation VERB, so the
+    // negation-word alternation below could never reach it: "not eligible" is
+    // not "not able to", and "ineligible" contains no negation token at all.
+    // These are among the most explicit refusals a posting can carry, and both
+    // were scoring as no signal.
+    /\b(?:in\s?eligible|not\s+eligible|ineligible)\b[^.]{0,60}\bsponsor(?:ship)?\b|\bsponsor(?:ship)?\b[^.]{0,60}\b(?:is\s+)?(?:in\s?eligible|not\s+eligible|ineligible)\b|\b(?:without|no|not able to|unable to|cannot|can not|won'?t|will not|do(?:es)? not|sponsorship\s+(?:is|will)?\s*(?:not|unavailable|not available))\b[^.]{0,120}\bsponsor(?:ship)?\b|\bsponsorship\s+(?:is|will\s+be)\s+(?:unavailable|not available)\b|\bsponsorship\b[^.]{0,80}\bwill\s+not\s+be\s+(?:provided|available|offered)\b|\b(?:candidate|applicant|individual)s?\s+(?:who\s+)?(?:require|requiring|requires)\s+sponsorship[^.]{0,120}\bwill\s+not\s+be\s+considered\b|\btemporary\s+visas?\b[^.]{0,180}\bwill\s+not\s+be\s+considered\b/i,
     (sentence) => !isNonVisaSponsorshipSense(sentence),
   )
   if (sponsorshipBar) {
