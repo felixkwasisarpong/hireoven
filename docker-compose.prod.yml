@@ -42,6 +42,21 @@ services:
       - hireoven_postgres_data:/var/lib/postgresql/data
       - ./lib/postgres/auth-bootstrap.sql:/docker-entrypoint-initdb.d/01-auth-bootstrap.sql:ro
       - ./docker/postgres/02-profiles.sql:/docker-entrypoint-initdb.d/02-profiles.sql:ro
+    networks:
+      # Stay on the Compose project network (what `default` resolves to) so the
+      # existing app keeps reaching this as plain `postgres`.
+      default: {}
+      # Also join Coolify's own network, because that is the only destination
+      # network Coolify offers a standalone application. Without this, an app
+      # created outside this Compose stack cannot see this database at all.
+      #
+      # The alias is deliberately NOT `postgres`: on the coolify network that
+      # name already resolves to `coolify-db`, Coolify's own control-plane
+      # database (verified — it answers on 172.18.0.3). An app configured with
+      # `postgres:5432` there would connect to Coolify's internals rather than
+      # ours, so the alias is namespaced.
+      coolify:
+        aliases: [hireoven-postgres]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hireoven} -d ${POSTGRES_DB:-hireoven}"]
       interval: 10s
@@ -61,6 +76,13 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     volumes:
       - hireoven_minio_data:/data
+    networks:
+      default: {}
+      # Same reasoning as postgres above — reachable from a Coolify-managed app
+      # outside this stack. Namespaced alias to avoid colliding with anything
+      # Coolify runs on its own network.
+      coolify:
+        aliases: [hireoven-minio]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 15s
@@ -154,6 +176,13 @@ services:
   # There is intentionally no `harvester` or `app-worker` service here. Use
   # docker-compose.harvester.yml on the worker box for ATS harvesting, Workable/
   # Workday crawls, enrichment, discovery, and every scheduled cron.
+
+networks:
+  # Created and owned by Coolify, so declared external — Compose must attach to
+  # it, never create or destroy it. `default` stays implicit: Compose still makes
+  # the per-project network, which is what the current app talks over.
+  coolify:
+    external: true
 
 volumes:
   hireoven_postgres_data:
