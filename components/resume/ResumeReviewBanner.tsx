@@ -61,9 +61,9 @@ export default function ResumeReviewBanner() {
             }`}
           >
             {clean ? (
-              <CheckCircle2 className="h-4.5 w-4.5" aria-hidden />
+              <CheckCircle2 className="h-5 w-5" aria-hidden />
             ) : (
-              <Stethoscope className="h-4.5 w-4.5" aria-hidden />
+              <Stethoscope className="h-5 w-5" aria-hidden />
             )}
           </span>
           <div className="min-w-0">

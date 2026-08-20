@@ -21,6 +21,7 @@ export type FeatureKey =
   | "personal_brand"
   | "offer_analysis"
   | "skill_gap"
+  | "resume_ai_fix"
   | "personal_scorecard"
   | "salary_compare"
   | "credit_topups"
@@ -44,6 +45,10 @@ export const FEATURE_GATES: Record<FeatureKey, AccessLevel> = {
   personal_brand:         "pro",
   offer_analysis:         "pro",
   skill_gap:              "pro",
+  // The review itself stays free — it is the diagnosis, and a user who cannot
+  // see what is wrong has no reason to upgrade. Applying the fixes is the paid
+  // step. "pro" also grants pro_max via ACCESS_LEVEL_RANK.
+  resume_ai_fix:          "pro",
   personal_scorecard:     "pro",
   salary_compare:         "pro",
   credit_topups:          "pro",   // buying interview credits / top-up packs
@@ -59,6 +64,7 @@ export const FEATURE_DESCRIPTIONS: Record<FeatureKey, string> = {
   personal_brand:         "Personal brand content studio",
   offer_analysis:         "Offer risk analysis and counter scripts",
   skill_gap:              "Skill gap analysis",
+  resume_ai_fix:          "AI Fix — apply resume review fixes automatically",
   personal_scorecard:     "Shareable personal scorecard",
   salary_compare:         "Side-by-side salary comparison",
   credit_topups:          "Buy interview credits and top-up packs",
