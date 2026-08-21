@@ -71,7 +71,7 @@ export default function ImportLinkedInButton({ onImported, className, compact = 
         onImported(data.resume)
         // Imported profiles get the same treatment as uploads: go straight to
         // the review rather than leaving the record sitting in the library.
-        router.push("/dashboard/resume/review")
+        router.push("/dashboard/resume/optimize")
       } catch (error) {
         pushToast({
           tone: "error",

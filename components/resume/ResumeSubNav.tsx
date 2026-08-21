@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Stethoscope,
+  Target,
   Library,
   Sparkles,
   Mails,
@@ -27,9 +27,13 @@ const TABS: Tab[] = [
     exact: true,
   },
   {
-    label: "Review",
-    href: "/dashboard/resume/review",
-    icon: Stethoscope,
+    // Was "Review". The ranked diagnosis still lives at /resume/review and the
+    // positioning, pivot and skills pages still redirect into its panels — this
+    // is about what the tab offers first: being asked what you are targeting and
+    // getting an optimised résumé, rather than a list of findings to act on.
+    label: "Optimize",
+    href: "/dashboard/resume/optimize",
+    icon: Target,
   },
   {
     label: "Library",

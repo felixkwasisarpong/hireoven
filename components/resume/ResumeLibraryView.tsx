@@ -292,7 +292,7 @@ export default function ResumeLibraryView({ topSlot }: { topSlot?: ReactNode }) 
           window.dispatchEvent(new Event("hireoven:resumes-changed"))
           setUploadPhase("done")
           // A parsed resume should never just sit in the library.
-          router.push("/dashboard/resume/review")
+          router.push("/dashboard/resume/optimize")
           return
         }
         if (status.parse_status === "failed") {
