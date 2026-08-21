@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ElementType, ty
 import { flushSync } from "react-dom"
 import { useRouter, useSearchParams } from "next/navigation"
 import StudioFindingBanner from "@/components/resume/StudioFindingBanner"
+import OptimizeEntryCard from "@/components/resume/OptimizeEntryCard"
 import { studioSectionFor } from "@/lib/resume/fix-plan"
 import {
   closestCenter,
@@ -3015,6 +3016,11 @@ export default function ResumeStudioPage() {
                   ))}
                 </div>
               </section>
+
+              {/* Standing entry — the finding banner below only appears when the
+                  user arrived from a specific finding, so it cannot be the only
+                  way into the optimiser from here. */}
+              <OptimizeEntryCard />
 
               <StudioFindingBanner findingId={findingId} />
 

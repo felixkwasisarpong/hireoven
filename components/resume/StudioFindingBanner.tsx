@@ -83,7 +83,7 @@ export default function StudioFindingBanner({ findingId }: { findingId: string |
             href="/dashboard/resume/optimize"
             className="mt-3 inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700 underline underline-offset-2 hover:text-slate-900"
           >
-            <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Back to the review
+            <ArrowLeft className="h-3.5 w-3.5" aria-hidden /> Back to the optimiser
           </Link>
         </div>
 

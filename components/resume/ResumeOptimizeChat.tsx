@@ -19,7 +19,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowRight, Loader2, RotateCcw } from "lucide-react"
+import { ArrowRight, FileText, Loader2, RotateCcw } from "lucide-react"
 import { ApexIcon } from "@/components/apex/ApexIcon"
 import ResumeFixFlow, { type FixPlanPayload } from "@/components/resume/ResumeFixFlow"
 import {
@@ -86,6 +86,7 @@ export default function ResumeOptimizeChat() {
   const [submitting, setSubmitting] = useState(false)
   const [plan, setPlan] = useState<FixPlanPayload | null>(null)
   const [applied, setApplied] = useState(false)
+  const [resume, setResume] = useState<{ id: string; name: string | null } | null>(null)
   /** Answers already given, so the thread reads as a conversation. */
   const [transcript, setTranscript] = useState<string[]>([])
 
@@ -126,6 +127,7 @@ export default function ResumeOptimizeChat() {
         }
 
         setWaitingOnParse(false)
+        if (data.resume) setResume({ id: data.resume.id, name: data.resume.name })
         setState(startConversation(data.lanes ?? [], Boolean(data.ambiguous)))
         setLoading(false)
       } catch (err) {
@@ -305,8 +307,46 @@ export default function ResumeOptimizeChat() {
       )}
 
       {applied && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-          Your résumé has been updated. It is saved to your documents and ready to use.
+        <div className="space-y-3 border-t border-slate-100 pt-5">
+          <Bubble>
+            <p>
+              Done — your résumé is sharpened toward{" "}
+              <strong className="font-semibold text-slate-900">
+                {describe(state).target?.lane.label ?? "your target"}
+              </strong>{" "}
+              and saved to your documents.
+            </p>
+          </Bubble>
+
+          {/* The artifact, not just a claim that one exists. Saving already
+              happened on apply — this is the copy that makes it visible. */}
+          {resume && (
+            <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100">
+                <FileText className="h-5 w-5 text-slate-500" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[15px] font-semibold text-slate-900">
+                  {resume.name ?? "Your résumé"}
+                </span>
+                <span className="block text-[13px] text-slate-500">
+                  {describe(state).target?.lane.label ?? "Optimized"}
+                </span>
+              </span>
+              <a
+                href={`/api/resume/download?resumeId=${encodeURIComponent(resume.id)}`}
+                className="shrink-0 rounded-lg border border-slate-200 px-3.5 py-2 text-[13.5px] font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Download
+              </a>
+              <a
+                href="/dashboard/resume/library"
+                className="shrink-0 rounded-lg border border-slate-200 px-3.5 py-2 text-[13.5px] font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Documents
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>
