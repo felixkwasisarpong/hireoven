@@ -304,11 +304,11 @@ function ResumeUploadAction({
             message: status.ats_score != null
               ? `Your resume is ready. ATS score: ${status.ats_score}/100. Open your review to see what is costing you interviews.`
               : "Your resume is ready. Open your review to see what is costing you interviews.",
-            href: "/dashboard/resume/review",
+            href: "/dashboard/resume/optimize",
           })
           // The whole point of the review: a parsed resume should never just sit
           // in a library waiting to be acted on.
-          uploadRouter.push("/dashboard/resume/review")
+          uploadRouter.push("/dashboard/resume/optimize")
           return
         }
 
