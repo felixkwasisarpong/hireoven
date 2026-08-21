@@ -101,19 +101,33 @@ function hasWeakNormalizedEvidence(input: JobPublicationInput): boolean {
   return input.requiresReview === true || confidenceScore < LOW_CONFIDENCE_THRESHOLD
 }
 
-function needsDescriptionEnrichment(input: JobPublicationInput): boolean {
+/**
+ * Role content a reader could actually use: the description itself, or parsed
+ * role-specific sections, which are the description in structured form.
+ *
+ * Skills deliberately do NOT count. They are metadata extracted *from* the title
+ * and description, so on a job with no body they are derived from the title alone
+ * — "Senior Software Engineer (Java/Python)" yields ["Python", "Java"]. Treating
+ * two of them as sufficient content published Citi roles whose detail page had
+ * nothing on it at all: every one of the 186 jobs that reached `visible_enriched`
+ * with an empty description got there through exactly this route.
+ */
+function hasRoleContent(input: JobPublicationInput): boolean {
   return (
-    normalizedDescription(input.description).length < MIN_DESCRIPTION_CHARS &&
-    skillCount(input) < MIN_SKILL_COUNT
+    normalizedDescription(input.description).length >= MIN_DESCRIPTION_CHARS ||
+    roleSpecificSectionCount(input.sections) > 0
   )
+}
+
+function needsDescriptionEnrichment(input: JobPublicationInput): boolean {
+  return !hasRoleContent(input)
 }
 
 export function hasUsablePublicJobContent(input: JobPublicationInput): boolean {
   if (isLikelyCompanyBoilerplateOnly(input.description)) return false
   if (hasWeakNormalizedEvidence(input)) return false
 
-  const descriptionLength = normalizedDescription(input.description).length
-  return descriptionLength >= MIN_DESCRIPTION_CHARS || skillCount(input) >= MIN_SKILL_COUNT
+  return hasRoleContent(input)
 }
 
 export function publicationStatusForJob(input: JobPublicationInput): JobPublicationStatus {
@@ -189,6 +203,25 @@ export function sqlPublishedJob(alias = "jobs"): string {
     return `${col} IN ('published', 'visible_basic', 'visible_enriched')`
   }
   return `${col} = 'published'`
+}
+
+/**
+ * Jobs worth pushing at someone.
+ *
+ * Deliberately narrower than `sqlPublishedJob`. Notification eligibility used the
+ * same predicate, and the flag that widens it is set on the app-worker (which
+ * sends notifications) but not on the web app (which renders the feed) — so
+ * notifications pushed jobs the feed itself hides. `visible_basic` means
+ * "awaiting enrichment", and 87% of those rows have no description, so a tap on
+ * the notification opened a job page with nothing on it.
+ *
+ * `visible_enriched` and `published` both assert real role content, so a
+ * notification always leads to a page worth reading. The cost is that a job whose
+ * enrichment lags may fall out of the notification window and never be sent;
+ * pushing an empty job is the worse of the two.
+ */
+export function sqlNotifiableJob(alias = "jobs"): string {
+  return `COALESCE(${alias}.publication_status, 'published') IN ('published', 'visible_enriched')`
 }
 
 /**

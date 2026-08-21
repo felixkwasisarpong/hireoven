@@ -14,7 +14,7 @@
  *    watchlist recaps stay watchlist-shaped
  *  - job must still be active + published, and not already in the user's tracker
  */
-import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { sqlNotifiableJob } from "@/lib/jobs/publication"
 import { getPostgresPool } from "@/lib/postgres/server"
 import type { Job, NotificationType } from "@/types"
 
@@ -80,7 +80,7 @@ export async function fetchPreviouslySentInstantJobs({
           AND an.sent_at > now() - make_interval(days => $3)
           AND NOT (j.id = ANY($4::uuid[]))
           AND j.is_active = true
-          AND ${sqlPublishedJob("j")}
+          AND ${sqlNotifiableJob("j")}
           AND NOT EXISTS (
                 SELECT 1 FROM job_applications ja
                  WHERE ja.user_id = an.user_id AND ja.job_id = j.id

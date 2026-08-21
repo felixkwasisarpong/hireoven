@@ -5,6 +5,7 @@ import {
   isLikelyCompanyBoilerplateOnly,
   publicationStatusForJob,
   publicationStatusForInsert,
+  sqlNotifiableJob,
   sqlPublishedJob,
 } from "@/lib/jobs/publication"
 
@@ -35,8 +36,41 @@ test("publicationStatusForJob publishes jobs with useful content", () => {
     }),
     "published"
   )
-  assert.equal(publicationStatusForJob({ description: "", skills: ["TypeScript", "Postgres"] }), "published")
+  // Skills alone are NOT publishable content. They are extracted from the title
+  // and description, so a job with no body yields skills derived from its title
+  // — and this rule published Citi roles whose detail page was entirely empty.
+  assert.equal(
+    publicationStatusForJob({ description: "", skills: ["TypeScript", "Postgres"] }),
+    "pending_enrichment"
+  )
   assert.equal(hasUsablePublicJobContent({ description: null, skills: ["React"] }), false)
+})
+
+test("a job with no body is held even when its title yields skills", () => {
+  // Reported case: "Senior Software Engineer (Java/Python)" at Citi, description
+  // NULL, skills ["Python", "Java"] — it reached visible_enriched and rendered a
+  // detail page with no description on it.
+  assert.equal(
+    publicationStatusForJob({ description: null, skills: ["Python", "Java"] }),
+    "pending_enrichment"
+  )
+  assert.equal(hasUsablePublicJobContent({ description: null, skills: ["Python", "Java"] }), false)
+})
+
+test("parsed role sections count as content when the description column is thin", () => {
+  // Sections ARE the description in structured form, so unlike skills they can
+  // carry a job on their own — the page has something to render.
+  assert.equal(
+    publicationStatusForJob({
+      description: "",
+      skills: [],
+      sections: {
+        responsibilities: { items: ["Build and operate the payments ledger service."] },
+        requirements: { items: ["Five years of backend experience in Java or Go."] },
+      },
+    }),
+    "published"
+  )
 })
 
 test("publicationStatusForJob hides company boilerplate without role-specific signal", () => {
@@ -122,5 +156,30 @@ test("sqlPublishedJob respects FEED_USE_NEW_STATUS", () => {
   } finally {
     if (prev === undefined) delete process.env.FEED_USE_NEW_STATUS
     else process.env.FEED_USE_NEW_STATUS = prev
+  }
+})
+
+test("notifications are narrower than the feed and never include unenriched jobs", () => {
+  // The flag that widens sqlPublishedJob is set on the app-worker (which sends
+  // notifications) but not on the web app (which renders the feed), so the two
+  // disagreed about visibility. visible_basic means "awaiting enrichment" and is
+  // mostly description-less, so a notification opened an empty job page.
+  const predicate = sqlNotifiableJob("j")
+  assert.ok(predicate.includes("'published'"))
+  assert.ok(predicate.includes("'visible_enriched'"))
+  assert.ok(!predicate.includes("visible_basic"), "unenriched jobs must not be pushed at users")
+})
+
+test("sqlNotifiableJob is null-safe and ignores the feed rollout flag", () => {
+  const previous = process.env.FEED_USE_NEW_STATUS
+  try {
+    process.env.FEED_USE_NEW_STATUS = "true"
+    const withFlag = sqlNotifiableJob("j")
+    delete process.env.FEED_USE_NEW_STATUS
+    assert.equal(withFlag, sqlNotifiableJob("j"))
+    assert.ok(withFlag.startsWith("COALESCE(j.publication_status, 'published')"))
+  } finally {
+    if (previous === undefined) delete process.env.FEED_USE_NEW_STATUS
+    else process.env.FEED_USE_NEW_STATUS = previous
   }
 })
