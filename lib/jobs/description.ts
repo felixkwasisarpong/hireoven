@@ -392,6 +392,13 @@ function stripDescriptionArtifacts(value: string): string {
     .replace(/\b(MSFontService|Verdana_EmbeddedFont|MsoNormal|msonormal|charstyle|Properties)\b/gi, " ")
     .replace(/\[[0-9.,'" ]+\]/g, " ")
     .replace(/\{[0-9a-f-]{8,}\}/gi, " ")
+    // Workday separates its trailer fields with long rules of hyphens, which
+    // arrive both as their own line and welded onto the end of a real one
+    // ("New York New York United States ----------------"). Becoming a newline
+    // rather than being deleted keeps the field before it from running into the
+    // heading after it. Four or more, so "5-8 years" and "cross-functional" are
+    // untouched.
+    .replace(/[ \t]*-{4,}[ \t]*/g, "\n")
     .split("\n")
     .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .join("\n")
@@ -885,9 +892,62 @@ function parseWorkdayDetailContext(url: URL):
   }
 }
 
+/**
+ * Workday's Candidate Experience detail endpoint, which is where the description
+ * actually lives:
+ *   /wday/cxs/{tenant}/{site}/job/{location}/{title}_{id}
+ * returning `jobPostingInfo.jobDescription` as HTML.
+ *
+ * The search API below returns `bulletFields`, which sounds like body content and
+ * is not — for Citi it is `["26968452"]`, the job id, 8 characters. That never
+ * survived `cleanJobDescription`, so the Workday branch always fell through to
+ * the generic HTML scraper, which scraped the rendered page into one unbroken
+ * 5,260-character paragraph. The real HTML is 7,446 characters of <p>, <ul> and
+ * <li>, which cleanJobDescription already renders into headings and bullets.
+ */
+async function fetchWorkdayDetailDescription(
+  context: { tenantHost: string; tenant: string; site: string; normalizedPath: string },
+  url: URL,
+): Promise<string | null> {
+  const parts = url.pathname.split("/").filter(Boolean)
+  const siteIndex = parts.indexOf(context.site)
+  if (siteIndex === -1) return null
+  const afterSite = parts.slice(siteIndex + 1).join("/")
+  if (!afterSite) return null
+
+  const detailApi = `https://${context.tenantHost}/wday/cxs/${encodeURIComponent(
+    context.tenant,
+  )}/${encodeURIComponent(context.site)}/${afterSite}`
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+  try {
+    const response = await fetch(detailApi, {
+      signal: controller.signal,
+      headers: {
+        accept: "application/json",
+        "user-agent": "Mozilla/5.0 (compatible; HireovenDescriptionBot/1.0; +https://hireoven.com)",
+      },
+    })
+    if (!response.ok) return null
+
+    const payload = (await response.json()) as {
+      jobPostingInfo?: { jobDescription?: string }
+    }
+    return cleanJobDescription(payload.jobPostingInfo?.jobDescription ?? null)
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function fetchWorkdayDescriptionFromUrl(url: URL): Promise<string | null> {
   const context = parseWorkdayDetailContext(url)
   if (!context) return null
+
+  const fromDetail = await fetchWorkdayDetailDescription(context, url)
+  if (fromDetail) return fromDetail
 
   const jobsApi = `https://${context.tenantHost}/wday/cxs/${encodeURIComponent(
     context.tenant

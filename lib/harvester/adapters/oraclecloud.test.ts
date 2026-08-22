@@ -270,3 +270,38 @@ test("oraclecloud: change-detection returns notModified + skips pagination on un
   assert.equal(second.etag, first.etag)
   assert.equal(listingCalls - afterFirst, 1, "second crawl does exactly one page-0 fetch, no pagination")
 })
+
+test("oraclecloud: block structure survives into the description", () => {
+  // stripHtml inserted a newline for every block boundary and then ran
+  // `\s+ -> " "`, which collapsed all of them straight back. 95% of Oracle
+  // descriptions reached the job page as one unbroken paragraph.
+  const job = mapRequisitionToJob(
+    {
+      Id: 777,
+      Title: "Platform Engineer",
+      ExternalDescriptionStr:
+        "<p>Own the deployment platform.</p><p>Responsibilities:</p>" +
+        "<ul><li>Run Kubernetes clusters</li><li>Own CI/CD pipelines</li></ul>" +
+        "First line<br>Second line<br/>Third line",
+      PrimaryLocation: "Austin, TX",
+    },
+    "eeho.fa.us2",
+    "CX_1",
+    "https://eeho.fa.us2.oraclecloud.com"
+  )
+
+  const description = job!.description ?? ""
+  assert.ok(description.includes("\n"), `expected line breaks, got: ${JSON.stringify(description)}`)
+
+  const lines = description.split("\n").map((l) => l.trim())
+  assert.ok(lines.includes("Own the deployment platform."))
+  assert.ok(lines.includes("Responsibilities:"))
+  // <br> and <br /> are the forms Oracle actually emits; only </br> was matched.
+  assert.ok(lines.includes("Second line"), `expected <br> to break lines, got: ${JSON.stringify(lines)}`)
+  assert.ok(lines.includes("Third line"))
+  // List items are recognisable as bullets rather than run together.
+  assert.ok(
+    lines.some((l) => l.startsWith("- ") && l.includes("Kubernetes")),
+    `expected bulleted list items, got: ${JSON.stringify(lines)}`
+  )
+})

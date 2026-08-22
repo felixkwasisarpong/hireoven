@@ -315,3 +315,35 @@ test("cleanJobDescription keeps lines that merely contain a percent sign", () =>
   assert.match(cleaned!, /20% improvement/)
   assert.match(cleaned!, /100% of the revenue/)
 })
+
+test("Workday's hyphen rules become line breaks instead of surviving as noise", () => {
+  // Workday welds its trailer separators onto the end of real lines, so deleting
+  // them outright would run a field into the heading that follows it.
+  const cleaned = cleanJobDescription(
+    "<p>We build payments systems and you will own the ledger service end to end.</p>" +
+      "<p>Primary Location: New York New York United States ------------------------------------ " +
+      "Job Family Group: Technology ------------------------------------ Time Type: Full time</p>"
+  )
+
+  assert.ok(cleaned)
+  assert.equal(/-{4,}/.test(cleaned!), false, "hyphen rules must not survive")
+  assert.ok(cleaned!.includes("Primary Location: New York New York United States"))
+  assert.ok(cleaned!.includes("Job Family Group: Technology"))
+  // The three fields must not be welded into one line.
+  assert.ok(
+    cleaned!.split("\n").some((line) => line.trim() === "Job Family Group: Technology"),
+    `expected Job Family Group on its own line, got:\n${cleaned}`
+  )
+})
+
+test("ordinary hyphenation is left alone", () => {
+  const cleaned = cleanJobDescription(
+    "<p>You will lead cross-functional work on state-of-the-art systems.</p>" +
+      "<ul><li>5-8 years of relevant experience building end-to-end services.</li></ul>"
+  )
+
+  assert.ok(cleaned)
+  assert.ok(cleaned!.includes("cross-functional"))
+  assert.ok(cleaned!.includes("5-8 years"))
+  assert.ok(cleaned!.includes("state-of-the-art"))
+})
