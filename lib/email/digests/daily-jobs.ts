@@ -22,6 +22,7 @@ import {
   type DailyReport,
 } from "@/lib/grow/daily-report"
 import { sqlPublishedJob } from "@/lib/jobs/publication"
+import { isBlockedCrawlTitle } from "@/lib/jobs/filters"
 import { sqlJobLocatedInUsa } from "@/lib/jobs/usa-job-sql"
 import { freshnessLabel } from "@/lib/jobs/format"
 
@@ -120,6 +121,10 @@ export async function sendDailyJobsDigest(
         remoteJobs: report.totals.remoteJobs,
         sponsorCompanies: report.totals.sponsorCompanies,
       },
+      // Filtered here as well as at crawl time: the crawl-time guard only stops
+      // NEW junk, and rows scraped before it existed are still live and still
+      // rank — "View job" and "apply" were both in a recent night's top 8.
+      topRoles: report.topRoles.filter((r) => !isBlockedCrawlTitle(r.title)).slice(0, 3),
       jobs: freshJobs.map((j) => ({
         id: j.id,
         title: j.title,

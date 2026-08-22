@@ -14,6 +14,18 @@ const BLOCKED_TITLE_PATTERNS = [
   /^contractor roles?$/i,
   /^remote opportunities?$/i,
   /^hybrid opportunities?$/i,
+  // Bare call-to-action text scraped as a title. These are rare in absolute
+  // terms (~0.1% of listings) but they repeat, while real titles are diverse —
+  // so they climb straight into any "top roles today" ranking and end up
+  // headlining the daily email. Anchored to the whole string on purpose:
+  // "Apply Engineering Manager" and the healthcare titles CNA / EMT / LPN /
+  // RBT / LVN / PCA are all real and must survive.
+  /^apply(?:\s+(?:now|here|today))?$/i,
+  /^(?:view|see)\s+(?:job|jobs|details|posting|opening|more)$/i,
+  /^(?:learn|read|find out)\s+more$/i,
+  /^(?:more\s+)?(?:details|info(?:rmation)?)$/i,
+  /^job$/i,
+  /^click here$/i,
   /^\s*\.css-/i,
   /\{-webkit-|-webkit-text-decoration/,
 ]
