@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Cross, Video } from "lucide-react"
+import { Leaf, Video } from "lucide-react"
 import { useQuotas } from "@/lib/hooks/useQuotas"
 import { useSubscription } from "@/lib/context/SubscriptionContext"
 import {
@@ -196,7 +196,11 @@ export default function CreditsDropdown() {
           triggerColor
         )}
       >
-        <Cross className="h-3.5 w-3.5 shrink-0 text-red-500" strokeWidth={2.5} />
+        {/* Credits read as something you spend and that replenishes each period.
+            A red cross said "error" — the one thing the badge is not — and clashed
+            with the rose used on the counter when a quota is actually exhausted.
+            The leaf carries "renewable" without borrowing an alarm colour. */}
+        <Leaf className="h-3.5 w-3.5 shrink-0 text-emerald-600" strokeWidth={2.25} />
         <span>Credits</span>
 
         {/* Most-constrained quota counter */}
