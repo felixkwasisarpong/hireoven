@@ -203,7 +203,12 @@ function applyUrl(origin: string, site: string, requisitionId: string): string {
 function stripHtml(value: string | undefined | null): string | undefined {
   if (!value) return undefined
   const text = value
-    .replace(/<\/(p|div|li|br|h[1-6])>/gi, "\n")
+    // Block boundaries become line breaks. `<br>` and `<br />` are the forms that
+    // actually appear — matching only the closing `</br>` missed nearly all of
+    // them, and they fell through to the tag rule below as a space.
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|ul|ol|h[1-6]|tr)>/gi, "\n")
+    .replace(/<li\b[^>]*>/gi, "\n- ")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
@@ -211,7 +216,15 @@ function stripHtml(value: string | undefined | null): string | undefined {
     .replace(/&gt;/gi, ">")
     .replace(/&quot;/gi, '"')
     .replace(/&#39;/gi, "'")
-    .replace(/\s+/g, " ")
+    // Collapse runs of spaces and tabs but NOT newlines. `\s+ -> " "` undid every
+    // line break inserted above, so 95% of Oracle descriptions reached the page
+    // as one unbroken paragraph — the boundaries were computed and then thrown
+    // away on the next line.
+    .replace(/[^\S\n]+/g, " ")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n")
     .trim()
   return text || undefined
 }
@@ -369,6 +382,62 @@ function totalJobsCount(response: OracleRequisitionsResponse): number | null {
   return null
 }
 
+/** Pull `{origin, site, id}` back out of an apply URL we built. */
+function parseOracleJobUrl(applyUrl: string): { origin: string; site: string; id: string } | null {
+  try {
+    const url = new URL(applyUrl)
+    const parts = url.pathname.split("/").filter(Boolean)
+    const sitesIndex = parts.findIndex((p) => p.toLowerCase() === "sites")
+    const jobIndex = parts.findIndex((p) => p.toLowerCase() === "job")
+    if (sitesIndex === -1 || jobIndex === -1) return null
+    const site = parts[sitesIndex + 1]
+    const id = parts[jobIndex + 1]
+    if (!site || !id) return null
+    return { origin: url.origin, site, id }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The requisition detail API, which is the only place the full description lives.
+ *
+ * `recruitingCEJobRequisitions` (the list call) does not return
+ * ExternalDescriptionStr at all for most tenants, so descriptions fell through to
+ * scraping the page's og:description meta tag — a one-line marketing blurb. On a
+ * live board that left 202 of 225 descriptions as a single unbroken sentence,
+ * where this endpoint returns 6,000 characters of real HTML.
+ */
+async function fetchOracleDetailDescription(
+  applyUrl: string,
+  timeoutMs: number
+): Promise<string | undefined> {
+  const parsed = parseOracleJobUrl(applyUrl)
+  if (!parsed) return undefined
+
+  const api =
+    `${parsed.origin}/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails` +
+    `?onlyData=true&expand=all&finder=ById;Id=%22${encodeURIComponent(parsed.id)}%22` +
+    `,siteNumber=${encodeURIComponent(parsed.site)}`
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(api, {
+      signal: controller.signal,
+      headers: { accept: "application/json", "user-agent": "Mozilla/5.0 (compatible; Hireoven/1.0)" },
+    })
+    if (!response.ok) return undefined
+    const payload = (await response.json()) as { items?: OracleRequisition[] }
+    const item = payload.items?.[0]
+    return item ? pickDescription(item) : undefined
+  } catch {
+    return undefined
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 async function enrichMissingDescriptions(
   jobs: HarvestedJob[],
   ctx: HarvestCtx
@@ -385,13 +454,20 @@ async function enrichMissingDescriptions(
   await Promise.all(
     targets.map((job) =>
       limiter(async () => {
-        const result = await fetchHtmlConditional(
-          job.applyUrl,
-          { ...ctx, etag: null, lastModified: null },
-          { maxAttempts: 2 }
-        )
-        if (result.kind !== "ok") return
-        const description = extractOracleDetailDescriptionFromHtml(result.html)
+        // Ask the detail API first; the meta-tag scrape below is a one-line
+        // summary and only worth having when the API gives us nothing.
+        let description = await fetchOracleDetailDescription(job.applyUrl, ctx.timeoutMs ?? 10_000)
+
+        if (!description) {
+          const result = await fetchHtmlConditional(
+            job.applyUrl,
+            { ...ctx, etag: null, lastModified: null },
+            { maxAttempts: 2 }
+          )
+          if (result.kind !== "ok") return
+          description = extractOracleDetailDescriptionFromHtml(result.html)
+        }
+
         if (!description || description.length <= (job.description?.length ?? 0)) return
         job.description = description
         job.contentHash = hashContent([
