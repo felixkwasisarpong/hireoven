@@ -81,6 +81,43 @@ export class EverifyTableauLookup {
   }
 
   /** Find the bounding rect of the first leaf element whose trimmed text matches `re`. */
+  /**
+   * The Date Enrolled value control — the box showing the current selection,
+   * which opens the relative-date panel when its caret is clicked.
+   *
+   * Anchored on the control itself rather than a pixel offset from the "Date
+   * Enrolled" label. The previous code clicked `label.x + 150`, which broke when
+   * USCIS added the "[Select last 30 years for all data]" hint above the row and
+   * shifted everything: the click landed on dead space, the panel never opened,
+   * and the "Last … years" lookup then failed with a message blaming a layout
+   * change that had not actually happened. The panel is unchanged; only the way
+   * in moved.
+   *
+   * Identified by the wide leaf on the same row as the label. Width matters:
+   * the descriptive blurb above also contains the words "this year", and
+   * matching that instead opens nothing.
+   */
+  private async dateEnrolledControl(): Promise<{ x: number; y: number; w: number; h: number } | null> {
+    return this.page!.evaluate(() => {
+      const leaves = [...document.querySelectorAll("*")].filter((e) => e.children.length === 0)
+      const label = leaves.find((e) => (e.textContent || "").trim() === "Date Enrolled")
+      if (!label) return null
+      const lr = label.getBoundingClientRect()
+      const candidates = leaves
+        .map((e) => ({ el: e, r: e.getBoundingClientRect() }))
+        .filter(({ el, r }) =>
+          r.width > 100 &&
+          r.x > lr.x &&
+          Math.abs(r.y - lr.y) < 24 &&
+          (el.textContent || "").trim().length > 0,
+        )
+        .sort((a, b) => b.r.width - a.r.width)
+      const best = candidates[0]
+      if (!best) return null
+      return { x: best.r.x, y: best.r.y, w: best.r.width, h: best.r.height }
+    })
+  }
+
   private async leafRect(re: string): Promise<{ x: number; y: number; w: number; h: number } | null> {
     return this.page!.evaluate((src) => {
       const rx = new RegExp(src, "i")
@@ -100,8 +137,14 @@ export class EverifyTableauLookup {
     const page = this.page!
     const de = await this.leafRect("Date Enrolled")
     if (!de) throw new Error("E-Verify lookup: could not find 'Date Enrolled' filter")
-    await page.mouse.click(de.x + 150, de.y + de.h + 12)
-    await page.waitForTimeout(1800)
+
+    const control = await this.dateEnrolledControl()
+    if (!control) {
+      throw new Error("E-Verify lookup: could not locate the Date Enrolled value control")
+    }
+    // The caret sits just inside the control's right edge.
+    await page.mouse.click(control.x + control.w - 8, control.y + control.h / 2)
+    await page.waitForTimeout(2500)
 
     // "Last [N] years" radio + its number box (just left of the "years" label).
     const last = await this.leafRect("^Last$")
