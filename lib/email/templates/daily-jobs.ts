@@ -19,6 +19,13 @@ export interface DailyJobsEmailData {
     remoteJobs: number
     sponsorCompanies: number
   }
+  /**
+   * What actually posted overnight, biggest first. Replaces the fixed AI / ML
+   * stat: AI/ML was 1.8% of a recent night's 16,959 listings, so leading with it
+   * described the board for almost nobody on this list — a nurse or a retail
+   * manager got a headline about a category they will never search.
+   */
+  topRoles: Array<{ title: string; count: number }>
   jobs: DailyJobsEmailJob[]
   reportUrl: string
   browseUrl: string
@@ -51,7 +58,11 @@ export function renderDailyJobsEmail(d: DailyJobsEmailData): RenderedEmail {
     `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;background:#f8fafc;border:1px solid #eef1f5;border-radius:12px;margin:0 0 8px;">
       <tr>
         ${statCell(d.totals.newJobs, "fresh jobs")}
-        ${statCell(d.totals.aiJobs, "AI / ML")}
+        ${
+          d.topRoles[0]
+            ? statCell(d.topRoles[0].count, esc(d.topRoles[0].title))
+            : statCell(d.totals.remoteJobs, "remote")
+        }
         ${statCell(d.totals.remoteJobs, "remote")}
         ${statCell(d.totals.sponsorCompanies, "sponsors")}
       </tr>
@@ -87,7 +98,14 @@ export function renderDailyJobsEmail(d: DailyJobsEmailData): RenderedEmail {
   const tparts: string[] = []
   tparts.push(`FRESH JOBS — ${d.dateLabel}`)
   tparts.push(
-    `${n(d.totals.newJobs)} fresh jobs · ${n(d.totals.aiJobs)} AI/ML · ${n(d.totals.remoteJobs)} remote · ${n(d.totals.sponsorCompanies)} sponsor companies`,
+    [
+      `${n(d.totals.newJobs)} fresh jobs`,
+      d.topRoles[0] ? `${n(d.topRoles[0].count)} ${d.topRoles[0].title}` : null,
+      `${n(d.totals.remoteJobs)} remote`,
+      `${n(d.totals.sponsorCompanies)} sponsor companies`,
+    ]
+      .filter(Boolean)
+      .join(" · "),
   )
   if (d.jobs.length) {
     tparts.push(

@@ -42,3 +42,48 @@ test("isBlockedApplyUrl: keeps real job posting URLs", () => {
     false
   )
 })
+
+test("blocks bare call-to-action text scraped as a title", () => {
+  // Rare overall (~0.1% of listings) but they repeat while real titles are
+  // diverse, so they climb into any "top roles today" ranking — which is how
+  // "View job" ended up in the daily email's top 8.
+  for (const title of [
+    "View job",
+    "apply",
+    "Apply Now",
+    "Apply here",
+    "View Details",
+    "See job",
+    "Learn more",
+    "Read More",
+    "Details",
+    "More info",
+    "job",
+    "Click here",
+  ]) {
+    assert.equal(isBlockedCrawlTitle(title), true, `should block: ${title}`)
+  }
+})
+
+test("does not block real titles that contain those words", () => {
+  // The healthcare abbreviations matter: CNA, EMT, LPN, RBT, LVN, PCA and CSR
+  // are genuine titles on this board, and a naive length rule would erase them.
+  for (const title of [
+    "CNA",
+    "EMT",
+    "LPN",
+    "RBT",
+    "LVN",
+    "PCA",
+    "CSR",
+    "Apply Engineering Manager",
+    "Job Coach",
+    "Details Clerk",
+    "Application Developer",
+    "Auto Detailer",
+    "Learning Specialist",
+    "Software Engineer",
+  ]) {
+    assert.equal(isBlockedCrawlTitle(title), false, `should allow: ${title}`)
+  }
+})
