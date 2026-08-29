@@ -199,11 +199,29 @@ const INSPECT = `(() => {
   // EEO selects the profile deliberately declines as failures, which understated
   // Greenhouse at 40% on a form where one non-application search box was the
   // ONLY thing left blank.
+  // react-select keeps the chosen value OUT of the <input>. It renders in a
+  // sibling single-value node and a hidden input, so el.value stays "" on a
+  // control that is visibly answered. Reading only el.value made every
+  // react-select selection invisible: pick() reported failure after a successful
+  // click, and coverage counted answered dropdowns as gaps. Both now go through
+  // this, so the metric and the success check cannot disagree.
+  const hasValue = (el) => {
+    if ((el.value || "").trim().length > 0) return true;
+    const wrap = el.closest('[class*="control" i]') || el.parentElement;
+    if (wrap) {
+      const single = wrap.querySelector('[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i]');
+      if (single && (single.textContent || "").trim().length > 0) return true;
+      const hidden = wrap.querySelector('input[type="hidden"]');
+      if (hidden && (hidden.value || "").trim().length > 0) return true;
+    }
+    if (el.getAttribute("aria-activedescendant")) return true;
+    return false;
+  };
   const req = (el) => el.hasAttribute("required") || el.getAttribute("aria-required") === "true" ||
     !!(el.closest(".field, .form-group, [data-field]") || {}).querySelector?.("[aria-required=true]");
   const required = ctrls.filter(req);
-  const withValue = ctrls.filter((el) => (el.value||"").trim().length > 0);
-  const requiredFilled = required.filter((el) => (el.value||"").trim().length > 0);
+  const withValue = ctrls.filter(hasValue);
+  const requiredFilled = required.filter(hasValue);
   const emptyFreeText = ctrls.filter((el) =>
     (el.value||"").trim().length === 0 &&
     (el.tagName.toLowerCase() === "textarea" || labelFor(el).length > 40));
@@ -218,7 +236,7 @@ const INSPECT = `(() => {
     return "text";
   };
   const unfilledRequired = required
-    .filter((el) => (el.value||"").trim().length === 0)
+    .filter((el) => !hasValue(el))
     .map((el) => {
       // A positional index goes stale the moment React re-renders after the
       // first write, which is why most injections silently missed. id and name
@@ -324,7 +342,9 @@ function fillComboboxExpr(selector: string, value: string): string {
       m.scrollIntoView({ block: "center" });
       m.click();
       await sleep(250);
-      if (norm(el.value).length > 0) return true;
+      const w = el.closest('[class*="control" i]') || el.parentElement;
+      const sv = w && w.querySelector('[class*="singleValue" i], [class*="single-value" i]');
+      if (norm(el.value).length > 0 || (sv && norm(sv.textContent).length > 0)) return true;
     }
     el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
     await sleep(200);
@@ -425,7 +445,12 @@ function pickOptionExpr(selector: string, optionText: string): string {
     m.scrollIntoView({ block: "center" });
     m.click();
     await sleep(250);
-    return norm(el.value).length > 0 || el.getAttribute("aria-expanded") === "false";
+    const wrap = el.closest('[class*="control" i]') || el.parentElement;
+    const single = wrap && wrap.querySelector('[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i]');
+    const hidden = wrap && wrap.querySelector('input[type="hidden"]');
+    return norm(el.value).length > 0
+      || !!(single && norm(single.textContent).length > 0)
+      || !!(hidden && norm(hidden.value).length > 0);
   } catch (e) { return false; }
 })()`
 }
