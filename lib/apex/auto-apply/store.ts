@@ -47,10 +47,29 @@ export async function getAutoApplyLog(
   try {
     const pool = getPostgresPool()
     const { rows } = await pool.query<AutoApplyRecord>(
-      `SELECT * FROM apex_auto_apply_log
-       WHERE user_id = $1
-       ORDER BY applied_at DESC
-       LIMIT $2`,
+      // Explicit column aliases: the table is snake_case and AutoApplyRecord is
+      // camelCase, so SELECT * silently produced records whose fields were all
+      // undefined on the client.
+      `SELECT id,
+              job_id            AS "jobId",
+              job_title         AS "jobTitle",
+              company,
+              match_score       AS "matchScore",
+              applied_at        AS "appliedAt",
+              qualified_by      AS "qualifiedBy",
+              cover_letter_id   AS "coverLetterId",
+              tailored_resume_id AS "tailoredResumeId",
+              status,
+              error,
+              apply_url         AS "applyUrl",
+              ats,
+              run_id            AS "runId",
+              required_total    AS "requiredTotal",
+              required_filled   AS "requiredFilled"
+         FROM apex_auto_apply_log
+        WHERE user_id = $1
+        ORDER BY applied_at DESC
+        LIMIT $2`,
       [userId, limit],
     )
     return rows

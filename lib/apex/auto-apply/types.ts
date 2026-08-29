@@ -31,8 +31,16 @@ export type AutoApplyRecord = {
   qualifiedBy: Partial<AutoApplyCriteria>
   coverLetterId: string | null
   tailoredResumeId: string | null
-  status: "applied" | "failed" | "skipped_cap"
+  /** dry_run = the full pipeline ran but deliberately stopped before submitting. */
+  status: "applied" | "failed" | "skipped_cap" | "dry_run"
   error: string | null
+  applyUrl?: string | null
+  ats?: string | null
+  /** Groups this application's AI calls in api_usage.run_id. */
+  runId?: string | null
+  /** How complete the filled form was — the quality signal behind a run. */
+  requiredTotal?: number | null
+  requiredFilled?: number | null
 }
 
 export const AUTO_APPLY_DEFAULTS: AutoApplyCriteria = {
