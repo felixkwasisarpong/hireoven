@@ -44,6 +44,9 @@ import { classifyApplyMethod } from "../lib/jobs/apply-method"
 import { generateFillScript } from "../lib/autofill"
 import type { AutofillProfile } from "../types"
 
+/** --no-combo runs the pre-combobox baseline on the same fixed job set. */
+const COMBOS_ENABLED = !process.argv.includes("--no-combo")
+
 const NAV_TIMEOUT_MS = 30_000
 const SETTLE_MS = 2_500
 
@@ -124,6 +127,10 @@ type FillOutcome = {
   aiQuestions: number
   /** answers the model produced that were successfully injected into the form */
   aiWrittenBack: number
+  /** comboboxes driven to a selection */
+  combosFilled: number
+  /** EEO comboboxes set to an explicit decline option */
+  eeoDeclined: number
   /** required fields still empty after both passes, by kind — the real gap */
   residual: UnfilledField[]
   aiInputTokens: number; aiOutputTokens: number
@@ -271,6 +278,180 @@ function writeAnswerExpr(selector: string, value: string): string {
 })()`
 }
 
+/**
+ * Drive a react-select / typeahead combobox.
+ *
+ * Ported from the extension's fillAshbyTypeahead. These controls hold no value
+ * to assign — a plain value-set registers no selection — so the only thing that
+ * works is focus, open the menu, type a query, wait for the listbox to populate,
+ * then click the matching option. They were 28 of the residual required fields,
+ * concentrated in Greenhouse's Education block (School / Degree / Discipline).
+ *
+ * Values come from the profile by label. An unrecognised required combobox is
+ * deliberately left alone rather than given the first available option: guessing
+ * an answer to an unknown question is how a form gets submitted saying something
+ * untrue, and leaving it in the residual keeps the measurement honest.
+ */
+function fillComboboxExpr(selector: string, value: string): string {
+  return `(async () => {
+  const SEL = ${JSON.stringify(selector)}, VALUE = ${JSON.stringify(value)};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const el = document.querySelector(SEL);
+  if (!el) return false;
+  const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  const setVal = (input, v) => {
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    if (d && d.set) d.set.call(input, v); else input.value = v;
+    ["input", "change"].forEach((t) => input.dispatchEvent(new Event(t, { bubbles: true })));
+  };
+  const collect = () => Array.from(document.querySelectorAll(
+    '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
+  )).filter((n) => vis(n) && norm(n.textContent).length > 0);
+  try {
+    el.focus();
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    el.click();
+    const first = (VALUE.split(",")[0] || VALUE).trim();
+    for (const q of [VALUE, first]) {
+      setVal(el, q);
+      let opts = [];
+      const deadline = Date.now() + 1800;
+      while (Date.now() < deadline) { opts = collect(); if (opts.length) break; await sleep(150); }
+      if (!opts.length) continue;
+      const m = opts.find((o) => norm(o.textContent).toLowerCase().includes(first.toLowerCase())) || opts[0];
+      m.scrollIntoView({ block: "center" });
+      m.click();
+      await sleep(250);
+      if (norm(el.value).length > 0) return true;
+    }
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true }));
+    await sleep(200);
+    return norm(el.value).length > 0;
+  } catch (e) { return false; }
+})()`
+}
+
+/**
+ * Read the option list a combobox offers, without choosing anything.
+ *
+ * Selecting requires knowing what is on offer: these are not typeaheads to be
+ * matched against a profile value but closed questions — Yes/No screening,
+ * multiple-choice culture-fit, and EEO self-identification — where the answer
+ * must be one of the listed options.
+ */
+function readOptionsExpr(selector: string): string {
+  return `(async () => {
+  const SEL = ${JSON.stringify(selector)};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const el = document.querySelector(SEL);
+  if (!el) return [];
+  const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  // react-select ignores a mousedown on the inner input — the menu opens from
+  // the control wrapper. Clicking the input left aria-expanded="false" and the
+  // option nodes present-but-hidden, so every read returned an empty list.
+  const opener = (n) => n.closest('[class*="control" i]') || n.parentElement || n;
+  const openMenu = async (n) => {
+    const t = opener(n);
+    t.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    t.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    t.click();
+    n.focus();
+    for (let i = 0; i < 12; i++) {
+      if (n.getAttribute("aria-expanded") === "true") return true;
+      await sleep(120);
+    }
+    return n.getAttribute("aria-expanded") === "true";
+  };
+  try {
+    await openMenu(el);
+    for (let i = 0; i < 12; i++) {
+      const opts = Array.from(document.querySelectorAll(
+        '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
+      )).filter((n) => vis(n) && norm(n.textContent).length > 0);
+      if (opts.length) return opts.map((o) => norm(o.textContent)).slice(0, 25);
+      await sleep(150);
+    }
+    return [];
+  } catch (e) { return []; }
+})()`
+}
+
+/** Click the option whose text matches, then confirm the control took a value. */
+function pickOptionExpr(selector: string, optionText: string): string {
+  return `(async () => {
+  const SEL = ${JSON.stringify(selector)}, WANT = ${JSON.stringify(optionText)};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const el = document.querySelector(SEL);
+  if (!el) return false;
+  const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  // react-select ignores a mousedown on the inner input — the menu opens from
+  // the control wrapper. Clicking the input left aria-expanded="false" and the
+  // option nodes present-but-hidden, so every read returned an empty list.
+  const opener = (n) => n.closest('[class*="control" i]') || n.parentElement || n;
+  const openMenu = async (n) => {
+    const t = opener(n);
+    t.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    t.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    t.click();
+    n.focus();
+    for (let i = 0; i < 12; i++) {
+      if (n.getAttribute("aria-expanded") === "true") return true;
+      await sleep(120);
+    }
+    return n.getAttribute("aria-expanded") === "true";
+  };
+  try {
+    await openMenu(el);
+    let opts = [];
+    for (let i = 0; i < 12; i++) {
+      opts = Array.from(document.querySelectorAll(
+        '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
+      )).filter((n) => vis(n) && norm(n.textContent).length > 0);
+      if (opts.length) break;
+      await sleep(150);
+    }
+    if (!opts.length) return false;
+    const want = WANT.toLowerCase();
+    const m = opts.find((o) => norm(o.textContent).toLowerCase() === want)
+           || opts.find((o) => norm(o.textContent).toLowerCase().includes(want))
+           || opts.find((o) => want.includes(norm(o.textContent).toLowerCase()));
+    if (!m) return false;
+    m.scrollIntoView({ block: "center" });
+    m.click();
+    await sleep(250);
+    return norm(el.value).length > 0 || el.getAttribute("aria-expanded") === "false";
+  } catch (e) { return false; }
+})()`
+}
+
+/** EEO questions must never be answered from the résumé — they get the explicit
+ *  decline option. Leaving them blank is not equivalent: when the field is
+ *  required, a blank one blocks submission outright. */
+const EEO_LABEL = /gender|race|ethnic|hispanic|latino|veteran|disab|self.?identif/i
+const DECLINE_OPTION = /decline|prefer not|do not wish|don'?t wish|not to answer|not to say|choose not/i
+
+function pickDeclineOption(options: string[]): string | null {
+  return options.find((o) => DECLINE_OPTION.test(o)) ?? null
+}
+
+/** Profile value for a combobox, by its label. Null means "do not guess". */
+function comboValueFor(label: string): string | null {
+  const l = label.toLowerCase()
+  if (/\blocation\b|\bcity\b|\baddress\b|\bresidence\b|where are you based/.test(l)) return "Austin, TX"
+  if (/\bcountry\b/.test(l)) return "United States"
+  if (/\bschool\b|universit|college|institution/.test(l)) return "University of Example"
+  if (/\bdegree\b|qualification/.test(l)) return "Bachelor's Degree"
+  if (/discipline|field of study|\bmajor\b|concentration/.test(l)) return "Computer Science"
+  if (/\bstate\b|province/.test(l)) return "Texas"
+  return null
+}
+
 async function revealForm(page: Page): Promise<void> {
   for (const el of await page.$$("a, button, [role=button]")) {
     const label = ((await el.textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim()
@@ -316,6 +497,33 @@ async function answerQuestions(
   return { inTok, outTok, cacheRead, cacheWrite, cost, answers }
 }
 
+/**
+ * Choose one of a combobox's own options for a closed question.
+ *
+ * The option list is passed in and the model is told to return one verbatim, so
+ * it cannot answer with something the form will not accept. A refusal to match
+ * is returned as null and left in the residual rather than forced.
+ */
+async function chooseOption(
+  anthropic: Anthropic, question: string, options: string[],
+): Promise<string | null> {
+  const msg = await anthropic.messages.create({
+    model: "claude-haiku-4-5",
+    max_tokens: 60,
+    system: `Answer an application form question by selecting exactly one option.
+Reply with the option text VERBATIM and nothing else.
+Ground the answer in the applicant profile. If none is truthful, reply NONE.`,
+    messages: [{
+      role: "user",
+      content: `Applicant: ${RESUME_CONTEXT}\nAge 18+: yes. US work authorization: yes, no sponsorship needed.\n\nQuestion: ${question}\nOptions:\n${options.map((o) => `- ${o}`).join("\n")}`,
+    }],
+  }).catch(() => null)
+  if (!msg) return null
+  const text = msg.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("").trim()
+  if (!text || /^none$/i.test(text)) return null
+  return options.find((o) => o.toLowerCase() === text.toLowerCase()) ?? text
+}
+
 async function fillOne(
   browser: Browser, job: Candidate, anthropic: Anthropic | null,
 ): Promise<FillOutcome> {
@@ -326,7 +534,7 @@ async function fillOne(
     formReached: false, blocked: false, fieldsVisible: 0,
     filled: 0, skipped: 0, errors: 0, verifiedFilled: 0, fillRate: 0,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
-    aiQuestions: 0, aiWrittenBack: 0, residual: [],
+    aiQuestions: 0, aiWrittenBack: 0, combosFilled: 0, eeoDeclined: 0, residual: [],
     aiInputTokens: 0, aiOutputTokens: 0,
     aiCacheReadTokens: 0, aiCacheWriteTokens: 0, aiCostUsd: 0,
     submitAttemptsBlocked: 0, durationMs: 0, error: null,
@@ -383,8 +591,13 @@ async function fillOne(
     // floor rather than a result: every AI-answerable question counted as
     // unfilled. Only text and textarea are handled — selects and comboboxes need
     // option matching, which is deliberately left to show up in the residual.
-    const answerable = (after.unfilledRequired as UnfilledField[])
-      .filter((f) => (f.kind === "text" || f.kind === "textarea") && f.sel)
+    const unfilled = after.unfilledRequired as UnfilledField[]
+    const answerable = unfilled.filter((f) => (f.kind === "text" || f.kind === "textarea") && f.sel)
+
+    // Text answers and combobox selection run independently. Nesting the
+    // combobox pass inside the text pass meant a form whose only gaps were
+    // dropdowns never had them touched, which is why combosFilled stayed at
+    // zero through three different attempts at the mechanism itself.
     if (anthropic && answerable.length) {
       const a = await answerQuestions(
         anthropic, answerable.map((f) => f.label),
@@ -401,13 +614,37 @@ async function fillOne(
         if (ok) o.aiWrittenBack++
       }
       await page.waitForTimeout(400)
-      const final = await page.evaluate(INSPECT) as InspectResult
-      o.requiredFilled = final.requiredFilled
-      o.requiredRate = final.requiredTotal ? final.requiredFilled / final.requiredTotal : 1
-      o.residual = final.unfilledRequired
-    } else {
-      o.residual = after.unfilledRequired as UnfilledField[]
     }
+
+    const combos = COMBOS_ENABLED ? unfilled.filter((f) => f.kind === "combobox" && f.sel) : []
+    for (const c of combos) {
+      // Profile-backed typeahead first (location, school, degree).
+      const v = comboValueFor(c.label)
+      if (v) {
+        const ok = await page.evaluate(fillComboboxExpr(c.sel!, v)).catch(() => false)
+        if (ok) { o.combosFilled++; continue }
+      }
+      // Otherwise it is a closed question — read what it offers before choosing.
+      const options = await page.evaluate(readOptionsExpr(c.sel!)).catch(() => []) as string[]
+      if (!options.length) continue
+
+      let choice: string | null = null
+      if (EEO_LABEL.test(c.label)) {
+        choice = pickDeclineOption(options)
+        if (choice) o.eeoDeclined++
+      } else if (anthropic) {
+        choice = await chooseOption(anthropic, c.label, options)
+      }
+      if (!choice) continue
+      const ok = await page.evaluate(pickOptionExpr(c.sel!, choice)).catch(() => false)
+      if (ok) o.combosFilled++
+    }
+    if (combos.length) await page.waitForTimeout(400)
+
+    const final = await page.evaluate(INSPECT) as InspectResult
+    o.requiredFilled = final.requiredFilled
+    o.requiredRate = final.requiredTotal ? final.requiredFilled / final.requiredTotal : 1
+    o.residual = final.unfilledRequired
   } catch (err) {
     o.error = err instanceof Error ? err.message.slice(0, 180) : String(err)
   } finally {
@@ -434,7 +671,10 @@ async function main() {
         AND j.is_active AND j.apply_url IS NOT NULL
         -- SmartRecruiters is excluded: Phase 1 measured it 100% DataDome-blocked.
         AND j.apply_url ~* '(greenhouse|lever\\.co|ashbyhq|applytojob|bamboohr)'
-      ORDER BY random() LIMIT $1`,
+      -- Deterministic ordering, not random(): each run must hit the SAME
+      -- postings or a before/after comparison measures sample variation rather
+      -- than the change under test.
+      ORDER BY md5(j.id::text) LIMIT $1`,
     [limit * 2],
   )
   const candidates = rows
@@ -493,6 +733,8 @@ async function main() {
   const kinds = new Map<string, number>()
   for (const r of reached) for (const f of r.residual) kinds.set(f.kind, (kinds.get(f.kind) ?? 0) + 1)
   console.log(`answers written back ${results.reduce((a, r) => a + r.aiWrittenBack, 0)}`)
+  console.log(`comboboxes filled   ${results.reduce((a, r) => a + r.combosFilled, 0)}`)
+  console.log(`  EEO declined      ${results.reduce((a, r) => a + r.eeoDeclined, 0)}`)
   console.log(`residual gap by kind (required fields still empty):`)
   for (const [k, c] of [...kinds].sort((a, b) => b[1] - a[1])) console.log(`  ${k.padEnd(12)} ${c}`)
   if (useAi) {
