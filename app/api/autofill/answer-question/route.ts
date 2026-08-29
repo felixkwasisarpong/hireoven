@@ -17,15 +17,42 @@ import Anthropic from "@anthropic-ai/sdk"
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getPostgresPool } from "@/lib/postgres/server"
-import { logApiUsage } from "@/lib/admin/usage"
-import { HAIKU_MODEL, ANTHROPIC_TIER_PRICING } from "@/lib/ai/anthropic-models"
+import { logApiUsage, calcAnthropicCostUsd } from "@/lib/admin/usage"
+import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
 import { requireFeature } from "@/lib/gates/server-gate"
 import { requireQuota } from "@/lib/usage/server-quota"
 import { sanitizeGeneratedText, replaceEmDash } from "@/lib/text/sanitize-generated-text"
 import { formatResumeContext } from "@/lib/autofill/resume-context"
+import {
+  answerCacheKey,
+  getCachedAnswer,
+  putCachedAnswer,
+} from "@/lib/autofill/answer-cache"
+import { createHash } from "node:crypto"
 
 export const runtime = "nodejs"
 export const maxDuration = 30
+
+/**
+ * Frozen instruction prefix. Module scope and free of per-request
+ * interpolation so it stays byte-identical on every call — one varying
+ * character here would invalidate the cached prefix for every user.
+ */
+const ANSWER_INSTRUCTIONS = `You help a job applicant answer application-form questions. Answer as the applicant, first person. Match the answer length to the question. Return ONLY the answer text — no preamble, no quotes, no explanation.
+
+MATCH THE QUESTION TYPE:
+- Yes/No → answer with just "Yes" or "No" (nothing more) unless it clearly wants a sentence.
+- Numeric (years, count) → the number, optionally with a unit ("3 years", "5").
+- Short text → 1 sentence.
+- Open-ended ("Why this role?", "Tell us about yourself", "Why this company?") → 2–4 sentences, specific to THIS job, and tie it to a concrete achievement from the résumé. Sound like a real person: no "I am passionate about", no generic filler, no clichés.
+
+HARD FACTS — answer truthfully from the applicant profile, never guess:
+- Work authorization, sponsorship, citizenship, clearance, licenses, criminal/background → from the profile only. If not in the profile, give the safest truthful answer and don't invent specifics.
+- Location / relocation / start date → from the profile.
+
+SKILLS & EXPERIENCE — be confident, don't undersell. If the question asks about a tool/skill in the SAME domain as the applicant's background (and the résumé supports the domain), answer affirmatively; strong engineers pick up adjacent tools fast. But NEVER fabricate a specific named tool, employer, credential, or metric that isn't supported by the résumé.
+
+DEMOGRAPHIC / EEO questions (gender, race, ethnicity, veteran, disability) → answer "Prefer not to say" / "Decline to self-identify". Do not infer these from the résumé.`
 
 const anthropic = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -45,9 +72,18 @@ export async function POST(request: Request) {
     question?: string
     jobTitle?: string
     company?: string
+    /** Groups every question asked while filling one application, so
+     *  cost-per-application is a GROUP BY rather than a guess. */
+    runId?: string
   }
 
   const { question, jobTitle, company } = body
+  // Only accept a well-formed uuid — this lands in a uuid column and is
+  // client-supplied, so anything else is dropped rather than trusted.
+  const runId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    .test(body.runId ?? "")
+    ? body.runId!
+    : null
   if (!question?.trim()) {
     return NextResponse.json({ error: "question is required" }, { status: 400 })
   }
@@ -85,9 +121,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No resume found — upload one in Hireoven first." }, { status: 404 })
   }
 
-  const quota = await requireQuota(gate.userId, "autofill", gate.plan)
-  if (quota instanceof NextResponse) return quota
-
   // Build a complete resume context — full structured data, raw-text fallback.
   const resumeContext = formatResumeContext(resume)
   if (!resumeContext) {
@@ -98,34 +131,60 @@ export async function POST(request: Request) {
   const salaryGuidance = buildSalaryGuidance(profile)
   const jobContext = [jobTitle, company].filter(Boolean).join(" at ") || "this role"
 
+  // Answer bank. Checked BEFORE the quota bump on purpose: a cache hit costs us
+  // nothing, so charging the user's monthly allowance for it would be charging
+  // for an LLM call that never happened.
+  //
+  // The fingerprint is the exact grounding text, so editing a résumé or profile
+  // invalidates the answers derived from it rather than letting them contradict
+  // the document being uploaded alongside them.
+  const resumeFingerprint = createHash("sha256")
+    .update(`${resumeContext}\n${profileContext}\n${salaryGuidance}`)
+    .digest("hex")
+  const cacheKey = answerCacheKey({
+    question,
+    jobScope: [company, jobTitle].filter(Boolean).join("|") || null,
+  })
+
+  if (cacheKey) {
+    const hit = await getCachedAnswer({ userId: user.id, cacheKey, resumeFingerprint })
+    if (hit) {
+      return NextResponse.json(sanitizeGeneratedText({ answer: hit, cached: true }))
+    }
+  }
+
+  const quota = await requireQuota(gate.userId, "autofill", gate.plan)
+  if (quota instanceof NextResponse) return quota
+
   const message = await anthropic.messages.create({
     model: HAIKU_MODEL,
     max_tokens: 300,
-    system: `You help a job applicant answer application-form questions. Answer as the applicant, first person. Match the answer length to the question. Return ONLY the answer text — no preamble, no quotes, no explanation.
-
-MATCH THE QUESTION TYPE:
-- Yes/No → answer with just "Yes" or "No" (nothing more) unless it clearly wants a sentence.
-- Numeric (years, count) → the number, optionally with a unit ("3 years", "5").
-- Short text → 1 sentence.
-- Open-ended ("Why this role?", "Tell us about yourself", "Why this company?") → 2–4 sentences, specific to THIS job, and tie it to a concrete achievement from the résumé. Sound like a real person: no "I am passionate about", no generic filler, no clichés.
-
-HARD FACTS — answer truthfully from the applicant profile, never guess:
-- Work authorization, sponsorship, citizenship, clearance, licenses, criminal/background → from the profile only. If not in the profile, give the safest truthful answer and don't invent specifics.
-- Location / relocation / start date → from the profile.
-
-SKILLS & EXPERIENCE — be confident, don't undersell. If the question asks about a tool/skill in the SAME domain as the applicant's background (and the résumé supports the domain), answer affirmatively; strong engineers pick up adjacent tools fast. But NEVER fabricate a specific named tool, employer, credential, or metric that isn't supported by the résumé.
-
+    // Cache layout is load-bearing here. This route is the hot path of an
+    // application run, which asks the SAME résumé 5-10 questions in a row.
+    // Anthropic caching is a prefix match, so everything stable (instructions,
+    // résumé, profile, salary guidance) sits in `system` behind one breakpoint,
+    // and only the volatile part (job + question) rides in `messages`. Question
+    // two onward then reads the résumé from cache at ~0.1x input price instead
+    // of re-paying for it on every question. Moving the question above the
+    // breakpoint would silently drop the hit rate to zero.
+    system: [
+      { type: "text" as const, text: ANSWER_INSTRUCTIONS },
+      {
+        type: "text" as const,
+        text: `APPLICANT RÉSUMÉ:
+${resumeContext}
+${profileContext ? `\nAPPLICANT PROFILE (hard facts):\n${profileContext}\n` : ""}
 SALARY — think, don't just echo a number:
-${salaryGuidance}
-
-DEMOGRAPHIC / EEO questions (gender, race, ethnicity, veteran, disability) → answer "Prefer not to say" / "Decline to self-identify". Do not infer these from the résumé.`,
+${salaryGuidance}`,
+        // One breakpoint, at the end of the per-user grounding. A prefix under
+        // ~1024 tokens simply won't cache — a silent no-op, not an error.
+        cache_control: { type: "ephemeral" as const },
+      },
+    ],
     messages: [
       {
         role: "user",
-        content: `Applicant's résumé:
-${resumeContext}
-${profileContext ? `\nApplicant profile (hard facts):\n${profileContext}\n` : ""}
-Applying for: ${jobContext}
+        content: `Applying for: ${jobContext}
 
 Question: "${question}"
 
@@ -136,16 +195,27 @@ Write the answer, grounded only in the résumé and profile above.`,
 
   const inputTokens = message.usage?.input_tokens ?? 0
   const outputTokens = message.usage?.output_tokens ?? 0
+  const cacheReadTokens = message.usage?.cache_read_input_tokens ?? 0
+  const cacheWriteTokens = message.usage?.cache_creation_input_tokens ?? 0
   await logApiUsage({
     service: "claude",
     operation: "autofill_answer_question",
+    feature: "autofill_answer_question",
+    model: HAIKU_MODEL,
+    user_id: user.id,
+    run_id: runId,
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cache_read_tokens: cacheReadTokens,
+    cache_write_tokens: cacheWriteTokens,
     tokens_used: inputTokens + outputTokens,
-    cost_usd: Number(
-      (
-        (inputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.haiku.inputPerMillion +
-        (outputTokens / 1_000_000) * ANTHROPIC_TIER_PRICING.haiku.outputPerMillion
-      ).toFixed(6)
-    ),
+    cost_usd: calcAnthropicCostUsd({
+      tier: "haiku",
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+    }),
   })
 
   const raw = message.content
@@ -157,7 +227,17 @@ Write the answer, grounded only in the résumé and profile above.`,
 
   const answer = replaceEmDash(raw)
 
-  return NextResponse.json(sanitizeGeneratedText({ answer }))
+  if (cacheKey && answer) {
+    await putCachedAnswer({
+      userId: user.id,
+      cacheKey,
+      question,
+      answer,
+      resumeFingerprint,
+    })
+  }
+
+  return NextResponse.json(sanitizeGeneratedText({ answer, cached: false }))
 }
 
 type ResumeRow = {

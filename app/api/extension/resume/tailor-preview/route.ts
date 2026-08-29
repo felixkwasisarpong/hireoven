@@ -184,7 +184,8 @@ export async function POST(request: Request) {
       job.description,
       jobTitle,
       companyName,
-      resolvedAts.ats
+      resolvedAts.ats,
+      { userId: user.sub }
     )
   } catch (err) {
     console.error("[tailor-preview] tailorResumeForAts failed:", err)

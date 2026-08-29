@@ -11,9 +11,9 @@
 import type Anthropic from "@anthropic-ai/sdk"
 import type { MessageParam, MessageCreateParamsNonStreaming } from "@anthropic-ai/sdk/resources/messages"
 import type { ApexFeature, ModelTier } from "./types"
-import { budgetTracker, calcCost, inferTier } from "./tracker"
+import { budgetTracker, inferTier } from "./tracker"
 import { isAiBudgetExceeded } from "./cap"
-import { logApiUsage } from "@/lib/admin/usage"
+import { logApiUsage, calcAnthropicCostUsd } from "@/lib/admin/usage"
 import { sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
 
 export type AICallOptions<T> = {
@@ -26,6 +26,8 @@ export type AICallOptions<T> = {
   /** Parse the Anthropic Message into your domain type */
   parse:      (content: string) => T
   userId?:    string
+  /** Groups every AI call in one logical unit of work, e.g. one application attempt. */
+  runId?:     string
 }
 
 export type AICallResult<T> = {
@@ -46,6 +48,7 @@ export async function withAICall<T>({
   fallback,
   parse,
   userId,
+  runId,
 }: AICallOptions<T>): Promise<AICallResult<T>> {
   const start   = Date.now()
   const tier    = inferTier(params.model)
@@ -54,6 +57,8 @@ export async function withAICall<T>({
   let success   = true
   let inputTokens  = 0
   let outputTokens = 0
+  let cacheReadTokens  = 0
+  let cacheWriteTokens = 0
   let costUsd      = 0
   let value: T
 
@@ -94,7 +99,17 @@ export async function withAICall<T>({
 
     inputTokens  = message.usage?.input_tokens  ?? 0
     outputTokens = message.usage?.output_tokens ?? 0
-    costUsd      = calcCost(tier, inputTokens, outputTokens)
+    // Prompt-cache counters bill at 0.1x (read) / 1.25x (write) of base input,
+    // so a call reusing a cached prefix costs far less than input_tokens implies.
+    cacheReadTokens  = message.usage?.cache_read_input_tokens ?? 0
+    cacheWriteTokens = message.usage?.cache_creation_input_tokens ?? 0
+    costUsd      = calcAnthropicCostUsd({
+      tier,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheWriteTokens,
+    })
 
     const text = message.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -128,10 +143,18 @@ export async function withAICall<T>({
 
   if (success && inputTokens > 0) {
     void logApiUsage({
-      service:     "claude",
-      operation:   feature,
-      tokens_used: inputTokens + outputTokens,
-      cost_usd:    Number(costUsd.toFixed(6)),
+      service:            "claude",
+      operation:          feature,
+      feature,
+      model,
+      user_id:            userId ?? null,
+      run_id:             runId ?? null,
+      input_tokens:       inputTokens,
+      output_tokens:      outputTokens,
+      cache_read_tokens:  cacheReadTokens,
+      cache_write_tokens: cacheWriteTokens,
+      tokens_used:        inputTokens + outputTokens,
+      cost_usd:           Number(costUsd.toFixed(6)),
     }).catch(() => {})
   }
 
