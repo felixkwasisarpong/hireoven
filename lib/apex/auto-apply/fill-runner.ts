@@ -121,7 +121,19 @@ const INSPECT = `(() => {
       if (hv && !SENTINEL.test(hv)) return true;
     }
     return false; };
-  const req = (el) => el.hasAttribute("required") || el.getAttribute("aria-required") === "true";
+  // JazzHR (and several others) mark a field required with an asterisk in the
+  // label rather than the HTML attribute. Checking only the attribute found
+  // ZERO required fields on those forms, which scored 0/0 as 100% coverage —
+  // a form we had barely filled reported as fully complete.
+  const req = (el) => {
+    if (el.hasAttribute("required") || el.getAttribute("aria-required") === "true") return true;
+    const l = labelFor(el);
+    if (/[*✱]\\s*$/.test(l) || /[*✱]/.test(l)) return true;
+    const w = el.closest('.field, .form-group, [class*="field" i], [class*="question" i]');
+    if (w && /[*✱]/.test((w.querySelector("label")||{}).textContent || "")) return true;
+    if (w && /\\brequired\\b/i.test(w.className || "")) return true;
+    return false;
+  };
   const required = ctrls.filter(req);
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type")||"").toLowerCase();
@@ -361,7 +373,9 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     const final = await page.evaluate(INSPECT) as InspectResult
     r.requiredTotal = final.requiredTotal
     r.requiredFilled = final.requiredFilled
-    r.requiredRate = final.requiredTotal ? final.requiredFilled / final.requiredTotal : 1
+    // A form with no detectable required fields is UNMEASURED, not complete.
+    // Scoring 0/0 as 1 reported barely-filled JazzHR forms as fully covered.
+    r.requiredRate = final.requiredTotal > 0 ? final.requiredFilled / final.requiredTotal : 0
     r.submitAttemptsBlocked = (final.blockedSubmits ?? 0) + state.blocked
     // "ok" means the form could be submitted, not that it was.
     r.ok = r.requiredRate >= 1
