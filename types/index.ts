@@ -1400,14 +1400,53 @@ export type ApiUsage = {
   id: string;
   service: string;
   operation: string | null;
+  /** Legacy combined input+output. Prefer input_tokens/output_tokens on new rows. */
   tokens_used: number | null;
   cost_usd: number | null;
   created_at: string;
+  /** Who the spend is attributable to. Null for system/cron work with no owner. */
+  user_id: string | null;
+  /** Stable feature key for rollups, independent of the free-text `operation`. */
+  feature: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  /** Prompt-cache accounting — billed at 0.1x (read) and 1.25x (write) of base input. */
+  cache_read_tokens: number | null;
+  cache_write_tokens: number | null;
+  /** Groups every AI call in one logical unit of work, e.g. a single application attempt. */
+  run_id: string | null;
 };
 
-export type ApiUsageInsert = Omit<ApiUsage, 'id' | 'created_at'> & {
+/**
+ * Every attribution field is optional so existing call sites keep compiling and
+ * can be migrated one at a time. New AI call sites should always set `user_id`,
+ * `feature`, and the input/output token split — without those, the spend cannot
+ * be attributed and per-user unit economics stay unmeasurable.
+ */
+export type ApiUsageInsert = Omit<
+  ApiUsage,
+  | 'id'
+  | 'created_at'
+  | 'user_id'
+  | 'feature'
+  | 'model'
+  | 'input_tokens'
+  | 'output_tokens'
+  | 'cache_read_tokens'
+  | 'cache_write_tokens'
+  | 'run_id'
+> & {
   id?: string;
   created_at?: string;
+  user_id?: string | null;
+  feature?: string | null;
+  model?: string | null;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_write_tokens?: number | null;
+  run_id?: string | null;
 };
 
 export type SystemSetting = {

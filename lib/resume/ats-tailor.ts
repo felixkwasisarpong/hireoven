@@ -18,6 +18,7 @@ import { buildLocalTailorAnalysis } from "@/lib/resume/tailor-analysis"
 import { detectJdDomains, resolveTargetTitle } from "@/lib/resume/jd-context"
 import { normalizeKeyword } from "@/lib/resume/hub"
 import { replaceEmDash, sanitizeGeneratedText } from "@/lib/text/sanitize-generated-text"
+import { logApiUsage, calcAnthropicCostUsd } from "@/lib/admin/usage"
 
 export type KnownATS =
   | "workday"
@@ -284,7 +285,8 @@ async function generateAtsSummaryRewrite(
   missingKeywords: string[],
   presentKeywords: string[],
   profile: AtsProfile,
-  resume: Resume
+  resume: Resume,
+  attribution?: AiAttribution
 ): Promise<string | null> {
   if (!anthropic) return null
 
@@ -339,6 +341,31 @@ Return ONLY the rewritten summary text. No commentary, no labels, no quotes.`
       messages: [{ role: "user", content: prompt }],
     })
 
+    // Previously unlogged — this was the single largest uninstrumented AI cost
+    // in the apply path, so cost-per-application could not be measured.
+    const inputTokens = message.usage?.input_tokens ?? 0
+    const outputTokens = message.usage?.output_tokens ?? 0
+    void logApiUsage({
+      service: "claude",
+      operation: "ats_summary_rewrite",
+      feature: "resume_tailor",
+      model: SONNET_MODEL,
+      user_id: attribution?.userId ?? null,
+      run_id: attribution?.runId ?? null,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      cache_read_tokens: message.usage?.cache_read_input_tokens ?? 0,
+      cache_write_tokens: message.usage?.cache_creation_input_tokens ?? 0,
+      tokens_used: inputTokens + outputTokens,
+      cost_usd: calcAnthropicCostUsd({
+        tier: "sonnet",
+        inputTokens,
+        outputTokens,
+        cacheReadTokens: message.usage?.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: message.usage?.cache_creation_input_tokens ?? 0,
+      }),
+    }).catch(() => {})
+
     const text = message.content
       .filter((b) => b.type === "text")
       .map((b) => b.text)
@@ -362,12 +389,24 @@ Return ONLY the rewritten summary text. No commentary, no labels, no quotes.`
  * summary alignment) then overlays ATS-specific guidance and — when an AI key
  * is available — generates a Claude-written ATS-optimized summary rewrite.
  */
+/**
+ * Who to bill an AI call to. Optional so existing callers keep working, but
+ * every new call site should pass it — an unattributed call is spend we cannot
+ * tie to a user, which is what made per-user unit economics unmeasurable.
+ */
+export type AiAttribution = {
+  userId?: string | null
+  /** Groups all AI calls for one logical unit of work, e.g. one application. */
+  runId?: string | null
+}
+
 export async function tailorResumeForAts(
   resume: Resume,
   jobDescription: string,
   jobTitle: string | null,
   company: string | null,
-  ats: string | null | undefined
+  ats: string | null | undefined,
+  attribution?: AiAttribution
 ): Promise<AtsTailorResult> {
   const profile = getAtsProfile(ats)
   const skillsText = skillsToText(resume)
@@ -417,7 +456,8 @@ export async function tailorResumeForAts(
     criticalKeywords,
     analysis.presentKeywords,
     profile,
-    resume
+    resume,
+    attribution
   )
 
   return sanitizeGeneratedText({
