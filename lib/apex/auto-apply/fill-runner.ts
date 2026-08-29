@@ -27,6 +27,12 @@ import Anthropic from "@anthropic-ai/sdk"
 import { generateFillScript } from "@/lib/autofill"
 import { logApiUsage, calcAnthropicCostUsd } from "@/lib/admin/usage"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
+import {
+  isUsableAnswer,
+  classifyWorkAuthQuestion,
+  answerWorkAuth,
+  identityAnswer,
+} from "@/lib/autofill/answer-policy"
 import type { AutofillProfile } from "@/types"
 
 const NAV_TIMEOUT_MS = 30_000
@@ -50,6 +56,12 @@ export type FillAttempt = {
   aiQuestions: number
   aiWrittenBack: number
   eeoDeclined: number
+  /** work-auth answers taken from the profile rather than a model */
+  groundedAnswers: number
+  /** model answers discarded for declining instead of answering */
+  refusalsRejected: number
+  /** required fields deliberately left blank for the human */
+  leftForHuman: number
   costUsd: number
   submitAttemptsBlocked: number
   /** true only when allowSubmit was set AND the form was actually submitted */
@@ -92,14 +104,21 @@ const INSPECT = `(() => {
     return t.replace(/\\s+/g," ").trim(); };
   // react-select keeps the chosen value OUT of the input; it renders in a
   // sibling node. Reading only el.value scores an answered dropdown as a gap.
+  // Mirrors isSentinelValue in lib/autofill/answer-policy.ts: an untouched
+  // JazzHR dropdown holds "resumator_no_selection", which is non-empty and was
+  // therefore scored as answered. It is not an answer.
+  const SENTINEL = /^(resumator_no_selection|no_selection|-+\\s*select|please\\s+select|select(\\s+one)?|choose\\s+one|n\\/?a)$/i;
   const hasValue = (el) => {
-    if ((el.value||"").trim().length > 0) return true;
+    const raw = (el.value||"").trim();
+    if (raw.length > 0 && !SENTINEL.test(raw)) return true;
     const w = el.closest('[class*="control" i]') || el.parentElement;
     if (w) {
       const sv = w.querySelector('[class*="singleValue" i], [class*="single-value" i], [class*="multiValue" i]');
-      if (sv && (sv.textContent||"").trim().length > 0) return true;
+      const svt = sv ? (sv.textContent||"").trim() : "";
+      if (svt && !SENTINEL.test(svt)) return true;
       const h = w.querySelector('input[type="hidden"]');
-      if (h && (h.value||"").trim().length > 0) return true;
+      const hv = h ? (h.value||"").trim() : "";
+      if (hv && !SENTINEL.test(hv)) return true;
     }
     return false; };
   const req = (el) => el.hasAttribute("required") || el.getAttribute("aria-required") === "true";
@@ -234,6 +253,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     ok: false, blocked: false, formReached: false,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
+    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0,
     costUsd: 0, submitAttemptsBlocked: 0, submitted: false, error: null,
   }
 
@@ -278,14 +298,45 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     r.aiQuestions = answerable.length
 
     for (const f of answerable) {
-      if (!opts.anthropic || !f.sel) continue
+      if (!f.sel) continue
+
+      // Work authorization, sponsorship and immigration status are legal
+      // declarations. They come from the profile or not at all — a model must
+      // never be asked to infer them, and an ungrounded profile leaves the
+      // field for the human rather than guessing.
+      // Identity is a lookup, never an inference. Asking a model "what is your
+      // name?" is how a refusal ended up in a Name field.
+      const identity = identityAnswer(opts.profile, f.label)
+      if (identity) {
+        const ok = await page.evaluate(writeAnswerExpr(f.sel, identity)).catch(() => false)
+        if (ok) r.groundedAnswers++
+        else r.leftForHuman++
+        continue
+      }
+
+      const authKind = classifyWorkAuthQuestion(f.label)
+      if (authKind) {
+        const grounded = answerWorkAuth(opts.profile, authKind)
+        if (grounded) {
+          const ok = await page.evaluate(writeAnswerExpr(f.sel, grounded.value)).catch(() => false)
+          if (ok) r.groundedAnswers++
+        } else {
+          r.leftForHuman++
+        }
+        continue
+      }
+
+      if (!opts.anthropic) continue
       const { answer, costUsd } = await answerQuestion(
         opts.anthropic, f.label, opts.resumeContext,
         opts.jobTitle, opts.companyName, opts.userId, opts.runId,
       )
       r.costUsd += costUsd
-      if (!answer) continue
-      const ok = await page.evaluate(writeAnswerExpr(f.sel, answer)).catch(() => false)
+      // A model that declines is talking to us, not to the employer. The audit
+      // found "I cannot provide your name..." typed into a Name field; the
+      // field is left blank instead.
+      if (!isUsableAnswer(answer)) { r.refusalsRejected++; r.leftForHuman++; continue }
+      const ok = await page.evaluate(writeAnswerExpr(f.sel, answer!)).catch(() => false)
       if (ok) r.aiWrittenBack++
     }
 

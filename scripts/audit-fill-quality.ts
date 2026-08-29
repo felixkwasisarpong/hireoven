@@ -28,6 +28,9 @@ import { getAutoApplyCandidates } from "../lib/apex/auto-apply/candidates"
 import { generateFillScript } from "../lib/autofill"
 import { formatResumeContext } from "../lib/autofill/resume-context"
 import { HAIKU_MODEL } from "../lib/ai/anthropic-models"
+import {
+  isAnswered, isUsableAnswer, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer,
+} from "../lib/autofill/answer-policy"
 import type { AutofillProfile } from "../types"
 
 const SETTLE_MS = 2_500
@@ -152,8 +155,22 @@ async function main() {
       const aiAnswers: { label: string; answer: string }[] = []
 
       // Answer the required free-text gaps exactly as the worker would.
+      const grounded: { label: string; answer: string }[] = []
+      const leftBlank: string[] = []
       for (const f of afterDeterministic) {
-        if (f.value || !f.required) continue
+        // Only required fields, and a sentinel counts as still-unanswered.
+        if (!f.required || isAnswered(f.value)) continue
+
+        const identity = identityAnswer(profile, f.label)
+        if (identity) { grounded.push({ label: f.label, answer: identity }); continue }
+
+        const authKind = classifyWorkAuthQuestion(f.label)
+        if (authKind) {
+          const g = answerWorkAuth(profile, authKind)
+          if (g) grounded.push({ label: f.label, answer: g.value })
+          else leftBlank.push(f.label)
+          continue
+        }
         if (f.kind !== "text" && f.kind !== "textarea") continue
         if (!anthropic) break
         const msg = await anthropic.messages.create({
@@ -166,20 +183,22 @@ async function main() {
         }).catch(() => null)
         const answer = msg?.content.filter((b) => b.type === "text")
           .map((b) => (b as { text: string }).text).join("").trim() ?? ""
-        if (answer) aiAnswers.push({ label: f.label, answer })
+        if (!isUsableAnswer(answer)) { leftBlank.push(f.label); continue }
+        aiAnswers.push({ label: f.label, answer })
       }
 
       report.push({
         company: job.companyName, title: job.title, ats: job.ats,
         applyUrl: job.applyUrl, matchScore: job.matchScore,
-        deterministic: afterDeterministic.filter((f) => f.value)
+        deterministic: afterDeterministic.filter((f) => isAnswered(f.value))
           .map((f) => ({ label: f.label, value: f.value })),
+        grounded,
         aiAnswers,
-        stillEmptyRequired: afterDeterministic
-          .filter((f) => !f.value && f.required)
-          .map((f) => ({ label: f.label, kind: f.kind })),
+        leftBlank,
+        sentinels: afterDeterministic.filter((f) => f.value && !isAnswered(f.value))
+          .map((f) => ({ label: f.label, value: f.value })),
       })
-      console.log(`  ok  ${(job.companyName ?? "").slice(0, 28).padEnd(30)} ${afterDeterministic.filter((f) => f.value).length} filled, ${aiAnswers.length} AI`)
+      console.log(`  ok  ${(job.companyName ?? "").slice(0, 26).padEnd(28)} ${afterDeterministic.filter((f) => isAnswered(f.value)).length} filled, ${grounded.length} grounded, ${aiAnswers.length} AI, ${leftBlank.length} left blank`)
     } catch (e) {
       console.log(`  ERR ${job.companyName}: ${(e as Error).message.slice(0, 80)}`)
     } finally {
