@@ -1,0 +1,161 @@
+/**
+ * One overnight auto-apply run for one user.
+ *
+ * Orchestration only — the decisions live in the modules it calls, each of which
+ * fails closed on its own: limits.ts decides how many, candidates.ts decides
+ * which, fill-runner.ts decides whether a form can actually be completed.
+ *
+ * The run is a DRY RUN unless `allowSubmit` is explicitly true. A dry run does
+ * everything except submit and records status 'dry_run', which is what makes a
+ * closed beta possible: the whole pipeline is exercised, cost is measured
+ * per-user, and no employer is contacted.
+ */
+
+import { randomUUID } from "node:crypto"
+import { chromium } from "playwright"
+import Anthropic from "@anthropic-ai/sdk"
+import { getPostgresPool } from "@/lib/postgres/server"
+import { getRemainingAllowance } from "./limits"
+import { getAutoApplyCandidates } from "./candidates"
+import { runFillAttempt } from "./fill-runner"
+import { formatResumeContext } from "@/lib/autofill/resume-context"
+import type { Plan } from "@/lib/gates"
+import type { AutofillProfile } from "@/types"
+
+export type RunOptions = {
+  userId: string
+  plan: Plan
+  timezone?: string
+  /** Must be explicitly true to contact employers. Absent means dry run. */
+  allowSubmit?: boolean
+  /** Try Greenhouse too (54% measured coverage — off by default). */
+  includeUnproven?: boolean
+}
+
+export type RunResult = {
+  runId: string
+  attempted: number
+  submittable: number
+  blocked: number
+  failed: number
+  costUsd: number
+  skippedReason: string | null
+}
+
+export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> {
+  const runId = randomUUID()
+  const result: RunResult = {
+    runId, attempted: 0, submittable: 0, blocked: 0, failed: 0,
+    costUsd: 0, skippedReason: null,
+  }
+
+  const allowance = await getRemainingAllowance(opts.userId, opts.plan, opts.timezone ?? "UTC")
+  if (allowance.allowed <= 0) {
+    result.skippedReason = allowance.reason
+    return result
+  }
+
+  const pool = getPostgresPool()
+
+  // The profile grounds every deterministic field; without one there is nothing
+  // truthful to fill from, so the run stops rather than guessing.
+  const { rows: profileRows } = await pool.query<AutofillProfile>(
+    `SELECT * FROM autofill_profiles WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`,
+    [opts.userId],
+  ).catch(() => ({ rows: [] as AutofillProfile[] }))
+  const profile = profileRows[0]
+  if (!profile) {
+    result.skippedReason = "no_autofill_profile"
+    return result
+  }
+
+  const { rows: resumeRows } = await pool.query(
+    `SELECT summary, primary_role, top_skills, work_experience, education,
+            projects, years_of_experience, raw_text
+       FROM resumes WHERE user_id = $1
+      ORDER BY is_primary DESC, updated_at DESC LIMIT 1`,
+    [opts.userId],
+  ).catch(() => ({ rows: [] as unknown[] }))
+  const resumeContext = resumeRows[0] ? formatResumeContext(resumeRows[0] as never) : ""
+  if (!resumeContext) {
+    result.skippedReason = "no_resume"
+    return result
+  }
+
+  const candidates = await getAutoApplyCandidates(opts.userId, {
+    minMatchScore: allowance.limits.minMatchScore,
+    limit: allowance.allowed,
+    includeUnproven: opts.includeUnproven,
+  })
+  if (candidates.length === 0) {
+    result.skippedReason = "no_candidates"
+    return result
+  }
+
+  const anthropic = process.env.ANTHROPIC_API_KEY
+    ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    : null
+
+  // One browser for the whole run; a fresh context per posting so cookies and
+  // storage never leak between employers.
+  const browser = await chromium.launch({ headless: true })
+  try {
+    for (const job of candidates) {
+      // Re-check before every attempt rather than trusting the opening figure:
+      // a run is long, and the dollar ceiling can trip partway through it.
+      const live = await getRemainingAllowance(opts.userId, opts.plan, opts.timezone ?? "UTC")
+      if (live.allowed <= 0) {
+        result.skippedReason = live.reason
+        break
+      }
+
+      result.attempted++
+      const attempt = await runFillAttempt({
+        applyUrl: job.applyUrl,
+        ats: job.ats,
+        profile,
+        resumeContext,
+        jobTitle: job.title,
+        companyName: job.companyName ?? "the company",
+        userId: opts.userId,
+        runId,
+        anthropic,
+        allowSubmit: opts.allowSubmit === true,
+        browser,
+      })
+      result.costUsd += attempt.costUsd
+
+      let status: string
+      if (attempt.blocked) { status = "failed"; result.blocked++ }
+      else if (attempt.error || !attempt.formReached) { status = "failed"; result.failed++ }
+      else if (!attempt.ok) {
+        // Reached the form but could not complete every required field. Not a
+        // failure of the pipeline — a form we must not leave half-filled.
+        status = "failed"; result.failed++
+      } else {
+        result.submittable++
+        status = opts.allowSubmit && attempt.submitted ? "applied" : "dry_run"
+      }
+
+      await pool.query(
+        `INSERT INTO apex_auto_apply_log
+           (user_id, job_id, job_title, company, match_score, qualified_by,
+            status, error, run_id, apply_url, ats, required_total, required_filled)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9,$10,$11,$12,$13)
+         ON CONFLICT DO NOTHING`,
+        [
+          opts.userId, job.jobId, job.title, job.companyName, job.matchScore,
+          JSON.stringify({ minMatchScore: allowance.limits.minMatchScore, ats: job.ats }),
+          status,
+          attempt.error ?? (attempt.blocked ? "bot_wall" : attempt.formReached ? null : "no_form"),
+          runId, job.applyUrl, job.ats,
+          attempt.requiredTotal, attempt.requiredFilled,
+        ],
+      ).catch(() => {})
+    }
+  } finally {
+    await browser.close().catch(() => {})
+  }
+
+  return result
+}
