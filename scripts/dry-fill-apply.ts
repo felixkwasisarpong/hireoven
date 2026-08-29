@@ -91,6 +91,19 @@ const ANSWER_INSTRUCTIONS = `You help a job applicant answer application-form qu
 - Open-ended → 2-4 sentences grounded in the résumé.
 Never fabricate an employer, credential, or metric not in the résumé.`
 
+type UnfilledField = { sel: string | null; kind: string; label: string }
+
+type InspectResult = {
+  fieldsVisible: number
+  requiredTotal: number
+  requiredFilled: number
+  unfilledRequired: UnfilledField[]
+  withValue: number
+  emptyQuestions: string[]
+  formDetected: boolean
+  blockedSubmits: number
+}
+
 type Candidate = {
   id: string; title: string | null; apply_url: string
   ats_type: string | null; company_name: string | null
@@ -109,6 +122,10 @@ type FillOutcome = {
   requiredFilled: number
   requiredRate: number
   aiQuestions: number
+  /** answers the model produced that were successfully injected into the form */
+  aiWrittenBack: number
+  /** required fields still empty after both passes, by kind — the real gap */
+  residual: UnfilledField[]
   aiInputTokens: number; aiOutputTokens: number
   aiCacheReadTokens: number; aiCacheWriteTokens: number
   aiCostUsd: number
@@ -183,16 +200,76 @@ const INSPECT = `(() => {
   const emptyFreeText = ctrls.filter((el) =>
     (el.value||"").trim().length === 0 &&
     (el.tagName.toLowerCase() === "textarea" || labelFor(el).length > 40));
+  const kindOf = (el) => {
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute("type")||"").toLowerCase();
+    const role = el.getAttribute("role")||"";
+    if (tag === "select") return "select";
+    if (role === "combobox" || el.getAttribute("aria-autocomplete")) return "combobox";
+    if (type === "radio" || type === "checkbox") return type;
+    if (tag === "textarea") return "textarea";
+    return "text";
+  };
+  const unfilledRequired = required
+    .filter((el) => (el.value||"").trim().length === 0)
+    .map((el) => {
+      // A positional index goes stale the moment React re-renders after the
+      // first write, which is why most injections silently missed. id and name
+      // survive re-render; anything without either is skipped rather than
+      // guessed at.
+      const id = el.getAttribute("id"), nm = el.getAttribute("name");
+      const sel = id ? "#" + (window.CSS && CSS.escape ? CSS.escape(id) : id)
+                : nm ? el.tagName.toLowerCase() + '[name="' + nm.replace(/"/g, '\\"') + '"]'
+                : null;
+      return { sel: sel, kind: kindOf(el), label: labelFor(el).slice(0, 70) };
+    });
   return {
     fieldsVisible: ctrls.length,
     requiredTotal: required.length,
     requiredFilled: requiredFilled.length,
+    unfilledRequired: unfilledRequired,
     withValue: withValue.length,
     emptyQuestions: emptyFreeText.map(labelFor).filter((t) => t.length > 3).slice(0, 12),
     formDetected: ctrls.length >= 3,
     blockedSubmits: window.__blockedSubmits || 0
   };
 })()`
+
+/**
+ * Write an answer into a control the way React expects.
+ *
+ * Assigning .value directly is invisible to React — its synthetic event system
+ * never sees the change and the state reverts on the next render. The native
+ * prototype setter plus input/change events is what the production fill script
+ * uses, and it is the difference between a field that looks filled and one that
+ * submits filled.
+ */
+/**
+ * Build a self-contained expression that writes one answer into one control.
+ *
+ * The values are inlined as JSON rather than passed as evaluate() arguments,
+ * because a STRING passed to page.evaluate is evaluated as an expression and any
+ * argument is ignored — the function was simply never called, so every write
+ * silently reported false. A string is still required here: tsx compiles real
+ * functions with an esbuild `__name` helper that does not exist in the page.
+ *
+ * Assigning .value directly is invisible to React, whose synthetic event system
+ * never sees it and reverts on the next render, so this goes through the native
+ * prototype setter and then dispatches input/change — the same approach the
+ * production fill script uses.
+ */
+function writeAnswerExpr(selector: string, value: string): string {
+  return `(() => {
+  const SEL = ${JSON.stringify(selector)}, VALUE = ${JSON.stringify(value)};
+  const el = document.querySelector(SEL);
+  if (!el) return false;
+  const proto = el.tagName.toLowerCase() === "textarea" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const d = Object.getOwnPropertyDescriptor(proto, "value");
+  if (d && d.set) d.set.call(el, VALUE); else el.value = VALUE;
+  ["input","change","blur"].forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+  return (el.value||"").trim().length > 0;
+})()`
+}
 
 async function revealForm(page: Page): Promise<void> {
   for (const el of await page.$$("a, button, [role=button]")) {
@@ -209,6 +286,7 @@ async function answerQuestions(
   anthropic: Anthropic, questions: string[], jobTitle: string, company: string,
 ) {
   let inTok = 0, outTok = 0, cacheRead = 0, cacheWrite = 0
+  const answers: (string | null)[] = []
   for (const q of questions) {
     const msg = await anthropic.messages.create({
       model: "claude-haiku-4-5",
@@ -223,7 +301,11 @@ async function answerQuestions(
       ],
       messages: [{ role: "user", content: `Applying for: ${jobTitle} at ${company}\n\nQuestion: "${q}"\n\nWrite the answer.` }],
     }).catch(() => null)
-    if (!msg) continue
+    if (!msg) { answers.push(null); continue }
+    answers.push(
+      msg.content.filter((b): b is { type: "text"; text: string; citations: never } => b.type === "text")
+        .map((b) => b.text).join("").trim().replace(/^["']|["']$/g, "") || null,
+    )
     inTok += msg.usage?.input_tokens ?? 0
     outTok += msg.usage?.output_tokens ?? 0
     cacheRead += msg.usage?.cache_read_input_tokens ?? 0
@@ -231,7 +313,7 @@ async function answerQuestions(
   }
   // Haiku 4.5: $1/M in, $5/M out; cache read 0.1x, cache write 1.25x of input.
   const cost = inTok / 1e6 * 1 + outTok / 1e6 * 5 + cacheRead / 1e6 * 0.1 + cacheWrite / 1e6 * 1.25
-  return { inTok, outTok, cacheRead, cacheWrite, cost }
+  return { inTok, outTok, cacheRead, cacheWrite, cost, answers }
 }
 
 async function fillOne(
@@ -244,7 +326,8 @@ async function fillOne(
     formReached: false, blocked: false, fieldsVisible: 0,
     filled: 0, skipped: 0, errors: 0, verifiedFilled: 0, fillRate: 0,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
-    aiQuestions: 0, aiInputTokens: 0, aiOutputTokens: 0,
+    aiQuestions: 0, aiWrittenBack: 0, residual: [],
+    aiInputTokens: 0, aiOutputTokens: 0,
     aiCacheReadTokens: 0, aiCacheWriteTokens: 0, aiCostUsd: 0,
     submitAttemptsBlocked: 0, durationMs: 0, error: null,
   }
@@ -261,10 +344,10 @@ async function fillOne(
     await page.goto(job.apply_url, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS })
     await page.waitForTimeout(SETTLE_MS)
 
-    let info = await page.evaluate(INSPECT) as any
+    let info = await page.evaluate(INSPECT) as InspectResult
     if (!info.formDetected) {
       await revealForm(page)
-      info = await page.evaluate(INSPECT) as any
+      info = await page.evaluate(INSPECT) as InspectResult
     }
 
     if (CAPTCHA_FRAME.test(page.frames().map((f) => f.url()).join(" ")) && !info.formDetected) {
@@ -286,7 +369,7 @@ async function fillOne(
     o.errors = res?.errors?.length ?? 0
 
     await page.waitForTimeout(600)
-    const after = await page.evaluate(INSPECT) as any
+    const after = await page.evaluate(INSPECT) as InspectResult
     o.verifiedFilled = after.withValue
     o.fillRate = o.fieldsVisible ? o.verifiedFilled / o.fieldsVisible : 0
     o.requiredTotal = after.requiredTotal
@@ -295,13 +378,35 @@ async function fillOne(
     o.aiQuestions = after.emptyQuestions.length
     o.submitAttemptsBlocked = (after.blockedSubmits ?? 0) + state.blocked
 
-    if (anthropic && after.emptyQuestions.length) {
+    // ── Answer the required free-text gaps and WRITE THEM BACK ───────────────
+    // Generating answers without injecting them made the previous run report a
+    // floor rather than a result: every AI-answerable question counted as
+    // unfilled. Only text and textarea are handled — selects and comboboxes need
+    // option matching, which is deliberately left to show up in the residual.
+    const answerable = (after.unfilledRequired as UnfilledField[])
+      .filter((f) => (f.kind === "text" || f.kind === "textarea") && f.sel)
+    if (anthropic && answerable.length) {
       const a = await answerQuestions(
-        anthropic, after.emptyQuestions, job.title ?? "this role", job.company_name ?? "the company",
+        anthropic, answerable.map((f) => f.label),
+        job.title ?? "this role", job.company_name ?? "the company",
       )
       o.aiInputTokens = a.inTok; o.aiOutputTokens = a.outTok
       o.aiCacheReadTokens = a.cacheRead; o.aiCacheWriteTokens = a.cacheWrite
       o.aiCostUsd = a.cost
+      for (let i = 0; i < answerable.length; i++) {
+        const ans = a.answers[i]
+        const sel = answerable[i].sel
+        if (!ans || !sel) continue
+        const ok = await page.evaluate(writeAnswerExpr(sel, ans)).catch(() => false)
+        if (ok) o.aiWrittenBack++
+      }
+      await page.waitForTimeout(400)
+      const final = await page.evaluate(INSPECT) as InspectResult
+      o.requiredFilled = final.requiredFilled
+      o.requiredRate = final.requiredTotal ? final.requiredFilled / final.requiredTotal : 1
+      o.residual = final.unfilledRequired
+    } else {
+      o.residual = after.unfilledRequired as UnfilledField[]
     }
   } catch (err) {
     o.error = err instanceof Error ? err.message.slice(0, 180) : String(err)
@@ -385,7 +490,11 @@ async function main() {
   for (const [a, e] of [...byAts].sort((x, y) => y[1].n - x[1].n)) {
     console.log(`  ${a.padEnd(12)} n=${String(e.n).padStart(2)}  ${((e.fill / e.n) * 100).toFixed(0)}%`)
   }
-  console.log(`AI questions left   ${results.reduce((a, r) => a + r.aiQuestions, 0)} total`)
+  const kinds = new Map<string, number>()
+  for (const r of reached) for (const f of r.residual) kinds.set(f.kind, (kinds.get(f.kind) ?? 0) + 1)
+  console.log(`answers written back ${results.reduce((a, r) => a + r.aiWrittenBack, 0)}`)
+  console.log(`residual gap by kind (required fields still empty):`)
+  for (const [k, c] of [...kinds].sort((a, b) => b[1] - a[1])) console.log(`  ${k.padEnd(12)} ${c}`)
   if (useAi) {
     console.log(`measured AI cost    $${totalCost.toFixed(5)} across ${reached.length} applications`)
     console.log(`  per application   $${(totalCost / n).toFixed(5)}`)
