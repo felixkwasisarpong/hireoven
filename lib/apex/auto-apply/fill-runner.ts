@@ -260,6 +260,101 @@ async function answerQuestion(
   return { answer: text || null, costUsd }
 }
 
+/**
+ * Drive an ARIA / react-select combobox to a chosen option.
+ *
+ * Ported from chrome-extension/src/autofill/ashby-autofill.ts, which solved
+ * this already. Two details make the difference between working and silently
+ * doing nothing, and missing either produced a 0% success rate here:
+ *
+ *   Opening. A click is not enough. SmartRecruiters' spl-autocomplete and other
+ *   ARIA comboboxes ignore pointer events entirely and only open on ArrowDown,
+ *   so the sequence is pointer + mouse + click AND a keydown. Clicking the
+ *   control wrapper alone left aria-expanded="false" and the option nodes
+ *   present but hidden, which read as "no options".
+ *
+ *   Committing. Clicking the option WRAPPER never commits — the handlers sit on
+ *   the deepest text-bearing leaf (an inner truncate/slot element), possibly
+ *   across an open shadow root. Walking down to that leaf is what makes the
+ *   selection stick.
+ *
+ * Success is aria-expanded returning to "false", or the control showing a
+ * value: the menu staying open means nothing was taken.
+ */
+function selectComboOptionExpr(selector: string, wanted: string): string {
+  return `(async () => {
+  const SEL = ${JSON.stringify(selector)}, WANT = ${JSON.stringify(wanted)}.toLowerCase();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const el = document.querySelector(SEL);
+  if (!el) return false;
+  const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+
+  const firePointer = (n, type, c) => {
+    try { n.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, composed: true,
+      pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0,
+      ...(c ? { clientX: c.x, clientY: c.y } : {}) })); } catch (e) {}
+  };
+  const openCombo = (n) => {
+    try { n.focus({ preventScroll: true }); } catch (e) {}
+    firePointer(n, "pointerdown");
+    n.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 }));
+    firePointer(n, "pointerup");
+    n.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true, button: 0 }));
+    if (n.click) n.click();
+    // The one that actually opens ARIA comboboxes.
+    n.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+  };
+  // Handlers live on the deepest text-bearing descendant, not the wrapper.
+  const deepestLeaf = (n) => {
+    let node = n;
+    for (let d = 0; d < 14; d++) {
+      const scope = node.shadowRoot || node;
+      const kids = Array.from(scope.children || []);
+      if (!kids.length) break;
+      const next = kids.filter((k) => norm(k.textContent)).pop() || kids[kids.length - 1];
+      if (!next || next === node) break;
+      node = next;
+    }
+    return node;
+  };
+  const collect = () => Array.from(document.querySelectorAll(
+    '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
+  )).filter((n) => vis(n) && norm(n.textContent).length > 0);
+
+  try {
+    openCombo(el);
+    let opts = [];
+    for (let i = 0; i < 14; i++) { opts = collect(); if (opts.length) break; await sleep(140); }
+    if (!opts.length) return false;
+
+    const exact = opts.find((o) => norm(o.textContent).toLowerCase() === WANT);
+    const partial = opts.find((o) => norm(o.textContent).toLowerCase().indexOf(WANT) !== -1);
+    const target = exact || partial;
+    if (!target) return false;
+
+    const leaf = deepestLeaf(target);
+    const r = leaf.getBoundingClientRect();
+    const c = { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    target.scrollIntoView({ block: "center" });
+    firePointer(leaf, "pointerdown", c);
+    leaf.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0, clientX: c.x, clientY: c.y }));
+    firePointer(leaf, "pointerup", c);
+    leaf.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true, button: 0, clientX: c.x, clientY: c.y }));
+    leaf.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, button: 0, clientX: c.x, clientY: c.y }));
+    await sleep(300);
+
+    // A menu still open means nothing was committed.
+    if (el.getAttribute("aria-expanded") === "true") return false;
+    if (norm(el.value)) return true;
+    const w = el.closest('[class*="control" i]') || el.parentElement;
+    const sv = w && w.querySelector('[class*="singleValue" i], [class*="single-value" i]');
+    return !!(sv && norm(sv.textContent));
+  } catch (e) { return false; }
+})()`
+}
+
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
   const r: FillAttempt = {
     ok: false, blocked: false, formReached: false,
@@ -350,6 +445,22 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       if (!isUsableAnswer(answer)) { r.refusalsRejected++; r.leftForHuman++; continue }
       const ok = await page.evaluate(writeAnswerExpr(f.sel, answer!)).catch(() => false)
       if (ok) r.aiWrittenBack++
+    }
+
+    // Required comboboxes: pick the option matching a grounded answer. Same
+    // policy as text — identity and work authorization come from the profile,
+    // never from a model.
+    for (const f of unfilled.filter((x) => x.kind === "combobox" && x.sel)) {
+      let want: string | null = identityAnswer(opts.profile, f.label)
+      if (!want) {
+        const kind = classifyWorkAuthQuestion(f.label)
+        if (kind) want = answerWorkAuth(opts.profile, kind)?.value ?? null
+      }
+      if (!want && EEO_LABEL.test(f.label)) want = "Decline"
+      if (!want) { r.leftForHuman++; continue }
+      const ok = await page.evaluate(selectComboOptionExpr(f.sel!, want)).catch(() => false)
+      if (ok) r.groundedAnswers++
+      else r.leftForHuman++
     }
 
     // EEO fields are declined explicitly rather than left blank: a required
