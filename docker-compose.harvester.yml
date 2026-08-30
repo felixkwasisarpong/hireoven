@@ -120,8 +120,6 @@ services:
       AUTH_SESSION_SECRET: ${AUTH_SESSION_SECRET}
       CRON_SECRET: ${CRON_SECRET}
       # Discovery pipeline — all optional (code defaults apply when unset).
-      # FEED_USE_NEW_STATUS must be passed through for the Phase-5 feed flip.
-      FEED_USE_NEW_STATUS: ${FEED_USE_NEW_STATUS:-false}
       # Routes Dice fetches through a residential/clean-IP proxy (Dice WAF-blocks
       # datacenter IPs). e.g. http://5.161.53.248:8888 (tinyproxy on the webbox).
       DICE_PROXY_URL: ${DICE_PROXY_URL:-}

@@ -1,22 +1,18 @@
 # Rollout — discovery pipeline
 
-## ⚠️ READ FIRST: live-feed state (prod backfill already ran)
+## READ FIRST: live-feed state (prod backfill already ran)
 
 The `add-ats-tenants` migration was applied to **prod** during development, and
 its backfill flipped **~190k recent jobs** `published → visible_enriched` (and
 ~2k `pending_enrichment → visible_basic`).
 
-The **currently deployed** prod code filters the feed on
-`publication_status = 'published'` (old `sqlPublishedJob`). So those ~190k
-`visible_enriched` jobs are **excluded from the live feed right now.**
+Current code treats `published`, `visible_basic`, and `visible_enriched` as
+feed-visible. No `FEED_USE_NEW_STATUS` env flag is required.
 
-Pick ONE before/at deploy:
-- **Preferred:** deploy the new code and set `FEED_USE_NEW_STATUS=true` in the
-  same window (PHASE 2 + PHASE 5 collapsed), so `visible_*` are visible again.
-- **If new code can't go out yet:** temporarily revert the data —
-  `UPDATE jobs SET publication_status='published'
-   WHERE publication_status IN ('visible_basic','visible_enriched') AND is_active=true;`
-  then proceed with the normal phased plan later.
+If deploying an older build that still filters on `publication_status =
+'published'`, temporarily revert the data before deploy:
+`UPDATE jobs SET publication_status='published'
+ WHERE publication_status IN ('visible_basic','visible_enriched') AND is_active=true;`
 
 Verify current exposure:
 ```sql
@@ -61,9 +57,8 @@ c. Spot-check the backfill: `ats_tenants` enrolled count ≈ distinct
           AND duplicate_of_company_id IS NULL) AS distinct_pairs;
    ```
 
-## PHASE 2 — Code deploy with flags OFF
-a. Deploy with `FEED_USE_NEW_STATUS=false`. (See the ⚠️ above — with the flag
-   off, freshly-persisted `visible_*` jobs are NOT in the feed.)
+## PHASE 2 — Code deploy
+a. Deploy the current code. `visible_*` jobs are feed-visible by default.
 b. Verify adzuna / dice / discover-tenants crons run without errors
    (watch logs for `aggregator_backsolve` lines and no unhandled throws).
 c. `GET /api/admin/discovery-stats` (admin auth) returns a payload.
@@ -85,11 +80,10 @@ b. Watch `tenant.enrolled` (and `tenant.retry_later`) over 24h via the stats
    SELECT status, COUNT(*) FROM ats_tenants GROUP BY 1;
    ```
 
-## PHASE 5 — Feed flip
-a. Set `FEED_USE_NEW_STATUS=true`.
-b. Monitor `last24h.jobs_publication_status_breakdown` for 24h.
-c. Quality complaints → set `FEED_USE_NEW_STATUS=false` for an instant revert
-   (feed returns to `published`-only). No redeploy needed.
+## PHASE 5 — Feed verification
+a. Monitor `last24h.jobs_publication_status_breakdown` for 24h.
+b. Quality complaints require a redeploy or a code-level rollback to a narrower
+   feed predicate; there is no env-flag feed flip in current code.
 
 ---
 
@@ -111,8 +105,8 @@ c. Quality complaints → set `FEED_USE_NEW_STATUS=false` for an instant revert
   ```
   The companies `resolution_*` columns can stay (harmless).
 - **Phase 2 (code):** redeploy the previous build.
-- **Phase 3+ (backsolver):** `FEED_USE_NEW_STATUS=false` reverts the feed, but
-  **the aggregator backsolver itself is NOT gated** — adzuna/dice call it
+- **Phase 3+ (backsolver):** the feed predicate is no longer env-gated. The
+  **aggregator backsolver itself is NOT gated** — adzuna/dice call it
   unconditionally. To make the backsolver instantly revertible you must add an
   `AGGREGATOR_USE_BACKSOLVER` env gate around the `backsolveAggregatorCompany`
   calls in `adzuna-ingest`/`dice-ingest` (and fall back to the legacy

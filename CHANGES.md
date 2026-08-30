@@ -3,7 +3,8 @@
 Backsolve aggregator apply URLs to real ATS tenants, enroll them as harvestable
 companies, track everything in a new `ats_tenants` registry, and surface flow
 metrics. Persist-side job statuses move to a `visible_basic`/`visible_enriched`
-model behind a feed feature flag.
+model; `published`, `visible_basic`, and `visible_enriched` are feed-visible,
+while notifications stay limited to enriched/published jobs.
 
 ## Files added
 
@@ -36,8 +37,8 @@ model behind a feed feature flag.
 | `app/api/cron/adzuna-ingest/route.ts` | `missing`-company loop routes through the backsolver at `pLimit(4)` + time budget; placeholder fallback tagged via `discovered_via` |
 | `app/api/cron/dice-ingest/route.ts` | Replaced `enrollFromApplyUrl` call with the shared backsolver (same concurrency/budget pattern) |
 | `lib/harvester/discovery/enroll-from-apply-url.ts` | Now a thin back-compat wrapper over `resolveApplyUrlToAtsTenant` → `enrollTenantAsCompany` (signature unchanged) |
-| `lib/jobs/publication.ts` | `publicationStatusForInsert`, `SQL_UPGRADE_TO_VISIBLE_ENRICHED`, and feature-flagged `sqlPublishedJob` |
-| `lib/jobs/publication.test.ts` | Tests for `publicationStatusForInsert` + `FEED_USE_NEW_STATUS` behavior |
+| `lib/jobs/publication.ts` | `publicationStatusForInsert`, `SQL_UPGRADE_TO_VISIBLE_ENRICHED`, feed-visible `sqlPublishedJob`, and narrower `sqlNotifiableJob` |
+| `lib/jobs/publication.test.ts` | Tests for insert status mapping, feed visibility, and notification visibility |
 | `lib/harvester/persist-bulk.ts` | New inserts use `visible_basic`/`visible_enriched`; try/catch around normalize (fallback row); stale sweep sets `hidden_expired`; jobs/normalize metrics |
 | `app/api/apex/chat/route.ts` | Inline feed filter switched to `sqlPublishedJob("j")` so the flag covers it |
 | `scripts/discover-from-domains-render.ts` | Fixed broken `--apply` claim (multi-column `id IN (...)` → CTE) |
@@ -57,7 +58,6 @@ model behind a feed feature flag.
 
 | Var | Default | Where | Purpose |
 |---|---|---|---|
-| `FEED_USE_NEW_STATUS` | `false` | `lib/jobs/publication.ts` | When `true`, feed includes `visible_basic`+`visible_enriched` (not just `published`) |
 | `ATS_RATE_LIMIT_<HOST>_RPS` | `5` | `lib/discovery/ats-rate-limiter.ts` | Per-ATS req/sec (e.g. `ATS_RATE_LIMIT_GREENHOUSE_RPS`) |
 | `ATS_RATE_LIMIT_<HOST>_BURST` | `10` | `lib/discovery/ats-rate-limiter.ts` | Per-ATS burst |
 | `ATS_RATE_LIMIT_QUEUE_CAP` | `200` | `lib/discovery/ats-rate-limiter.ts` | Per-host queue depth before `QueueFullError` |
