@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Building2, CheckCircle2, Clock, ExternalLink, ShieldAlert, Moon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AutoApplyRecord } from "@/lib/apex/auto-apply/types"
+import PendingQuestions, { type PendingQuestion } from "./PendingQuestions"
 
 type Allowance = {
   allowed: number
@@ -13,7 +14,7 @@ type Allowance = {
   enabled: boolean
 } | null
 
-type Props = { log: AutoApplyRecord[]; allowance: Allowance }
+type Props = { log: AutoApplyRecord[]; allowance: Allowance; questions: PendingQuestion[] }
 
 /** Only outcomes the user can act on. 'skipped_cap' is bookkeeping, not an event. */
 type Filter = "all" | "applied" | "needs_you"
@@ -29,7 +30,7 @@ function timeAgo(iso: string): string {
   return `${Math.round(hrs / 24)}d ago`
 }
 
-export default function AutoApplyActivityClient({ log, allowance }: Props) {
+export default function AutoApplyActivityClient({ log, allowance, questions }: Props) {
   const [filter, setFilter] = useState<Filter>("all")
 
   const { applied, needsYou } = useMemo(() => {
@@ -55,6 +56,10 @@ export default function AutoApplyActivityClient({ log, allowance }: Props) {
           Hireoven applies to your strongest matches while you sleep. Everything it sent is here.
         </p>
       </header>
+
+      {/* Above the activity list on purpose: these are the reason applications
+          stall, and each answer unblocks every future run. */}
+      <PendingQuestions initial={questions} />
 
       <section className="mb-6 grid grid-cols-3 gap-3">
         <Stat label="Sent this week" value={String(thisWeek)}
