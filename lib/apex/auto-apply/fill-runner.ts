@@ -33,6 +33,10 @@ import {
   answerWorkAuth,
   identityAnswer,
 } from "@/lib/autofill/answer-policy"
+import {
+  getScreeningAnswer,
+  recordUnansweredQuestion,
+} from "@/lib/autofill/screening-answers"
 import type { AutofillProfile } from "@/types"
 
 const NAV_TIMEOUT_MS = 30_000
@@ -62,6 +66,8 @@ export type FillAttempt = {
   refusalsRejected: number
   /** required fields deliberately left blank for the human */
   leftForHuman: number
+  /** answered from a screening answer the user gave earlier */
+  screeningAnswers: number
   costUsd: number
   submitAttemptsBlocked: number
   /** true only when allowSubmit was set AND the form was actually submitted */
@@ -281,6 +287,34 @@ async function answerQuestion(
  * Success is aria-expanded returning to "false", or the control showing a
  * value: the menu staying open means nothing was taken.
  */
+/** Read a combobox's options without choosing one, so the user can be shown
+ *  exactly the choices the form offered. */
+function readComboOptionsExpr(selector: string): string {
+  return `(async () => {
+  const SEL = ${JSON.stringify(selector)};
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const el = document.querySelector(SEL);
+  if (!el) return [];
+  const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
+    return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
+  try {
+    try { el.focus({ preventScroll: true }); } catch (e) {}
+    el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 }));
+    if (el.click) el.click();
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    for (let i = 0; i < 12; i++) {
+      const opts = Array.from(document.querySelectorAll(
+        '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
+      )).filter((n) => vis(n) && norm(n.textContent).length > 0);
+      if (opts.length) return opts.map((o) => norm(o.textContent)).slice(0, 25);
+      await sleep(140);
+    }
+    return [];
+  } catch (e) { return []; }
+})()`
+}
+
 function selectComboOptionExpr(selector: string, wanted: string): string {
   return `(async () => {
   const SEL = ${JSON.stringify(selector)}, WANT = ${JSON.stringify(wanted)}.toLowerCase();
@@ -360,7 +394,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     ok: false, blocked: false, formReached: false,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
-    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0,
+    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0,
     costUsd: 0, submitAttemptsBlocked: 0, submitted: false, error: null,
   }
 
@@ -433,6 +467,16 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         continue
       }
 
+      // A screening answer the user has already given beats anything a model
+      // can infer, and costs nothing.
+      const known = await getScreeningAnswer({
+        userId: opts.userId, question: f.label, company: opts.companyName,
+      })
+      if (known) {
+        const ok = await page.evaluate(writeAnswerExpr(f.sel, known)).catch(() => false)
+        if (ok) { r.screeningAnswers++; continue }
+      }
+
       if (!opts.anthropic) continue
       const { answer, costUsd } = await answerQuestion(
         opts.anthropic, f.label, opts.resumeContext,
@@ -442,7 +486,16 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       // A model that declines is talking to us, not to the employer. The audit
       // found "I cannot provide your name..." typed into a Name field; the
       // field is left blank instead.
-      if (!isUsableAnswer(answer)) { r.refusalsRejected++; r.leftForHuman++; continue }
+      if (!isUsableAnswer(answer)) {
+        r.refusalsRejected++
+        r.leftForHuman++
+        // The model could not answer it either, so it goes on the list to ask
+        // the user rather than being silently dropped.
+        await recordUnansweredQuestion({
+          userId: opts.userId, question: f.label, company: opts.companyName,
+        })
+        continue
+      }
       const ok = await page.evaluate(writeAnswerExpr(f.sel, answer!)).catch(() => false)
       if (ok) r.aiWrittenBack++
     }
@@ -457,7 +510,23 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         if (kind) want = answerWorkAuth(opts.profile, kind)?.value ?? null
       }
       if (!want && EEO_LABEL.test(f.label)) want = "Decline"
-      if (!want) { r.leftForHuman++; continue }
+      if (!want) {
+        const known = await getScreeningAnswer({
+          userId: opts.userId, question: f.label, company: opts.companyName,
+        })
+        if (known) want = known
+      }
+      if (!want) {
+        // Capture the options too, so the user is later shown the same choices
+        // the form offered rather than a free-text box.
+        const options = await page.evaluate(readComboOptionsExpr(f.sel!)).catch(() => []) as string[]
+        await recordUnansweredQuestion({
+          userId: opts.userId, question: f.label,
+          company: opts.companyName, options,
+        })
+        r.leftForHuman++
+        continue
+      }
       const ok = await page.evaluate(selectComboOptionExpr(f.sel!, want)).catch(() => false)
       if (ok) r.groundedAnswers++
       else r.leftForHuman++
