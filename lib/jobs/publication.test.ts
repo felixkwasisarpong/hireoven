@@ -124,7 +124,10 @@ Requirements include experience with Microsoft Sentinel, KQL, and Python.
 })
 
 test("sqlPublishedJob emits a null-safe predicate", () => {
-  assert.equal(sqlPublishedJob("j"), "COALESCE(j.publication_status, 'published') = 'published'")
+  assert.equal(
+    sqlPublishedJob("j"),
+    "COALESCE(j.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')"
+  )
 })
 
 test("publicationStatusForInsert maps quality → new visible/hidden states", () => {
@@ -139,47 +142,25 @@ test("publicationStatusForInsert maps quality → new visible/hidden states", ()
   assert.equal(publicationStatusForInsert({ duplicate: true, normalizationStatus: "published" }), "hidden_duplicate")
 })
 
-test("sqlPublishedJob respects FEED_USE_NEW_STATUS", () => {
-  const prev = process.env.FEED_USE_NEW_STATUS
-  try {
-    delete process.env.FEED_USE_NEW_STATUS
-    assert.equal(sqlPublishedJob("jobs"), "COALESCE(jobs.publication_status, 'published') = 'published'")
-
-    process.env.FEED_USE_NEW_STATUS = "false"
-    assert.equal(sqlPublishedJob("jobs"), "COALESCE(jobs.publication_status, 'published') = 'published'")
-
-    process.env.FEED_USE_NEW_STATUS = "true"
-    assert.equal(
-      sqlPublishedJob("jobs"),
-      "COALESCE(jobs.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')"
-    )
-  } finally {
-    if (prev === undefined) delete process.env.FEED_USE_NEW_STATUS
-    else process.env.FEED_USE_NEW_STATUS = prev
-  }
+test("sqlPublishedJob includes harvested visible states by default", () => {
+  assert.equal(
+    sqlPublishedJob("jobs"),
+    "COALESCE(jobs.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')"
+  )
 })
 
 test("notifications are narrower than the feed and never include unenriched jobs", () => {
-  // The flag that widens sqlPublishedJob is set on the app-worker (which sends
-  // notifications) but not on the web app (which renders the feed), so the two
-  // disagreed about visibility. visible_basic means "awaiting enrichment" and is
-  // mostly description-less, so a notification opened an empty job page.
+  // visible_basic means "awaiting enrichment" and is often description-light,
+  // so it is feed-visible but not something we should proactively push.
   const predicate = sqlNotifiableJob("j")
   assert.ok(predicate.includes("'published'"))
   assert.ok(predicate.includes("'visible_enriched'"))
   assert.ok(!predicate.includes("visible_basic"), "unenriched jobs must not be pushed at users")
 })
 
-test("sqlNotifiableJob is null-safe and ignores the feed rollout flag", () => {
-  const previous = process.env.FEED_USE_NEW_STATUS
-  try {
-    process.env.FEED_USE_NEW_STATUS = "true"
-    const withFlag = sqlNotifiableJob("j")
-    delete process.env.FEED_USE_NEW_STATUS
-    assert.equal(withFlag, sqlNotifiableJob("j"))
-    assert.ok(withFlag.startsWith("COALESCE(j.publication_status, 'published')"))
-  } finally {
-    if (previous === undefined) delete process.env.FEED_USE_NEW_STATUS
-    else process.env.FEED_USE_NEW_STATUS = previous
-  }
+test("sqlNotifiableJob is null-safe and narrower than the feed", () => {
+  assert.equal(
+    sqlNotifiableJob("j"),
+    "COALESCE(j.publication_status, 'published') IN ('published', 'visible_enriched')"
+  )
 })

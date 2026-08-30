@@ -191,29 +191,28 @@ export const SQL_UPGRADE_TO_VISIBLE_ENRICHED =
   "UPDATE jobs SET publication_status = 'visible_enriched', updated_at = now() WHERE id = $1 AND publication_status = 'visible_basic'"
 
 /**
- * Feed visibility predicate. Behind FEED_USE_NEW_STATUS (default off) so the
- * persist-side status changes can ship before the feed switches over.
- *   off → legacy: only 'published' is visible
- *   on  → 'published' + 'visible_basic' + 'visible_enriched' are visible
+ * Feed visibility predicate.
+ *
+ * New harvester inserts use `visible_basic` / `visible_enriched`; keeping the
+ * feed on legacy `published` only makes directly harvested jobs appear on
+ * company surfaces/counts but disappear from the main feed. Notifications use
+ * `sqlNotifiableJob` below for the narrower "worth pushing" rule.
+ *
  * (is_active is asserted separately by each caller, as today.)
  */
 export function sqlPublishedJob(alias = "jobs"): string {
   const col = `COALESCE(${alias}.publication_status, 'published')`
-  if (process.env.FEED_USE_NEW_STATUS === "true") {
-    return `${col} IN ('published', 'visible_basic', 'visible_enriched')`
-  }
-  return `${col} = 'published'`
+  return `${col} IN ('published', 'visible_basic', 'visible_enriched')`
 }
 
 /**
  * Jobs worth pushing at someone.
  *
  * Deliberately narrower than `sqlPublishedJob`. Notification eligibility used the
- * same predicate, and the flag that widens it is set on the app-worker (which
- * sends notifications) but not on the web app (which renders the feed) — so
- * notifications pushed jobs the feed itself hides. `visible_basic` means
- * "awaiting enrichment", and 87% of those rows have no description, so a tap on
- * the notification opened a job page with nothing on it.
+ * same predicate while feed visibility was behind an env flag; when worker and
+ * web disagreed, notifications pushed jobs the feed itself hid. `visible_basic`
+ * means "awaiting enrichment", and many of those rows have no description, so
+ * a tap on the notification can open a thin job page.
  *
  * `visible_enriched` and `published` both assert real role content, so a
  * notification always leads to a page worth reading. The cost is that a job whose
@@ -226,8 +225,8 @@ export function sqlNotifiableJob(alias = "jobs"): string {
 
 /**
  * Public SEO pages should recognize the extended harvested-job visibility states
- * regardless of the feed rollout flag. Otherwise sitemap/listing pages can link
- * to jobs-at/company/job URLs that immediately 404 in production.
+ * too. Otherwise sitemap/listing pages can link to jobs-at/company/job URLs
+ * that immediately 404 in production.
  */
 export function sqlSeoVisibleJob(alias = "jobs"): string {
   return `COALESCE(${alias}.publication_status, 'published') IN ('published', 'visible_basic', 'visible_enriched')`
