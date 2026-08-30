@@ -241,7 +241,7 @@ export function generateFillScript(
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">',
     '<div style="width:8px;height:8px;background:#0369a1;border-radius:50%"></div>',
     '<b style="color:#0369a1;font-size:14px;flex:1">Hireoven autofill</b>',
-    '<button onclick="document.getElementById(\'__hireoven_overlay\').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#999;line-height:1;padding:0">×</button>',
+    '<button id="__hireoven_overlay_close" style="background:none;border:none;cursor:pointer;font-size:18px;color:#999;line-height:1;padding:0">×</button>',
     '</div>',
     '<p style="margin:0 0 4px;color:#111">✓ Filled <b>' + results.filled.length + '</b> fields</p>',
     results.skipped.length > 0 ? '<p style="margin:0 0 4px;color:#888">⚬ ' + results.skipped.length + ' fields need manual input</p>' : '',
@@ -250,6 +250,16 @@ export function generateFillScript(
   ].join('');
 
   document.body.appendChild(overlay);
+
+  // Listener rather than an inline onclick: the handler used to be embedded in
+  // this innerHTML string, and its nested quotes terminated the surrounding JS
+  // string early, so the whole generated script failed to parse. See the
+  // "generated script parses" test in index.test.ts.
+  var closeBtn = document.getElementById('__hireoven_overlay_close');
+  if (closeBtn) closeBtn.addEventListener('click', function() {
+    var o = document.getElementById('__hireoven_overlay');
+    if (o) o.remove();
+  });
   setTimeout(function() {
     var el = document.getElementById('__hireoven_overlay');
     if (el) el.style.transition = 'opacity 0.5s';
