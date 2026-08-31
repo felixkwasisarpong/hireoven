@@ -186,6 +186,9 @@ test("certifications and working-arrangement acknowledgements are affirmed", () 
     'By selecting "Yes", I am certifying that, to the best of my knowledge, the information is accurate',
     "Do you acknowledge that this position requires working onsite three days a week?",
     "Our HQ is in San Mateo and this role is not remote — do you understand that?",
+    // A named privacy-notice acknowledgement is still an acknowledgement; the
+    // earlier pattern only matched the verb form and left this required and empty.
+    "Capco Job Candidate Privacy Notice Acknowledgement*",
   ]) {
     assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "Yes" }, q.slice(0, 40))
   }

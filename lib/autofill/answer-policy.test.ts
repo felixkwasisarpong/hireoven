@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   isSentinelValue, isAnswered, isRefusalText, isUsableAnswer,
-  shouldFillFromProfile, shouldSpendEffortOn, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer,
+  shouldFillFromProfile, shouldSpendEffortOn, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer, eeoAnswer,
 } from "./answer-policy"
 import type { AutofillProfile } from "@/types"
 
@@ -168,4 +168,46 @@ test("'eligible to work' phrasing is recognised as an authorisation question", (
   // Greenhouse asks it this way and the original regex missed it entirely.
   assert.equal(classifyWorkAuthQuestion("Are you eligible to work in the US?*"), "authorized_now")
   assert.equal(classifyWorkAuthQuestion("Are you legally able to work in the United States?"), "authorized_now")
+})
+
+const EEO = {
+  gender: "Male",
+  ethnicity: "Black or African American",
+  veteran_status: "I am not a protected veteran",
+  disability_status: "No, I don't have a disability",
+  auto_fill_diversity: true,
+} as unknown as AutofillProfile
+
+test("EEO questions are answered from the profile the user filled in", () => {
+  assert.equal(eeoAnswer(EEO, "Gender*"), "Male")
+  assert.equal(eeoAnswer(EEO, "Gender Identity*"), "Male")
+  assert.equal(eeoAnswer(EEO, "Please identify your race/ethnicity*"), "Black or African American")
+  assert.equal(eeoAnswer(EEO, "Are you a protected veteran? *"), "I am not a protected veteran")
+  assert.equal(eeoAnswer(EEO, "Do you have a disability? *"), "No, I don't have a disability")
+})
+
+test("Hispanic/Latinx is answered from ethnicity, not declined", () => {
+  // Asked as its own yes/no question alongside race on US forms.
+  assert.equal(eeoAnswer(EEO, "Are you Hispanic/Latinx?*"), "No")
+  const hispanic = { ...EEO, ethnicity: "Hispanic or Latino" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(hispanic, "Are you Hispanic/Latinx?*"), "Yes")
+})
+
+test("nothing is disclosed while the consent switch is off", () => {
+  const off = { ...EEO, auto_fill_diversity: false } as unknown as AutofillProfile
+  for (const q of ["Gender*", "Race*", "Are you a protected veteran?", "Do you have a disability?"]) {
+    assert.equal(eeoAnswer(off, q), null, q)
+  }
+})
+
+test("pronouns and sexual orientation are never inferred from gender", () => {
+  // Gender determines neither. Guessing would assert something personal the
+  // user never entered; these need their own profile fields.
+  assert.equal(eeoAnswer(EEO, "What are your personal pronouns? *"), null)
+  assert.equal(eeoAnswer(EEO, "Sexual Orientation*"), null)
+})
+
+test("an empty profile field falls through rather than answering blank", () => {
+  const partial = { ...EEO, gender: "" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(partial, "Gender*"), null)
 })

@@ -255,3 +255,50 @@ export function identityAnswer(
   if (/phone|mobile|telephone|cell/.test(l)) return (profile.phone ?? "").trim() || null
   return null
 }
+
+// ── 6. EEO comes from the profile when the user has opted in ────────────────
+
+/**
+ * Self-identification answered from the autofill profile.
+ *
+ * These fields already exist and the user fills them deliberately, so declining
+ * on their behalf discards an answer they chose to give — and on forms where the
+ * question is required with no opt-out, declining leaves the application stuck.
+ *
+ * `auto_fill_diversity` is the consent switch. While it is false nothing here is
+ * disclosed, whatever the profile holds.
+ */
+export type EeoProfile = Pick<
+  AutofillProfile,
+  "gender" | "ethnicity" | "veteran_status" | "disability_status" | "auto_fill_diversity"
+>
+
+export function eeoAnswer(profile: EeoProfile, label: string): string | null {
+  if (profile.auto_fill_diversity !== true) return null
+  const l = label.toLowerCase()
+  const val = (v: unknown): string | null => {
+    const s = typeof v === "string" ? v.trim() : ""
+    return s.length > 0 ? s : null
+  }
+
+  // Asked separately from race on US forms, and answered from the ethnicity
+  // field rather than by declining.
+  if (/hispanic|latin[xoa]/.test(l)) {
+    const eth = val(profile.ethnicity)
+    if (!eth) return null
+    return /hispanic|latin/i.test(eth) ? "Yes" : "No"
+  }
+
+  if (/race|ethnic/.test(l)) return val(profile.ethnicity)
+  if (/veteran/.test(l)) return val(profile.veteran_status)
+  if (/disab/.test(l)) return val(profile.disability_status)
+
+  // Gender identity is asked as its own question but the profile carries only
+  // one gender field, which is the closest honest answer available.
+  if (/gender/.test(l)) return val(profile.gender)
+
+  // Pronouns and sexual orientation are deliberately NOT inferred. Gender does
+  // not determine either, and guessing would assert something personal the user
+  // never entered. They need their own profile fields.
+  return null
+}

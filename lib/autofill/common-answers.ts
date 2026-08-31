@@ -97,7 +97,7 @@ export function isInternship(ctx: AnswerContext): boolean {
  * does — declining certification withdraws the application.
  */
 const ACKNOWLEDGEMENT =
-  /by selecting ["\u2019']?yes|i am certifying|i certify|to the best of my knowledge|do you acknowledge|please acknowledge|do you understand that|this (role|position) (is not|requires)|not remote|onsite .* (days?|week)/i
+  /by selecting ["\u2019']?yes|i am certifying|i certify|to the best of my knowledge|do you acknowledge|please acknowledge|\backnowledge?ment\b|do you understand that|this (role|position) (is not|requires)|not remote|onsite .* (days?|week)/i
 
 const START_DATE = /earliest (start|available)|start date|when (can|could) you start|availability date|date available/i
 const HOURLY_RATE = /rate per hour|hourly rate|desired rate|hourly pay|rate \(\$\)|\$\/hour|per hour/i

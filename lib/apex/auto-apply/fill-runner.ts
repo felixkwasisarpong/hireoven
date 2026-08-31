@@ -32,6 +32,7 @@ import {
   classifyWorkAuthQuestion,
   answerWorkAuth,
   identityAnswer,
+  eeoAnswer,
 } from "@/lib/autofill/answer-policy"
 import { answerCommonQuestion } from "@/lib/autofill/common-answers"
 import { computeYearsOfExperience } from "@/lib/autofill/resume-facts"
@@ -734,12 +735,26 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       // 20 of 25 remaining unfilled fields were this.
       if (!want && (EEO_LABEL.test(f.label) || SELF_ID_LABEL.test(f.label))) {
         const eeoOptions = await page.evaluate(readComboOptionsExpr(f.sel!)).catch(() => []) as string[]
+        // The profile's own answer first — the user entered it deliberately, and
+        // declining discards a choice they made. But the profile's wording rarely
+        // matches the form's exactly ("Black or African American" against
+        // "Black or African American (Not Hispanic or Latino)"), so match it
+        // against the real options and fall back to declining when it does not
+        // fit. Without the fallback a near-miss left the field empty, which is
+        // worse than either answering or declining.
+        const stated = eeoAnswer(opts.profile, f.label)
+        const matched = stated
+          ? eeoOptions.find((o) => o.toLowerCase() === stated.toLowerCase())
+            ?? eeoOptions.find((o) => o.toLowerCase().includes(stated.toLowerCase()))
+            ?? eeoOptions.find((o) => stated.toLowerCase().includes(o.toLowerCase()))
+          : undefined
         const decline = eeoOptions.find((o) => DECLINE_OPTION.test(o))
-        if (decline) {
-          const ok = await page.evaluate(selectComboOptionExpr(f.sel!, decline)).catch(() => false)
-          if (ok) { r.eeoDeclined++; continue }
+        const choice = matched ?? decline
+        if (choice) {
+          const ok = await page.evaluate(selectComboOptionExpr(f.sel!, choice)).catch(() => false)
+          if (ok) { if (matched) r.groundedAnswers++; else r.eeoDeclined++; continue }
         }
-        want = decline ?? "Decline"
+        want = choice ?? stated ?? "Decline"
       }
       if (!want) {
         const known = await getScreeningAnswer({
@@ -800,7 +815,14 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       }
       if (!want && (EEO_LABEL.test(f.label) || SELF_ID_LABEL.test(f.label))) {
         const eeoOptions = await page.evaluate(readNativeOptionsExpr(f.sel!)).catch(() => []) as string[]
-        want = eeoOptions.find((o) => DECLINE_OPTION.test(o)) ?? "Decline"
+        const stated = eeoAnswer(opts.profile, f.label)
+        want = (stated
+          ? eeoOptions.find((o) => o.toLowerCase() === stated.toLowerCase())
+            ?? eeoOptions.find((o) => o.toLowerCase().includes(stated.toLowerCase()))
+            ?? eeoOptions.find((o) => stated.toLowerCase().includes(o.toLowerCase()))
+          : undefined)
+          ?? eeoOptions.find((o) => DECLINE_OPTION.test(o))
+          ?? "Decline"
       }
       if (!want) {
         want = await getScreeningAnswer({
