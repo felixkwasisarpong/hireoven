@@ -6,20 +6,27 @@
  * is not attempted, Greenhouse is opt-in, and a form that cannot reach full
  * required coverage is abandoned rather than left half-filled.
  *
- * SUBMISSION IS OFF BY DEFAULT AND GATED THREE WAYS.
+ * SUBMISSION IS OFF BY DEFAULT AND GATED FOUR WAYS.
  *
- *   1. `allowSubmit` defaults to false, and while false the request router
- *      arms as soon as a form is found and aborts every non-GET from then on,
- *      so a submission physically cannot leave the browser. It stays disarmed
- *      during load because GraphQL-rendered ATS (Ashby) will not render
- *      otherwise.
- *   2. form.submit() is stubbed and submit events are cancelled in the capture
- *      phase, ahead of any site handler.
- *   3. Nothing matching submit/send/finish is ever clicked. The only click is an
- *      apply-CTA allowlist that reveals the form.
+ *   1. `allowSubmit` must be explicitly true. Anything else — including
+ *      undefined — is a dry run.
+ *   2. The form must be COMPLETE. submitForm is reached only when every
+ *      required field is filled and nothing disqualified the form, so a
+ *      partially filled application can never be sent.
+ *   3. On a dry run the request router arms as soon as a form is found and
+ *      aborts every non-GET, so a submission cannot leave the browser. It stays
+ *      disarmed during load because GraphQL-rendered ATS (Ashby) will not
+ *      render otherwise.
+ *   4. Also on a dry run, form.submit() is stubbed and submit events are
+ *      cancelled in the capture phase, ahead of any site handler. Both of these
+ *      are installed ONLY when allowSubmit is false — left in place they would
+ *      block a permitted submission too, which would look like a silent failure
+ *      rather than a refusal.
  *
- * Across the runs that produced these numbers the guards caught 14-18 real
- * submit attempts per 30 postings, so the layering is not theoretical.
+ * Outside submitForm nothing matching submit/send/finish is ever clicked; the
+ * only click is an apply-CTA allowlist that reveals the form. Across the runs
+ * that produced these numbers the dry-run guards caught 14-18 real submit
+ * attempts per 30 postings, so the layering is not theoretical.
  */
 
 import { chromium, type Browser, type Page } from "playwright"
@@ -242,8 +249,15 @@ type InspectResult = {
   blockedSubmits: number; bodyText: string
 }
 
-async function installGuards(page: Page, state: { armed: boolean; blocked: number }) {
-  await page.addInitScript(() => {
+async function installGuards(
+  page: Page,
+  state: { armed: boolean; blocked: number },
+  allowSubmit: boolean,
+) {
+  // The in-page stub is installed ONLY for dry runs. Left in place it would
+  // block a permitted submission too, which would present as a silent failure
+  // rather than a refusal.
+  if (!allowSubmit) await page.addInitScript(() => {
     // @ts-expect-error counter read back through INSPECT
     window.__blockedSubmits = 0
     // @ts-expect-error see above
@@ -621,6 +635,47 @@ function labelFromSelector(sel: string | null): string | null {
   return null
 }
 
+/** The real submit control, and text that never identifies one. */
+const SUBMIT_LABEL = /^(submit|submit application|submit my application|send application|finish|complete application)$/i
+const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add another|apply now/i
+
+/**
+ * Click submit, then confirm from the PAGE that it went through.
+ *
+ * Reached only when the caller passed allowSubmit AND every required field is
+ * filled. Success is judged from the resulting page rather than from the click
+ * not throwing: a click that silently fails validation would otherwise be
+ * recorded as "applied", corrupting the ledger the caps are computed from and
+ * telling the user an application exists when it does not.
+ */
+async function submitForm(page: Page): Promise<boolean> {
+  const before = page.url()
+  let clicked = false
+  for (const el of await page.$$("button, input[type=submit]")) {
+    const label = (
+      ((await el.textContent().catch(() => "")) ?? "") ||
+      ((await el.getAttribute("value").catch(() => "")) ?? "")
+    ).replace(/\s+/g, " ").trim()
+    if (!label || label.length > 40) continue
+    // Denylist first, so it wins over any allowlist match.
+    if (NOT_SUBMIT.test(label) || !SUBMIT_LABEL.test(label)) continue
+    if (!(await el.isVisible().catch(() => false))) continue
+    if (!(await el.isEnabled().catch(() => false))) continue
+    await el.click({ timeout: 10_000 }).catch(() => {})
+    clicked = true
+    break
+  }
+  if (!clicked) return false
+
+  await page.waitForTimeout(5_000).catch(() => {})
+  const confirmed = await page.evaluate(`(() => {
+    const t = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
+    return /thank you|application (has been )?(received|submitted|sent)|we have received|successfully applied|thanks for applying/.test(t);
+  })()`).catch(() => false)
+  return Boolean(confirmed) || page.url() !== before
+}
+
+
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
   const r: FillAttempt = {
     ok: false, blocked: false, formReached: false,
@@ -640,7 +695,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
 
   try {
     const page = await ctx.newPage()
-    await installGuards(page, state)
+    await installGuards(page, state, opts.allowSubmit === true)
     await page.goto(opts.applyUrl, { waitUntil: "domcontentloaded", timeout: NAV_TIMEOUT_MS })
     await page.waitForTimeout(SETTLE_MS)
 
@@ -925,6 +980,13 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // "ok" means the form could be submitted, not that it was.
     // A disqualified form can never be submitted, however complete it looks.
     r.ok = r.requiredRate >= 1 && !r.disqualified
+
+    // Two conditions, both required. Submitting a partially filled application
+    // is worse than not applying at all: it reaches a real employer under the
+    // user's name and cannot be withdrawn.
+    if (opts.allowSubmit === true && r.ok) {
+      r.submitted = await submitForm(page)
+    }
   } catch (err) {
     r.error = err instanceof Error ? err.message.slice(0, 200) : String(err)
   } finally {
