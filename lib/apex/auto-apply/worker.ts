@@ -19,6 +19,7 @@ import { getRemainingAllowance } from "./limits"
 import { getAutoApplyCandidates } from "./candidates"
 import { runFillAttempt } from "./fill-runner"
 import { formatResumeContext } from "@/lib/autofill/resume-context"
+import { buildDerivedFacts, computeYearsOfExperience } from "@/lib/autofill/resume-facts"
 import type { Plan } from "@/lib/gates"
 import type { AutofillProfile } from "@/types"
 
@@ -76,8 +77,28 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
       ORDER BY is_primary DESC, updated_at DESC LIMIT 1`,
     [opts.userId],
   ).catch(() => ({ rows: [] as unknown[] }))
-  const resumeContext = resumeRows[0] ? formatResumeContext(resumeRows[0] as never) : ""
-  if (!resumeContext) {
+  const resumeRow = resumeRows[0] as Record<string, unknown> | undefined
+  const prose = resumeRow ? formatResumeContext(resumeRow as never) : ""
+  // Facts first, prose second. Forms ask "4+ years?" and "what city?", which the
+  // résumé settles but only as date ranges and paragraphs — stating the answers
+  // up front stops the model reporting that it cannot find them.
+  const facts = resumeRow
+    ? buildDerivedFacts({
+        yearsOfExperience: resumeRow.years_of_experience as number | null,
+        primaryRole: resumeRow.primary_role as string | null,
+        topSkills: resumeRow.top_skills as string[] | null,
+        workExperience: resumeRow.work_experience as never,
+        city: profile.city, state: profile.state, country: profile.country,
+        highestDegree: profile.highest_degree, fieldOfStudy: profile.field_of_study,
+        university: profile.university,
+      })
+    : ""
+  // Same figure the derived-facts block states, reused for level-based rate
+  // defaults so the two can never disagree.
+  const years = (resumeRow?.years_of_experience as number | null) ||
+    computeYearsOfExperience((resumeRow?.work_experience as never) ?? [])
+  const resumeContext = [facts, prose].filter(Boolean).join("\n\n")
+  if (!prose) {
     result.skippedReason = "no_resume"
     return result
   }
@@ -120,6 +141,7 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
         userId: opts.userId,
         runId,
         anthropic,
+        yearsOfExperience: years,
         allowSubmit: opts.allowSubmit === true,
         browser,
       })

@@ -73,6 +73,12 @@ run_many() {
 # crawl-enrichment   manual only       run api/crawl/enrichment  # AI-backed; disabled by default
 # job-description-enrichment */5 * * * * run api/cron/job-description-enrichment?batch=500&concurrency=12
 # ghost-scan         0 */6 * * *       run api/cron/ghost-scan
+# auto-apply         0 * * * *         run api/cron/auto-apply
+#   Hourly on purpose: the route only acts on users whose LOCAL time is inside
+#   their night window and who have not already run tonight, so an hourly sweep
+#   reaches every timezone while still touching each user once per night.
+#   Dry-run unless AUTO_APPLY_ALLOW_SUBMIT=true is set on the app-worker.
+#   Drives a headless browser — keep it on the app-worker, never the web box.
 # timing-refresh     0 */6 * * *       run api/cron/timing-refresh
 # cohort-refresh     10 */6 * * *      run cohort detect -> match -> aggregate
 # layoffs-fyi        0 1 * * *         run api/cron/layoffs-fyi
@@ -124,6 +130,7 @@ case "${1:-}" in
   instant-notify)    run api/cron/instant-notify ;;
   interview-reminders) run api/cron/interview-reminders ;;
   ghost-scan)        run api/cron/ghost-scan ;;
+  auto-apply)        run api/cron/auto-apply ;;
   timing-refresh)    run api/cron/timing-refresh ;;
   cohort-detect)     run api/cron/cohort-detect ;;
   cohort-match)      run api/cron/cohort-match ;;
@@ -229,7 +236,7 @@ case "${1:-}" in
     echo "Usage: $0 <name|all>"
     echo ""
     echo "Available:"
-    echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh"
+    echo "  instant-notify  crawl  crawl-full  crawl-full-non-ats  crawl-enrichment  job-description-enrichment  ghost-scan  timing-refresh  auto-apply"
     echo "  cohort-detect  cohort-match  cohort-aggregate  cohort-refresh  layoffs-fyi  process-referrals  health-scores"
     echo "  rejection-patterns  burnout-classify  salary-digest  warn-act"
     echo "  deliver-checkins  blog-generate  daily-report  daily-jobs-email  weekly-digest  pipeline-cleanup  job-retention  refresh-title-suggestions  refresh-field-profiles  company-time-to-fill  mine-transitions  nightly-maintenance"
