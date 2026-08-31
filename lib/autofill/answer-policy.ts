@@ -71,15 +71,34 @@ export function isUsableAnswer(answer: string | null | undefined): boolean {
   return !isRefusalText(answer)
 }
 
-// ── 3. Only required fields get filled ───────────────────────────────────────
+// ── 3. Cheap fills are always worth it; effort is reserved for required ─────
 
 /**
- * Optional fields are deliberately left blank even when the profile could fill
- * them. Volunteering information nobody asked for is the applicant's choice to
- * make, not the system's, and every extra answer is another chance to be wrong
- * on their behalf.
+ * Fill anything the profile already answers, required or not.
+ *
+ * Writing a value we already hold costs nothing and can only help: an optional
+ * LinkedIn or phone field left blank is a worse application for no gain. This
+ * is the deterministic pass (generateFillScript), which matches profile data to
+ * fields by label and does not care whether the field is required.
  */
-export function shouldFillField(field: { required: boolean; value?: string | null }): boolean {
+export function shouldFillFromProfile(field: { value?: string | null }): boolean {
+  return !isAnswered(field.value)
+}
+
+/**
+ * Only spend effort on required fields.
+ *
+ * "Effort" is anything with a cost or a consequence: an LLM call, capturing a
+ * question to put to the user later, or abandoning a form as incomplete. An
+ * optional question we cannot answer from the profile is simply skipped — it
+ * does not block submission, so chasing it would burn money and the user's
+ * attention for nothing.
+ *
+ * The distinction matters because the two rules pull in opposite directions on
+ * the same field: an optional field gets filled if we know the answer, and
+ * ignored entirely if we do not.
+ */
+export function shouldSpendEffortOn(field: { required: boolean; value?: string | null }): boolean {
   if (!field.required) return false
   return !isAnswered(field.value)
 }

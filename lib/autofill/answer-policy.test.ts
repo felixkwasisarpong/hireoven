@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   isSentinelValue, isAnswered, isRefusalText, isUsableAnswer,
-  shouldFillField, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer,
+  shouldFillFromProfile, shouldSpendEffortOn, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer,
 } from "./answer-policy"
 import type { AutofillProfile } from "@/types"
 
@@ -47,12 +47,27 @@ test("normal answers pass the refusal filter", () => {
   }
 })
 
-test("optional fields are left blank even when fillable", () => {
-  assert.equal(shouldFillField({ required: false, value: "" }), false)
-  assert.equal(shouldFillField({ required: true, value: "" }), true)
-  // A sentinel means still-unanswered, so a required field holding one is filled.
-  assert.equal(shouldFillField({ required: true, value: "resumator_no_selection" }), true)
-  assert.equal(shouldFillField({ required: true, value: "Yes" }), false)
+test("anything the profile answers gets filled, required or not", () => {
+  // An optional LinkedIn field left blank is a worse application for no gain,
+  // so the deterministic pass does not care whether a field is required.
+  assert.equal(shouldFillFromProfile({ value: "" }), true)
+  assert.equal(shouldFillFromProfile({ value: "resumator_no_selection" }), true)
+  assert.equal(shouldFillFromProfile({ value: "Felix" }), false)
+})
+
+test("effort — an LLM call, or a question put to the user — is required-only", () => {
+  // An optional question we cannot answer does not block submission, so
+  // chasing it would spend money and the user's attention for nothing.
+  assert.equal(shouldSpendEffortOn({ required: false, value: "" }), false)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "" }), true)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "resumator_no_selection" }), true)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "Yes" }), false)
+})
+
+test("the two rules pull opposite ways on the same optional field", () => {
+  const optionalUnknown = { required: false, value: "" }
+  assert.equal(shouldFillFromProfile(optionalUnknown), true)   // fill if we know it
+  assert.equal(shouldSpendEffortOn(optionalUnknown), false)    // never chase it
 })
 
 test("the three work-auth phrasings are told apart", () => {
