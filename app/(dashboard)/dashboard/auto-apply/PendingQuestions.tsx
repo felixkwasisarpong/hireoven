@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Check, ChevronDown, HelpCircle, Loader2 } from "lucide-react"
+import { Check, ChevronDown, HelpCircle, Loader2, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type PendingQuestion = {
@@ -32,14 +32,14 @@ export default function PendingQuestions({ initial }: { initial: PendingQuestion
 
   if (questions.length === 0) return null
 
-  async function save(id: string, answer: string) {
-    if (!answer.trim() || saving) return
+  async function send(id: string, payload: Record<string, unknown>) {
+    if (saving) return
     setSaving(id)
     try {
       const res = await fetch("/api/auto-apply/questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, answer }),
+        body: JSON.stringify({ id, ...payload }),
       })
       // Only drop it once the server confirms; otherwise it vanishes from view
       // while still blocking the next run.
@@ -48,6 +48,12 @@ export default function PendingQuestions({ initial }: { initial: PendingQuestion
       setSaving(null)
     }
   }
+
+  const save = (id: string, answer: string) =>
+    answer.trim() ? send(id, { answer }) : undefined
+
+  /** Never ask again, and stop attempting jobs that require it. */
+  const skip = (id: string) => send(id, { skip: true })
 
   const shown = expanded ? questions : questions.slice(0, VISIBLE)
   const hidden = questions.length - shown.length
@@ -61,7 +67,8 @@ export default function PendingQuestions({ initial }: { initial: PendingQuestion
             {questions.length} question{questions.length === 1 ? "" : "s"} blocking applications
           </h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            Answer once and we reuse it everywhere. Skip anything that doesn&apos;t apply to you.
+            Answer once and we reuse it everywhere. Skip anything you&apos;d never answer —
+            we won&apos;t apply to jobs that ask it.
           </p>
         </div>
       </header>
@@ -71,11 +78,20 @@ export default function PendingQuestions({ initial }: { initial: PendingQuestion
           <li key={q.id} className="px-4 py-3">
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-sm text-slate-900">{q.questionText}</p>
-              {q.timesSeen > 1 && (
-                <span className="shrink-0 text-xs tabular-nums text-slate-400">
-                  {q.timesSeen}×
-                </span>
-              )}
+              <div className="flex shrink-0 items-center gap-2">
+                {q.timesSeen > 1 && (
+                  <span className="text-xs tabular-nums text-slate-400">{q.timesSeen}×</span>
+                )}
+                <button
+                  onClick={() => void skip(q.id)}
+                  disabled={saving === q.id}
+                  title="Never ask this again, and skip jobs that require it"
+                  className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 disabled:opacity-40"
+                >
+                  <X className="h-3 w-3" />
+                  Skip
+                </button>
+              </div>
             </div>
 
             {q.options && q.options.length > 0 ? (
