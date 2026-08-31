@@ -271,7 +271,10 @@ export function identityAnswer(
 export type EeoProfile = Pick<
   AutofillProfile,
   "gender" | "ethnicity" | "veteran_status" | "disability_status" | "auto_fill_diversity"
->
+> & {
+  pronouns?: string | null
+  sexual_orientation?: string | null
+}
 
 export function eeoAnswer(profile: EeoProfile, label: string): string | null {
   if (profile.auto_fill_diversity !== true) return null
@@ -297,8 +300,11 @@ export function eeoAnswer(profile: EeoProfile, label: string): string | null {
   // one gender field, which is the closest honest answer available.
   if (/gender/.test(l)) return val(profile.gender)
 
-  // Pronouns and sexual orientation are deliberately NOT inferred. Gender does
-  // not determine either, and guessing would assert something personal the user
-  // never entered. They need their own profile fields.
+  // Answered from their own profile fields, never inferred from gender — gender
+  // determines neither. Left unset they stay null, and the form's own decline
+  // option is chosen instead.
+  if (/pronoun/.test(l)) return val(profile.pronouns)
+  if (/sexual orientation|orientation/.test(l)) return val(profile.sexual_orientation)
+
   return null
 }

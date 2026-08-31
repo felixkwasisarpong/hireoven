@@ -200,9 +200,15 @@ test("nothing is disclosed while the consent switch is off", () => {
   }
 })
 
-test("pronouns and sexual orientation are never inferred from gender", () => {
-  // Gender determines neither. Guessing would assert something personal the
-  // user never entered; these need their own profile fields.
+test("pronouns and sexual orientation come from their own fields", () => {
+  const stated = { ...EEO, pronouns: "He/Him", sexual_orientation: "Prefer not to say" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(stated, "What are your personal pronouns? *"), "He/Him")
+  assert.equal(eeoAnswer(stated, "Sexual Orientation*"), "Prefer not to say")
+})
+
+test("pronouns are never inferred from gender when unset", () => {
+  // Gender determines neither. An unset field falls through to the form's own
+  // decline option rather than asserting something the user never entered.
   assert.equal(eeoAnswer(EEO, "What are your personal pronouns? *"), null)
   assert.equal(eeoAnswer(EEO, "Sexual Orientation*"), null)
 })
