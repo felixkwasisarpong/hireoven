@@ -106,6 +106,8 @@ export function shouldSpendEffortOn(field: { required: boolean; value?: string |
 // ── 4. Work authorization is answered from the profile, never by a model ─────
 
 export type WorkAuthQuestion =
+  /** Authorisation in a country the profile says nothing about. */
+  | "foreign_country"
   /** "Are you legally authorized to work in the US?" */
   | "authorized_now"
   /** "Do you currently require sponsorship?" */
@@ -126,9 +128,15 @@ export type WorkAuthQuestion =
  */
 export function classifyWorkAuthQuestion(label: string): WorkAuthQuestion | null {
   const l = label.toLowerCase()
-  if (!/authoriz|sponsor|visa|immigration|work permit|right to work|employment eligib/i.test(l)) {
+  if (!/authoriz|sponsor|visa|immigration|work permit|right to work|employment eligib|eligible to work|legally able to work/i.test(l)) {
     return null
   }
+
+  // Authorisation is country-specific. A profile that establishes US work
+  // authorisation says nothing about Canada or the UK, and answering "Yes"
+  // from it would be a false statement on the application.
+  const OTHER_COUNTRY = /\b(canada|canadian|united kingdom|\buk\b|ireland|australia|germany|france|india|singapore|eu\b|european union)\b/i
+  if (OTHER_COUNTRY.test(l)) return "foreign_country"
   // Future-tense first — "now or in the future" also contains "now".
   if (/\bfuture\b|\bever\b|\bnow or\b|at any (?:point|time)|will you (?:require|need)|going forward|long[- ]term/.test(l)) {
     return "sponsorship_future"
@@ -144,7 +152,7 @@ export function classifyWorkAuthQuestion(label: string): WorkAuthQuestion | null
   if (/immigration status|visa (?:type|status)|what is your (?:current )?status/.test(l)) {
     return "status"
   }
-  if (/authoriz|right to work|work permit|employment eligib|legally (?:able|entitled)/.test(l)) {
+  if (/authoriz|right to work|work permit|employment eligib|eligible to work|legally (?:able|entitled)/.test(l)) {
     return "authorized_now"
   }
   return null
@@ -193,6 +201,12 @@ export function answerWorkAuth(
       // Free text — only answer if the profile actually carries a status.
       if (!status) return null
       return { value: humanStatus(status), grounded: true }
+
+    case "foreign_country":
+      // The profile cannot establish this. Left for the human rather than
+      // answered either way: "Yes" would be a false claim and "No" may
+      // needlessly disqualify someone with dual status.
+      return null
   }
 }
 

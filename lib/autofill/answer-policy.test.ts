@@ -147,3 +147,23 @@ test("an identity field with nothing in the profile stays blank", () => {
   const empty = { first_name: null, last_name: null, email: null, phone: null } as unknown as AutofillProfile
   assert.equal(identityAnswer(empty, "Name"), null)
 })
+
+test("authorisation questions about another country are not answered from a US profile", () => {
+  // A profile establishing US work authorisation says nothing about Canada.
+  // "Yes" would be a false statement; "No" may wrongly disqualify someone with
+  // dual status. Left for the human either way.
+  for (const q of [
+    "Are you authorized to work in Canada?*",
+    "Will you now, or in the future, require sponsorship to work in Canada?",
+    "Do you have the right to work in the United Kingdom?",
+  ]) {
+    assert.equal(classifyWorkAuthQuestion(q), "foreign_country", q)
+    assert.equal(answerWorkAuth(OPT, "foreign_country"), null)
+  }
+})
+
+test("'eligible to work' phrasing is recognised as an authorisation question", () => {
+  // Greenhouse asks it this way and the original regex missed it entirely.
+  assert.equal(classifyWorkAuthQuestion("Are you eligible to work in the US?*"), "authorized_now")
+  assert.equal(classifyWorkAuthQuestion("Are you legally able to work in the United States?"), "authorized_now")
+})

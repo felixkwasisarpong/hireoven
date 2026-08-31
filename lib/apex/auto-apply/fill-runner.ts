@@ -48,7 +48,10 @@ const NEVER_CLICK = /submit|send|finish|complete|confirm|agree|accept/i
 const CAPTCHA_FRAME = /captcha-delivery\.com|hcaptcha\.com|recaptcha\/api2|challenges\.cloudflare\.com|perimeterx|px-cloud|arkoselabs/i
 const BOT_WALL = /just a moment|checking your browser|verify you are human|access denied|are you a robot|unusual traffic/i
 const EEO_LABEL = /gender|race|ethnic|hispanic|latino|veteran|disab|self.?identif/i
-const DECLINE_OPTION = /decline|prefer not|do not wish|don'?t wish|not to answer|not to say|choose not/i
+const DECLINE_OPTION = /decline|prefer not|do not wish|don'?t wish|not to answer|not to say|choose not|rather not|opt out|no response|not disclose|undisclosed|i do not want/i
+
+/** Voluntary self-identification beyond the classic EEO set. */
+const SELF_ID_LABEL = /\bpronouns?\b|sexual orientation|gender identity|\btransgender\b|hispanic|latin[xo]|race\/?ethnicity|protected veteran/i
 
 export type FillAttempt = {
   ok: boolean
@@ -167,7 +170,22 @@ const INSPECT = `(() => {
     if (w && /\\brequired\\b/i.test(w.className || "")) return true;
     return false;
   };
-  const required = ctrls.filter(req);
+  // react-select renders TWO controls per field: the visible combobox and a
+  // hidden companion input with no label of its own. Counting both made one
+  // question look like two unfilled requirements — 16 of Sony's 21 gaps were
+  // this artifact, and no answer could ever clear them.
+  const isSelectArtifact = (el) => {
+    // Identified structurally, not by a missing label: improving label lookup
+    // made the companion inherit the container's label, so "has no label" stopped
+    // finding it. The companion is any control inside a select widget that is
+    // not itself the combobox.
+    if (el.getAttribute("role") === "combobox" || el.getAttribute("aria-autocomplete")) return false;
+    const box = el.closest('[class*="select" i], [class*="control" i], [class*="combobox" i]');
+    if (!box) return false;
+    const combo = box.querySelector('[role="combobox"], [aria-autocomplete]');
+    return !!combo && combo !== el;
+  };
+  const required = ctrls.filter((el) => req(el) && !isSelectArtifact(el));
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type")||"").toLowerCase();
     if (tag === "select") return "select";
@@ -624,6 +642,18 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         continue
       }
 
+      // Location typeaheads look like plain text inputs but behave like
+      // comboboxes: a typed value is not a selection, so the field reads empty
+      // however correct the text is. Drive them through the menu instead.
+      if (/\blocation\b|\bcity\b/i.test(f.label) && !/relocat/i.test(f.label)) {
+        const loc = [opts.profile.city, opts.profile.state].filter(Boolean).join(", ")
+        if (loc) {
+          const ok = await page.evaluate(selectComboOptionExpr(f.sel, loc)).catch(() => false)
+            || await page.evaluate(writeAnswerExpr(f.sel, loc)).catch(() => false)
+          if (ok) { r.groundedAnswers++; continue }
+        }
+      }
+
       // Rule-based answers: prior employment, how-did-you-hear, preferred
       // name, student status. Free, and they never reach the user as questions.
       const common = answerCommonQuestion(f.label, {
@@ -691,7 +721,19 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
         if (common?.kind === "answer") want = common.value
       }
-      if (!want && EEO_LABEL.test(f.label)) want = "Decline"
+      // EEO and self-identification: read what the control actually offers and
+      // pick its own decline option. Guessing the wording ("Decline", "Prefer
+      // not to say") failed against forms that say "I don't wish to answer" —
+      // 20 of 25 remaining unfilled fields were this.
+      if (!want && (EEO_LABEL.test(f.label) || SELF_ID_LABEL.test(f.label))) {
+        const eeoOptions = await page.evaluate(readComboOptionsExpr(f.sel!)).catch(() => []) as string[]
+        const decline = eeoOptions.find((o) => DECLINE_OPTION.test(o))
+        if (decline) {
+          const ok = await page.evaluate(selectComboOptionExpr(f.sel!, decline)).catch(() => false)
+          if (ok) { r.eeoDeclined++; continue }
+        }
+        want = decline ?? "Decline"
+      }
       if (!want) {
         const known = await getScreeningAnswer({
           userId: opts.userId, question: f.label, company: opts.companyName,
@@ -747,7 +789,10 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
         if (common?.kind === "answer") want = common.value
       }
-      if (!want && EEO_LABEL.test(f.label)) want = "Decline"
+      if (!want && (EEO_LABEL.test(f.label) || SELF_ID_LABEL.test(f.label))) {
+        const eeoOptions = await page.evaluate(readNativeOptionsExpr(f.sel!)).catch(() => []) as string[]
+        want = eeoOptions.find((o) => DECLINE_OPTION.test(o)) ?? "Decline"
+      }
       if (!want) {
         want = await getScreeningAnswer({
           userId: opts.userId, question: f.label, company: opts.companyName,
