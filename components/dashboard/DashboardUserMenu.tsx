@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { ChevronDown, CreditCard, LogOut, Settings, UserRound } from "lucide-react"
+import { ChevronDown, CreditCard, LogOut, Settings, UserRound, Moon } from "lucide-react"
 import { useAuth } from "@/lib/hooks/useAuth"
 import { useSubscription } from "@/lib/hooks/useSubscription"
 import { cn } from "@/lib/utils"
@@ -94,6 +94,15 @@ export default function DashboardUserMenu() {
             >
               <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
               Profile
+            </Link>
+            <Link
+              href="/dashboard/auto-apply"
+              role="menuitem"
+              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium text-strong transition-colors hover:bg-cyan-50/65"
+              onClick={() => setOpen(false)}
+            >
+              <Moon className="h-4 w-4 text-muted-foreground" strokeWidth={2} />
+              Auto-apply
             </Link>
             <Link
               href="/dashboard/email-preferences"
