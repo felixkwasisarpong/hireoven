@@ -9,7 +9,9 @@
  * This module inverts that: search across every category first, judge what is
  * genuinely newsworthy today, and let the winning story decide which category
  * the post belongs to. If nothing clears the bar, it says so and the run skips
- * rather than manufacturing a post.
+ * rather than manufacturing a post. The selector also keeps category mix in
+ * check so a hot immigration-policy week does not permanently collapse the blog
+ * back into an H-1B-only publication.
  */
 import Anthropic from "@anthropic-ai/sdk"
 import { ANTHROPIC_MODEL_ROUTING } from "@/lib/ai/anthropic-models"
@@ -46,16 +48,22 @@ export type TrendScoutResult =
  * better outcome than publishing the same post again.
  */
 export const MIN_NOVELTY = 55
+export const CATEGORY_BALANCE_WINDOW = 10
+export const CATEGORY_DOMINANCE_THRESHOLD = 0.45
+export const CATEGORY_BALANCE_MAX_NOVELTY_GAP = 20
 
-const SCOUT_SYSTEM_PROMPT = `You are a news scout for Hireoven, a real-time job monitoring platform. Its readers are engineers, PMs and data scientists actively job-hunting — many navigating US visa sponsorship (H-1B, OPT, STEM OPT).
+const SCOUT_SYSTEM_PROMPT = `You are a news scout for Hireoven, a real-time job monitoring platform. Its readers are engineers, PMs, designers, operators, and data scientists actively job-hunting. Some are international candidates navigating H-1B, OPT, STEM OPT, and green-card timing, but the blog must not become immigration-only.
 
 Your job is to find what is ACTUALLY developing right now across the categories you are given, and to be honest when nothing is.
 
 Rules:
 - Search the web. Prefer developments from the last 7 days.
-- A candidate must be a DEVELOPMENT — a rule change, a filing deadline, a layoff, a policy ruling, a hiring shift, a court decision, published data. Not an evergreen explainer.
+- Scout all lanes: hiring demand, layoffs, remote/onsite shifts, compensation, company-specific hiring/freezes, recruiting process changes, interview formats, offer negotiation, resume/ATS changes, and immigration policy.
+- A candidate must be a DEVELOPMENT — a rule change, a filing deadline, a layoff, an earnings/hiring signal, a policy ruling, a court decision, newly published labor data, a tooling/platform change, or a measurable hiring shift. Not an evergreen explainer.
 - "H-1B is competitive" or "tailor your resume" are NOT developments. Score them low.
 - Do NOT propose anything that substantially overlaps the recent posts you are shown. Covering the same ground again is the failure mode you exist to prevent.
+- Do not over-file into H1B & Visa Intel. Include at most one immigration/visa candidate unless every genuinely newsworthy development today is immigration-specific.
+- If recent posts are concentrated in one category, actively look for strong candidates in the other categories before returning your final list.
 - noveltyScore is how much genuinely NEW information the story carries for this audience: 80+ a real development most readers have not seen, 55-79 a real but smaller update, below 55 essentially evergreen.
 - It is correct and expected to return an empty candidate list on a quiet day.
 
@@ -73,8 +81,32 @@ CRITICAL: your ENTIRE response must be a single raw JSON object — no prose, no
   ]
 }`
 
+function recentCategoryCounts(recent: RecentPostDigest[], limit = CATEGORY_BALANCE_WINDOW): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const post of recent.slice(0, limit)) {
+    counts.set(post.categorySlug, (counts.get(post.categorySlug) ?? 0) + 1)
+  }
+  return counts
+}
+
+function buildRecentCategoryMix(recent: RecentPostDigest[]): string {
+  const counts = recentCategoryCounts(recent)
+  if (counts.size === 0) return "(none yet)"
+
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([slug, count]) => `- ${slug}: ${count} of the last ${Math.min(recent.length, CATEGORY_BALANCE_WINDOW)} posts`)
+    .join("\n")
+}
+
 function buildScoutPrompt(categories: BlogCategory[], recent: RecentPostDigest[], today: string): string {
-  const categoryLines = categories
+  const counts = recentCategoryCounts(recent)
+  const categoryLines = [...categories]
+    .sort((a, b) => {
+      const byRecentCount = (counts.get(a.slug) ?? 0) - (counts.get(b.slug) ?? 0)
+      if (byRecentCount !== 0) return byRecentCount
+      return a.day_of_week - b.day_of_week
+    })
     .map((c) => `- ${c.slug}: ${c.name} — ${c.description ?? ""}`)
     .join("\n")
 
@@ -92,7 +124,17 @@ ${categoryLines}
 Hireoven has ALREADY published these posts. Do not propose anything that covers the same ground:
 ${recentLines}
 
-Find up to 4 genuine developments from the last 7 days across ANY of those categories. Rank them by how newsworthy they are for this audience. If nothing genuinely new has happened, return {"candidates": []}.`
+Recent category mix:
+${buildRecentCategoryMix(recent)}
+
+Non-immigration search directions to try before settling on a visa story:
+- tech hiring shifts, job postings, layoffs, headcount plans, earnings-call hiring signals
+- remote/on-site policy changes and compensation bands affecting job seekers
+- interview format changes, AI coding assessment policies, recruiter process changes
+- offer negotiation, salary transparency, pay compression, and hiring timeline data
+- ATS/recruiting platform changes that affect applications or candidate screening
+
+Find up to 6 genuine developments from the last 7 days across ANY of those categories. Return a diverse list when real developments exist: aim for at least 3 non-immigration candidates and no more than 1 H1B/Visa candidate. Rank them by how newsworthy they are for this audience. If nothing genuinely new has happened, return {"candidates": []}.`
 }
 
 function parseScoutJson(raw: string): TrendCandidate[] {
@@ -152,6 +194,18 @@ export function isDuplicateOfRecent(
   })
 }
 
+function dominantRecentCategories(recent: RecentPostDigest[]): Set<string> {
+  const windowSize = Math.min(recent.length, CATEGORY_BALANCE_WINDOW)
+  if (windowSize === 0) return new Set()
+
+  const counts = recentCategoryCounts(recent, windowSize)
+  const out = new Set<string>()
+  for (const [slug, count] of counts) {
+    if (count / windowSize >= CATEGORY_DOMINANCE_THRESHOLD) out.add(slug)
+  }
+  return out
+}
+
 /**
  * Pick the best candidate: known category, novel enough, not already covered.
  * Pure — separated from the API call so selection is testable without a model.
@@ -185,7 +239,20 @@ export function selectTrend(
     return { status: "nothing_trending", reason, considered }
   }
 
-  return { status: "found", candidate: eligible[0]!, considered }
+  const top = eligible[0]!
+  const dominant = dominantRecentCategories(recent)
+  if (dominant.has(top.categorySlug)) {
+    const balanced = eligible.find(
+      (candidate) =>
+        !dominant.has(candidate.categorySlug) &&
+        top.noveltyScore - candidate.noveltyScore <= CATEGORY_BALANCE_MAX_NOVELTY_GAP,
+    )
+    if (balanced) {
+      return { status: "found", candidate: balanced, considered }
+    }
+  }
+
+  return { status: "found", candidate: top, considered }
 }
 
 let anthropic: Anthropic | null = null
@@ -206,9 +273,9 @@ export async function scoutTrendingTopic(input: {
 
   const response = await client.beta.messages.create({
     model: ANTHROPIC_MODEL_ROUTING.BLOG_GENERATION,
-    max_tokens: 2048,
+    max_tokens: 3072,
     betas: ["web-search-2025-03-05"],
-    tools: [{ type: "web_search_20250305" as const, name: "web_search", max_uses: 6 }],
+    tools: [{ type: "web_search_20250305" as const, name: "web_search", max_uses: 8 }],
     system: SCOUT_SYSTEM_PROMPT,
     messages: [{ role: "user", content: buildScoutPrompt(input.categories, input.recentPosts, today) }],
   })

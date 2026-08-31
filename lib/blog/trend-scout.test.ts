@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert"
 import { test } from "node:test"
 import type { BlogCategory } from "@/types/blog"
 import {
+  CATEGORY_BALANCE_MAX_NOVELTY_GAP,
   MIN_NOVELTY,
   isDuplicateOfRecent,
   selectTrend,
@@ -83,6 +84,56 @@ test("falls through to the next candidate when the best one is a repeat", () => 
   assert.equal(result.status, "found")
   if (result.status !== "found") return
   assert.equal(result.candidate.headline, fresh.headline)
+})
+
+test("balances away from a recently dominant category when another strong story exists", () => {
+  const recent = [
+    post("State Dept pauses global visa interviews"),
+    post("USCIS shortens RFE response windows"),
+    post("DHS files a new H-1B fee rule"),
+    post("DHS fee proposal comment period opens"),
+    post("Federal judge blocks a visa ban"),
+  ]
+  const h1b = candidate({
+    headline: "USCIS updates H-1B receipt notice wording",
+    noveltyScore: 90,
+  })
+  const market = candidate({
+    categorySlug: "job-market-pulse",
+    headline: "Cloud employers reopen infrastructure roles after earnings calls",
+    noveltyScore: 90 - CATEGORY_BALANCE_MAX_NOVELTY_GAP,
+  })
+
+  const result = selectTrend([h1b, market], CATEGORIES, recent)
+
+  assert.equal(result.status, "found")
+  if (result.status !== "found") return
+  assert.equal(result.candidate.categorySlug, "job-market-pulse")
+})
+
+test("keeps a dominant-category story when alternatives are too weak", () => {
+  const recent = [
+    post("State Dept pauses global visa interviews"),
+    post("USCIS shortens RFE response windows"),
+    post("DHS files a new H-1B fee rule"),
+    post("DHS fee proposal comment period opens"),
+    post("Federal judge blocks a visa ban"),
+  ]
+  const h1b = candidate({
+    headline: "USCIS opens a surprise filing window for selected registrations",
+    noveltyScore: 95,
+  })
+  const weakMarket = candidate({
+    categorySlug: "job-market-pulse",
+    headline: "Tech workers keep using LinkedIn to find roles",
+    noveltyScore: MIN_NOVELTY,
+  })
+
+  const result = selectTrend([h1b, weakMarket], CATEGORIES, recent)
+
+  assert.equal(result.status, "found")
+  if (result.status !== "found") return
+  assert.equal(result.candidate.categorySlug, "h1b-visa-intel")
 })
 
 test("a candidate filed under an unknown category is not published", () => {

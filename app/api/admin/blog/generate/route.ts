@@ -3,7 +3,7 @@ import { assertAdminAccess } from "@/lib/admin/auth"
 import { generateTodaysBlogPost } from "@/lib/blog/generate-worker"
 
 export const runtime = "nodejs"
-export const maxDuration = 120
+export const maxDuration = 300
 
 export async function POST() {
   await assertAdminAccess()
@@ -11,7 +11,11 @@ export async function POST() {
   const result = await generateTodaysBlogPost()
 
   if (!result) {
-    return NextResponse.json({ ok: true, skipped: true, message: "No post scheduled today (weekend)" })
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      message: "No blog post generated today (weekend or no qualifying trend)",
+    })
   }
 
   if (result.skippedExisting) {

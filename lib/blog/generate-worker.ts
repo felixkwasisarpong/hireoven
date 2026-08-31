@@ -20,9 +20,9 @@ function getClient(): Anthropic {
   return anthropic
 }
 
-const SYSTEM_PROMPT = `You are a content writer for Hireoven, a real-time job monitoring platform for tech professionals and international job seekers (H1B, OPT, STEM OPT). Our readers are engineers, PMs, and data scientists actively job-hunting — many navigating US visa sponsorship.
+const SYSTEM_PROMPT = `You are a content writer for Hireoven, a real-time job monitoring platform for tech professionals. Our readers are engineers, PMs, designers, operators, and data scientists actively job-hunting. Some are international candidates navigating H-1B, OPT, STEM OPT, and green-card timing, but immigration is only one coverage lane.
 
-Write informative, practical, well-structured blog posts in HTML. Use <h2> for section headings, <p> for paragraphs, <ul>/<li> for lists. No <html>, <head>, or <body> tags — just content elements. Tone: direct, knowledgeable, not salesy.
+Write informative, practical, well-structured blog posts in HTML. Use <h2> for section headings, <p> for paragraphs, <ul>/<li> for lists. No <html>, <head>, or <body> tags — just content elements. Tone: direct, knowledgeable, not salesy. Do not force a visa angle unless the selected story is actually filed under an immigration category.
 
 CRITICAL: Your ENTIRE response must be a single raw JSON object — no prose, no markdown fences, no explanation before or after. Start your response with { and end with }.
 
@@ -33,7 +33,7 @@ JSON keys required:
 - seo_description: meta description under 155 characters
 - body: full HTML content, ~600 words, with h2 sections
 - reading_time: integer minutes (estimate from word count)
-- image_prompt: one sentence describing a text-free editorial hero image for this post
+- image_prompt: one sentence describing a text-free editorial hero image for this post. It must describe concrete visual objects/composition, no letters, no numbers, no calendar dates, no document text, no logos, no brand names.
 - hero_image_alt: concise alt text for the hero image`
 
 interface GeneratedPost {
@@ -67,6 +67,8 @@ ${trend.sources.length ? `SOURCES FOUND WHILE SCOUTING:\n${trend.sources.map((s)
 File it under the "${category.name}" section (${category.description}).
 
 Search the web to verify and deepen the story before writing — confirm the details above and pull in specifics, numbers and dates. Cite sources naturally in the text. Write about THIS development specifically; do not fall back to a general explainer about the category.
+
+For image_prompt, describe a polished editorial composition with specific objects and visual hierarchy. Do not ask for readable text, headlines, forms, calendars with dates, government seals, company logos, or named-brand screens.
 
 Return only the JSON object described in the system prompt.`
 
