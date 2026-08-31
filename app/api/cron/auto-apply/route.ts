@@ -61,10 +61,29 @@ export async function GET(request: NextRequest) {
   const { rows: users } = await pool.query<{
     user_id: string; plan: string; timezone: string | null
   }>(
-    `SELECT p.id AS user_id, l.plan, COALESCE(p.timezone, 'UTC') AS timezone
+    // Two things this query has to get right, both of which it got wrong first
+    // time and both of which failed SILENTLY — the sweep selected nobody while
+    // reporting success.
+    //
+    //   Plan names differ between storage and code. Pro Max is stored as
+    //   "pro_international" (see lib/billing/fulfillment.ts), so joining
+    //   auto_apply_limits on the raw value never matched a single row.
+    //
+    //   Users have many subscription rows — the test account has eight, seven
+    //   of them canceled. Joining them all would fan out and let a canceled
+    //   subscription grant access, so only the newest live one counts.
+    `WITH live AS (
+       SELECT DISTINCT ON (s.user_id)
+              s.user_id,
+              CASE WHEN s.plan = 'pro_international' THEN 'pro_max' ELSE s.plan END AS plan
+         FROM subscriptions s
+        WHERE s.status IN ('active', 'trialing', 'past_due', 'unpaid')
+        ORDER BY s.user_id, s.created_at DESC
+     )
+     SELECT p.id AS user_id, l.plan, COALESCE(p.timezone, 'UTC') AS timezone
        FROM profiles p
-       JOIN subscriptions s ON s.user_id = p.id
-       JOIN auto_apply_limits l ON l.plan = s.plan
+       JOIN live ON live.user_id = p.id
+       JOIN auto_apply_limits l ON l.plan = live.plan
       WHERE l.enabled
         AND COALESCE((p.auto_apply_prefs->>'enabled')::boolean, false)
         AND EXTRACT(HOUR FROM (now() AT TIME ZONE COALESCE(p.timezone, 'UTC')))
@@ -77,7 +96,14 @@ export async function GET(request: NextRequest) {
       ORDER BY p.id
       LIMIT $3`,
     [WINDOW_START_HOUR, WINDOW_END_HOUR, MAX_USERS_PER_RUN],
-  ).catch(() => ({ rows: [] as { user_id: string; plan: string; timezone: string | null }[] }))
+  ).catch((err) => {
+    // Loudly. A swallowed error here is indistinguishable from "nobody is
+    // eligible tonight", and that is exactly how two missing columns and a
+    // plan-name mismatch went unnoticed: the sweep reported success every hour
+    // while selecting nobody.
+    console.error("[cron/auto-apply] user selection failed:", err)
+    return { rows: [] as { user_id: string; plan: string; timezone: string | null }[] }
+  })
 
   const results: Record<string, unknown>[] = []
   for (const u of users) {
