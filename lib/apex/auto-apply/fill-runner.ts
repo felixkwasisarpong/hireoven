@@ -568,6 +568,29 @@ function readNativeOptionsExpr(selector: string): string {
 })()`
 }
 
+/**
+ * Greenhouse names its fields semantically — gender, hispanic_ethnicity,
+ * veteran_status, disability_status, candidate-location — so the id is a far
+ * more reliable classifier than the visible label, which varies per company
+ * ("Please identify your race", "Race/Ethnicity", "What is your race?") and
+ * sometimes carries the widget's own error text.
+ *
+ * Returns a label-shaped string so the existing matchers work unchanged.
+ */
+function labelFromSelector(sel: string | null): string | null {
+  if (!sel) return null
+  const id = sel.replace(/^#/, "").replace(/^\[[a-z-]+="/i, "").replace(/"\]$/, "").toLowerCase()
+  if (/hispanic|latin/.test(id)) return "Are you Hispanic/Latino?"
+  if (/race|ethnic/.test(id)) return "Please identify your race/ethnicity"
+  if (/veteran/.test(id)) return "Veteran status"
+  if (/disab/.test(id)) return "Disability status"
+  if (/gender/.test(id)) return "Gender"
+  if (/pronoun/.test(id)) return "Pronouns"
+  if (/orientation/.test(id)) return "Sexual orientation"
+  if (/candidate-location|^location$|\blocation\b/.test(id)) return "Location (City)"
+  return null
+}
+
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
   const r: FillAttempt = {
     ok: false, blocked: false, formReached: false,
@@ -713,7 +736,13 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // Required comboboxes: pick the option matching a grounded answer. Same
     // policy as text — identity and work authorization come from the profile,
     // never from a model.
-    for (const f of unfilled.filter((x) => x.kind === "combobox" && x.sel)) {
+    for (const raw of unfilled.filter((x) => x.kind === "combobox" && x.sel)) {
+      // Prefer the id-derived label when the visible one does not classify:
+      // Greenhouse's ids are stable where its labels are not.
+      const byId = labelFromSelector(raw.sel)
+      const f = byId && !EEO_LABEL.test(raw.label) && !SELF_ID_LABEL.test(raw.label)
+        ? { ...raw, label: byId }
+        : raw
       let want: string | null = identityAnswer(opts.profile, f.label)
       if (!want) {
         const kind = classifyWorkAuthQuestion(f.label)
@@ -797,7 +826,11 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // 85 unfilled required fields were dropdowns nobody drove — immigration
     // status, US residency, veteran and disability among them. They now go
     // through the same pipeline as everything else.
-    for (const f of unfilled.filter((x) => x.kind === "select" && x.sel)) {
+    for (const raw of unfilled.filter((x) => x.kind === "select" && x.sel)) {
+      const byId = labelFromSelector(raw.sel)
+      const f = byId && !EEO_LABEL.test(raw.label) && !SELF_ID_LABEL.test(raw.label)
+        ? { ...raw, label: byId }
+        : raw
       let want: string | null = identityAnswer(opts.profile, f.label)
       if (!want) {
         const kind = classifyWorkAuthQuestion(f.label)
