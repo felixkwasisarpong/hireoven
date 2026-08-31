@@ -71,15 +71,34 @@ export function isUsableAnswer(answer: string | null | undefined): boolean {
   return !isRefusalText(answer)
 }
 
-// ── 3. Only required fields get filled ───────────────────────────────────────
+// ── 3. Cheap fills are always worth it; effort is reserved for required ─────
 
 /**
- * Optional fields are deliberately left blank even when the profile could fill
- * them. Volunteering information nobody asked for is the applicant's choice to
- * make, not the system's, and every extra answer is another chance to be wrong
- * on their behalf.
+ * Fill anything the profile already answers, required or not.
+ *
+ * Writing a value we already hold costs nothing and can only help: an optional
+ * LinkedIn or phone field left blank is a worse application for no gain. This
+ * is the deterministic pass (generateFillScript), which matches profile data to
+ * fields by label and does not care whether the field is required.
  */
-export function shouldFillField(field: { required: boolean; value?: string | null }): boolean {
+export function shouldFillFromProfile(field: { value?: string | null }): boolean {
+  return !isAnswered(field.value)
+}
+
+/**
+ * Only spend effort on required fields.
+ *
+ * "Effort" is anything with a cost or a consequence: an LLM call, capturing a
+ * question to put to the user later, or abandoning a form as incomplete. An
+ * optional question we cannot answer from the profile is simply skipped — it
+ * does not block submission, so chasing it would burn money and the user's
+ * attention for nothing.
+ *
+ * The distinction matters because the two rules pull in opposite directions on
+ * the same field: an optional field gets filled if we know the answer, and
+ * ignored entirely if we do not.
+ */
+export function shouldSpendEffortOn(field: { required: boolean; value?: string | null }): boolean {
   if (!field.required) return false
   return !isAnswered(field.value)
 }
@@ -87,6 +106,8 @@ export function shouldFillField(field: { required: boolean; value?: string | nul
 // ── 4. Work authorization is answered from the profile, never by a model ─────
 
 export type WorkAuthQuestion =
+  /** Authorisation in a country the profile says nothing about. */
+  | "foreign_country"
   /** "Are you legally authorized to work in the US?" */
   | "authorized_now"
   /** "Do you currently require sponsorship?" */
@@ -107,9 +128,15 @@ export type WorkAuthQuestion =
  */
 export function classifyWorkAuthQuestion(label: string): WorkAuthQuestion | null {
   const l = label.toLowerCase()
-  if (!/authoriz|sponsor|visa|immigration|work permit|right to work|employment eligib/i.test(l)) {
+  if (!/authoriz|sponsor|visa|immigration|work permit|right to work|employment eligib|eligible to work|legally able to work/i.test(l)) {
     return null
   }
+
+  // Authorisation is country-specific. A profile that establishes US work
+  // authorisation says nothing about Canada or the UK, and answering "Yes"
+  // from it would be a false statement on the application.
+  const OTHER_COUNTRY = /\b(canada|canadian|united kingdom|\buk\b|ireland|australia|germany|france|india|singapore|eu\b|european union)\b/i
+  if (OTHER_COUNTRY.test(l)) return "foreign_country"
   // Future-tense first — "now or in the future" also contains "now".
   if (/\bfuture\b|\bever\b|\bnow or\b|at any (?:point|time)|will you (?:require|need)|going forward|long[- ]term/.test(l)) {
     return "sponsorship_future"
@@ -125,7 +152,7 @@ export function classifyWorkAuthQuestion(label: string): WorkAuthQuestion | null
   if (/immigration status|visa (?:type|status)|what is your (?:current )?status/.test(l)) {
     return "status"
   }
-  if (/authoriz|right to work|work permit|employment eligib|legally (?:able|entitled)/.test(l)) {
+  if (/authoriz|right to work|work permit|employment eligib|eligible to work|legally (?:able|entitled)/.test(l)) {
     return "authorized_now"
   }
   return null
@@ -174,6 +201,14 @@ export function answerWorkAuth(
       // Free text — only answer if the profile actually carries a status.
       if (!status) return null
       return { value: humanStatus(status), grounded: true }
+
+    case "foreign_country":
+      // Authorisation does not travel. Someone whose profile establishes US
+      // status is not authorised in Canada or the UK, so "No" is the truthful
+      // answer — and it is the safe one, since claiming authorisation abroad
+      // that does not exist is a false statement on the application.
+      if (status || authorizedNow !== null) return { value: "No", grounded: true }
+      return null
   }
 }
 
@@ -218,5 +253,58 @@ export function identityAnswer(
   if (/last[\s_-]?name|surname|family[\s_-]?name/.test(l)) return last || null
   if (/e-?mail/.test(l)) return (profile.email ?? "").trim() || null
   if (/phone|mobile|telephone|cell/.test(l)) return (profile.phone ?? "").trim() || null
+  return null
+}
+
+// ── 6. EEO comes from the profile when the user has opted in ────────────────
+
+/**
+ * Self-identification answered from the autofill profile.
+ *
+ * These fields already exist and the user fills them deliberately, so declining
+ * on their behalf discards an answer they chose to give — and on forms where the
+ * question is required with no opt-out, declining leaves the application stuck.
+ *
+ * `auto_fill_diversity` is the consent switch. While it is false nothing here is
+ * disclosed, whatever the profile holds.
+ */
+export type EeoProfile = Pick<
+  AutofillProfile,
+  "gender" | "ethnicity" | "veteran_status" | "disability_status" | "auto_fill_diversity"
+> & {
+  pronouns?: string | null
+  sexual_orientation?: string | null
+}
+
+export function eeoAnswer(profile: EeoProfile, label: string): string | null {
+  if (profile.auto_fill_diversity !== true) return null
+  const l = label.toLowerCase()
+  const val = (v: unknown): string | null => {
+    const s = typeof v === "string" ? v.trim() : ""
+    return s.length > 0 ? s : null
+  }
+
+  // Asked separately from race on US forms, and answered from the ethnicity
+  // field rather than by declining.
+  if (/hispanic|latin[xoa]/.test(l)) {
+    const eth = val(profile.ethnicity)
+    if (!eth) return null
+    return /hispanic|latin/i.test(eth) ? "Yes" : "No"
+  }
+
+  if (/race|ethnic/.test(l)) return val(profile.ethnicity)
+  if (/veteran/.test(l)) return val(profile.veteran_status)
+  if (/disab/.test(l)) return val(profile.disability_status)
+
+  // Gender identity is asked as its own question but the profile carries only
+  // one gender field, which is the closest honest answer available.
+  if (/gender/.test(l)) return val(profile.gender)
+
+  // Answered from their own profile fields, never inferred from gender — gender
+  // determines neither. Left unset they stay null, and the form's own decline
+  // option is chosen instead.
+  if (/pronoun/.test(l)) return val(profile.pronouns)
+  if (/sexual orientation|orientation/.test(l)) return val(profile.sexual_orientation)
+
   return null
 }

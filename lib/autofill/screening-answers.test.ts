@@ -92,3 +92,16 @@ test("placeholder text is not treated as a question", () => {
     assert.equal(isScreeningQuestion(q), false, q)
   }
 })
+
+test("consent and disclosure notices are not questions to put to a user", () => {
+  // These appeared in a captured backlog. They are acknowledgement checkboxes
+  // on the form, not things a person answers in advance.
+  for (const q of [
+    "Privacy notice*",
+    "Notice at Collection for California Job Applicants *",
+    "Terms and Conditions",
+    "I agree to the processing of my personal data",
+  ]) {
+    assert.equal(isScreeningQuestion(q), false, q)
+  }
+})

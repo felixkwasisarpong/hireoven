@@ -27,6 +27,15 @@ const PROFILE_OWNED =
 const NOT_A_QUESTION =
   /^(type your response|your (answer|response)|enter (your )?(answer|response|text)|answer|response|comments?|other|please specify|n\/?a)$/i
 
+/**
+ * Consent and disclosure notices. These are acknowledgement checkboxes an
+ * applicant ticks, not questions with answers — putting "Privacy notice" to a
+ * user as though it were a question is nonsense, and a legal acknowledgement is
+ * theirs to give on the form, not something to pre-store.
+ */
+const LEGAL_NOTICE =
+  /(privacy|cookie|data protection)\s*(notice|policy|statement)|notice at collection|terms (and|&) conditions|e-?verify (notice|poster)|i (agree|consent|acknowledge)\b|acknowledgement\b|by selecting ["']?yes["']?, i am certifying|i certify that/i
+
 /** Legal declarations answered by answer-policy from the profile, not here. */
 const POLICY_OWNED = /authoriz|sponsor|visa|immigration|work permit|right to work/i
 
@@ -46,6 +55,7 @@ export function isScreeningQuestion(question: string): boolean {
   const q = question.trim()
   if (q.length < 4) return false
   if (NOT_A_QUESTION.test(q.replace(/[*✱:]/g, "").trim())) return false
+  if (LEGAL_NOTICE.test(q)) return false
   if (PROFILE_OWNED.test(q)) return false
   if (POLICY_OWNED.test(q)) return false
   return true

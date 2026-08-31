@@ -2,7 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import {
   isSentinelValue, isAnswered, isRefusalText, isUsableAnswer,
-  shouldFillField, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer,
+  shouldFillFromProfile, shouldSpendEffortOn, classifyWorkAuthQuestion, answerWorkAuth, identityAnswer, eeoAnswer,
 } from "./answer-policy"
 import type { AutofillProfile } from "@/types"
 
@@ -47,12 +47,27 @@ test("normal answers pass the refusal filter", () => {
   }
 })
 
-test("optional fields are left blank even when fillable", () => {
-  assert.equal(shouldFillField({ required: false, value: "" }), false)
-  assert.equal(shouldFillField({ required: true, value: "" }), true)
-  // A sentinel means still-unanswered, so a required field holding one is filled.
-  assert.equal(shouldFillField({ required: true, value: "resumator_no_selection" }), true)
-  assert.equal(shouldFillField({ required: true, value: "Yes" }), false)
+test("anything the profile answers gets filled, required or not", () => {
+  // An optional LinkedIn field left blank is a worse application for no gain,
+  // so the deterministic pass does not care whether a field is required.
+  assert.equal(shouldFillFromProfile({ value: "" }), true)
+  assert.equal(shouldFillFromProfile({ value: "resumator_no_selection" }), true)
+  assert.equal(shouldFillFromProfile({ value: "Felix" }), false)
+})
+
+test("effort — an LLM call, or a question put to the user — is required-only", () => {
+  // An optional question we cannot answer does not block submission, so
+  // chasing it would spend money and the user's attention for nothing.
+  assert.equal(shouldSpendEffortOn({ required: false, value: "" }), false)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "" }), true)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "resumator_no_selection" }), true)
+  assert.equal(shouldSpendEffortOn({ required: true, value: "Yes" }), false)
+})
+
+test("the two rules pull opposite ways on the same optional field", () => {
+  const optionalUnknown = { required: false, value: "" }
+  assert.equal(shouldFillFromProfile(optionalUnknown), true)   // fill if we know it
+  assert.equal(shouldSpendEffortOn(optionalUnknown), false)    // never chase it
 })
 
 test("the three work-auth phrasings are told apart", () => {
@@ -131,4 +146,74 @@ test("identity fields are answered from the profile, never by a model", () => {
 test("an identity field with nothing in the profile stays blank", () => {
   const empty = { first_name: null, last_name: null, email: null, phone: null } as unknown as AutofillProfile
   assert.equal(identityAnswer(empty, "Name"), null)
+})
+
+test("authorisation abroad is answered No, because it does not travel", () => {
+  // A profile establishing US work authorisation says nothing about Canada.
+  // "Yes" would be a false statement; "No" may wrongly disqualify someone with
+  // dual status. Left for the human either way.
+  for (const q of [
+    "Are you authorized to work in Canada?*",
+    "Will you now, or in the future, require sponsorship to work in Canada?",
+    "Do you have the right to work in the United Kingdom?",
+  ]) {
+    assert.equal(classifyWorkAuthQuestion(q), "foreign_country", q)
+    // Authorisation does not travel: a US-authorised applicant is not
+    // authorised in Canada, and claiming otherwise is a false statement.
+    assert.deepEqual(answerWorkAuth(OPT, "foreign_country"), { value: "No", grounded: true })
+  }
+})
+
+test("'eligible to work' phrasing is recognised as an authorisation question", () => {
+  // Greenhouse asks it this way and the original regex missed it entirely.
+  assert.equal(classifyWorkAuthQuestion("Are you eligible to work in the US?*"), "authorized_now")
+  assert.equal(classifyWorkAuthQuestion("Are you legally able to work in the United States?"), "authorized_now")
+})
+
+const EEO = {
+  gender: "Male",
+  ethnicity: "Black or African American",
+  veteran_status: "I am not a protected veteran",
+  disability_status: "No, I don't have a disability",
+  auto_fill_diversity: true,
+} as unknown as AutofillProfile
+
+test("EEO questions are answered from the profile the user filled in", () => {
+  assert.equal(eeoAnswer(EEO, "Gender*"), "Male")
+  assert.equal(eeoAnswer(EEO, "Gender Identity*"), "Male")
+  assert.equal(eeoAnswer(EEO, "Please identify your race/ethnicity*"), "Black or African American")
+  assert.equal(eeoAnswer(EEO, "Are you a protected veteran? *"), "I am not a protected veteran")
+  assert.equal(eeoAnswer(EEO, "Do you have a disability? *"), "No, I don't have a disability")
+})
+
+test("Hispanic/Latinx is answered from ethnicity, not declined", () => {
+  // Asked as its own yes/no question alongside race on US forms.
+  assert.equal(eeoAnswer(EEO, "Are you Hispanic/Latinx?*"), "No")
+  const hispanic = { ...EEO, ethnicity: "Hispanic or Latino" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(hispanic, "Are you Hispanic/Latinx?*"), "Yes")
+})
+
+test("nothing is disclosed while the consent switch is off", () => {
+  const off = { ...EEO, auto_fill_diversity: false } as unknown as AutofillProfile
+  for (const q of ["Gender*", "Race*", "Are you a protected veteran?", "Do you have a disability?"]) {
+    assert.equal(eeoAnswer(off, q), null, q)
+  }
+})
+
+test("pronouns and sexual orientation come from their own fields", () => {
+  const stated = { ...EEO, pronouns: "He/Him", sexual_orientation: "Prefer not to say" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(stated, "What are your personal pronouns? *"), "He/Him")
+  assert.equal(eeoAnswer(stated, "Sexual Orientation*"), "Prefer not to say")
+})
+
+test("pronouns are never inferred from gender when unset", () => {
+  // Gender determines neither. An unset field falls through to the form's own
+  // decline option rather than asserting something the user never entered.
+  assert.equal(eeoAnswer(EEO, "What are your personal pronouns? *"), null)
+  assert.equal(eeoAnswer(EEO, "Sexual Orientation*"), null)
+})
+
+test("an empty profile field falls through rather than answering blank", () => {
+  const partial = { ...EEO, gender: "" } as unknown as AutofillProfile
+  assert.equal(eeoAnswer(partial, "Gender*"), null)
 })
