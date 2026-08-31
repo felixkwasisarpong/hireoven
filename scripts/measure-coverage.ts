@@ -19,8 +19,9 @@ import { randomUUID } from "node:crypto"
 import { writeFileSync } from "node:fs"
 import { getPostgresPool } from "../lib/postgres/server"
 import { runFillAttempt } from "../lib/apex/auto-apply/fill-runner"
-import { classifyApplyMethod } from "../lib/jobs/apply-method"
+import { getAutoApplyCandidates } from "../lib/apex/auto-apply/candidates"
 import { formatResumeContext } from "../lib/autofill/resume-context"
+import { buildDerivedFacts } from "../lib/autofill/resume-facts"
 import type { AutofillProfile } from "../types"
 
 function arg(name: string, fallback = ""): string {
@@ -51,25 +52,38 @@ async function main() {
     `SELECT summary, primary_role, top_skills, work_experience, education,
             projects, years_of_experience, raw_text
        FROM resumes WHERE user_id = $1 ORDER BY is_primary DESC, updated_at DESC LIMIT 1`, [userId])
-  const resumeContext = (rr[0] ? formatResumeContext(rr[0] as never) : "") ?? ""
+  const row = rr[0] as Record<string, unknown> | undefined
+  const facts = row ? buildDerivedFacts({
+    yearsOfExperience: row.years_of_experience as number | null,
+    primaryRole: row.primary_role as string | null,
+    topSkills: row.top_skills as string[] | null,
+    workExperience: row.work_experience as never,
+    city: profile.city, state: profile.state, country: profile.country,
+    highestDegree: profile.highest_degree, fieldOfStudy: profile.field_of_study,
+    university: profile.university,
+  }) : ""
+  const resumeContext = [facts, (row ? formatResumeContext(row as never) : "") ?? ""]
+    .filter(Boolean).join("\n\n")
 
-  // Deterministic ordering so a re-run measures the change, not a new sample.
-  const { rows } = await pool.query<{
-    id: string; title: string | null; apply_url: string; ats_type: string | null; name: string | null
-  }>(
-    `SELECT j.id, j.title, j.apply_url, c.ats_type, c.name
-       FROM jobs j LEFT JOIN companies c ON c.id = j.company_id
-      WHERE j.is_active AND j.apply_url IS NOT NULL
-        AND j.first_detected_at > now() - interval '14 days'
-        AND j.apply_url ~* '(greenhouse|lever\\.co|ashbyhq|applytojob|bamboohr)'
-      ORDER BY md5(j.id::text) LIMIT $1`,
-    [limit * 3],
-  )
-  const jobs = rows
-    .filter((r) => classifyApplyMethod(r.apply_url, r.ats_type) === "tier1_fillable")
-    .slice(0, limit)
+  // Use the REAL candidate selection, so the measurement reflects the jobs that
+  // would actually be applied to. Measuring an unfiltered slice of tier-1
+  // postings produced a queue of bartending, physical-therapy and house-flipping
+  // roles, whose screening questions a software résumé cannot answer and never
+  // should — which made coverage look worse than the product would ever be.
+  const minMatch = Number.parseInt(arg("min-match", "85"), 10)
+  const candidates = await getAutoApplyCandidates(userId, {
+    minMatchScore: minMatch,
+    limit,
+    // Include Greenhouse so it stays measured even though the worker skips it.
+    includeUnproven: true,
+  })
+  const jobs = candidates.map((c) => ({
+    id: c.jobId, title: c.title, apply_url: c.applyUrl,
+    ats_type: null as string | null, name: c.companyName,
+    matchScore: c.matchScore,
+  }))
 
-  console.log(`measuring ${jobs.length} postings through the real worker path\n`)
+  console.log(`measuring ${jobs.length} postings (match >= ${minMatch}) through the real worker path\n`)
 
   const anthropic = process.env.ANTHROPIC_API_KEY
     ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null
