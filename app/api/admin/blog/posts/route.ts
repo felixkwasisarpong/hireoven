@@ -28,6 +28,26 @@ export async function PATCH(request: NextRequest) {
   const body = patchSchema.parse(await request.json())
   const pool = getPostgresPool()
 
+  if (body.status === "published") {
+    const { rows } = await pool.query<{ has_image: boolean }>(
+      `SELECT COALESCE(NULLIF(hero_image_url, ''), '') <> '' AS has_image
+       FROM blog_posts
+       WHERE id = $1
+       LIMIT 1`,
+      [body.id],
+    )
+
+    if (rows.length === 0) {
+      return NextResponse.json({ error: "Post not found" }, { status: 404 })
+    }
+    if (!rows[0].has_image) {
+      return NextResponse.json(
+        { error: "Cannot publish a blog post without a hero image." },
+        { status: 409 },
+      )
+    }
+  }
+
   await pool.query(
     `UPDATE blog_posts
      SET status = $1,

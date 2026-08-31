@@ -3,7 +3,7 @@ import { requireCronAuth } from "@/lib/env"
 import { generateTodaysBlogPost } from "@/lib/blog/generate-worker"
 
 export const runtime = "nodejs"
-export const maxDuration = 120
+export const maxDuration = 300
 
 export async function GET(request: NextRequest) {
   if (!requireCronAuth(request.headers.get("authorization"))) {
@@ -14,7 +14,11 @@ export async function GET(request: NextRequest) {
     const result = await generateTodaysBlogPost()
 
     if (!result) {
-      return NextResponse.json({ ok: true, skipped: true, message: "No blog post scheduled today (weekend)" })
+      return NextResponse.json({
+        ok: true,
+        skipped: true,
+        message: "No blog post generated today (weekend or no qualifying trend)",
+      })
     }
 
     if (result.skippedExisting) {

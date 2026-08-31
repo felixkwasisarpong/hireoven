@@ -101,7 +101,7 @@ export default function AdminBlogPage() {
         setActionResult(
           data.reason === "existing_post"
             ? data.message ?? "Blog post already exists for today."
-            : "No post scheduled today (weekend)."
+            : data.message ?? "No blog post generated today."
         )
       } else if (data.imageGenerated === false) {
         setError(`Draft created, but hero image generation failed${data.imageError ? `: ${data.imageError}` : "."}`)
@@ -122,7 +122,7 @@ export default function AdminBlogPage() {
       <AdminPageHeader
         eyebrow="Blog"
         title="Blog posts"
-        description="Review AI-generated drafts and publish them to the public blog. One post is generated per weekday, per category."
+        description="Review AI-generated drafts and publish them to the public blog. Topic selection is trend-driven across all categories."
         actions={
           <div className="flex gap-2">
             <AdminButton tone="secondary" onClick={() => void load()} disabled={loading}>
@@ -171,61 +171,67 @@ export default function AdminBlogPage() {
                   </td>
                 </tr>
               ) : (
-                rows.map((post) => (
-                  <tr key={post.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="relative h-12 w-20 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
-                        {post.hero_image_url ? (
-                          <Image
-                            src={post.hero_image_url}
-                            alt={post.hero_image_alt ?? post.title}
-                            fill
-                            sizes="80px"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-white to-orange-50" />
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 max-w-xs">
-                      <p className="font-semibold text-gray-900 line-clamp-1">{post.title}</p>
-                      <p className="mt-0.5 text-xs text-gray-400 line-clamp-1">{post.excerpt}</p>
-                    </td>
-                    <td className="px-4 py-3">
-                      <AdminBadge tone="dark">{post.category_name}</AdminBadge>
-                    </td>
-                    <td className="px-4 py-3">
-                      <AdminBadge tone={statusTone(post.status)}>{post.status}</AdminBadge>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {post.reading_time ? `${post.reading_time} min` : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {new Date(post.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">
-                      {post.published_at
-                        ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <AdminButton
-                        tone={post.status === "draft" ? "primary" : "secondary"}
-                        disabled={togglingId === post.id}
-                        onClick={() => void toggleStatus(post)}
-                      >
-                        {togglingId === post.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : post.status === "draft" ? (
-                          "Publish"
-                        ) : (
-                          "Unpublish"
-                        )}
-                      </AdminButton>
-                    </td>
-                  </tr>
-                ))
+                rows.map((post) => {
+                  const missingImage = !post.hero_image_url?.trim()
+                  const cannotPublish = post.status === "draft" && missingImage
+                  return (
+                    <tr key={post.id} className="hover:bg-gray-50/60 transition-colors">
+                      <td className="px-4 py-3">
+                        <div className="relative h-12 w-20 overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+                          {post.hero_image_url ? (
+                            <Image
+                              src={post.hero_image_url}
+                              alt={post.hero_image_alt ?? post.title}
+                              fill
+                              sizes="80px"
+                              className="object-cover"
+                            />
+                          ) : (
+                            <div className="absolute inset-0 bg-gradient-to-br from-gray-100 via-white to-orange-50" />
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 max-w-xs">
+                        <p className="font-semibold text-gray-900 line-clamp-1">{post.title}</p>
+                        <p className="mt-0.5 text-xs text-gray-400 line-clamp-1">{post.excerpt}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <AdminBadge tone="dark">{post.category_name}</AdminBadge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <AdminBadge tone={statusTone(post.status)}>{post.status}</AdminBadge>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {post.reading_time ? `${post.reading_time} min` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {new Date(post.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-500">
+                        {post.published_at
+                          ? new Date(post.published_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                          : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <AdminButton
+                          tone={post.status === "draft" ? "primary" : "secondary"}
+                          disabled={togglingId === post.id || cannotPublish}
+                          onClick={() => void toggleStatus(post)}
+                        >
+                          {togglingId === post.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : cannotPublish ? (
+                            "Needs image"
+                          ) : post.status === "draft" ? (
+                            "Publish"
+                          ) : (
+                            "Unpublish"
+                          )}
+                        </AdminButton>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
