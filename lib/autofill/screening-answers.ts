@@ -92,7 +92,12 @@ export async function getScreeningAnswer(args: ScreeningLookup): Promise<string 
     const pool = getPostgresPool()
     const { rows } = await pool.query<{ answer: string | null }>(
       `UPDATE user_screening_answers
-          SET times_seen = times_seen + 1, last_seen_at = now()
+          -- Only an ANSWERED row is bumped here. Counting misses too meant
+          -- every encounter incremented twice — once on this lookup and once in
+          -- recordUnansweredQuestion — so "asked on 36 applications" was about
+          -- double the truth and kept growing when nothing new had happened.
+          SET times_seen = CASE WHEN answer IS NOT NULL THEN times_seen + 1 ELSE times_seen END,
+              last_seen_at = CASE WHEN answer IS NOT NULL THEN now() ELSE last_seen_at END
         WHERE user_id = $1 AND question_key = $2 AND COALESCE(company_scope, '') = $3
         RETURNING answer`,
       [args.userId, key, scope],
