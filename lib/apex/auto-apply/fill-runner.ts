@@ -383,14 +383,15 @@ function readComboOptionsExpr(selector: string): string {
     // captured questions had options recorded.
     const fire = (n, type) => { try { n.dispatchEvent(new PointerEvent(type, { bubbles: true,
       cancelable: true, composed: true, pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0 })); } catch (e) {} };
-    try { el.focus({ preventScroll: true }); } catch (e) {}
+    try { el.scrollIntoView({ block: "center" }); } catch (e) {}
+    try { el.focus({ preventScroll: false }); } catch (e) {}
     fire(el, "pointerdown");
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 }));
     fire(el, "pointerup");
     el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true, button: 0 }));
     if (el.click) el.click();
     el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 20; i++) {
       const opts = Array.from(document.querySelectorAll(
         '[role="option"], [class*="option" i], [class*="menuItem" i], li[role]'
       )).filter((n) => vis(n) && norm(n.textContent).length > 0);
@@ -418,7 +419,12 @@ function selectComboOptionExpr(selector: string, wanted: string): string {
       ...(c ? { clientX: c.x, clientY: c.y } : {}) })); } catch (e) {}
   };
   const openCombo = (n) => {
-    try { n.focus({ preventScroll: true }); } catch (e) {}
+    // Scroll the CONTROL into view first. Self-identification fields sit at the
+    // bottom of long forms, and while off-screen their option nodes fail the
+    // visibility filter, so the list reads as empty and neither the profile
+    // answer nor the decline option is ever attempted.
+    try { n.scrollIntoView({ block: "center" }); } catch (e) {}
+    try { n.focus({ preventScroll: false }); } catch (e) {}
     firePointer(n, "pointerdown");
     n.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 }));
     firePointer(n, "pointerup");
@@ -447,7 +453,7 @@ function selectComboOptionExpr(selector: string, wanted: string): string {
   try {
     openCombo(el);
     let opts = [];
-    for (let i = 0; i < 14; i++) { opts = collect(); if (opts.length) break; await sleep(140); }
+    for (let i = 0; i < 20; i++) { opts = collect(); if (opts.length) break; await sleep(140); }
     if (!opts.length) return false;
 
     const exact = opts.find((o) => norm(o.textContent).toLowerCase() === WANT);
@@ -467,11 +473,35 @@ function selectComboOptionExpr(selector: string, wanted: string): string {
     await sleep(300);
 
     // A menu still open means nothing was committed.
-    if (el.getAttribute("aria-expanded") === "true") return false;
-    if (norm(el.value)) return true;
-    const w = el.closest('[class*="control" i]') || el.parentElement;
-    const sv = w && w.querySelector('[class*="singleValue" i], [class*="single-value" i]');
-    return !!(sv && norm(sv.textContent));
+    const committed = () => {
+      const w = el.closest('[class*="control" i]') || el.parentElement;
+      const sv = w && w.querySelector('[class*="singleValue" i], [class*="single-value" i]');
+      return norm(el.value).length > 0 || !!(sv && norm(sv.textContent));
+    };
+    if (el.getAttribute("aria-expanded") !== "true" && committed()) return true;
+
+    // Fallback: type to filter, then Enter. This needs no option list at all,
+    // which matters because reading options proved unreliable when several
+    // controls on one form are driven in sequence — the menu renders for the
+    // first and comes back empty for the rest. Typing drives react-select
+    // through its own keyboard path instead.
+    try {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+      openMenu(el);
+      if (setter && setter.set) setter.set.call(el, WANT); else el.value = WANT;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      await sleep(500);
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
+      await sleep(350);
+      if (committed()) return true;
+      // Last resort: first highlighted option via the keyboard.
+      openMenu(el);
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+      await sleep(200);
+      el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", keyCode: 13, bubbles: true, cancelable: true }));
+      await sleep(300);
+    } catch (e) {}
+    return committed();
   } catch (e) { return false; }
 })()`
 }
