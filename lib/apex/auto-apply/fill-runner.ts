@@ -71,6 +71,10 @@ export type FillAttempt = {
   screeningAnswers: number
   /** set when the form asks something we must not answer automatically */
   disqualified: string | null
+  /** required fields still empty at the end, with why we could not fill them —
+   *  the only way to tell a question we could not answer from a control we
+   *  could not drive. */
+  residual: Array<{ kind: string; label: string; hasSelector: boolean }>
   costUsd: number
   submitAttemptsBlocked: number
   /** true only when allowSubmit was set AND the form was actually submitted */
@@ -111,7 +115,25 @@ const INSPECT = `(() => {
     const id = el.getAttribute("id");
     const bf = id ? document.querySelector('label[for="' + (window.CSS&&CSS.escape?CSS.escape(id):id) + '"]') : null;
     const wr = el.closest("label");
-    const t = (bf&&bf.textContent)||(wr&&wr.textContent)||el.getAttribute("aria-label")||el.getAttribute("placeholder")||"";
+    let t = (bf&&bf.textContent)||(wr&&wr.textContent)||el.getAttribute("aria-label")||el.getAttribute("placeholder")||"";
+    // Radio and checkbox groups carry the question on a fieldset legend or a
+    // container heading, never on the input. Inspecting only the input left 40
+    // of 86 unfilled required fields with NO label, so they could neither be
+    // answered nor put to the user as a question.
+    if (!t.trim()) {
+      const lb = el.getAttribute("aria-labelledby");
+      if (lb) t = lb.split(/\\s+/).map(function(i){ const n=document.getElementById(i); return n?n.textContent:""; }).join(" ");
+    }
+    if (!t.trim()) {
+      const fs = el.closest("fieldset");
+      const lg = fs && fs.querySelector("legend");
+      if (lg) t = lg.textContent || "";
+    }
+    if (!t.trim()) {
+      const box = el.closest('[class*="question" i], [class*="field" i], [class*="form-group" i], [role="group"]');
+      const head = box && box.querySelector('label, legend, h1, h2, h3, h4, [class*="label" i]');
+      if (head) t = head.textContent || "";
+    }
     return t.replace(/\\s+/g," ").trim(); };
   // react-select keeps the chosen value OUT of the input; it renders in a
   // sibling node. Reading only el.value scores an answered dropdown as a gap.
@@ -159,9 +181,16 @@ const INSPECT = `(() => {
     requiredFilled: required.filter(hasValue).length,
     unfilledRequired: required.filter((el) => !hasValue(el)).map((el) => {
       const id = el.getAttribute("id"), nm = el.getAttribute("name");
-      const sel = id ? "#" + (window.CSS&&CSS.escape?CSS.escape(id):id)
-                : nm ? el.tagName.toLowerCase() + '[name="' + nm.replace(/"/g,'\\\\"') + '"]' : null;
-      return { sel: sel, kind: kindOf(el), label: labelFor(el).slice(0,70) };
+      // Last resort: stamp the element so it can be found again. A positional
+      // path breaks as React re-renders; an attribute survives.
+      let sel = id ? "#" + (window.CSS&&CSS.escape?CSS.escape(id):id)
+              : nm ? el.tagName.toLowerCase() + '[name="' + nm.replace(/"/g,'\\\\"') + '"]' : null;
+      if (!sel) {
+        const stamp = "ho" + Math.abs(Array.from(labelFor(el)+el.tagName).reduce(function(a,c){return ((a<<5)-a+c.charCodeAt(0))|0;},0));
+        el.setAttribute("data-ho-field", stamp);
+        sel = '[data-ho-field="' + stamp + '"]';
+      }
+      return { sel: sel, kind: kindOf(el), label: labelFor(el).slice(0,90) };
     }),
     formDetected: ctrls.length >= 3,
     blockedSubmits: window.__blockedSubmits || 0,
@@ -223,21 +252,34 @@ async function revealForm(page: Page): Promise<void> {
   }
 }
 
-const ANSWER_INSTRUCTIONS = `You help a job applicant answer application-form questions. Answer as the applicant, first person. Match the answer length to the question. Return ONLY the answer text — no preamble, no quotes, no explanation.
+const ANSWER_INSTRUCTIONS = `You help a job applicant answer application-form questions. Answer as the applicant, first person. Match the answer length to the question. Return ONLY the answer text — no preamble, no quotes, no explanation. Your reply goes straight into the form, so never address the reader and never say the information is missing.
 - Yes/No → just "Yes" or "No".
 - Numeric → the number with a unit.
 - Open-ended → 2-4 sentences grounded in the résumé.
 
-ABSENCE OF EVIDENCE IS AN ANSWER. If a yes/no question asks about experience,
-a skill, a licence or a language and the résumé does not show it, the truthful
-answer is "No" — say "No". Do not reply that the information is missing, do not
-ask for it, and do not address the reader: your reply goes directly into the
-form, so an explanation would be submitted to the employer verbatim.
-Only if the question cannot be answered truthfully either way — because it is
-about something no résumé could establish — reply with exactly: UNKNOWN
+BE CONFIDENT ABOUT WHAT THE RÉSUMÉ SUPPORTS. Do not undersell.
+- If a question asks about a skill, tool, or kind of work in the SAME DOMAIN as
+  the applicant's background, answer "Yes". A résumé listing backend services
+  supports "REST APIs", "databases", "debugging"; an engineering résumé supports
+  "Excel" and "documentation". Do not demand the exact word appear.
+- For "N+ years" questions in the applicant's own field, compare N against the
+  total years in DERIVED FACTS and answer Yes when it is met.
+- Being literal about wording is a wrong answer, not a careful one: it rejects
+  the applicant from roles they are qualified for.
 
-HARD FACTS (work authorization, sponsorship, citizenship, clearance, criminal history) come from the profile only — never guess.
-Never fabricate an employer, credential, tool, or metric that is not in the résumé.`
+BUT NEVER CLAIM WHAT IS NOT THERE. Answer "No" when the question asks about:
+- A licence, certification, clearance or registration the résumé does not show
+  (e.g. Licensed Physical Therapist, CPA, CDL, security clearance).
+- A named employer, product, or credential the résumé does not name.
+- A whole field the applicant has not worked in (real estate, bartending,
+  nursing, payroll) — an unrelated domain is not an adjacent skill.
+- A specific language they are not shown to speak.
+These are checkable and a false answer can void an offer, so "No" is correct
+even though it may lose the application.
+
+HARD FACTS (work authorization, sponsorship, citizenship, criminal history) come
+from the profile only — never guess.
+If the question truly cannot be settled either way, reply exactly: UNKNOWN`
 
 /**
  * Answer one question, billing it to the user and this run.
@@ -436,8 +478,15 @@ async function chooseFromOptions(
     system: [
       { type: "text", text: `Answer one application-form question by selecting exactly one of the offered options.
 Reply with the option text VERBATIM and nothing else.
-Answer ONLY from the résumé. If it does not support any option truthfully, reply NONE.
-Never claim experience, a licence, or a language the résumé does not show.` },
+
+Be confident about what the résumé supports: a skill, tool or kind of work in
+the SAME DOMAIN as the applicant's background counts as Yes, and for "N+ years"
+compare against the total in DERIVED FACTS. Being literal about wording rejects
+an applicant from roles they are qualified for.
+
+But never claim a licence, certification, named credential, specific language,
+or experience in a field they have not worked in — those are checkable and a
+false answer can void an offer. If no option is truthful, reply NONE.` },
       { type: "text", text: `APPLICANT RÉSUMÉ:\n${resumeContext}`, cache_control: { type: "ephemeral" } },
     ],
     messages: [{ role: "user", content: `Question: ${question}\nOptions:\n${options.map((o) => `- ${o}`).join("\n")}` }],
@@ -466,12 +515,43 @@ Never claim experience, a licence, or a language the résumé does not show.` },
       ?? null
 }
 
+/** Set a native <select> by matching option text, then fire change for React. */
+function selectNativeOptionExpr(selector: string, wanted: string): string {
+  return `(() => {
+  const SEL = ${JSON.stringify(selector)}, WANT = ${JSON.stringify(wanted)}.toLowerCase();
+  const el = document.querySelector(SEL);
+  if (!el || !el.options) return false;
+  const norm = (t) => (t || "").replace(/\\s+/g, " ").trim();
+  const opts = Array.from(el.options).filter((o) => norm(o.textContent) && o.value !== "");
+  const m = opts.find((o) => norm(o.textContent).toLowerCase() === WANT)
+        || opts.find((o) => norm(o.textContent).toLowerCase().indexOf(WANT) !== -1)
+        || opts.find((o) => WANT.indexOf(norm(o.textContent).toLowerCase()) !== -1);
+  if (!m) return false;
+  const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+  if (d && d.set) d.set.call(el, m.value); else el.value = m.value;
+  ["input","change"].forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+  return (el.value || "") === m.value;
+})()`
+}
+
+/** Read a native select's options, so the model can be constrained to them. */
+function readNativeOptionsExpr(selector: string): string {
+  return `(() => {
+  const el = document.querySelector(${JSON.stringify(selector)});
+  if (!el || !el.options) return [];
+  return Array.from(el.options)
+    .filter((o) => o.value !== "" && (o.textContent || "").trim())
+    .map((o) => (o.textContent || "").replace(/\\s+/g, " ").trim())
+    .slice(0, 30);
+})()`
+}
+
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
   const r: FillAttempt = {
     ok: false, blocked: false, formReached: false,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
-    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null,
+    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null, residual: [],
     costUsd: 0, submitAttemptsBlocked: 0, submitted: false, error: null,
   }
 
@@ -548,6 +628,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       // name, student status. Free, and they never reach the user as questions.
       const common = answerCommonQuestion(f.label, {
         profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
+        city: opts.profile.city, state: opts.profile.state,
       })
       if (common?.kind === "disqualify") {
         // Not a field we can fill — the whole form is handed back. Submitting
@@ -605,6 +686,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       if (!want) {
         const common = answerCommonQuestion(f.label, {
           profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
+          city: opts.profile.city, state: opts.profile.state,
         })
         if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
         if (common?.kind === "answer") want = common.value
@@ -647,21 +729,47 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       else r.leftForHuman++
     }
 
-    // EEO fields are declined explicitly rather than left blank: a required
-    // blank blocks submission, and the answer must never come from the résumé.
-    for (const f of unfilled.filter((x) => x.kind === "select" && x.sel && EEO_LABEL.test(x.label))) {
-      const picked = await page.evaluate(`(() => {
-        const el = document.querySelector(${JSON.stringify(f.sel)});
-        if (!el || !el.options) return false;
-        const want = ${DECLINE_OPTION.source ? JSON.stringify(DECLINE_OPTION.source) : '""'};
-        const re = new RegExp(want, "i");
-        const opt = Array.from(el.options).find((o) => re.test(o.textContent || ""));
-        if (!opt) return false;
-        el.value = opt.value;
-        el.dispatchEvent(new Event("change", { bubbles: true }));
-        return true;
-      })()`).catch(() => false)
-      if (picked) r.eeoDeclined++
+    // Native <select> controls were only ever handled for EEO decline, so 23 of
+    // 85 unfilled required fields were dropdowns nobody drove — immigration
+    // status, US residency, veteran and disability among them. They now go
+    // through the same pipeline as everything else.
+    for (const f of unfilled.filter((x) => x.kind === "select" && x.sel)) {
+      let want: string | null = identityAnswer(opts.profile, f.label)
+      if (!want) {
+        const kind = classifyWorkAuthQuestion(f.label)
+        if (kind) want = answerWorkAuth(opts.profile, kind)?.value ?? null
+      }
+      if (!want) {
+        const common = answerCommonQuestion(f.label, {
+          profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
+          city: opts.profile.city, state: opts.profile.state,
+        })
+        if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
+        if (common?.kind === "answer") want = common.value
+      }
+      if (!want && EEO_LABEL.test(f.label)) want = "Decline"
+      if (!want) {
+        want = await getScreeningAnswer({
+          userId: opts.userId, question: f.label, company: opts.companyName,
+        })
+      }
+
+      const options = await page.evaluate(readNativeOptionsExpr(f.sel!)).catch(() => []) as string[]
+      if (!want && opts.anthropic && options.length) {
+        want = await chooseFromOptions(
+          opts.anthropic, f.label, options, opts.resumeContext, opts.userId, opts.runId,
+        )
+      }
+      if (!want) {
+        await recordUnansweredQuestion({
+          userId: opts.userId, question: f.label, company: opts.companyName, options,
+        })
+        r.leftForHuman++
+        continue
+      }
+      const ok = await page.evaluate(selectNativeOptionExpr(f.sel!, want)).catch(() => false)
+      if (ok) r.groundedAnswers++
+      else r.leftForHuman++
     }
 
     await page.waitForTimeout(400)
@@ -672,6 +780,9 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // Scoring 0/0 as 1 reported barely-filled JazzHR forms as fully covered.
     r.requiredRate = final.requiredTotal > 0 ? final.requiredFilled / final.requiredTotal : 0
     r.submitAttemptsBlocked = (final.blockedSubmits ?? 0) + state.blocked
+    r.residual = final.unfilledRequired.map((f) => ({
+      kind: f.kind, label: f.label, hasSelector: !!f.sel,
+    }))
     // "ok" means the form could be submitted, not that it was.
     // A disqualified form can never be submitted, however complete it looks.
     r.ok = r.requiredRate >= 1 && !r.disqualified

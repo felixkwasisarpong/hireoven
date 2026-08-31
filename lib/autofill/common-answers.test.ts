@@ -92,3 +92,61 @@ test("role-specific questions are left for the user", () => {
     assert.equal(answerCommonQuestion(q, ctx()), null, q)
   }
 })
+
+const withLoc = () => ({
+  profile: { first_name: "Felix" } as unknown as AutofillProfile,
+  jobTitle: "Senior Software Engineer",
+  city: "Lubbock", state: "TX",
+})
+
+test("a location typeahead is answered from the profile despite its error text", () => {
+  // Verbatim label from a real form — the widget's own error message is part of
+  // the label, which is why a plain /city|location/ match missed it. This was
+  // the single most common unanswered field.
+  const r = answerCommonQuestion(
+    "Current location ✱No location found. Try entering a different location", withLoc())
+  assert.deepEqual(r, { kind: "answer", value: "Lubbock, TX" })
+  assert.deepEqual(answerCommonQuestion("City*", withLoc()), { kind: "answer", value: "Lubbock, TX" })
+})
+
+test("relocation questions are not mistaken for location questions", () => {
+  // "Are you willing to relocate" asks something else entirely; answering it
+  // with a city would be nonsense.
+  assert.equal(answerCommonQuestion("Are you willing to relocate?*", withLoc()), null)
+})
+
+test("non-compete and post-employment restrictions are the same question", () => {
+  for (const q of [
+    "Do you have a non-compete in place with your previous or current employer?",
+    "Are there any post-employment restrictions from your current employer?",
+    "Are you subject to a restrictive covenant?",
+  ]) {
+    assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "No" }, q)
+  }
+})
+
+test("voluntary self-identification is declined, never inferred", () => {
+  for (const q of [
+    "What pronouns should we use to refer to you?*",
+    "What are your personal pronouns? *",
+    "Sexual Orientation*",
+    "Gender identity",
+  ]) {
+    assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "Prefer not to say" }, q)
+  }
+})
+
+test("accommodation questions default to No rather than disclosing", () => {
+  assert.deepEqual(
+    answerCommonQuestion("Do you require reasonable accommodations or adjustments?*", withLoc()),
+    { kind: "answer", value: "No" })
+})
+
+test("wider prior-relationship phrasings are caught", () => {
+  for (const q of [
+    "Are you related to, or in a close personal relationship with, anyone who works here?",
+    "Have you ever been hired through Remote as a third party?*",
+  ]) {
+    assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "No" }, q)
+  }
+})

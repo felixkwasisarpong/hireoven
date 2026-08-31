@@ -34,7 +34,7 @@ const NOT_A_QUESTION =
  * theirs to give on the form, not something to pre-store.
  */
 const LEGAL_NOTICE =
-  /^(privacy|cookie|data protection)\s*(notice|policy|statement)|notice at collection|terms (and|&) conditions|e-?verify (notice|poster)|i (agree|consent|acknowledge)\b/i
+  /(privacy|cookie|data protection)\s*(notice|policy|statement)|notice at collection|terms (and|&) conditions|e-?verify (notice|poster)|i (agree|consent|acknowledge)\b|acknowledgement\b|by selecting ["']?yes["']?, i am certifying|i certify that/i
 
 /** Legal declarations answered by answer-policy from the profile, not here. */
 const POLICY_OWNED = /authoriz|sponsor|visa|immigration|work permit|right to work/i

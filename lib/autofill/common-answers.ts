@@ -23,6 +23,8 @@ export type AnswerContext = {
   profile: Pick<AutofillProfile, "first_name">
   jobTitle?: string | null
   employmentType?: string | null
+  city?: string | null
+  state?: string | null
 }
 
 /**
@@ -34,7 +36,32 @@ export type AnswerContext = {
  * so a stored personal answer overrides this and always wins.
  */
 const PRIOR_RELATIONSHIP =
-  /\b(previously|ever|formerly)\b.*\b(employed|worked)\b|\brelatives?\b.*\bemploy|\bfamily member\b.*\bemploy|\breferred by\b|\bwork(ed)? (for|at) (us|our)\b|\bcurrent(ly)? employed (by|with)\b|\bpartner or reseller\b/i
+  /\b(previously|ever|formerly)\b.*\b(employed|worked)\b|\brelatives?\b.*\bemploy|\bfamily member\b.*\bemploy|\breferred by\b|\bwork(ed)? (for|at) (us|our)\b|\bcurrent(ly)? employed (by|with)\b|\bpartner or reseller\b|\brelated to\b.*\b(anyone|employee|someone)\b|\bclose personal relationship\b|\bhired through\b.*\bthird party\b/i
+
+/**
+ * Non-compete and post-employment restriction questions are the same question.
+ * The user answers it once as "post-employment restrictions"; without this the
+ * non-compete phrasing is a separate row they are asked again.
+ */
+const NON_COMPETE = /\bnon-?compete\b|\bpost-?employment restriction|\brestrictive covenant\b/i
+
+/**
+ * Location typeaheads. The label frequently carries the widget's own error text
+ * ("Current location ✱No location found. Try entering a different location"),
+ * which is why matching on a clean "city" or "location" alone missed it — this
+ * was the single most common unanswered field at 8 occurrences.
+ */
+const LOCATION = /\b(current )?location\b|\bcity\b|\bwhere are you (based|located)\b|\bplace of residence\b/i
+
+/**
+ * Demographic self-identification beyond the usual EEO set. Pronouns, sexual
+ * orientation and gender identity are voluntary disclosures; the applicant
+ * declines them by default rather than having them inferred or guessed.
+ */
+const SELF_ID = /\bpronouns?\b|sexual orientation|gender identity|\btransgender\b|\bLGBT/i
+
+/** Accessibility adjustments — a personal disclosure, declined by default. */
+const ACCOMMODATIONS = /reasonable (accommodation|adjustment)|\baccommodations? or adjustments?\b/i
 
 const HOW_DID_YOU_HEAR = /how did you (hear|find|learn)|where did you (hear|find)|referral source|source of application/i
 
@@ -69,6 +96,17 @@ export function answerCommonQuestion(question: string, ctx: AnswerContext): Comm
   }
 
   if (PRIOR_RELATIONSHIP.test(q)) return { kind: "answer", value: "No" }
+  if (NON_COMPETE.test(q)) return { kind: "answer", value: "No" }
+  if (ACCOMMODATIONS.test(q)) return { kind: "answer", value: "No" }
+
+  // Voluntary self-identification is declined, never inferred. "Prefer not to
+  // say" is offered by these controls precisely so it need not be answered.
+  if (SELF_ID.test(q)) return { kind: "answer", value: "Prefer not to say" }
+
+  if (LOCATION.test(q) && !/relocat|willing to move/i.test(q)) {
+    const loc = [ctx.city, ctx.state].filter(Boolean).join(", ")
+    return loc ? { kind: "answer", value: loc } : null
+  }
   if (HOW_DID_YOU_HEAR.test(q)) return { kind: "answer", value: "LinkedIn" }
 
   if (PREFERRED_NAME.test(q)) {
