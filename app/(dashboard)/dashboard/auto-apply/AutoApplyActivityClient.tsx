@@ -1,10 +1,11 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Building2, CheckCircle2, Clock, ExternalLink, ShieldAlert, Moon } from "lucide-react"
+import { Building2, CheckCircle2, Clock, ExternalLink, Moon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AutoApplyRecord } from "@/lib/apex/auto-apply/types"
 import PendingQuestions, { type PendingQuestion } from "./PendingQuestions"
+import AutoApplyToggle from "./AutoApplyToggle"
 
 type Allowance = {
   allowed: number
@@ -14,7 +15,12 @@ type Allowance = {
   enabled: boolean
 } | null
 
-type Props = { log: AutoApplyRecord[]; allowance: Allowance; questions: PendingQuestion[] }
+type Props = {
+  log: AutoApplyRecord[]
+  allowance: Allowance
+  questions: PendingQuestion[]
+  enabled: boolean
+}
 
 /** Only outcomes the user can act on. 'skipped_cap' is bookkeeping, not an event. */
 type Filter = "all" | "applied" | "needs_you"
@@ -30,7 +36,7 @@ function timeAgo(iso: string): string {
   return `${Math.round(hrs / 24)}d ago`
 }
 
-export default function AutoApplyActivityClient({ log, allowance, questions }: Props) {
+export default function AutoApplyActivityClient({ log, allowance, questions, enabled }: Props) {
   const [filter, setFilter] = useState<Filter>("all")
 
   const { applied, needsYou } = useMemo(() => {
@@ -69,17 +75,11 @@ export default function AutoApplyActivityClient({ log, allowance, questions }: P
           sub={needsYou.length ? "couldn't finish" : "nothing waiting"} />
       </section>
 
-      {allowance && !allowance.enabled && (
-        <div className="mb-6 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div className="text-sm text-amber-900">
-            <p className="font-medium">Auto-apply is off</p>
-            <p className="mt-0.5 text-amber-800">
-              Turn it on and Hireoven will start applying to your best matches overnight.
-            </p>
-          </div>
-        </div>
-      )}
+      <AutoApplyToggle
+        initialEnabled={enabled}
+        weeklyCap={allowance?.weeklyCap ?? 25}
+        planEnabled={allowance?.enabled ?? false}
+      />
 
       <div className="mb-4 flex gap-1">
         {([["all", "All"], ["applied", "Sent"], ["needs_you", "Needs you"]] as const).map(([key, label]) => (

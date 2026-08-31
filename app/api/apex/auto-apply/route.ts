@@ -66,6 +66,14 @@ export async function POST(req: NextRequest) {
   // Safety: minimum match score 70 to prevent low-quality auto-applies
   if (updated.criteria.minMatchScore < 70) updated.criteria.minMatchScore = 70
 
-  await saveAutoApplyPrefs(user.id, updated)
-  return NextResponse.json({ prefs: updated })
+  // Validated rather than trusted: this is client-supplied and lands in a column
+  // the cron uses to decide when to run. An invalid name would silently fall
+  // back to UTC, so only a real IANA zone is accepted.
+  const timezone =
+    typeof body.timezone === "string" && /^[A-Za-z]+\/[A-Za-z0-9_+-]+$/.test(body.timezone)
+      ? body.timezone
+      : null
+
+  await saveAutoApplyPrefs(user.id, updated, timezone)
+  return NextResponse.json({ prefs: updated, timezone })
 }
