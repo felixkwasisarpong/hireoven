@@ -69,33 +69,39 @@ export function isBlogImageGenerationConfigured(): boolean {
 function visualDirectionForCategory(category: BlogCategory): string {
   switch (category.slug) {
     case "h1b-visa-intel":
-      return "Layered immigration-timing scene with abstract passports, application folders, queue markers, and map lines; official but not governmental, no seals or readable forms."
+      return "Abstract global-mobility policy scene with route arcs, checkpoint markers, a sculptural hourglass form, and distant civic architecture silhouettes; no passports, forms, seals, flags, or official documents."
     case "job-market-pulse":
-      return "Labor-market intelligence scene with hiring heatmap tiles, salary bands, role clusters, and city/workspace depth cues."
+      return "Labor-market intelligence scene with unlabeled color blocks, role-cluster nodes, salary-band ribbons, and city/workspace depth cues; no dashboards, charts with axes, or screen UI."
     case "career-strategy":
-      return "Practical job-search strategy scene with a polished workspace, resume blocks without text, outreach paths, skill cards, and prioritization markers."
+      return "Practical job-search strategy scene with a polished desk, blank prioritization tiles, skill tokens, route paths, and layered workspace objects; no resumes, documents, notebooks with writing, or screen UI."
     case "tech-company-watch":
-      return "Company-monitoring scene with grouped office towers, startup workspace signals, hiring/freeze indicators, and market-map layers."
+      return "Company-monitoring scene with grouped office silhouettes, startup workspace signals, hiring/freeze indicators, and an unlabeled market-map layer; no logos, signage, dashboards, or brand screens."
     case "interview-offers":
-      return "Interview and offer-readiness scene with a coding workspace, scorecard shapes, compensation chips, calendar-free scheduling objects, and negotiation notes without text."
+      return "Interview and offer-readiness scene with a clean keyboard, abstract score rings, compensation tokens, scheduling arcs, and negotiation markers; no calendars, notes, forms, or scorecards with writing."
     default:
-      return "Job-market intelligence scene with layered signals, workspace objects, and clear editorial focus."
+      return "Job-market intelligence scene with layered abstract signals, tactile workspace objects, and clear editorial focus; no text-bearing objects."
   }
 }
 
 function buildPrompt(input: BlogImageInput): string {
   const promptSeed = input.imagePrompt?.trim()
-  const subject = promptSeed || `${input.title}. ${input.excerpt}`
+  const reusableSeed =
+    promptSeed && !/Create a polished editorial hero image|Article category:|Article subject:/i.test(promptSeed)
+      ? promptSeed
+      : ""
+  const subject = `${input.title}. ${input.excerpt}${reusableSeed ? ` Visual cue: ${reusableSeed}` : ""}`
 
   return [
     "Create a polished editorial hero image for a Hireoven blog article.",
     `Article category: ${input.category.name}.`,
-    `Article subject: ${subject}`,
+    `Article subject context only, not literal visual text: ${subject}`,
     `Category-specific visual direction: ${visualDirectionForCategory(input.category)}`,
+    "Use visual metaphors instead of literal paperwork or interfaces: route arcs, colored blocks, blank cards, material tokens, depth layers, and architectural silhouettes.",
     "Composition: wide landscape for a blog card and article hero, strong central focal point, layered foreground/midground/background, no empty white center, no blank minimal canvas.",
     "Style: premium editorial render with crisp objects, believable depth, soft studio lighting, and tactile materials; sophisticated but not generic SaaS clip art.",
     "Palette: deep navy and warm off-white base with Hireoven orange accents (#FF5C18), soft blue surfaces, and small emerald signal accents; balanced, not one-note.",
-    "Constraints: no readable text, no letters, no numbers, no dates, no logos, no brand names, no watermarks, no people, no faces, no animals, no fake UI typography.",
+    "Do not include text-bearing objects: no calendars, passports, ID cards, forms, certificates, spreadsheets, laptop or phone screens with UI, books, newspapers, badges, stamps, seals, flags, buttons, warning signs, or charts with axes/labels.",
+    "Constraints: no readable text, no fake text, no letters, no numbers, no dates, no logos, no brand names, no watermarks, no people, no faces, no animals, no literal stop or pause symbols.",
   ].join("\n")
 }
 
