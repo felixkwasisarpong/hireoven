@@ -148,7 +148,7 @@ test("an identity field with nothing in the profile stays blank", () => {
   assert.equal(identityAnswer(empty, "Name"), null)
 })
 
-test("authorisation questions about another country are not answered from a US profile", () => {
+test("authorisation abroad is answered No, because it does not travel", () => {
   // A profile establishing US work authorisation says nothing about Canada.
   // "Yes" would be a false statement; "No" may wrongly disqualify someone with
   // dual status. Left for the human either way.
@@ -158,7 +158,9 @@ test("authorisation questions about another country are not answered from a US p
     "Do you have the right to work in the United Kingdom?",
   ]) {
     assert.equal(classifyWorkAuthQuestion(q), "foreign_country", q)
-    assert.equal(answerWorkAuth(OPT, "foreign_country"), null)
+    // Authorisation does not travel: a US-authorised applicant is not
+    // authorised in Canada, and claiming otherwise is a false statement.
+    assert.deepEqual(answerWorkAuth(OPT, "foreign_country"), { value: "No", grounded: true })
   }
 })
 

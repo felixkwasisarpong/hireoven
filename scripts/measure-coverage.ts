@@ -21,7 +21,7 @@ import { getPostgresPool } from "../lib/postgres/server"
 import { runFillAttempt } from "../lib/apex/auto-apply/fill-runner"
 import { getAutoApplyCandidates } from "../lib/apex/auto-apply/candidates"
 import { formatResumeContext } from "../lib/autofill/resume-context"
-import { buildDerivedFacts } from "../lib/autofill/resume-facts"
+import { buildDerivedFacts, computeYearsOfExperience } from "../lib/autofill/resume-facts"
 import type { AutofillProfile } from "../types"
 
 function arg(name: string, fallback = ""): string {
@@ -62,6 +62,10 @@ async function main() {
     highestDegree: profile.highest_degree, fieldOfStudy: profile.field_of_study,
     university: profile.university,
   }) : ""
+  // Same figure the derived-facts block states, reused for level-based rate
+  // defaults so the two can never disagree.
+  const years = (row?.years_of_experience as number | null) ||
+    computeYearsOfExperience((row?.work_experience as never) ?? [])
   const resumeContext = [facts, (row ? formatResumeContext(row as never) : "") ?? ""]
     .filter(Boolean).join("\n\n")
 
@@ -97,6 +101,7 @@ async function main() {
       applyUrl: j.apply_url, ats, profile, resumeContext,
       jobTitle: j.title ?? "", companyName: j.name ?? "the company",
       userId, runId, anthropic, browser,
+      yearsOfExperience: years,
       // allowSubmit deliberately omitted.
     })
     out.push({ ats, company: j.name, ...a })

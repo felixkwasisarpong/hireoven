@@ -150,3 +150,43 @@ test("wider prior-relationship phrasings are caught", () => {
     assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "No" }, q)
   }
 })
+
+test("earliest start date is one month out", () => {
+  const iso = answerCommonQuestion("Earliest start date?*", withLoc())
+  assert.equal(iso?.kind, "answer")
+  const d = new Date((iso as { value: string }).value)
+  const monthsAway = (d.getFullYear() - new Date().getFullYear()) * 12 + (d.getMonth() - new Date().getMonth())
+  assert.equal(monthsAway, 1)
+})
+
+test("an hourly rate uses the applicant's own expectation when they gave one", () => {
+  // Their stated number beats any band: $150k / 2080 hours.
+  const r = answerCommonQuestion("Desired Rate per hour ($)*", {
+    ...withLoc(), salaryExpectationMin: 150_000, yearsOfExperience: 6,
+  })
+  assert.deepEqual(r, { kind: "answer", value: "72" })
+})
+
+test("with no stated salary the rate follows the DOL experience level", () => {
+  const at = (yearsOfExperience: number) =>
+    (answerCommonQuestion("Desired Rate per hour ($)*", { ...withLoc(), yearsOfExperience }) as { value: string }).value
+  assert.equal(at(1), "35")    // Level I
+  assert.equal(at(3), "50")    // Level II
+  assert.equal(at(6), "70")    // Level III
+  assert.equal(at(12), "90")   // Level IV
+})
+
+test("no salary and no experience quotes nothing rather than inventing a rate", () => {
+  assert.equal(answerCommonQuestion("Desired Rate per hour ($)*", withLoc()), null)
+})
+
+test("certifications and working-arrangement acknowledgements are affirmed", () => {
+  // Declining to certify withdraws the application; a person ticks these.
+  for (const q of [
+    'By selecting "Yes", I am certifying that, to the best of my knowledge, the information is accurate',
+    "Do you acknowledge that this position requires working onsite three days a week?",
+    "Our HQ is in San Mateo and this role is not remote — do you understand that?",
+  ]) {
+    assert.deepEqual(answerCommonQuestion(q, withLoc()), { kind: "answer", value: "Yes" }, q.slice(0, 40))
+  }
+})

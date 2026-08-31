@@ -19,7 +19,7 @@ import { getRemainingAllowance } from "./limits"
 import { getAutoApplyCandidates } from "./candidates"
 import { runFillAttempt } from "./fill-runner"
 import { formatResumeContext } from "@/lib/autofill/resume-context"
-import { buildDerivedFacts } from "@/lib/autofill/resume-facts"
+import { buildDerivedFacts, computeYearsOfExperience } from "@/lib/autofill/resume-facts"
 import type { Plan } from "@/lib/gates"
 import type { AutofillProfile } from "@/types"
 
@@ -93,6 +93,10 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
         university: profile.university,
       })
     : ""
+  // Same figure the derived-facts block states, reused for level-based rate
+  // defaults so the two can never disagree.
+  const years = (resumeRow?.years_of_experience as number | null) ||
+    computeYearsOfExperience((resumeRow?.work_experience as never) ?? [])
   const resumeContext = [facts, prose].filter(Boolean).join("\n\n")
   if (!prose) {
     result.skippedReason = "no_resume"
@@ -137,6 +141,7 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
         userId: opts.userId,
         runId,
         anthropic,
+        yearsOfExperience: years,
         allowSubmit: opts.allowSubmit === true,
         browser,
       })

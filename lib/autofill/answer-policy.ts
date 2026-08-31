@@ -203,9 +203,11 @@ export function answerWorkAuth(
       return { value: humanStatus(status), grounded: true }
 
     case "foreign_country":
-      // The profile cannot establish this. Left for the human rather than
-      // answered either way: "Yes" would be a false claim and "No" may
-      // needlessly disqualify someone with dual status.
+      // Authorisation does not travel. Someone whose profile establishes US
+      // status is not authorised in Canada or the UK, so "No" is the truthful
+      // answer — and it is the safe one, since claiming authorisation abroad
+      // that does not exist is a false statement on the application.
+      if (status || authorizedNow !== null) return { value: "No", grounded: true }
       return null
   }
 }

@@ -21,6 +21,12 @@ export type CommonAnswer =
 
 export type AnswerContext = {
   profile: Pick<AutofillProfile, "first_name">
+  /** Total years of experience, for level-based rate defaults. */
+  yearsOfExperience?: number | null
+  /** The applicant's own expected annual salary, when they have stated one. */
+  salaryExpectationMin?: number | null
+  /** Country the applicant is authorised in, from the profile. */
+  authorizedCountry?: string | null
   jobTitle?: string | null
   employmentType?: string | null
   city?: string | null
@@ -85,6 +91,53 @@ export function isInternship(ctx: AnswerContext): boolean {
   return /\bintern(ship)?\b|\bco-?op\b|\bsummer analyst\b/.test(t)
 }
 
+/**
+ * Confirmations the applicant affirms: certifying their answers are truthful,
+ * or acknowledging a stated working arrangement. Answering Yes is what a person
+ * does — declining certification withdraws the application.
+ */
+const ACKNOWLEDGEMENT =
+  /by selecting ["\u2019']?yes|i am certifying|i certify|to the best of my knowledge|do you acknowledge|please acknowledge|do you understand that|this (role|position) (is not|requires)|not remote|onsite .* (days?|week)/i
+
+const START_DATE = /earliest (start|available)|start date|when (can|could) you start|availability date|date available/i
+const HOURLY_RATE = /rate per hour|hourly rate|desired rate|hourly pay|rate \(\$\)|\$\/hour|per hour/i
+
+/**
+ * DOL wage levels keyed to experience, the same I-IV framing lib/stay uses.
+ * Only a fallback: an applicant's own stated expectation is a real number and
+ * always wins over a band.
+ */
+function hourlyFromExperience(years: number): number {
+  if (years < 2) return 35     // Level I   — entry
+  if (years < 5) return 50     // Level II  — qualified
+  if (years < 8) return 70     // Level III — experienced
+  return 90                    // Level IV  — expert
+}
+
+/**
+ * An hourly rate for contract roles.
+ *
+ * Prefers the applicant's own annual expectation over 2,080 working hours,
+ * because that is a figure they chose. The experience band is a floor for when
+ * they have stated nothing, and is deliberately conservative — quoting too high
+ * loses the role outright, while too low is recoverable in negotiation.
+ */
+export function hourlyRate(ctx: AnswerContext): number | null {
+  const annual = ctx.salaryExpectationMin
+  if (annual && annual > 1000) return Math.round(annual / 2080)
+  const years = ctx.yearsOfExperience
+  if (years && years > 0) return hourlyFromExperience(years)
+  return null
+}
+
+/** One month out: soon enough to look available, long enough to give notice. */
+export function earliestStartDate(now = new Date()): string {
+  const d = new Date(now.getTime())
+  d.setMonth(d.getMonth() + 1)
+  const iso = d.toISOString().slice(0, 10)
+  return iso
+}
+
 export function answerCommonQuestion(question: string, ctx: AnswerContext): CommonAnswer {
   const q = question.replace(/\s+/g, " ").trim()
   if (!q) return null
@@ -102,6 +155,17 @@ export function answerCommonQuestion(question: string, ctx: AnswerContext): Comm
   // Voluntary self-identification is declined, never inferred. "Prefer not to
   // say" is offered by these controls precisely so it need not be answered.
   if (SELF_ID.test(q)) return { kind: "answer", value: "Prefer not to say" }
+
+  if (ACKNOWLEDGEMENT.test(q)) return { kind: "answer", value: "Yes" }
+
+  if (START_DATE.test(q)) {
+    return { kind: "answer", value: earliestStartDate() }
+  }
+
+  if (HOURLY_RATE.test(q)) {
+    const rate = hourlyRate(ctx)
+    return rate ? { kind: "answer", value: String(rate) } : null
+  }
 
   if (LOCATION.test(q) && !/relocat|willing to move/i.test(q)) {
     const loc = [ctx.city, ctx.state].filter(Boolean).join(", ")

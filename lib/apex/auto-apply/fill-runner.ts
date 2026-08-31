@@ -34,6 +34,7 @@ import {
   identityAnswer,
 } from "@/lib/autofill/answer-policy"
 import { answerCommonQuestion } from "@/lib/autofill/common-answers"
+import { computeYearsOfExperience } from "@/lib/autofill/resume-facts"
 import {
   getScreeningAnswer,
   recordUnansweredQuestion,
@@ -97,6 +98,8 @@ export type FillOptions = {
   runId: string
   /** Employment type, so "are you a full-time student" can flip on internships. */
   employmentType?: string | null
+  /** Total years of experience, for level-based rate defaults. */
+  yearsOfExperience?: number | null
   anthropic: Anthropic | null
   /** Must be explicitly true to submit. Anything else is a dry run. */
   allowSubmit?: boolean
@@ -659,6 +662,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       const common = answerCommonQuestion(f.label, {
         profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
         city: opts.profile.city, state: opts.profile.state,
+        yearsOfExperience: opts.yearsOfExperience,
+        salaryExpectationMin: opts.profile.salary_expectation_min,
       })
       if (common?.kind === "disqualify") {
         // Not a field we can fill — the whole form is handed back. Submitting
@@ -717,6 +722,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         const common = answerCommonQuestion(f.label, {
           profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
           city: opts.profile.city, state: opts.profile.state,
+          yearsOfExperience: opts.yearsOfExperience,
+          salaryExpectationMin: opts.profile.salary_expectation_min,
         })
         if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
         if (common?.kind === "answer") want = common.value
@@ -785,6 +792,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         const common = answerCommonQuestion(f.label, {
           profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
           city: opts.profile.city, state: opts.profile.state,
+          yearsOfExperience: opts.yearsOfExperience,
+          salaryExpectationMin: opts.profile.salary_expectation_min,
         })
         if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
         if (common?.kind === "answer") want = common.value
