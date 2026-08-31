@@ -45,6 +45,7 @@ import { answerCommonQuestion } from "@/lib/autofill/common-answers"
 import { computeYearsOfExperience } from "@/lib/autofill/resume-facts"
 import {
   getScreeningAnswer,
+  isSkippedQuestion,
   recordUnansweredQuestion,
 } from "@/lib/autofill/screening-answers"
 import type { AutofillProfile } from "@/types"
@@ -810,6 +811,22 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
 
     const after = await page.evaluate(INSPECT) as InspectResult
     const unfilled = after.unfilledRequired
+
+    // Abandon before spending anything if a REQUIRED field asks something the
+    // user has declined to answer. The form can never be completed, so filling
+    // the rest of it buys nothing — and with a nightly cap of five, the attempt
+    // costs a real application rather than just a few seconds.
+    for (const f of unfilled) {
+      if (!f.label) continue
+      if (await isSkippedQuestion({
+        userId: opts.userId, question: f.label, company: opts.companyName,
+      })) {
+        r.disqualified = `requires a question you skipped: ${f.label.slice(0, 60)}`
+        r.residual = unfilled.map((x) => ({ kind: x.kind, label: x.label, hasSelector: !!x.sel }))
+        return r
+      }
+    }
+
     const answerable = unfilled.filter((f) => (f.kind === "text" || f.kind === "textarea") && f.sel)
     r.aiQuestions = answerable.length
 

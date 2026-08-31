@@ -92,7 +92,12 @@ export async function getScreeningAnswer(args: ScreeningLookup): Promise<string 
     const pool = getPostgresPool()
     const { rows } = await pool.query<{ answer: string | null }>(
       `UPDATE user_screening_answers
-          SET times_seen = times_seen + 1, last_seen_at = now()
+          -- Only an ANSWERED row is bumped here. Counting misses too meant
+          -- every encounter incremented twice — once on this lookup and once in
+          -- recordUnansweredQuestion — so "asked on 36 applications" was about
+          -- double the truth and kept growing when nothing new had happened.
+          SET times_seen = CASE WHEN answer IS NOT NULL THEN times_seen + 1 ELSE times_seen END,
+              last_seen_at = CASE WHEN answer IS NOT NULL THEN now() ELSE last_seen_at END
         WHERE user_id = $1 AND question_key = $2 AND COALESCE(company_scope, '') = $3
         RETURNING answer`,
       [args.userId, key, scope],
@@ -160,7 +165,7 @@ export async function getPendingQuestions(userId: string, limit = 20): Promise<P
     }>(
       `SELECT id, question_text, options, company_scope, times_seen
          FROM user_screening_answers
-        WHERE user_id = $1 AND answer IS NULL
+        WHERE user_id = $1 AND answer IS NULL AND skipped_at IS NULL
         ORDER BY times_seen DESC, last_seen_at DESC
         LIMIT $2`,
       [userId, limit],
@@ -187,6 +192,48 @@ export async function saveScreeningAnswer(
           SET answer = $3, answered_at = now()
         WHERE id = $2 AND user_id = $1`,
       [userId, id, answer.slice(0, 2000)],
+    )
+    return (rowCount ?? 0) > 0
+  } catch {
+    return false
+  }
+}
+
+
+/**
+ * True when the user has declined this question outright.
+ *
+ * A form requiring it can never be completed, so there is no point spending
+ * LLM calls on its other fields or a browser slot on the attempt — with a
+ * nightly cap of five, attempting it costs a real application, not just time.
+ */
+export async function isSkippedQuestion(args: ScreeningLookup): Promise<boolean> {
+  const key = normalizeQuestionKey(args.question)
+  if (!key) return false
+  const scope = isCompanySpecific(args.question) ? (args.company ?? "") : ""
+  try {
+    const pool = getPostgresPool()
+    const { rows } = await pool.query<{ skipped: boolean }>(
+      `SELECT skipped_at IS NOT NULL AS skipped
+         FROM user_screening_answers
+        WHERE user_id = $1 AND question_key = $2 AND COALESCE(company_scope, '') = $3`,
+      [args.userId, key, scope],
+    )
+    return rows[0]?.skipped === true
+  } catch {
+    return false
+  }
+}
+
+/** Decline a question for good. */
+export async function skipScreeningQuestion(userId: string, id: string): Promise<boolean> {
+  try {
+    const pool = getPostgresPool()
+    const { rowCount } = await pool.query(
+      `UPDATE user_screening_answers
+          SET skipped_at = now()
+        WHERE id = $2 AND user_id = $1`,
+      [userId, id],
     )
     return (rowCount ?? 0) > 0
   } catch {

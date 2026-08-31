@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   MessageCircle,
   Mic,
+  Moon,
   Plane,
   Search,
   Send,
@@ -70,6 +71,12 @@ export const DASHBOARD_NAV_ITEMS: DashboardNavItem[] = [
   // Alerts (saved searches) moved into notification settings — reach them from
   // Settings -> Job alerts (D6). Route remains at /dashboard/alerts.
   { label: "Applications",   href: "/dashboard/applications",             icon: ClipboardList, group: "Search & Apply", subtitle: "Track your pipeline" },
+  // Sits directly under Applications because that is what it produces. It was
+  // reachable only from the account dropdown, next to email preferences, which
+  // is nowhere near where anyone would look for the headline Pro Max feature —
+  // and the page also holds the questions that block applications, so a user who
+  // cannot find it cannot unblock their own run.
+  { label: "Auto-apply",     href: "/dashboard/auto-apply",               icon: Moon,          group: "Search & Apply", gate: "apex_actions", subtitle: "Applications sent while you sleep" },
   // D8: this route IS the profile (personal info, work auth, experience, EEO) —
   // relabel to "Profile". Route stays /dashboard/autofill because the shipped
   // Chrome extension hard-codes that path (chrome.tabs.create, easy-apply);

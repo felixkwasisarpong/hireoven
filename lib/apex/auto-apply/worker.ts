@@ -23,6 +23,11 @@ import { buildDerivedFacts, computeYearsOfExperience } from "@/lib/autofill/resu
 import type { Plan } from "@/lib/gates"
 import type { AutofillProfile } from "@/types"
 
+/** How many candidates to line up per allowed application. */
+const CANDIDATE_OVERFETCH = 3
+/** Ceiling on attempts per run, so a run of unfillable forms still terminates. */
+const MAX_ATTEMPTS_PER_RUN = 15
+
 export type RunOptions = {
   userId: string
   plan: Plan
@@ -103,9 +108,14 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
     return result
   }
 
+  // Over-fetch deliberately. Fetching exactly `allowed` meant a night where
+  // three forms could not be completed produced two applications instead of
+  // five — the failures consumed the run even though the cap only counts
+  // successes. We now work down a longer list until the allowance is actually
+  // filled, bounded by MAX_ATTEMPTS so a bad streak cannot run all night.
   const candidates = await getAutoApplyCandidates(opts.userId, {
     minMatchScore: allowance.limits.minMatchScore,
-    limit: allowance.allowed,
+    limit: allowance.allowed * CANDIDATE_OVERFETCH,
     includeUnproven: opts.includeUnproven,
   })
   if (candidates.length === 0) {
@@ -122,6 +132,14 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
   const browser = await chromium.launch({ headless: true })
   try {
     for (const job of candidates) {
+      // Stop once the allowance is genuinely filled, not once it has been
+      // attempted. Counting attempts is what let failures eat the night.
+      if (result.submittable >= allowance.allowed) break
+      if (result.attempted >= MAX_ATTEMPTS_PER_RUN) {
+        result.skippedReason = "attempt_limit"
+        break
+      }
+
       // Re-check before every attempt rather than trusting the opening figure:
       // a run is long, and the dollar ceiling can trip partway through it.
       const live = await getRemainingAllowance(opts.userId, opts.plan, opts.timezone ?? "UTC")
@@ -148,7 +166,13 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
       result.costUsd += attempt.costUsd
 
       let status: string
-      if (attempt.blocked) { status = "failed"; result.blocked++ }
+      if (attempt.disqualified) {
+        // Not a failure of ours — the form asks something we must not or cannot
+        // answer. Recorded distinctly so "needs you" stays meaningful.
+        status = "failed"
+        result.failed++
+      }
+      else if (attempt.blocked) { status = "failed"; result.blocked++ }
       else if (attempt.error || !attempt.formReached) { status = "failed"; result.failed++ }
       else if (!attempt.ok) {
         // Reached the form but could not complete every required field. Not a
