@@ -33,6 +33,7 @@ import {
   answerWorkAuth,
   identityAnswer,
 } from "@/lib/autofill/answer-policy"
+import { answerCommonQuestion } from "@/lib/autofill/common-answers"
 import {
   getScreeningAnswer,
   recordUnansweredQuestion,
@@ -68,6 +69,8 @@ export type FillAttempt = {
   leftForHuman: number
   /** answered from a screening answer the user gave earlier */
   screeningAnswers: number
+  /** set when the form asks something we must not answer automatically */
+  disqualified: string | null
   costUsd: number
   submitAttemptsBlocked: number
   /** true only when allowSubmit was set AND the form was actually submitted */
@@ -85,6 +88,8 @@ export type FillOptions = {
   userId: string
   /** groups every AI call for this attempt in api_usage.run_id */
   runId: string
+  /** Employment type, so "are you a full-time student" can flip on internships. */
+  employmentType?: string | null
   anthropic: Anthropic | null
   /** Must be explicitly true to submit. Anything else is a dry run. */
   allowSubmit?: boolean
@@ -394,7 +399,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     ok: false, blocked: false, formReached: false,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
-    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0,
+    groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null,
     costUsd: 0, submitAttemptsBlocked: 0, submitted: false, error: null,
   }
 
@@ -467,6 +472,22 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         continue
       }
 
+      // Rule-based answers: prior employment, how-did-you-hear, preferred
+      // name, student status. Free, and they never reach the user as questions.
+      const common = answerCommonQuestion(f.label, {
+        profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
+      })
+      if (common?.kind === "disqualify") {
+        // Not a field we can fill — the whole form is handed back. Submitting
+        // third parties' contact details without asking them is not ours to do.
+        r.disqualified = common.reason
+        break
+      }
+      if (common?.kind === "answer") {
+        const ok = await page.evaluate(writeAnswerExpr(f.sel, common.value)).catch(() => false)
+        if (ok) { r.groundedAnswers++; continue }
+      }
+
       // A screening answer the user has already given beats anything a model
       // can infer, and costs nothing.
       const known = await getScreeningAnswer({
@@ -508,6 +529,13 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       if (!want) {
         const kind = classifyWorkAuthQuestion(f.label)
         if (kind) want = answerWorkAuth(opts.profile, kind)?.value ?? null
+      }
+      if (!want) {
+        const common = answerCommonQuestion(f.label, {
+          profile: opts.profile, jobTitle: opts.jobTitle, employmentType: opts.employmentType,
+        })
+        if (common?.kind === "disqualify") { r.disqualified = common.reason; break }
+        if (common?.kind === "answer") want = common.value
       }
       if (!want && EEO_LABEL.test(f.label)) want = "Decline"
       if (!want) {
@@ -558,7 +586,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     r.requiredRate = final.requiredTotal > 0 ? final.requiredFilled / final.requiredTotal : 0
     r.submitAttemptsBlocked = (final.blockedSubmits ?? 0) + state.blocked
     // "ok" means the form could be submitted, not that it was.
-    r.ok = r.requiredRate >= 1
+    // A disqualified form can never be submitted, however complete it looks.
+    r.ok = r.requiredRate >= 1 && !r.disqualified
   } catch (err) {
     r.error = err instanceof Error ? err.message.slice(0, 200) : String(err)
   } finally {
