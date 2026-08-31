@@ -227,6 +227,15 @@ const ANSWER_INSTRUCTIONS = `You help a job applicant answer application-form qu
 - Yes/No → just "Yes" or "No".
 - Numeric → the number with a unit.
 - Open-ended → 2-4 sentences grounded in the résumé.
+
+ABSENCE OF EVIDENCE IS AN ANSWER. If a yes/no question asks about experience,
+a skill, a licence or a language and the résumé does not show it, the truthful
+answer is "No" — say "No". Do not reply that the information is missing, do not
+ask for it, and do not address the reader: your reply goes directly into the
+form, so an explanation would be submitted to the employer verbatim.
+Only if the question cannot be answered truthfully either way — because it is
+about something no résumé could establish — reply with exactly: UNKNOWN
+
 HARD FACTS (work authorization, sponsorship, citizenship, clearance, criminal history) come from the profile only — never guess.
 Never fabricate an employer, credential, tool, or metric that is not in the résumé.`
 
@@ -304,8 +313,17 @@ function readComboOptionsExpr(selector: string): string {
   const vis = (n) => { const r = n.getBoundingClientRect(), s = getComputedStyle(n);
     return r.width > 0 && r.height > 0 && s.visibility !== "hidden" && s.display !== "none"; };
   try {
+    // Same sequence as selectComboOptionExpr. The reader previously used a
+    // weaker one (no pointer events) and returned an empty list every time, so
+    // no dropdown's choices ever reached the model or the user: 0 of 28
+    // captured questions had options recorded.
+    const fire = (n, type) => { try { n.dispatchEvent(new PointerEvent(type, { bubbles: true,
+      cancelable: true, composed: true, pointerId: 1, pointerType: "mouse", isPrimary: true, button: 0 })); } catch (e) {} };
     try { el.focus({ preventScroll: true }); } catch (e) {}
+    fire(el, "pointerdown");
     el.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0 }));
+    fire(el, "pointerup");
+    el.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, composed: true, button: 0 }));
     if (el.click) el.click();
     el.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
     for (let i = 0; i < 12; i++) {
@@ -392,6 +410,60 @@ function selectComboOptionExpr(selector: string, wanted: string): string {
     return !!(sv && norm(sv.textContent));
   } catch (e) { return false; }
 })()`
+}
+
+/**
+ * Answer a closed question by picking one of the control's own options.
+ *
+ * Experience and skill questions — "4+ years of sales experience?", "level of
+ * experience with Excel", "do you speak French and English?" — are answerable
+ * from the résumé, but arrive as dropdowns. Without this they skipped the model
+ * entirely and landed in the backlog to be put to the user, who would only be
+ * re-reading their own résumé to answer.
+ *
+ * The option list is supplied and the model must reply with one verbatim, so it
+ * cannot produce a value the form will not accept. It is told to answer NONE
+ * rather than guess, because claiming experience the résumé does not support is
+ * a lie on an application, and an unanswered field is merely incomplete.
+ */
+async function chooseFromOptions(
+  anthropic: Anthropic, question: string, options: string[],
+  resumeContext: string, userId: string, runId: string,
+): Promise<string | null> {
+  const msg = await anthropic.messages.create({
+    model: HAIKU_MODEL,
+    max_tokens: 60,
+    system: [
+      { type: "text", text: `Answer one application-form question by selecting exactly one of the offered options.
+Reply with the option text VERBATIM and nothing else.
+Answer ONLY from the résumé. If it does not support any option truthfully, reply NONE.
+Never claim experience, a licence, or a language the résumé does not show.` },
+      { type: "text", text: `APPLICANT RÉSUMÉ:\n${resumeContext}`, cache_control: { type: "ephemeral" } },
+    ],
+    messages: [{ role: "user", content: `Question: ${question}\nOptions:\n${options.map((o) => `- ${o}`).join("\n")}` }],
+  }).catch(() => null)
+  if (!msg) return null
+
+  const inputTokens = msg.usage?.input_tokens ?? 0
+  const outputTokens = msg.usage?.output_tokens ?? 0
+  const cacheReadTokens = msg.usage?.cache_read_input_tokens ?? 0
+  const cacheWriteTokens = msg.usage?.cache_creation_input_tokens ?? 0
+  await logApiUsage({
+    service: "claude", operation: "auto_apply_choose_option", feature: "auto_apply",
+    model: HAIKU_MODEL, user_id: userId, run_id: runId,
+    input_tokens: inputTokens, output_tokens: outputTokens,
+    cache_read_tokens: cacheReadTokens, cache_write_tokens: cacheWriteTokens,
+    tokens_used: inputTokens + outputTokens,
+    cost_usd: calcAnthropicCostUsd({ tier: "haiku", inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens }),
+  })
+
+  const text = msg.content.filter((b) => b.type === "text")
+    .map((b) => (b as { text: string }).text).join("").trim()
+  if (!text || /^none$/i.test(text) || !isUsableAnswer(text)) return null
+  // Only accept something the control actually offers.
+  return options.find((o) => o.toLowerCase() === text.toLowerCase())
+      ?? options.find((o) => o.toLowerCase().includes(text.toLowerCase()))
+      ?? null
 }
 
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
@@ -507,7 +579,7 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       // A model that declines is talking to us, not to the employer. The audit
       // found "I cannot provide your name..." typed into a Name field; the
       // field is left blank instead.
-      if (!isUsableAnswer(answer)) {
+      if (/^unknown$/i.test((answer ?? "").trim()) || !isUsableAnswer(answer)) {
         r.refusalsRejected++
         r.leftForHuman++
         // The model could not answer it either, so it goes on the list to ask
@@ -544,10 +616,25 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         })
         if (known) want = known
       }
+      // Read the options once: the model needs them to choose, and the backlog
+      // needs them to show the user the same choices the form offered.
+      const options = !want
+        ? await page.evaluate(readComboOptionsExpr(f.sel!)).catch(() => []) as string[]
+        : []
+
+      // Skill and experience questions are answerable from the résumé even
+      // though they arrive as dropdowns.
+      if (!want && opts.anthropic && options.length) {
+        const picked = await chooseFromOptions(
+          opts.anthropic, f.label, options, opts.resumeContext, opts.userId, opts.runId,
+        )
+        if (picked) {
+          const ok = await page.evaluate(selectComboOptionExpr(f.sel!, picked)).catch(() => false)
+          if (ok) { r.aiWrittenBack++; continue }
+        }
+      }
+
       if (!want) {
-        // Capture the options too, so the user is later shown the same choices
-        // the form offered rather than a free-text box.
-        const options = await page.evaluate(readComboOptionsExpr(f.sel!)).catch(() => []) as string[]
         await recordUnansweredQuestion({
           userId: opts.userId, question: f.label,
           company: opts.companyName, options,
