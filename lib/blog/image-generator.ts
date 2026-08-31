@@ -19,13 +19,15 @@ const IMAGE_SAMPLE_HEIGHT = 64
 const MIN_OPAQUE_RATIO = 0.5
 const MIN_NON_WHITE_RATIO = 0.08
 const MIN_LUMA_STDDEV = 8
+const TITLE_MAX_LINES = 4
+const EXCERPT_MAX_LINES = 2
 
 type OpenAIImageResponse = {
   data?: Array<{ b64_json?: string }>
   error?: { message?: string }
 }
 
-type BlogImageInput = {
+export type BlogImageInput = {
   postId: string
   category: BlogCategory
   title: string
@@ -56,6 +58,59 @@ export type BlogImageInspection = {
   opaqueRatio: number
   nonWhiteRatio: number
   lumaStdDev: number
+}
+
+function normalizeOverlayText(text: string): string {
+  return text.replace(/\s+/g, " ").trim()
+}
+
+function escapeSvgText(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;")
+}
+
+function truncateLine(line: string, maxChars: number): string {
+  const normalized = normalizeOverlayText(line)
+  if (normalized.length <= maxChars) return normalized
+  return `${normalized.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`
+}
+
+export function wrapHeroOverlayText(text: string, maxChars: number, maxLines: number): string[] {
+  const words = normalizeOverlayText(text).split(" ").filter(Boolean)
+  if (!words.length || maxChars <= 0 || maxLines <= 0) return []
+
+  const lines: string[] = []
+  let current = ""
+  let consumedAllWords = true
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word
+    if (candidate.length <= maxChars || !current) {
+      current = candidate
+      continue
+    }
+
+    lines.push(current)
+    current = word
+
+    if (lines.length === maxLines) {
+      consumedAllWords = false
+      break
+    }
+  }
+
+  if (lines.length < maxLines && current) lines.push(current)
+  const wrapped = lines.slice(0, maxLines).map((line) => truncateLine(line, maxChars))
+
+  if (!consumedAllWords && wrapped.length) {
+    wrapped[wrapped.length - 1] = withOverflowEllipsis(wrapped[wrapped.length - 1], maxChars)
+  }
+
+  return wrapped
 }
 
 export function isBlogImageGenerationConfigured(): boolean {
@@ -97,12 +152,109 @@ function buildPrompt(input: BlogImageInput): string {
     `Article subject context only, not literal visual text: ${subject}`,
     `Category-specific visual direction: ${visualDirectionForCategory(input.category)}`,
     "Use visual metaphors instead of literal paperwork or interfaces: route arcs, colored blocks, blank cards, material tokens, depth layers, and architectural silhouettes.",
-    "Composition: wide landscape for a blog card and article hero, strong central focal point, layered foreground/midground/background, no empty white center, no blank minimal canvas.",
+    "Composition: wide landscape for a blog card and article hero, detailed focal objects center-right, darker quieter left third for a deterministic title overlay, layered foreground/midground/background, no empty white center, no blank minimal canvas.",
     "Style: premium editorial render with crisp objects, believable depth, soft studio lighting, and tactile materials; sophisticated but not generic SaaS clip art.",
     "Palette: deep navy and warm off-white base with Hireoven orange accents (#FF5C18), soft blue surfaces, and small emerald signal accents; balanced, not one-note.",
     "Do not include text-bearing objects: no calendars, passports, ID cards, forms, certificates, spreadsheets, laptop or phone screens with UI, books, newspapers, badges, stamps, seals, flags, buttons, warning signs, or charts with axes/labels.",
     "Constraints: no readable text, no fake text, no letters, no numbers, no dates, no logos, no brand names, no watermarks, no people, no faces, no animals, no literal stop or pause symbols.",
   ].join("\n")
+}
+
+function withOverflowEllipsis(line: string, maxChars: number): string {
+  const normalized = normalizeOverlayText(line)
+  const base = normalized.length > maxChars ? normalized.slice(0, Math.max(0, maxChars - 3)) : normalized
+  return `${base.trimEnd().replace(/\.*$/, "")}...`
+}
+
+export function buildBlogHeroOverlaySvg(input: BlogImageInput, width: number, height: number): string {
+  const marginX = Math.round(width * 0.065)
+  const top = Math.round(height * 0.105)
+  const maxTextWidth = Math.round(width * 0.52)
+  const titleFontSize = Math.max(42, Math.round(width * 0.035))
+  const titleLineHeight = Math.round(titleFontSize * 1.13)
+  const excerptFontSize = Math.max(22, Math.round(width * 0.017))
+  const excerptLineHeight = Math.round(excerptFontSize * 1.35)
+  const categoryFontSize = Math.max(18, Math.round(width * 0.015))
+  const brandFontSize = Math.max(18, Math.round(width * 0.014))
+  const titleMaxChars = Math.max(18, Math.floor(maxTextWidth / (titleFontSize * 0.53)))
+  const excerptMaxChars = Math.max(34, Math.floor(maxTextWidth / (excerptFontSize * 0.51)))
+  const category = normalizeOverlayText(input.category.name).toUpperCase()
+  const titleLines = wrapHeroOverlayText(input.title, titleMaxChars, TITLE_MAX_LINES)
+  const excerptLines = wrapHeroOverlayText(input.excerpt, excerptMaxChars, EXCERPT_MAX_LINES)
+  const pillPaddingX = Math.round(categoryFontSize * 0.85)
+  const pillHeight = Math.round(categoryFontSize * 2.2)
+  const pillWidth = Math.min(maxTextWidth, Math.round(category.length * categoryFontSize * 0.62) + pillPaddingX * 2)
+  const titleY = top + pillHeight + Math.round(titleFontSize * 0.85)
+  const excerptY = titleY + titleLines.length * titleLineHeight + Math.round(excerptFontSize * 1.35)
+  const brandY = height - Math.round(height * 0.08)
+
+  const titleTspans = titleLines
+    .map((line, index) => {
+      const y = index === 0 ? titleY : titleLineHeight
+      const attrs = index === 0 ? `x="${marginX}" y="${y}"` : `x="${marginX}" dy="${y}"`
+      return `<tspan ${attrs}>${escapeSvgText(line)}</tspan>`
+    })
+    .join("")
+
+  const excerptTspans = excerptLines
+    .map((line, index) => {
+      const y = index === 0 ? excerptY : excerptLineHeight
+      const attrs = index === 0 ? `x="${marginX}" y="${y}"` : `x="${marginX}" dy="${y}"`
+      return `<tspan ${attrs}>${escapeSvgText(line)}</tspan>`
+    })
+    .join("")
+
+  return `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="left-scrim" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0%" stop-color="#071426" stop-opacity="0.96"/>
+      <stop offset="50%" stop-color="#071426" stop-opacity="0.76"/>
+      <stop offset="78%" stop-color="#071426" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#071426" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="copy-shadow" x="-10%" y="-20%" width="120%" height="150%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#020617" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <rect width="${width}" height="${height}" fill="url(#left-scrim)"/>
+  <rect x="${marginX}" y="${top}" width="${pillWidth}" height="${pillHeight}" rx="${Math.round(pillHeight / 2)}" fill="#FF5C18"/>
+  <text x="${marginX + pillPaddingX}" y="${top + Math.round(pillHeight * 0.64)}" fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="${categoryFontSize}" font-weight="800" letter-spacing="0">${escapeSvgText(category)}</text>
+  <text fill="#FFFFFF" font-family="Arial, Helvetica, sans-serif" font-size="${titleFontSize}" font-weight="850" letter-spacing="0" filter="url(#copy-shadow)">${titleTspans}</text>
+  <text fill="#DCEBFF" font-family="Arial, Helvetica, sans-serif" font-size="${excerptFontSize}" font-weight="500" letter-spacing="0" opacity="0.94">${excerptTspans}</text>
+  <text x="${marginX}" y="${brandY}" fill="#FFBE9A" font-family="Arial, Helvetica, sans-serif" font-size="${brandFontSize}" font-weight="800" letter-spacing="0">HIREOVEN BLOG</text>
+</svg>`
+}
+
+export async function applyBlogHeroTextOverlay(
+  buffer: Buffer,
+  input: BlogImageInput,
+  outputFormat = DEFAULT_IMAGE_FORMAT,
+): Promise<Buffer> {
+  const image = sharp(buffer, { failOn: "warning" })
+  const metadata = await image.metadata()
+  const width = metadata.width ?? 0
+  const height = metadata.height ?? 0
+
+  if (!width || !height) {
+    throw new Error("Generated blog image is missing dimensions")
+  }
+
+  const composed = sharp(buffer)
+    .composite([
+      {
+        input: Buffer.from(buildBlogHeroOverlaySvg(input, width, height)),
+        left: 0,
+        top: 0,
+      },
+    ])
+
+  if (outputFormat === "png") {
+    return composed.png({ quality: 90 }).toBuffer()
+  }
+  if (outputFormat === "jpeg") {
+    return composed.jpeg({ quality: 90, mozjpeg: true }).toBuffer()
+  }
+  return composed.webp({ quality: 85 }).toBuffer()
 }
 
 export function isOpenAIImageGenerationConfigured(): boolean {
@@ -226,9 +378,11 @@ export async function generateBlogImageBytes(input: BlogImageInput): Promise<Gen
     throw new Error("OpenAI image response did not include b64_json")
   }
 
-  const buffer = Buffer.from(imageBase64, "base64")
   const extension = outputFormat === "png" ? "png" : outputFormat === "jpeg" ? "jpg" : "webp"
   const contentType = outputFormat === "png" ? "image/png" : outputFormat === "jpeg" ? "image/jpeg" : "image/webp"
+  const backgroundBuffer = Buffer.from(imageBase64, "base64")
+  await assertUsableGeneratedBlogImage(backgroundBuffer)
+  const buffer = await applyBlogHeroTextOverlay(backgroundBuffer, input, outputFormat)
   await assertUsableGeneratedBlogImage(buffer)
 
   return {
