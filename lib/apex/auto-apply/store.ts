@@ -25,15 +25,26 @@ export async function getAutoApplyPrefs(userId: string): Promise<AutoApplyPrefer
   return { enabled: false, criteria: AUTO_APPLY_DEFAULTS, enabledAt: null }
 }
 
+/**
+ * `timezone` is saved alongside the prefs because the overnight sweep selects
+ * users by their LOCAL hour. Without it the column stays null, the cron falls
+ * back to UTC, and someone in the Americas gets their "overnight" run in the
+ * early evening — the one thing the feature promises not to do. The browser
+ * knows the answer, so the client sends it when the toggle is flipped.
+ */
 export async function saveAutoApplyPrefs(
   userId: string,
   prefs: AutoApplyPreferences,
+  timezone?: string | null,
 ): Promise<void> {
   try {
     const pool = getPostgresPool()
     await pool.query(
-      `UPDATE profiles SET auto_apply_prefs = $1::jsonb WHERE id = $2`,
-      [JSON.stringify(prefs), userId],
+      `UPDATE profiles
+          SET auto_apply_prefs = $1::jsonb,
+              timezone = COALESCE(NULLIF($3, ''), timezone)
+        WHERE id = $2`,
+      [JSON.stringify(prefs), userId, timezone ?? null],
     )
   } catch {
     // best-effort — client keeps prefs in localStorage regardless
