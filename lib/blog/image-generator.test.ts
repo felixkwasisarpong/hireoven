@@ -2,9 +2,26 @@ import assert from "node:assert/strict"
 import { test } from "node:test"
 import sharp from "sharp"
 import {
+  applyBlogHeroTextOverlay,
   assertUsableGeneratedBlogImage,
+  buildBlogHeroOverlaySvg,
   inspectGeneratedBlogImageBuffer,
+  wrapHeroOverlayText,
 } from "./image-generator"
+import type { BlogImageInput } from "./image-generator"
+
+const sampleInput: BlogImageInput = {
+  postId: "post-1",
+  category: {
+    id: 1,
+    slug: "h1b-visa-intel",
+    name: "H1B & Visa Intel",
+    description: "Visa and hiring policy updates",
+    day_of_week: 1,
+  },
+  title: "USCIS RFE Deadlines Collapse to 30 Days: File Perfect From Day One",
+  excerpt: "A shorter review window changes how candidates and employers should prepare evidence before filing.",
+}
 
 async function patternedImageBuffer(): Promise<Buffer> {
   const width = 1200
@@ -34,6 +51,44 @@ test("accepts a sufficiently detailed generated blog image", async () => {
   assert.equal(inspection.height, 800)
   assert.ok(inspection.nonWhiteRatio > 0.5)
   assert.ok(inspection.lumaStdDev > 20)
+})
+
+test("wraps hero overlay text with a visible overflow marker", () => {
+  const lines = wrapHeroOverlayText(
+    "A very long title about visa policy evidence timing and employer response planning",
+    24,
+    2,
+  )
+
+  assert.equal(lines.length, 2)
+  assert.ok(lines.every((line) => line.length <= 24))
+  assert.ok(lines[1].endsWith("..."))
+})
+
+test("builds an overlay svg using escaped article copy", () => {
+  const svg = buildBlogHeroOverlaySvg(
+    {
+      ...sampleInput,
+      title: "H-1B <policy> & offers",
+      excerpt: "Use employer evidence before RFE windows shrink.",
+    },
+    1536,
+    1024,
+  )
+
+  assert.match(svg, /H1B &amp; VISA INTEL/)
+  assert.match(svg, /H-1B &lt;policy&gt; &amp; offers/)
+  assert.doesNotMatch(svg, /<policy>/)
+})
+
+test("applies article text overlay while preserving hero dimensions", async () => {
+  const buffer = await patternedImageBuffer()
+  const output = await applyBlogHeroTextOverlay(buffer, sampleInput, "webp")
+  const inspection = await assertUsableGeneratedBlogImage(output)
+
+  assert.equal(inspection.width, 1200)
+  assert.equal(inspection.height, 800)
+  assert.ok(output.length > 2048)
 })
 
 test("rejects a response that is too small to be a real hero image", async () => {
