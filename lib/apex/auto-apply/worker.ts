@@ -160,6 +160,7 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
         runId,
         anthropic,
         yearsOfExperience: years,
+        resume: (resumeRow as never) ?? null,
         allowSubmit: opts.allowSubmit === true,
         browser,
       })
