@@ -37,48 +37,9 @@ export type HeroImageOutcome = {
 
 /** Base URL of the app that owns object storage, or null to store locally. */
 export function heroImageDelegateUrl(): string | null {
-  const explicit = normalizeHttpOrigin(process.env.BLOG_IMAGE_DELEGATE_URL)
-  if (explicit) return explicit
-
-  if (process.env.BLOG_IMAGE_AUTO_DELEGATE === "false") return null
-  if (!minioEndpointIsLoopback()) return null
-
-  const appOrigin =
-    normalizeHttpOrigin(process.env.NEXT_PUBLIC_APP_URL) ??
-    normalizeHttpOrigin(process.env.NEXT_PUBLIC_SITE_URL)
-
-  if (!appOrigin) return null
-  if (isLoopbackHost(new URL(appOrigin).hostname)) return null
-  return appOrigin
-}
-
-function normalizeHttpOrigin(raw: string | undefined): string | null {
-  const value = raw?.trim()
-  if (!value) return null
-
-  try {
-    const url = new URL(value)
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null
-    return url.origin.replace(/\/+$/, "")
-  } catch {
-    return null
-  }
-}
-
-function minioEndpointIsLoopback(): boolean {
-  const raw = process.env.MINIO_ENDPOINT?.trim() || "http://127.0.0.1:9000"
-  const value = /^[a-z]+:\/\//i.test(raw) ? raw : `http://${raw}`
-
-  try {
-    return isLoopbackHost(new URL(value).hostname)
-  } catch {
-    return false
-  }
-}
-
-function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0"
+  const raw = process.env.BLOG_IMAGE_DELEGATE_URL?.trim()
+  if (!raw) return null
+  return raw.replace(/\/+$/, "")
 }
 
 /**
