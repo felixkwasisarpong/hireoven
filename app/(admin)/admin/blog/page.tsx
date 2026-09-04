@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import { useCallback, useEffect, useState } from "react"
-import { BookOpen, Loader2, RefreshCw, Zap } from "lucide-react"
+import { BookOpen, ImagePlus, Loader2, RefreshCw, Zap } from "lucide-react"
 import {
   AdminBadge,
   AdminButton,
@@ -39,6 +39,7 @@ export default function AdminBlogPage() {
   const [actionResult, setActionResult] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [imageGeneratingId, setImageGeneratingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -117,6 +118,35 @@ export default function AdminBlogPage() {
     }
   }
 
+  async function generateImage(post: PostRow) {
+    setImageGeneratingId(post.id)
+    setActionResult(null)
+    setError(null)
+    try {
+      const res = await fetch("/api/admin/blog/posts/hero-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: post.id }),
+      })
+      const data = (await res.json()) as {
+        ok?: boolean
+        status?: "created" | "already_present" | "not_configured"
+        error?: string
+      }
+      if (!res.ok || data.ok === false) throw new Error(data.error ?? "Hero image generation failed")
+      setActionResult(
+        data.status === "already_present"
+          ? `"${post.title}" already has a hero image.`
+          : `"${post.title}" now has a hero image.`
+      )
+      await load()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setImageGeneratingId(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <AdminPageHeader
@@ -149,7 +179,7 @@ export default function AdminBlogPage() {
         description="Draft posts are not visible on the public blog. Publish to make them live."
       >
         <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white">
-          <table className="w-full min-w-[860px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">
               <tr>
                 <th className="px-4 py-3">Image</th>
@@ -213,21 +243,37 @@ export default function AdminBlogPage() {
                           : "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <AdminButton
-                          tone={post.status === "draft" ? "primary" : "secondary"}
-                          disabled={togglingId === post.id || cannotPublish}
-                          onClick={() => void toggleStatus(post)}
-                        >
-                          {togglingId === post.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : cannotPublish ? (
-                            "Needs image"
-                          ) : post.status === "draft" ? (
-                            "Publish"
-                          ) : (
-                            "Unpublish"
+                        <div className="flex items-center justify-end gap-2">
+                          {missingImage && (
+                            <AdminButton
+                              tone="secondary"
+                              disabled={imageGeneratingId === post.id}
+                              onClick={() => void generateImage(post)}
+                            >
+                              {imageGeneratingId === post.id ? (
+                                <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <ImagePlus className="mr-2 h-3.5 w-3.5" />
+                              )}
+                              Generate image
+                            </AdminButton>
                           )}
-                        </AdminButton>
+                          <AdminButton
+                            tone={post.status === "draft" ? "primary" : "secondary"}
+                            disabled={togglingId === post.id || cannotPublish}
+                            onClick={() => void toggleStatus(post)}
+                          >
+                            {togglingId === post.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : cannotPublish ? (
+                              "Needs image"
+                            ) : post.status === "draft" ? (
+                              "Publish"
+                            ) : (
+                              "Unpublish"
+                            )}
+                          </AdminButton>
+                        </div>
                       </td>
                     </tr>
                   )
