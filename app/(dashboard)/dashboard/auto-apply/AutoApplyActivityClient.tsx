@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Building2, CheckCircle2, Clock, ExternalLink, Moon } from "lucide-react"
+import { Building2, CheckCircle2, Clock, ExternalLink, FileCheck, Moon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AutoApplyRecord } from "@/lib/apex/auto-apply/types"
 import PendingQuestions, { type PendingQuestion } from "./PendingQuestions"
@@ -23,7 +23,7 @@ type Props = {
 }
 
 /** Only outcomes the user can act on. 'skipped_cap' is bookkeeping, not an event. */
-type Filter = "all" | "applied" | "needs_you"
+type Filter = "all" | "applied" | "prepared" | "needs_you"
 
 /** Rendered at once. A month of runs is ~100 rows, which is a scroll, not a list. */
 const PAGE = 20
@@ -62,15 +62,22 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
   const [filter, setFilter] = useState<Filter>("all")
   const [limit, setLimit] = useState(PAGE)
 
-  const { applied, needsYou } = useMemo(() => {
-    const applied = log.filter((r) => r.status === "applied" || r.status === "dry_run")
+  const { applied, prepared, needsYou } = useMemo(() => {
+    // A dry run is NOT an application. Counting the two together made the page
+    // claim credit for work that never reached an employer — the header read
+    // "Applications sent for you" above rows where nothing was sent.
+    const applied = log.filter((r) => r.status === "applied")
+    const prepared = log.filter((r) => r.status === "dry_run")
     // A failed row is only worth surfacing because the job is still open — the
     // user can finish it by hand. Shown as "needs you", never as an error.
     const needsYou = log.filter((r) => r.status === "failed")
-    return { applied, needsYou }
+    return { applied, prepared, needsYou }
   }, [log])
 
-  const all = filter === "applied" ? applied : filter === "needs_you" ? needsYou : log
+  const all = filter === "applied" ? applied
+            : filter === "needs_you" ? needsYou
+            : filter === "prepared" ? prepared
+            : log
   const rows = all.slice(0, limit)
 
   // Switching tabs resets the page — carrying a deep scroll across a filter
@@ -92,9 +99,15 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
           <Moon className="h-4 w-4" />
           <span className="text-xs font-medium uppercase tracking-wide">Overnight auto-apply</span>
         </div>
-        <h1 className="mt-1 text-2xl font-semibold text-slate-900">Applications sent for you</h1>
+        {/* The heading follows the data. Claiming "sent for you" over a list
+            where nothing was sent is the same lie as the green checkmark. */}
+        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+          {applied.length > 0 ? "Applications sent for you" : "Your overnight runs"}
+        </h1>
         <p className="mt-1 text-sm text-slate-600">
-          Hireoven applies to your strongest matches while you sleep. Everything it sent is here.
+          {applied.length > 0
+            ? "Hireoven applies to your strongest matches while you sleep. Everything it sent is here."
+            : "Hireoven fills applications for your strongest matches while you sleep. Nothing has been submitted yet."}
         </p>
       </header>
 
@@ -105,7 +118,11 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
       <section className="mb-6 grid grid-cols-3 gap-3">
         <Stat label="Sent this week" value={String(thisWeek)}
           sub={allowance ? `of ${allowance.weeklyCap} included` : undefined} />
-        <Stat label="Total sent" value={String(applied.length)} />
+        {/* Shown only while there are any. Once submission is live this should
+            be zero, and a permanent tile for it would imply otherwise. */}
+        {prepared.length > 0
+          ? <Stat label="Filled, not sent" value={String(prepared.length)} sub="test runs" />
+          : <Stat label="Total sent" value={String(applied.length)} />}
         <Stat label="Need you" value={String(needsYou.length)}
           sub={needsYou.length ? "couldn't finish" : "nothing waiting"} />
       </section>
@@ -117,7 +134,9 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
       />
 
       <div className="mb-4 flex gap-1">
-        {([["all", "All"], ["applied", "Sent"], ["needs_you", "Needs you"]] as const).map(([key, label]) => (
+        {([["all", "All"], ["applied", "Sent"],
+           ...(prepared.length > 0 ? [["prepared", "Filled, not sent"] as const] : []),
+           ["needs_you", "Needs you"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => { setFilter(key); setLimit(PAGE) }}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
@@ -161,7 +180,10 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
                           </span>
                         )}
                       </p>
-                      {r.status === "failed" && (
+                      {r.status === "dry_run" && (
+                  <p className="mt-1 text-xs text-slate-500">Filled and checked, not submitted.</p>
+                )}
+                {r.status === "failed" && (
                         <p className="mt-1 text-xs text-amber-700">
                           Couldn&apos;t complete this one — the form needs something only you can answer.
                         </p>
@@ -211,6 +233,12 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
 function StatusIcon({ status }: { status: AutoApplyRecord["status"] }) {
   if (status === "failed") {
     return <Clock className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-label="Needs you" />
+  }
+  // A filled-but-unsent run gets its own mark. Wearing the same green check as a
+  // real application is the one thing this screen must never do: it would tell
+  // someone they had applied when no employer received anything.
+  if (status === "dry_run") {
+    return <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-label="Filled, not sent" />
   }
   return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Sent" />
 }
