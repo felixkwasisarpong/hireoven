@@ -102,6 +102,7 @@ async function main() {
       jobTitle: j.title ?? "", companyName: j.name ?? "the company",
       userId, runId, anthropic, browser,
       yearsOfExperience: years,
+      resume: (row as never) ?? null,
       // allowSubmit deliberately omitted.
     })
     out.push({ ats, company: j.name, ...a })

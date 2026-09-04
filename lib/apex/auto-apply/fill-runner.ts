@@ -31,6 +31,11 @@
 
 import { chromium, type Browser, type Page } from "playwright"
 import Anthropic from "@anthropic-ai/sdk"
+import { randomUUID } from "node:crypto"
+import { writeFile, unlink } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { generateResumePDF } from "@/lib/resume/pdf-generator"
 import { generateFillScript } from "@/lib/autofill"
 import { logApiUsage, calcAnthropicCostUsd } from "@/lib/admin/usage"
 import { HAIKU_MODEL } from "@/lib/ai/anthropic-models"
@@ -48,7 +53,7 @@ import {
   isSkippedQuestion,
   recordUnansweredQuestion,
 } from "@/lib/autofill/screening-answers"
-import type { AutofillProfile } from "@/types"
+import type { AutofillProfile, Resume } from "@/types"
 
 const NAV_TIMEOUT_MS = 30_000
 const SETTLE_MS = 2_500
@@ -90,6 +95,8 @@ export type FillAttempt = {
   residual: Array<{ kind: string; label: string; hasSelector: boolean }>
   costUsd: number
   submitAttemptsBlocked: number
+  /** the résumé PDF was attached to the form's file input */
+  resumeAttached: boolean
   /** true only when allowSubmit was set AND the form was actually submitted */
   submitted: boolean
   error: string | null
@@ -109,6 +116,8 @@ export type FillOptions = {
   employmentType?: string | null
   /** Total years of experience, for level-based rate defaults. */
   yearsOfExperience?: number | null
+  /** The résumé to attach. Without it an application goes out with no CV. */
+  resume?: Resume | null
   anthropic: Anthropic | null
   /** Must be explicitly true to submit. Anything else is a dry run. */
   allowSubmit?: boolean
@@ -122,9 +131,13 @@ export type FillOptions = {
 const INSPECT = `(() => {
   const vis = (el) => { const r = el.getBoundingClientRect(), s = getComputedStyle(el);
     return r.width>0 && r.height>0 && s.visibility!=="hidden" && s.display!=="none"; };
+  // File inputs are INCLUDED. Excluding them meant a form with an empty résumé
+  // slot scored 100% required coverage — the single most important field on an
+  // application was outside the denominator, so the number was true and
+  // meaningless at once.
   const ctrls = Array.from(document.querySelectorAll("input, textarea, select")).filter((el) => {
     const t = (el.getAttribute("type")||"").toLowerCase();
-    if (["hidden","submit","button","image","reset","file"].indexOf(t) !== -1) return false;
+    if (["hidden","submit","button","image","reset"].indexOf(t) !== -1) return false;
     return vis(el); });
   const labelFor = (el) => {
     const id = el.getAttribute("id");
@@ -157,6 +170,9 @@ const INSPECT = `(() => {
   // therefore scored as answered. It is not an answer.
   const SENTINEL = /^(resumator_no_selection|no_selection|-+\\s*select|please\\s+select|select(\\s+one)?|choose\\s+one|n\\/?a)$/i;
   const hasValue = (el) => {
+    if ((el.getAttribute("type")||"").toLowerCase() === "file") {
+      return !!(el.files && el.files.length > 0);
+    }
     const raw = (el.value||"").trim();
     if (raw.length > 0 && !SENTINEL.test(raw)) return true;
     const w = el.closest('[class*="control" i]') || el.parentElement;
@@ -200,6 +216,7 @@ const INSPECT = `(() => {
   const required = ctrls.filter((el) => req(el) && !isSelectArtifact(el));
   const kindOf = (el) => {
     const tag = el.tagName.toLowerCase(), type = (el.getAttribute("type")||"").toLowerCase();
+    if (type === "file") return "file";
     if (tag === "select") return "select";
     if (el.getAttribute("role") === "combobox" || el.getAttribute("aria-autocomplete")) return "combobox";
     if (type === "radio" || type === "checkbox") return type;
@@ -765,13 +782,67 @@ async function selectComboNative(
   }
 }
 
+/** Résumé fields, as distinct from the other file inputs a form may offer. */
+const RESUME_FIELD = /resume|résumé|\bcv\b|curriculum/i
+/** Never attach the résumé to one of these. */
+const NOT_RESUME = /cover letter|portfolio|transcript|certificate|photo|headshot|writing sample/i
+
+/**
+ * Attach the résumé to the form's file input.
+ *
+ * Without this an application goes out with a name, an email and no CV — not a
+ * weak application but a discarded one, and it burns the posting, since you
+ * cannot reapply to a job you have already applied to badly.
+ *
+ * The PDF is generated from the parsed résumé rather than pulled from object
+ * storage, because the app-worker has no MinIO access. It is written to a temp
+ * file because setInputFiles needs a path, and removed afterwards.
+ */
+async function attachResume(page: Page, resume: Resume): Promise<boolean> {
+  let tmp: string | null = null
+  try {
+    const inputs = await page.$$('input[type="file"]')
+    if (inputs.length === 0) return false
+
+    // Pick the résumé input specifically. Attaching a CV to the cover-letter
+    // slot is its own kind of wrong.
+    let target = null
+    for (const el of inputs) {
+      const id = (await el.getAttribute("id").catch(() => "")) ?? ""
+      const name = (await el.getAttribute("name").catch(() => "")) ?? ""
+      const aria = (await el.getAttribute("aria-label").catch(() => "")) ?? ""
+      const hay = `${id} ${name} ${aria}`
+      if (NOT_RESUME.test(hay)) continue
+      if (RESUME_FIELD.test(hay)) { target = el; break }
+      if (!target) target = el   // fall back to the first non-excluded input
+    }
+    if (!target) return false
+
+    const pdf = await generateResumePDF(resume)
+    const path = join(tmpdir(), `ho-resume-${randomUUID()}.pdf`)
+    tmp = path
+    await writeFile(path, pdf)
+    await target.setInputFiles(path, { timeout: 15_000 })
+    await page.waitForTimeout(1_500)
+
+    return await page.evaluate(`(() => {
+      const els = Array.from(document.querySelectorAll('input[type="file"]'));
+      return els.some((e) => e.files && e.files.length > 0);
+    })()`).then(Boolean).catch(() => false)
+  } catch {
+    return false
+  } finally {
+    if (tmp) await unlink(tmp).catch(() => {})
+  }
+}
+
 export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
   const r: FillAttempt = {
     ok: false, blocked: false, formReached: false,
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
     groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null, residual: [],
-    costUsd: 0, submitAttemptsBlocked: 0, submitted: false, error: null,
+    costUsd: 0, submitAttemptsBlocked: 0, resumeAttached: false, submitted: false, error: null,
   }
 
   const ownBrowser = !opts.browser
@@ -808,6 +879,12 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     const { script } = generateFillScript(opts.profile, opts.ats)
     await page.evaluate(script).catch(() => null)
     await page.waitForTimeout(600)
+
+    // Attach before measuring, so the résumé counts toward coverage like any
+    // other required field.
+    if (opts.resume) {
+      r.resumeAttached = await attachResume(page, opts.resume)
+    }
 
     const after = await page.evaluate(INSPECT) as InspectResult
     const unfilled = after.unfilledRequired
