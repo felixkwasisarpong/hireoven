@@ -111,9 +111,19 @@ export async function getAutoApplyCandidates(
           SELECT 1 FROM job_applications ja
            WHERE ja.user_id = $1 AND ja.job_id = j.id
         )
+        -- Never look at a posting twice, whatever happened last time.
+        --
+        -- This previously excluded only status='applied', so every job we had
+        -- filled but not submitted, or failed to complete, came back the next
+        -- night. Twenty-four attempts landed on eight distinct postings, three
+        -- passes each: the same forms re-filled, the same questions re-asked,
+        -- and nightly slots spent re-treading ground. A form that could not be
+        -- completed yesterday will almost always fail again today, and with
+        -- roughly 42k fresh Tier-1 postings a week there is no shortage of
+        -- unseen ones to move on to.
         AND NOT EXISTS (
           SELECT 1 FROM apex_auto_apply_log l
-           WHERE l.user_id = $1 AND l.job_id = j.id AND l.status = 'applied'
+           WHERE l.user_id = $1 AND l.job_id = j.id
         )
       ORDER BY ms.overall_score DESC NULLS LAST, j.first_detected_at DESC
       LIMIT $3`,
