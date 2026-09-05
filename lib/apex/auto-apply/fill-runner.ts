@@ -691,9 +691,13 @@ const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add an
  * telling the user an application exists when it does not.
  */
 async function submitForm(page: Page): Promise<boolean> {
+  // Anchors count. JazzHR's submit is <a href="#" id="resumator-submit-resume">
+  // inside the form, so a button-only query found nothing, returned false, and
+  // every completed application was recorded as a dry run — the form was filled
+  // perfectly and then simply abandoned.
   const before = page.url()
   let clicked = false
-  for (const el of await page.$$("button, input[type=submit]")) {
+  for (const el of await page.$$("button, input[type=submit], a, [role=button]")) {
     const label = (
       ((await el.textContent().catch(() => "")) ?? "") ||
       ((await el.getAttribute("value").catch(() => "")) ?? "")
@@ -714,7 +718,12 @@ async function submitForm(page: Page): Promise<boolean> {
     const t = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
     return /thank you|application (has been )?(received|submitted|sent)|we have received|successfully applied|thanks for applying/.test(t);
   })()`).catch(() => false)
-  return Boolean(confirmed) || page.url() !== before
+  // Compare without the fragment. Those anchor submits carry href="#", so a
+  // click that failed validation still moves the URL from ".../Role" to
+  // ".../Role#" — which a raw comparison reads as a successful navigation and
+  // records as 'applied'. That is precisely the lie this gate exists to stop.
+  const sameDoc = (u: string) => u.split("#")[0]
+  return Boolean(confirmed) || sameDoc(page.url()) !== sameDoc(before)
 }
 
 
