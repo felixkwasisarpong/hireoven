@@ -256,6 +256,66 @@ export function identityAnswer(
   return null
 }
 
+/**
+ * US state names, keyed by the two-letter code profiles actually store.
+ *
+ * A profile holding "TX" against a dropdown offering "Texas" is not a missing
+ * answer, but it read as one: no exact match, so the field was left empty and
+ * the whole application was refused for an address the profile knew.
+ */
+const US_STATES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+  CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+  HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+  KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+  MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada",
+  NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma",
+  OR: "Oregon", PA: "Pennsylvania", RI: "Rhode Island", SC: "South Carolina",
+  SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah", VT: "Vermont",
+  VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin",
+  WY: "Wyoming", DC: "District of Columbia", PR: "Puerto Rico", GU: "Guam",
+  VI: "U.S. Virgin Islands", AS: "American Samoa", MP: "Northern Mariana Islands",
+}
+
+/** Both spellings of a US state, so either can be matched against a menu. */
+export function usStateAliases(value: string): string[] {
+  const v = value.trim()
+  if (!v) return []
+  const upper = v.toUpperCase()
+  if (US_STATES[upper]) return [v, US_STATES[upper]]
+  const code = Object.keys(US_STATES).find(
+    (k) => US_STATES[k].toLowerCase() === v.toLowerCase(),
+  )
+  return code ? [v, code] : [v]
+}
+
+/**
+ * Where the applicant lives, straight from the profile.
+ *
+ * identityAnswer covers name, email and phone; address fields had no
+ * deterministic source at all, so a required State dropdown fell through to the
+ * model, which correctly declined to invent one. The profile holds the answer.
+ */
+export function locationAnswer(
+  profile: Pick<
+    AutofillProfile,
+    "city" | "state" | "country" | "zip_code" | "address_line1"
+  >,
+  label: string,
+): string | null {
+  const l = label.toLowerCase().replace(/[*✱]/g, "").trim()
+  const val = (v: string | null | undefined) => (v ?? "").trim() || null
+
+  if (/\bstate\b|\bprovince\b|\bregion\b/.test(l)) return val(profile.state)
+  if (/\bcity\b|\btown\b|\blocality\b/.test(l)) return val(profile.city)
+  if (/\bcountry\b/.test(l)) return val(profile.country)
+  if (/\bzip\b|postal/.test(l)) return val(profile.zip_code)
+  if (/\baddress\b|\bstreet\b/.test(l)) return val(profile.address_line1)
+  return null
+}
+
 // ── 6. EEO comes from the profile when the user has opted in ────────────────
 
 /**

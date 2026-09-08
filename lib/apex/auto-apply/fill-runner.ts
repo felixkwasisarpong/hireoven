@@ -44,6 +44,8 @@ import {
   classifyWorkAuthQuestion,
   answerWorkAuth,
   identityAnswer,
+  locationAnswer,
+  usStateAliases,
   eeoAnswer,
 } from "@/lib/autofill/answer-policy"
 import { answerCommonQuestion } from "@/lib/autofill/common-answers"
@@ -654,16 +656,30 @@ const FORM_VALIDITY = `(() => {
     }
     return (t || "").replace(/\s+/g, " ").trim().slice(0, 80);
   };
-  const sel = (el) => el.id ? "#" + CSS.escape(el.id)
-    : (el.getAttribute("name") ? el.tagName.toLowerCase() + '[name="' + el.getAttribute("name") + '"]' : null);
+  // name before id. Design systems regenerate ids on re-render, so a selector
+  // captured here stops resolving the moment the widget updates — the verify
+  // step then reads null, calls a successful pick a failure, and the field is
+  // reported unfilled while the form is actually complete.
+  const sel = (el) => {
+    const nm = el.getAttribute("name");
+    if (nm) return el.tagName.toLowerCase() + '[name="' + CSS.escape(nm) + '"]';
+    return el.id ? "#" + CSS.escape(el.id) : null;
+  };
 
   const invalid = [];
   for (const el of Array.from(document.querySelectorAll("input, textarea, select"))) {
     if (el.disabled || (el.getAttribute("type") || "").toLowerCase() === "hidden") continue;
-    // Deliberately NOT filtered by visibility. MUI-style widgets render the real
-    // control in a popup and leave a hidden native <select> behind; that mirror
-    // is what the browser validates and what blocks the submission, and skipping
-    // it is why this gate passed a BambooHR form whose State was empty.
+    // Not filtered by visibility alone: MUI-style widgets render the real
+    // control in a popup and leave a hidden native element behind, and that
+    // mirror is what the browser validates. Skipping it is why this gate passed
+    // a BambooHR form whose State was empty.
+    //
+    // An invisible control with neither name nor id is a different animal —
+    // framework scaffolding, like the bare file input behind a styled uploader
+    // that stays "empty" while the résumé is attached and displayed. We cannot
+    // name it, target it, or report it usefully, and treating it as a blocker
+    // refuses forms that are in fact complete.
+    if (!vis(el) && !sel(el)) continue;
     if (typeof el.checkValidity === "function" && el.checkValidity()) continue;
     invalid.push({
       label: labelOf(el),
@@ -933,6 +949,60 @@ async function readPageText(page: Page): Promise<string | null> {
  * controls where a real click cannot land (covered, zero-size, or inside a
  * closed shadow root).
  */
+/**
+ * Read a widget's options by opening it, the way a person would.
+ *
+ * The in-page reader queries the element it is handed, which for a hidden
+ * native mirror means one blank option and an empty list — so the field looked
+ * unanswerable and was skipped without a single attempt.
+ */
+/** Resolve a known answer to the exact wording a menu uses. */
+function matchOption(want: string, options: string[]): string | null {
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase()
+  for (const alias of usStateAliases(want)) {
+    const hit = options.find((o) => norm(o) === norm(alias))
+    if (hit) return hit
+  }
+  const loose = options.find(
+    (o) => norm(o).includes(norm(want)) || norm(want).includes(norm(o)),
+  )
+  return loose ?? null
+}
+
+async function readComboOptionsNative(page: Page, selector: string): Promise<string[]> {
+  try {
+    const native = page.locator(selector).first()
+    if (!(await native.count())) return []
+    const visible = await native.isVisible().catch(() => false)
+    const control = visible
+      ? native
+      : native.locator(
+          'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+        ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+    if (!(await control.count().catch(() => 0))) return []
+
+    await control.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+    await control.click({ timeout: 5_000 })
+    await page.waitForTimeout(600)
+
+    const options = page.locator('[role="option"], [class*="option" i]:visible')
+    const count = Math.min(await options.count().catch(() => 0), 80)
+    const out: string[] = []
+    for (let i = 0; i < count; i++) {
+      const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
+        .replace(/\s+/g, " ").trim()
+      // Nested nodes repeat the same label; the chooser wants a clean menu.
+      if (text && text.length < 60 && !out.includes(text)) out.push(text)
+    }
+    // Leave nothing half-open for the next control to trip over.
+    await page.keyboard.press("Escape").catch(() => {})
+    await page.waitForTimeout(300)
+    return out
+  } catch {
+    return []
+  }
+}
+
 async function selectComboNative(
   page: Page, selector: string, wanted: string,
 ): Promise<boolean> {
@@ -960,23 +1030,34 @@ async function selectComboNative(
 
     const want = wanted.toLowerCase()
     const options = page.locator('[role="option"], [class*="option" i]:visible')
-    const count = Math.min(await options.count().catch(() => 0), 40)
-    let exact = -1
-    let partial = -1
-    for (let i = 0; i < count; i++) {
-      const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
-        .replace(/\s+/g, " ").trim().toLowerCase()
-      if (!text) continue
-      if (text === want) { exact = i; break }
-      if (partial < 0 && (text.includes(want) || want.includes(text))) partial = i
+
+    // Ask for the option by name first. Walking the list with a cap stopped
+    // around "Arizona" on a state menu, so every state past it was unreachable,
+    // and a virtualised list may not render the wanted row until it is asked for.
+    const escaped = wanted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const byName = options.filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, "i") }).first()
+    let target = (await byName.count().catch(() => 0)) ? byName : null
+
+    if (!target) {
+      const count = Math.min(await options.count().catch(() => 0), 40)
+      let partial = -1
+      for (let i = 0; i < count; i++) {
+        const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
+          .replace(/\s+/g, " ").trim().toLowerCase()
+        if (!text) continue
+        if (text === want) { partial = i; break }
+        if (partial < 0 && (text.includes(want) || want.includes(text))) partial = i
+      }
+      if (partial >= 0) target = options.nth(partial)
     }
-    const pick = exact >= 0 ? exact : partial
-    if (pick < 0) {
+
+    if (!target) {
       // Leave nothing half-open for the next control to trip over.
       await page.keyboard.press("Escape").catch(() => {})
       return false
     }
-    await options.nth(pick).click({ timeout: 5_000 })
+    await target.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+    await target.click({ timeout: 5_000 })
     await page.waitForTimeout(400)
 
     return await page.evaluate(`(() => {
@@ -1393,13 +1474,18 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         const widget = options.length === 0
         if (widget) {
           options = await page.evaluate(readComboOptionsExpr(bad.sel)).catch(() => []) as string[]
+          if (!options.length) options = await readComboOptionsNative(page, bad.sel)
         }
-        let want: string | null = identityAnswer(opts.profile, bad.label)
+        let want: string | null =
+          identityAnswer(opts.profile, bad.label) ?? locationAnswer(opts.profile, bad.label)
         if (!want && opts.anthropic && options.length) {
           want = await chooseFromOptions(
             opts.anthropic, bad.label, options, opts.resumeContext, opts.userId, opts.runId,
           )
         }
+        // Say it the way the menu says it. A profile holding "TX" against a
+        // list offering "Texas" is an answer we have, not one we lack.
+        if (want && options.length) want = matchOption(want, options) ?? want
         if (!want) continue
         const set = widget
           ? false
@@ -1408,7 +1494,17 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
         // select registers; setting the hidden mirror's value satisfies the
         // browser while the framework's own state stays empty, which is exactly
         // how a form passed checkValidity and still refused on submit.
-        if (!set) await selectComboNative(page, bad.sel, want).catch(() => false)
+        // Try every spelling of the answer against the widget itself. The option
+        // list we can READ is truncated and virtualised — it stops around
+        // "Georgia" on a state menu — but the widget can still be asked for
+        // "Texas" by name, so a readable list is the wrong thing to constrain to.
+        let viaWidget = set
+        if (!viaWidget) {
+          for (const alias of usStateAliases(want)) {
+            viaWidget = await selectComboNative(page, bad.sel, alias).catch(() => false)
+            if (viaWidget) break
+          }
+        }
       }
       await page.waitForTimeout(400)
       validity = await page.evaluate(FORM_VALIDITY).catch(() => null) as FormValidity | null
