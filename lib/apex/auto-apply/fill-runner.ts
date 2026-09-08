@@ -44,6 +44,8 @@ import {
   classifyWorkAuthQuestion,
   answerWorkAuth,
   identityAnswer,
+  locationAnswer,
+  usStateAliases,
   eeoAnswer,
 } from "@/lib/autofill/answer-policy"
 import { answerCommonQuestion } from "@/lib/autofill/common-answers"
@@ -97,8 +99,12 @@ export type FillAttempt = {
   submitAttemptsBlocked: number
   /** the résumé PDF was attached to the form's file input */
   resumeAttached: boolean
-  /** true only when allowSubmit was set AND the form was actually submitted */
+  /** true only when allowSubmit was set AND the submission was confirmed */
   submitted: boolean
+  /** what the submit attempt did, and the evidence for that verdict */
+  submit: SubmitOutcome
+  /** controls the form itself rejected at the moment we were ready to submit */
+  formInvalid: Array<{ label: string; message: string }>
   error: string | null
 }
 
@@ -168,7 +174,7 @@ const INSPECT = `(() => {
   // Mirrors isSentinelValue in lib/autofill/answer-policy.ts: an untouched
   // JazzHR dropdown holds "resumator_no_selection", which is non-empty and was
   // therefore scored as answered. It is not an answer.
-  const SENTINEL = /^(resumator_no_selection|no_selection|-+\\s*select|please\\s+select|select(\\s+one)?|choose\\s+one|n\\/?a)$/i;
+  const SENTINEL = /^[\\s\\u002d\\u2010-\\u2015]*(resumator_no_selection|no_selection|select|please\\s+select|select\\s+one|choose(\\s+one)?|none|n\\/?a)[\\s\\u002d\\u2010-\\u2015]*$/i;
   const hasValue = (el) => {
     if ((el.getAttribute("type")||"").toLowerCase() === "file") {
       return !!(el.files && el.files.length > 0);
@@ -525,7 +531,7 @@ function selectComboOptionExpr(selector: string, wanted: string): string {
     // Same sentinel filter as hasValue in INSPECT. A control still showing its
     // placeholder is NOT committed, and treating it as committed made a failed
     // selection report success and suppressed every fallback behind it.
-    const SENT = /^(resumator_no_selection|no_selection|-+\\s*select|please\\s+select|select(\\s+one)?|choose\\s+one|n\\/?a)$/i;
+    const SENT = /^[\\s\\u002d\\u2010-\\u2015]*(resumator_no_selection|no_selection|select|please\\s+select|select\\s+one|choose(\\s+one)?|none|n\\/?a)[\\s\\u002d\\u2010-\\u2015]*$/i;
     const committed = () => {
       const raw = norm(el.value);
       if (raw && !SENT.test(raw)) return true;
@@ -623,6 +629,116 @@ false answer can void an offer. If no option is truthful, reply NONE.` },
       ?? null
 }
 
+/**
+ * Ask the FORM whether it is complete, rather than trusting our own count.
+ *
+ * `requiredFilled/requiredTotal` only ever recorded what the filler believed it
+ * had typed. On a BambooHR form that belief read 9/9 while the State dropdown
+ * was empty, so the run clicked submit with total confidence into a validation
+ * wall — twice, identically, because nothing ever read the page's answer.
+ *
+ * Constraint validation is the browser's own verdict and costs one evaluate().
+ */
+const FORM_VALIDITY = `(() => {
+  const vis = (el) => {
+    const r = el.getBoundingClientRect();
+    const st = getComputedStyle(el);
+    return r.width > 0 && r.height > 0 && st.visibility !== "hidden" && st.display !== "none";
+  };
+  const labelOf = (el) => {
+    let t = "";
+    if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) t = l.textContent || ""; }
+    if (!t) { const l = el.closest("label"); if (l) t = l.textContent || ""; }
+    if (!t) {
+      const box = el.closest('[class*="field" i],[class*="form" i],[class*="question" i]');
+      const h = box && box.querySelector("label,legend");
+      if (h) t = h.textContent || "";
+    }
+    return (t || "").replace(/\s+/g, " ").trim().slice(0, 80);
+  };
+  // name before id. Design systems regenerate ids on re-render, so a selector
+  // captured here stops resolving the moment the widget updates — the verify
+  // step then reads null, calls a successful pick a failure, and the field is
+  // reported unfilled while the form is actually complete.
+  const sel = (el) => {
+    const nm = el.getAttribute("name");
+    if (nm) return el.tagName.toLowerCase() + '[name="' + CSS.escape(nm) + '"]';
+    return el.id ? "#" + CSS.escape(el.id) : null;
+  };
+
+  const invalid = [];
+  for (const el of Array.from(document.querySelectorAll("input, textarea, select"))) {
+    if (el.disabled || (el.getAttribute("type") || "").toLowerCase() === "hidden") continue;
+    // Not filtered by visibility alone: MUI-style widgets render the real
+    // control in a popup and leave a hidden native element behind, and that
+    // mirror is what the browser validates. Skipping it is why this gate passed
+    // a BambooHR form whose State was empty.
+    //
+    // An invisible control with neither name nor id is a different animal —
+    // framework scaffolding, like the bare file input behind a styled uploader
+    // that stays "empty" while the résumé is attached and displayed. We cannot
+    // name it, target it, or report it usefully, and treating it as a blocker
+    // refuses forms that are in fact complete.
+    if (!vis(el) && !sel(el)) continue;
+    if (typeof el.checkValidity === "function" && el.checkValidity()) continue;
+    invalid.push({
+      label: labelOf(el),
+      sel: sel(el),
+      kind: el.tagName.toLowerCase() === "select" ? "select"
+        : (el.getAttribute("type") || "text").toLowerCase(),
+      message: (el.validationMessage || "").slice(0, 120),
+    });
+  }
+
+  // Rendered messages catch what constraint validation cannot — BambooHR's
+  // "Invalid website URL." lives on a type=text input that passes checkValidity.
+  const RE = /required|please (make a selection|select|enter|complete|choose)|invalid|must be|cannot be blank|is not valid|enter a valid/i;
+  const messages = [];
+  for (const el of Array.from(document.querySelectorAll('[class*="error" i],[class*="invalid" i],[role="alert"],[aria-live]'))) {
+    if (!vis(el)) continue;
+    const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (t && t.length < 160 && RE.test(t) && messages.indexOf(t) === -1) messages.push(t);
+  }
+  return { invalid: invalid.slice(0, 25), messages: messages.slice(0, 10) };
+})()`
+
+/**
+ * Clear optional URL fields holding something the site will reject.
+ *
+ * A junk value in "Website, Blog or Portfolio" — a field nobody required —
+ * was enough for BambooHR to refuse the whole submission. An optional field we
+ * cannot fill correctly is better left empty; a required one gets a scheme
+ * prepended, which is the usual reason it was rejected.
+ */
+const SANITIZE_URL_FIELDS = `(() => {
+  const URLISH = /website|portfolio|blog|url|link/i;
+  const VALID = /^https?:\/\/[^\s.]+\.[^\s]+$/i;
+  const labelOf = (el) => {
+    let t = "";
+    if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) t = l.textContent || ""; }
+    if (!t) { const l = el.closest("label"); if (l) t = l.textContent || ""; }
+    if (!t) { const box = el.closest('[class*="field" i],[class*="form" i]'); const h = box && box.querySelector("label"); if (h) t = h.textContent || ""; }
+    return (t || "").replace(/\s+/g, " ").trim();
+  };
+  const setValue = (el, v) => {
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    if (d && d.set) d.set.call(el, v); else el.value = v;
+    ["input", "change", "blur"].forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+  };
+  let cleaned = 0, repaired = 0;
+  for (const el of Array.from(document.querySelectorAll('input[type="text"], input[type="url"], input:not([type])'))) {
+    const v = (el.value || "").trim();
+    if (!v || VALID.test(v)) continue;
+    const label = labelOf(el);
+    if (!URLISH.test(label)) continue;
+    const required = el.hasAttribute("required") || el.getAttribute("aria-required") === "true" || /[*✱]/.test(label);
+    const withScheme = "https://" + v.replace(/^\/+/, "");
+    if (VALID.test(withScheme)) { setValue(el, withScheme); repaired++; continue; }
+    if (!required) { setValue(el, ""); cleaned++; }
+  }
+  return { cleaned, repaired };
+})()`
+
 /** Set a native <select> by matching option text, then fire change for React. */
 function selectNativeOptionExpr(selector: string, wanted: string): string {
   return `(() => {
@@ -682,6 +798,81 @@ const SUBMIT_LABEL = /^(submit|submit application|submit my application|send app
 const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add another|apply now/i
 
 /**
+ * Wording ATS confirmation pages actually use. Kept narrow enough that a job
+ * description mentioning "thank you for your interest" cannot pass for a
+ * receipt, since a false confirmation writes 'applied' for an application that
+ * does not exist.
+ */
+const SUBMIT_CONFIRMED =
+  /thank you for applying|thanks for applying|application (has been |was )?(received|submitted|sent)|we(?: have|'ve) received your application|received your application|successfully (applied|submitted)|application complete|submission (received|complete)/i
+
+/**
+ * The form refusing the submission in its own words. Deliberately phrased as
+ * whole messages, so a job description mentioning "required experience" cannot
+ * be mistaken for a validation failure.
+ */
+const SUBMIT_REJECTED =
+  /please make a selection|please select|this field is required|is required\b|cannot be blank|invalid [a-z ]{0,20}(url|email|phone|date|format)|enter a valid|please correct|there (was|were) (an? )?error/i
+
+/** How long to keep looking for a receipt before giving up on one. */
+const CONFIRM_TIMEOUT_MS = 20_000
+const CONFIRM_POLL_MS = 500
+
+type FormValidity = {
+  invalid: Array<{ label: string; sel: string | null; kind: string; message: string }>
+  messages: string[]
+}
+
+export type SubmitOutcome = {
+  /** a submit control was found, enabled, and clicked */
+  clicked: boolean
+  /** the page then proved the submission landed */
+  confirmed: boolean
+  /** the page said the form was wrong — a definite "nothing was sent" */
+  rejected: boolean
+  /** label of the control clicked, for diagnosing a wrong-button click */
+  label: string | null
+  urlBefore: string | null
+  urlAfter: string | null
+  /** trimmed page text after the click — the evidence behind the verdict */
+  pageText: string | null
+}
+
+export const EMPTY_SUBMIT_OUTCOME: SubmitOutcome = {
+  clicked: false, confirmed: false, rejected: false, label: null,
+  urlBefore: null, urlAfter: null, pageText: null,
+}
+
+/**
+ * Decide what a click actually achieved.
+ *
+ * Split out from the browser work so the verdict is testable: the first live
+ * run recorded four completed applications as plain failures, and there was no
+ * way to tell afterwards whether they had been sent.
+ */
+export function classifySubmitOutcome(input: {
+  clicked: boolean
+  urlBefore: string | null
+  urlAfter: string | null
+  pageText: string | null
+}): "not_clicked" | "confirmed" | "rejected" | "unconfirmed" {
+  if (!input.clicked) return "not_clicked"
+  if (input.pageText && SUBMIT_CONFIRMED.test(input.pageText)) return "confirmed"
+  // The page telling us a field is wrong is a definite answer: nothing was
+  // sent. Filing that as "unconfirmed" wasted a real investigation working out
+  // whether four applications existed, when the page had said so all along.
+  if (input.pageText && SUBMIT_REJECTED.test(input.pageText)) return "rejected"
+  // Those anchor submits carry href="#", so a click that merely failed
+  // validation still moves the URL from ".../Role" to ".../Role#". Comparing
+  // without the fragment keeps that from reading as a successful navigation.
+  const doc = (u: string | null) => (u ?? "").split("#")[0]
+  if (input.urlBefore && input.urlAfter && doc(input.urlAfter) !== doc(input.urlBefore)) {
+    return "confirmed"
+  }
+  return "unconfirmed"
+}
+
+/**
  * Click submit, then confirm from the PAGE that it went through.
  *
  * Reached only when the caller passed allowSubmit AND every required field is
@@ -690,13 +881,14 @@ const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add an
  * recorded as "applied", corrupting the ledger the caps are computed from and
  * telling the user an application exists when it does not.
  */
-async function submitForm(page: Page): Promise<boolean> {
+async function submitForm(page: Page): Promise<SubmitOutcome> {
   // Anchors count. JazzHR's submit is <a href="#" id="resumator-submit-resume">
   // inside the form, so a button-only query found nothing, returned false, and
   // every completed application was recorded as a dry run — the form was filled
   // perfectly and then simply abandoned.
-  const before = page.url()
-  let clicked = false
+  const urlBefore = page.url()
+  const out: SubmitOutcome = { ...EMPTY_SUBMIT_OUTCOME, urlBefore }
+
   for (const el of await page.$$("button, input[type=submit], a, [role=button]")) {
     const label = (
       ((await el.textContent().catch(() => "")) ?? "") ||
@@ -708,22 +900,41 @@ async function submitForm(page: Page): Promise<boolean> {
     if (!(await el.isVisible().catch(() => false))) continue
     if (!(await el.isEnabled().catch(() => false))) continue
     await el.click({ timeout: 10_000 }).catch(() => {})
-    clicked = true
+    out.clicked = true
+    out.label = label
     break
   }
-  if (!clicked) return false
+  if (!out.clicked) return out
 
-  await page.waitForTimeout(5_000).catch(() => {})
-  const confirmed = await page.evaluate(`(() => {
-    const t = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
-    return /thank you|application (has been )?(received|submitted|sent)|we have received|successfully applied|thanks for applying/.test(t);
-  })()`).catch(() => false)
-  // Compare without the fragment. Those anchor submits carry href="#", so a
-  // click that failed validation still moves the URL from ".../Role" to
-  // ".../Role#" — which a raw comparison reads as a successful navigation and
-  // records as 'applied'. That is precisely the lie this gate exists to stop.
-  const sameDoc = (u: string) => u.split("#")[0]
-  return Boolean(confirmed) || sameDoc(page.url()) !== sameDoc(before)
+  // Poll rather than sleeping a fixed five seconds. The old wait returned a
+  // verdict on whatever the page happened to be showing at 5.0s, which is
+  // before some ATS have finished posting the application — a slow receipt was
+  // indistinguishable from no receipt at all.
+  const deadline = Date.now() + CONFIRM_TIMEOUT_MS
+  for (;;) {
+    out.urlAfter = page.url()
+    out.pageText = await readPageText(page)
+    const verdict = classifySubmitOutcome(out)
+    // Stop on any definite answer. Waiting out the full timeout on a form that
+    // has already said "please make a selection" just delays the run.
+    if (verdict === "confirmed" || verdict === "rejected") break
+    if (Date.now() >= deadline) break
+    await page.waitForTimeout(CONFIRM_POLL_MS).catch(() => {})
+  }
+
+  const verdict = classifySubmitOutcome(out)
+  out.confirmed = verdict === "confirmed"
+  out.rejected = verdict === "rejected"
+  return out
+}
+
+/** Body text after a submit click, trimmed to what fits in the ledger. */
+async function readPageText(page: Page): Promise<string | null> {
+  const text = await page.evaluate(
+    `(document.body && document.body.innerText) ? document.body.innerText : ""`,
+  ).catch(() => "")
+  const trimmed = String(text ?? "").replace(/\s+/g, " ").trim()
+  return trimmed ? trimmed.slice(0, 1000) : null
 }
 
 
@@ -738,35 +949,115 @@ async function submitForm(page: Page): Promise<boolean> {
  * controls where a real click cannot land (covered, zero-size, or inside a
  * closed shadow root).
  */
+/**
+ * Read a widget's options by opening it, the way a person would.
+ *
+ * The in-page reader queries the element it is handed, which for a hidden
+ * native mirror means one blank option and an empty list — so the field looked
+ * unanswerable and was skipped without a single attempt.
+ */
+/** Resolve a known answer to the exact wording a menu uses. */
+function matchOption(want: string, options: string[]): string | null {
+  const norm = (t: string) => t.replace(/\s+/g, " ").trim().toLowerCase()
+  for (const alias of usStateAliases(want)) {
+    const hit = options.find((o) => norm(o) === norm(alias))
+    if (hit) return hit
+  }
+  const loose = options.find(
+    (o) => norm(o).includes(norm(want)) || norm(want).includes(norm(o)),
+  )
+  return loose ?? null
+}
+
+async function readComboOptionsNative(page: Page, selector: string): Promise<string[]> {
+  try {
+    const native = page.locator(selector).first()
+    if (!(await native.count())) return []
+    const visible = await native.isVisible().catch(() => false)
+    const control = visible
+      ? native
+      : native.locator(
+          'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+        ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+    if (!(await control.count().catch(() => 0))) return []
+
+    await control.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+    await control.click({ timeout: 5_000 })
+    await page.waitForTimeout(600)
+
+    const options = page.locator('[role="option"], [class*="option" i]:visible')
+    const count = Math.min(await options.count().catch(() => 0), 80)
+    const out: string[] = []
+    for (let i = 0; i < count; i++) {
+      const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
+        .replace(/\s+/g, " ").trim()
+      // Nested nodes repeat the same label; the chooser wants a clean menu.
+      if (text && text.length < 60 && !out.includes(text)) out.push(text)
+    }
+    // Leave nothing half-open for the next control to trip over.
+    await page.keyboard.press("Escape").catch(() => {})
+    await page.waitForTimeout(300)
+    return out
+  } catch {
+    return []
+  }
+}
+
 async function selectComboNative(
   page: Page, selector: string, wanted: string,
 ): Promise<boolean> {
   try {
-    const control = page.locator(selector).first()
-    if (!(await control.count())) return false
+    const native = page.locator(selector).first()
+    if (!(await native.count())) return false
+
+    // Click what a person clicks. Design systems like BambooHR's Fabric render
+    // the real widget as a button and leave the <select> behind as a 0x0,
+    // opacity-0 mirror — clicking that mirror opens nothing, so every option
+    // read came back empty and the field was written off as unfillable. The
+    // mirror is still what the browser validates, which is how a form could pass
+    // checkValidity and then refuse the submission on the framework's own state.
+    const visible = await native.isVisible().catch(() => false)
+    const control = visible
+      ? native
+      : native.locator(
+          'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+        ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+    if (!(await control.count().catch(() => 0))) return false
+
     await control.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
     await control.click({ timeout: 5_000 })
     await page.waitForTimeout(500)
 
     const want = wanted.toLowerCase()
     const options = page.locator('[role="option"], [class*="option" i]:visible')
-    const count = Math.min(await options.count().catch(() => 0), 40)
-    let exact = -1
-    let partial = -1
-    for (let i = 0; i < count; i++) {
-      const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
-        .replace(/\s+/g, " ").trim().toLowerCase()
-      if (!text) continue
-      if (text === want) { exact = i; break }
-      if (partial < 0 && (text.includes(want) || want.includes(text))) partial = i
+
+    // Ask for the option by name first. Walking the list with a cap stopped
+    // around "Arizona" on a state menu, so every state past it was unreachable,
+    // and a virtualised list may not render the wanted row until it is asked for.
+    const escaped = wanted.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    const byName = options.filter({ hasText: new RegExp(`^\\s*${escaped}\\s*$`, "i") }).first()
+    let target = (await byName.count().catch(() => 0)) ? byName : null
+
+    if (!target) {
+      const count = Math.min(await options.count().catch(() => 0), 40)
+      let partial = -1
+      for (let i = 0; i < count; i++) {
+        const text = ((await options.nth(i).textContent().catch(() => "")) ?? "")
+          .replace(/\s+/g, " ").trim().toLowerCase()
+        if (!text) continue
+        if (text === want) { partial = i; break }
+        if (partial < 0 && (text.includes(want) || want.includes(text))) partial = i
+      }
+      if (partial >= 0) target = options.nth(partial)
     }
-    const pick = exact >= 0 ? exact : partial
-    if (pick < 0) {
+
+    if (!target) {
       // Leave nothing half-open for the next control to trip over.
       await page.keyboard.press("Escape").catch(() => {})
       return false
     }
-    await options.nth(pick).click({ timeout: 5_000 })
+    await target.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+    await target.click({ timeout: 5_000 })
     await page.waitForTimeout(400)
 
     return await page.evaluate(`(() => {
@@ -778,7 +1069,7 @@ async function selectComboNative(
       // as committed, so the selection reported success while coverage still saw
       // the field as empty — a field that was "handled" yet never filled, and
       // the fallbacks never ran because the first attempt claimed to work.
-      const SENTINEL = /^(resumator_no_selection|no_selection|-+\\s*select|please\\s+select|select(\\s+one)?|choose\\s+one|n\\/?a)$/i;
+      const SENTINEL = /^[\\s\\u002d\\u2010-\\u2015]*(resumator_no_selection|no_selection|select|please\\s+select|select\\s+one|choose(\\s+one)?|none|n\\/?a)[\\s\\u002d\\u2010-\\u2015]*$/i;
       const raw = norm(el.value);
       if (raw && !SENTINEL.test(raw)) return true;
       const w = el.closest('[class*="control" i]') || el.parentElement;
@@ -851,7 +1142,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
     groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null, residual: [],
-    costUsd: 0, submitAttemptsBlocked: 0, resumeAttached: false, submitted: false, error: null,
+    costUsd: 0, submitAttemptsBlocked: 0, resumeAttached: false, submitted: false,
+    submit: { ...EMPTY_SUBMIT_OUTCOME }, formInvalid: [], error: null,
   }
 
   const ownBrowser = !opts.browser
@@ -1161,6 +1453,64 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
       else r.leftForHuman++
     }
 
+    // A URL the site will reject blocks the whole submission, even in a field
+    // nobody required. Clean those before asking the form for its verdict.
+    await page.evaluate(SANITIZE_URL_FIELDS).catch(() => null)
+
+    // Now ask the form. A dependent dropdown is the common case: BambooHR only
+    // populates State once Country is set, and Country sits AFTER State in the
+    // DOM, so the first pass fills a list that is still empty. One more pass,
+    // driven by what the form says is wrong rather than by our own bookkeeping,
+    // catches that and anything else the fill silently failed to commit.
+    let validity = await page.evaluate(FORM_VALIDITY).catch(() => null) as FormValidity | null
+    if (validity?.invalid.length) {
+      for (const bad of validity.invalid) {
+        if (!bad.sel || bad.kind !== "select") continue
+        // An empty option list does not mean "no choices" — MUI and friends
+        // render theirs only once the widget is opened, so the native element
+        // holds a single blank option and every text-matching attempt fails.
+        // Reading through the combobox path is what actually sees them.
+        let options = await page.evaluate(readNativeOptionsExpr(bad.sel)).catch(() => []) as string[]
+        const widget = options.length === 0
+        if (widget) {
+          options = await page.evaluate(readComboOptionsExpr(bad.sel)).catch(() => []) as string[]
+          if (!options.length) options = await readComboOptionsNative(page, bad.sel)
+        }
+        let want: string | null =
+          identityAnswer(opts.profile, bad.label) ?? locationAnswer(opts.profile, bad.label)
+        if (!want && opts.anthropic && options.length) {
+          want = await chooseFromOptions(
+            opts.anthropic, bad.label, options, opts.resumeContext, opts.userId, opts.runId,
+          )
+        }
+        // Say it the way the menu says it. A profile holding "TX" against a
+        // list offering "Texas" is an answer we have, not one we lack.
+        if (want && options.length) want = matchOption(want, options) ?? want
+        if (!want) continue
+        const set = widget
+          ? false
+          : await page.evaluate(selectNativeOptionExpr(bad.sel, want)).catch(() => false)
+        // Real clicks through the popup are the only thing a framework-managed
+        // select registers; setting the hidden mirror's value satisfies the
+        // browser while the framework's own state stays empty, which is exactly
+        // how a form passed checkValidity and still refused on submit.
+        // Try every spelling of the answer against the widget itself. The option
+        // list we can READ is truncated and virtualised — it stops around
+        // "Georgia" on a state menu — but the widget can still be asked for
+        // "Texas" by name, so a readable list is the wrong thing to constrain to.
+        let viaWidget = set
+        if (!viaWidget) {
+          for (const alias of usStateAliases(want)) {
+            viaWidget = await selectComboNative(page, bad.sel, alias).catch(() => false)
+            if (viaWidget) break
+          }
+        }
+      }
+      await page.waitForTimeout(400)
+      validity = await page.evaluate(FORM_VALIDITY).catch(() => null) as FormValidity | null
+    }
+    r.formInvalid = (validity?.invalid ?? []).map((f) => ({ label: f.label, message: f.message }))
+
     await page.waitForTimeout(400)
     const final = await page.evaluate(INSPECT) as InspectResult
     r.requiredTotal = final.requiredTotal
@@ -1179,8 +1529,14 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // Two conditions, both required. Submitting a partially filled application
     // is worse than not applying at all: it reaches a real employer under the
     // user's name and cannot be withdrawn.
-    if (opts.allowSubmit === true && r.ok) {
-      r.submitted = await submitForm(page)
+    // Three conditions now, not two. Clicking submit on a form the browser has
+    // already marked invalid cannot succeed, and burns the posting: the ledger
+    // row it writes excludes the job from every future run.
+    if (opts.allowSubmit === true && r.ok && r.formInvalid.length === 0) {
+      r.submit = await submitForm(page)
+      r.submitted = r.submit.confirmed
+    } else if (opts.allowSubmit === true && r.ok) {
+      r.error = `form_invalid: ${r.formInvalid.map((f) => f.label || "?").join(", ").slice(0, 180)}`
     }
   } catch (err) {
     r.error = err instanceof Error ? err.message.slice(0, 200) : String(err)

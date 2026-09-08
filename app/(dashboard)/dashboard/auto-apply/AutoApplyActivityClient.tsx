@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Building2, CheckCircle2, Clock, ExternalLink, FileCheck, Moon } from "lucide-react"
+import { AlertCircle, Building2, CheckCircle2, Clock, ExternalLink, FileCheck, Moon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AutoApplyRecord } from "@/lib/apex/auto-apply/types"
 import PendingQuestions, { type PendingQuestion } from "./PendingQuestions"
@@ -62,7 +62,10 @@ function timeAgo(iso: string): string {
 
 function failureMessage(record: AutoApplyRecord): string {
   if (record.error === "submit_not_confirmed") {
-    return "Filled and clicked submit, but could not confirm the application was received."
+    return "Filled and clicked submit, but could not confirm the application was received. It may have gone through — check your email."
+  }
+  if (record.error === "submit_control_not_found") {
+    return "Filled the form, but no submit button could be found on the page. Nothing was sent."
   }
   if (record.error === "bot_wall") {
     return "The application page blocked automated browser access."
@@ -92,7 +95,9 @@ export default function AutoApplyActivityClient({
     const prepared = log.filter((r) => r.status === "dry_run")
     // A failed row is only worth surfacing because the job is still open — the
     // user can finish it by hand. Shown as "needs you", never as an error.
-    const needsYou = log.filter((r) => r.status === "failed")
+    const needsYou = log.filter(
+      (r) => r.status === "failed" || r.status === "submitted_unconfirmed",
+    )
     return { applied, prepared, needsYou }
   }, [log])
 
@@ -218,6 +223,12 @@ export default function AutoApplyActivityClient({
                           {failureMessage(r)}
                         </p>
                       )}
+                      {r.status === "submitted_unconfirmed" && (
+                        <p className="mt-1 text-xs text-amber-700">
+                          Submit was clicked, but this site never confirmed it. Check your
+                          email for a receipt before applying again.
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <span className="text-xs text-slate-400">{timeAgo(r.appliedAt)}</span>
@@ -270,5 +281,14 @@ function StatusIcon({ status }: { status: AutoApplyRecord["status"] }) {
   if (status === "dry_run") {
     return <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-label="Filled, not sent" />
   }
-  return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Sent" />
+  // Clicked submit, no receipt. It gets its own mark for the same reason a dry
+  // run does — the green check is reserved for applications we can prove landed.
+  if (status === "submitted_unconfirmed") {
+    return <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" aria-label="Sent, unconfirmed" />
+  }
+  if (status === "applied") {
+    return <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-label="Sent" />
+  }
+  // Anything unrecognised is not evidence of a send, so it must not look like one.
+  return <FileCheck className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" aria-label={status} />
 }
