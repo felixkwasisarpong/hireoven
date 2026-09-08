@@ -220,7 +220,8 @@ export async function GET(request: NextRequest) {
      FROM profiles
      WHERE alert_frequency = 'weekly'
        AND email_alerts = true
-       AND email IS NOT NULL`
+       AND email IS NOT NULL
+       AND suspended_at IS NULL`
   )
   const users = usersResult.rows
 
