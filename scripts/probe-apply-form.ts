@@ -83,8 +83,112 @@ async function main() {
       await page.waitForTimeout(4_000)
       break
     }
+    // --set "<label substring>=<option text>" (repeatable) drives a control the
+    // way the runner does, then reports what the page did with it. This is how
+    // you tell a value the browser accepted from one the site's own framework
+    // registered — the distinction that decides whether a submit can succeed.
+    const sets = process.argv.slice(3).filter((a) => a.startsWith("--set="))
+    for (const raw of sets) {
+      const [label, want] = raw.slice("--set=".length).split("=")
+      const result = await page.evaluate(`(() => {
+        const LABEL = ${JSON.stringify(label)}.toLowerCase(), WANT = ${JSON.stringify(want)}.toLowerCase();
+        const labelOf = (el) => {
+          let t = "";
+          if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) t = l.textContent || ""; }
+          if (!t) { const l = el.closest("label"); if (l) t = l.textContent || ""; }
+          if (!t) { const b = el.closest('[class*="field" i],[class*="form" i]'); const h = b && b.querySelector("label"); if (h) t = h.textContent || ""; }
+          return (t || "").replace(/\s+/g, " ").trim();
+        };
+        const el = Array.from(document.querySelectorAll("select, input, textarea"))
+          .find((c) => labelOf(c).toLowerCase().indexOf(LABEL) !== -1);
+        if (!el) return { found: false };
+        const norm = (t) => (t || "").replace(/\s+/g, " ").trim();
+        let applied = false;
+        if (el.tagName.toLowerCase() === "select") {
+          const opts = Array.from(el.options).filter((o) => o.value !== "");
+          const m = opts.find((o) => norm(o.textContent).toLowerCase() === WANT)
+                || opts.find((o) => norm(o.textContent).toLowerCase().indexOf(WANT) !== -1);
+          if (m) {
+            const d = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value");
+            if (d && d.set) d.set.call(el, m.value); else el.value = m.value;
+            ["input", "change"].forEach((t) => el.dispatchEvent(new Event(t, { bubbles: true })));
+            applied = true;
+          }
+        }
+        const wrapper = el.closest('[class*="FormControl" i],[class*="field" i]');
+        return {
+          found: true,
+          applied,
+          optionCount: el.options ? el.options.length : null,
+          nativeValue: (el.value || ""),
+          checkValidity: typeof el.checkValidity === "function" ? el.checkValidity() : null,
+          // What a human sees. If this stays on the placeholder while
+          // nativeValue is set, the framework never registered the change.
+          renderedText: wrapper ? (wrapper.textContent || "").replace(/\s+/g, " ").trim().slice(0, 120) : null,
+        };
+      })()`).catch((e) => ({ error: String(e).slice(0, 200) }))
+      console.log(`[set] ${label} = ${want} ->`, JSON.stringify(result))
+      await page.waitForTimeout(1500)
+    }
+
+    // --listbox="<label substring>" opens a widget the way a person would and
+    // reports what the popup offers. A native <select> holding one blank option
+    // is not an empty field; its choices simply do not exist until it is opened.
+    for (const raw of process.argv.slice(3).filter((a) => a.startsWith("--listbox="))) {
+      const label = raw.slice("--listbox=".length).toLowerCase()
+      const sel = await page.evaluate(`(() => {
+        const labelOf = (el) => {
+          let t = "";
+          if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) t = l.textContent || ""; }
+          if (!t) { const b = el.closest('[class*="field" i],[class*="form" i]'); const h = b && b.querySelector("label"); if (h) t = h.textContent || ""; }
+          return (t || "").replace(/\s+/g, " ").trim().toLowerCase();
+        };
+        const el = Array.from(document.querySelectorAll("select, input"))
+          .find((c) => labelOf(c).indexOf(${JSON.stringify(label)}) !== -1);
+        return el && el.id ? "#" + el.id : null;
+      })()`) as string | null
+      if (!sel) { console.log(`[listbox] ${label}: control not found`); continue }
+      // What does a person actually click? The native element may be a hidden
+      // mirror, in which case the real widget is a sibling inside the wrapper.
+      const shapeExpr = "(() => {" +
+        "const el = document.querySelector(" + JSON.stringify(sel) + ");" +
+        "if (!el) return null;" +
+        "const st = getComputedStyle(el), r = el.getBoundingClientRect();" +
+        "const wrap = el.closest('[class*=\"FormControl\" i],[class*=\"field\" i]');" +
+        "const clickable = wrap ? Array.from(wrap.querySelectorAll('[role=\"combobox\"],[role=\"button\"],button,[class*=\"select\" i]'))" +
+        ".filter(function (n) { var rr = n.getBoundingClientRect(); return rr.width > 0 && rr.height > 0; })" +
+        ".slice(0, 4).map(function (n) { return n.tagName.toLowerCase() + (n.id ? '#' + n.id : '') + '[role=' + (n.getAttribute('role') || '-') + '][class=' + String(n.className || '').slice(0, 44) + ']'; }) : [];" +
+        "return { nativeVisible: r.width > 0 && r.height > 0 && st.visibility !== 'hidden' && st.display !== 'none'," +
+        " nativeSize: Math.round(r.width) + 'x' + Math.round(r.height), nativeOpacity: st.opacity, clickableInWrapper: clickable };" +
+        "})()"
+      const shape = await page.evaluate(shapeExpr).catch((e) => ({ error: String(e).slice(0, 120) }))
+      console.log(`[shape] ${label}:`, JSON.stringify(shape))
+      // Click what a person clicks. When the native element is a 0x0 mirror the
+      // widget lives beside it, and clicking the mirror opens nothing at all.
+      const nativeHidden = await page.locator(sel).first().isVisible().catch(() => false)
+      const control = nativeHidden
+        ? page.locator(sel).first()
+        : page.locator(sel).first().locator(
+            'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+          ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+      await control.click({ timeout: 5_000 }).catch(() => {})
+      await page.waitForTimeout(1_200)
+      const opts = page.locator('[role="option"], [class*="option" i]:visible')
+      const n = Math.min(await opts.count().catch(() => 0), 60)
+      const texts: string[] = []
+      for (let i = 0; i < n; i++) {
+        const t = ((await opts.nth(i).textContent().catch(() => "")) ?? "").replace(/\s+/g, " ").trim()
+        if (t) texts.push(t)
+      }
+      console.log(`[listbox] ${label} (${sel}): ${n} option(s) -> ${JSON.stringify(texts.slice(0, 12))}`)
+      await page.keyboard.press("Escape").catch(() => {})
+      await page.waitForTimeout(400)
+    }
+
     const fields = await page.evaluate(FIELD_DUMP)
-    console.log(JSON.stringify(fields, null, 1))
+    if (!sets.length && !process.argv.some((a) => a.startsWith("--listbox="))) {
+      console.log(JSON.stringify(fields, null, 1))
+    }
   } finally {
     await browser.close()
   }

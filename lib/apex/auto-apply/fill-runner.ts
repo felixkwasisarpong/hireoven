@@ -660,7 +660,10 @@ const FORM_VALIDITY = `(() => {
   const invalid = [];
   for (const el of Array.from(document.querySelectorAll("input, textarea, select"))) {
     if (el.disabled || (el.getAttribute("type") || "").toLowerCase() === "hidden") continue;
-    if (!vis(el)) continue;
+    // Deliberately NOT filtered by visibility. MUI-style widgets render the real
+    // control in a popup and leave a hidden native <select> behind; that mirror
+    // is what the browser validates and what blocks the submission, and skipping
+    // it is why this gate passed a BambooHR form whose State was empty.
     if (typeof el.checkValidity === "function" && el.checkValidity()) continue;
     invalid.push({
       label: labelOf(el),
@@ -934,8 +937,23 @@ async function selectComboNative(
   page: Page, selector: string, wanted: string,
 ): Promise<boolean> {
   try {
-    const control = page.locator(selector).first()
-    if (!(await control.count())) return false
+    const native = page.locator(selector).first()
+    if (!(await native.count())) return false
+
+    // Click what a person clicks. Design systems like BambooHR's Fabric render
+    // the real widget as a button and leave the <select> behind as a 0x0,
+    // opacity-0 mirror — clicking that mirror opens nothing, so every option
+    // read came back empty and the field was written off as unfillable. The
+    // mirror is still what the browser validates, which is how a form could pass
+    // checkValidity and then refuse the submission on the framework's own state.
+    const visible = await native.isVisible().catch(() => false)
+    const control = visible
+      ? native
+      : native.locator(
+          'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+        ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+    if (!(await control.count().catch(() => 0))) return false
+
     await control.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
     await control.click({ timeout: 5_000 })
     await page.waitForTimeout(500)
@@ -1367,16 +1385,30 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     if (validity?.invalid.length) {
       for (const bad of validity.invalid) {
         if (!bad.sel || bad.kind !== "select") continue
-        const options = await page.evaluate(readNativeOptionsExpr(bad.sel)).catch(() => []) as string[]
-        if (!options.length) continue
+        // An empty option list does not mean "no choices" — MUI and friends
+        // render theirs only once the widget is opened, so the native element
+        // holds a single blank option and every text-matching attempt fails.
+        // Reading through the combobox path is what actually sees them.
+        let options = await page.evaluate(readNativeOptionsExpr(bad.sel)).catch(() => []) as string[]
+        const widget = options.length === 0
+        if (widget) {
+          options = await page.evaluate(readComboOptionsExpr(bad.sel)).catch(() => []) as string[]
+        }
         let want: string | null = identityAnswer(opts.profile, bad.label)
-        if (!want && opts.anthropic) {
+        if (!want && opts.anthropic && options.length) {
           want = await chooseFromOptions(
             opts.anthropic, bad.label, options, opts.resumeContext, opts.userId, opts.runId,
           )
         }
         if (!want) continue
-        await page.evaluate(selectNativeOptionExpr(bad.sel, want)).catch(() => false)
+        const set = widget
+          ? false
+          : await page.evaluate(selectNativeOptionExpr(bad.sel, want)).catch(() => false)
+        // Real clicks through the popup are the only thing a framework-managed
+        // select registers; setting the hidden mirror's value satisfies the
+        // browser while the framework's own state stays empty, which is exactly
+        // how a form passed checkValidity and still refused on submit.
+        if (!set) await selectComboNative(page, bad.sel, want).catch(() => false)
       }
       await page.waitForTimeout(400)
       validity = await page.evaluate(FORM_VALIDITY).catch(() => null) as FormValidity | null
