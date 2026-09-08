@@ -1,4 +1,4 @@
-import { SESSION_COOKIE_NAME } from "@/lib/auth/constants"
+import { SESSION_COOKIE_NAME, SESSION_FLAGS_COOKIE_NAME } from "@/lib/auth/constants"
 
 const isProd = process.env.NODE_ENV === "production"
 
@@ -12,4 +12,12 @@ export function buildSessionSetCookie(token: string, maxAgeSeconds: number): str
 
 export function clearSessionCookieHeader(): string {
   return `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureSuffix()}`
+}
+
+export function buildSessionFlagsSetCookie(token: string, maxAgeSeconds: number): string {
+  return `${SESSION_FLAGS_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureSuffix()}`
+}
+
+export function clearSessionFlagsCookieHeader(): string {
+  return `${SESSION_FLAGS_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secureSuffix()}`
 }

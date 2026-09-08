@@ -71,7 +71,8 @@ type ProfileChannels = {
 async function fetchProfileChannels(userId: string): Promise<ProfileChannels | null> {
   const pool = getPostgresPool()
   const { rows } = await pool.query<ProfileChannels>(
-    `SELECT id, email, email_alerts, push_alerts, alert_frequency FROM profiles WHERE id = $1 LIMIT 1`,
+    `SELECT id, email, email_alerts, push_alerts, alert_frequency
+       FROM profiles WHERE id = $1 AND suspended_at IS NULL LIMIT 1`,
     [userId],
   )
   return rows[0] ?? null
@@ -472,6 +473,7 @@ export async function processNotifications(jobs: Job[]): Promise<void> {
       const { rows: seekers } = await pool.query<{ id: string }>(
         `SELECT id FROM profiles
           WHERE needs_sponsorship = true AND push_alerts = true AND alert_frequency = 'instant'
+            AND suspended_at IS NULL
           LIMIT 500`,
       )
 

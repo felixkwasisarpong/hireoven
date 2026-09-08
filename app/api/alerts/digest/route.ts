@@ -280,7 +280,8 @@ export async function GET(request: NextRequest) {
             ) AS has_active_alert
      FROM profiles p
      WHERE p.email_alerts = true
-       AND p.email IS NOT NULL`
+       AND p.email IS NOT NULL
+       AND p.suspended_at IS NULL`
   )
   const users = usersResult.rows
   if (!users.length) return NextResponse.json({ sent: 0, reason: "no eligible users" })

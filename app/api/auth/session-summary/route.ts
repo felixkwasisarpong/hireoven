@@ -14,14 +14,10 @@ export async function GET() {
     })
   }
 
-  if (typeof session.isAdmin === "boolean" && typeof session.suspended === "boolean") {
-    return NextResponse.json({
-      authenticated: true,
-      isAdmin: session.isAdmin,
-      suspended: session.suspended,
-    })
-  }
-
+  // Always read the flags from Postgres. Echoing back the claims on the session
+  // JWT would defeat the point: that token is signed at login and lives for two
+  // weeks, so a suspension (or an admin grant, or a revoked one) made after it
+  // was issued would not show up here until the user signed in again.
   try {
     const pool = getPostgresPool()
     const { rows } = await pool.query<{ is_admin: boolean; suspended_at: string | null }>(
@@ -33,13 +29,16 @@ export async function GET() {
     return NextResponse.json({
       authenticated: true,
       isAdmin: Boolean(row?.is_admin),
-      suspended: Boolean(row?.suspended_at),
+      // A session whose profile row is gone is not a live account either.
+      suspended: !row || Boolean(row.suspended_at),
     })
   } catch {
+    // Database unreachable: fall back to the session's own claims rather than
+    // reporting every user as suspended and signing the whole app out.
     return NextResponse.json({
       authenticated: true,
-      isAdmin: false,
-      suspended: false,
+      isAdmin: session.isAdmin ?? false,
+      suspended: session.suspended ?? false,
     })
   }
 }
