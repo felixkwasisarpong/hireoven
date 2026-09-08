@@ -89,13 +89,14 @@ export async function withAICall<T>({
   }, timeoutMs)
 
   try {
-    const message = await (anthropic.messages.create as (
-      p: MessageCreateParamsNonStreaming & { signal?: AbortSignal }
-    ) => Promise<Anthropic.Message>)({
-      ...params,
-      stream: false,
-      signal: controller.signal,
-    })
+    // `signal` is a REQUEST OPTION (second argument), not a body field. It used
+    // to be spread into the body behind a cast that silenced the type error, so
+    // every call through this helper was rejected by the API with
+    // "signal: Extra inputs are not permitted" and silently took the fallback.
+    const message = await anthropic.messages.create(
+      { ...params, stream: false },
+      { signal: controller.signal },
+    )
 
     inputTokens  = message.usage?.input_tokens  ?? 0
     outputTokens = message.usage?.output_tokens ?? 0
