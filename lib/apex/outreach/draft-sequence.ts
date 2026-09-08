@@ -23,6 +23,8 @@ export type SequenceDraftContext = {
   jobTitle: string | null
   contactName: string | null
   contactRole: string | null
+  /** Post-application outreach should reference the submitted application. */
+  applicationStatus?: "submitted"
 }
 
 const GOAL_FRAMING: Record<OutreachGoal, string> = {
@@ -36,6 +38,7 @@ const SYSTEM_PROMPT = `You write outbound job-search outreach for a candidate. Y
 Rules:
 - Each message stands alone but builds on the prior one (later ones reference "following up" naturally, never repeat the same opener).
 - Specific, human, confident. Reference the role/company/contact concretely.
+- If applicationStatus is "submitted", the initial message must say the candidate already applied, naturally and only once.
 - The initial message under 130 words; follow-ups under 70 words.
 - For email channel, start each with a "Subject:" line; for linkedin, no subject.
 - Use [Name] / [Company] placeholders only when the real value is unknown.
@@ -48,11 +51,14 @@ function fallbackDrafts(ctx: SequenceDraftContext, steps: CadenceStep[]): { step
   const who = ctx.contactName ?? "there"
   const role = ctx.jobTitle ? ` for the ${ctx.jobTitle} role` : ""
   const subj = ctx.channel === "email" ? `Subject: ${ctx.jobTitle ?? "Quick note"} at ${ctx.companyName}\n\n` : ""
+  const applicationLine = ctx.applicationStatus === "submitted"
+    ? `I just applied${role} at ${ctx.companyName} and wanted to add a quick note.`
+    : `I'm very interested in ${ctx.companyName}${role}.`
   return steps.map((s, i) => {
     if (i === 0) {
       return {
         stepNumber: i + 1,
-        draft: `${subj}Hi ${who}, I'm ${ctx.candidateName}, ${ctx.candidateHeadline}. I'm very interested in ${ctx.companyName}${role} and think my background lines up well. Would you be open to a quick chat or pointing me to the right person? Happy to share more. Thanks, ${ctx.candidateName}`,
+        draft: `${subj}Hi ${who}, I'm ${ctx.candidateName}, ${ctx.candidateHeadline}. ${applicationLine} I think my background lines up well. Open to taking a quick look or pointing me to the right person? Thanks, ${ctx.candidateName}`,
       }
     }
     return {
@@ -71,6 +77,7 @@ export async function generateSequenceDrafts(
   const inputs = {
     intent: GOAL_FRAMING[ctx.goal],
     channel: ctx.channel,
+    applicationStatus: ctx.applicationStatus ?? null,
     candidate: { name: ctx.candidateName, headline: ctx.candidateHeadline, strengths: ctx.topStrengths.slice(0, 5) },
     target: { company: ctx.companyName, role: ctx.jobTitle, contact_name: ctx.contactName, contact_role: ctx.contactRole },
     steps: steps.map((s, i) => ({ stepNumber: i + 1, kind: s.kind, purpose: s.purpose })),

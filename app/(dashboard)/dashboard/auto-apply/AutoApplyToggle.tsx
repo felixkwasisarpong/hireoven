@@ -10,6 +10,10 @@ type Props = {
   weeklyCap: number
   /** False when the plan itself is not switched on for this account. */
   planEnabled: boolean
+  /** False means overnight runs fill and verify but stop before employer submit. */
+  liveSubmitEnabled: boolean
+  /** Drafts outreach sequences after confirmed submissions. Never sends. */
+  postSubmitOutreachEnabled: boolean
 }
 
 /**
@@ -23,10 +27,22 @@ type Props = {
  * falls back to UTC, and someone in the Americas would get their "overnight"
  * run in the early evening — the one thing the feature promises not to do.
  */
-export default function AutoApplyToggle({ initialEnabled, weeklyCap, planEnabled }: Props) {
+export default function AutoApplyToggle({
+  initialEnabled,
+  weeklyCap,
+  planEnabled,
+  liveSubmitEnabled,
+  postSubmitOutreachEnabled,
+}: Props) {
   const [enabled, setEnabled] = useState(initialEnabled)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const activeCopy = liveSubmitEnabled
+    ? `We'll apply to up to ${weeklyCap} of your strongest matches a week, overnight in your timezone.`
+    : `We'll fill and check up to ${weeklyCap} of your strongest matches a week. Live submission is not enabled for this account yet.`
+  const inactiveCopy = liveSubmitEnabled
+    ? `Turn this on and we'll apply to up to ${weeklyCap} of your strongest matches a week while you sleep.`
+    : `Turn this on and we'll fill and check up to ${weeklyCap} of your strongest matches a week while you sleep.`
 
   async function toggle() {
     if (saving || !planEnabled) return
@@ -70,9 +86,7 @@ export default function AutoApplyToggle({ initialEnabled, weeklyCap, planEnabled
               {enabled ? "Auto-apply is on" : "Auto-apply is off"}
             </h2>
             <p className="mt-0.5 text-sm text-slate-600">
-              {enabled
-                ? `We'll apply to up to ${weeklyCap} of your strongest matches a week, overnight in your timezone.`
-                : `Turn this on and we'll apply to up to ${weeklyCap} of your strongest matches a week while you sleep.`}
+              {enabled ? activeCopy : inactiveCopy}
             </p>
             {!planEnabled && (
               <p className="mt-1 text-xs text-amber-700">
@@ -107,8 +121,12 @@ export default function AutoApplyToggle({ initialEnabled, weeklyCap, planEnabled
 
       {enabled && (
         <p className="mt-3 border-t border-emerald-200 pt-3 text-xs text-slate-600">
-          Only roles matching 85% or better. We never apply twice to the same job, and
-          we&apos;ll leave anything we can&apos;t complete for you rather than send it half-filled.
+          {liveSubmitEnabled
+            ? "Only roles matching 85% or better. We never apply twice to the same job, and we'll leave anything we can't complete for you rather than send it half-filled."
+            : "Only roles matching 85% or better. We never apply twice to the same job, and we'll keep runs filled, checked, and unsent until live submission is enabled."}
+          {postSubmitOutreachEnabled
+            ? " After confirmed submissions, recruiter and hiring-manager outreach drafts are added to Outreach for review."
+            : ""}
         </p>
       )}
     </section>

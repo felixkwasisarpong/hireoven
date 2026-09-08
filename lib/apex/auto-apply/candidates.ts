@@ -131,8 +131,16 @@ export async function getAutoApplyCandidates(
   )
 
   const out: AutoApplyCandidate[] = []
+  // The same posting reaches us under several job rows — the first live run
+  // spent five of five nightly slots on three postings, applying twice to two
+  // of them. Duplicate job rows are a known and unfinished cleanup, so dedupe
+  // on the apply URL here rather than trusting the ids to be distinct: sending
+  // an employer two identical applications is worse than sending one.
+  const seenUrls = new Set<string>()
   for (const r of rows) {
     if (BLOCKED_ATS_HOSTS.test(r.apply_url)) continue
+    const urlKey = r.apply_url.split("#")[0].replace(/\/+$/, "")
+    if (seenUrls.has(urlKey)) continue
     if (classifyApplyMethod(r.apply_url, r.ats_type) !== "tier1_fillable") continue
     const ats = atsOf(r.apply_url)
     if (!filters.includeUnproven && !PROVEN_ATS.has(ats)) continue
@@ -146,6 +154,7 @@ export async function getAutoApplyCandidates(
       matchScore: r.match_score === null ? null : Number(r.match_score),
       firstDetectedAt: r.first_detected_at,
     })
+    seenUrls.add(urlKey)
     if (out.length >= filters.limit) break
   }
   return out

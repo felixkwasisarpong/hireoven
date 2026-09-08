@@ -18,6 +18,7 @@ import { getPostgresPool } from "@/lib/postgres/server"
 import { getRemainingAllowance } from "./limits"
 import { getAutoApplyCandidates } from "./candidates"
 import { runFillAttempt } from "./fill-runner"
+import { preparePostSubmitOutreach } from "./post-submit-outreach"
 import { formatResumeContext } from "@/lib/autofill/resume-context"
 import { buildDerivedFacts, computeYearsOfExperience } from "@/lib/autofill/resume-facts"
 import type { Plan } from "@/lib/gates"
@@ -34,6 +35,8 @@ export type RunOptions = {
   timezone?: string
   /** Must be explicitly true to contact employers. Absent means dry run. */
   allowSubmit?: boolean
+  /** Prepare reviewable outreach drafts after a confirmed submit. Never sends. */
+  prepareOutreach?: boolean
   /** Try Greenhouse too (54% measured coverage — off by default). */
   includeUnproven?: boolean
 }
@@ -42,17 +45,164 @@ export type RunResult = {
   runId: string
   attempted: number
   submittable: number
+  submitted: number
   blocked: number
   failed: number
+  outreachPrepared: number
   costUsd: number
   skippedReason: string | null
+}
+
+type ResumeRow = {
+  id: string
+  summary: string | null
+  primary_role: string | null
+  top_skills: string[] | null
+  work_experience: unknown
+  education: unknown
+  projects: unknown
+  years_of_experience: number | null
+  raw_text: string | null
+}
+
+type TimelineEntry = {
+  id: string
+  type: "status_change"
+  status: "applied"
+  date: string
+  auto: boolean
+  note: string
+}
+
+function matchScoreForDb(score: number | null): number | null {
+  if (typeof score !== "number" || !Number.isFinite(score)) return null
+  return Math.max(0, Math.min(100, Math.round(score)))
+}
+
+function timelineWithAutoApplyEntry(raw: unknown, now: string): TimelineEntry[] {
+  const existing = Array.isArray(raw) ? raw : []
+  const alreadyRecorded = existing.some((item) => {
+    if (!item || typeof item !== "object") return false
+    const entry = item as { status?: unknown; auto?: unknown; note?: unknown }
+    return entry.status === "applied" &&
+      entry.auto === true &&
+      typeof entry.note === "string" &&
+      entry.note.toLowerCase().includes("auto-apply")
+  })
+  if (alreadyRecorded) return existing as TimelineEntry[]
+
+  return [
+    ...(existing as TimelineEntry[]),
+    {
+      id: randomUUID(),
+      type: "status_change",
+      status: "applied",
+      date: now,
+      auto: true,
+      note: "Submitted by overnight auto-apply",
+    },
+  ]
+}
+
+async function recordSubmittedApplication(
+  pool: ReturnType<typeof getPostgresPool>,
+  input: {
+    userId: string
+    jobId: string
+    resumeId: string | null
+    companyName: string
+    jobTitle: string
+    applyUrl: string
+    matchScore: number | null
+  },
+): Promise<void> {
+  const now = new Date().toISOString()
+  const matchScore = matchScoreForDb(input.matchScore)
+  const { rows } = await pool.query<{ id: string; timeline: unknown }>(
+    `SELECT id, timeline
+       FROM job_applications
+      WHERE user_id = $1::uuid
+        AND job_id = $2::uuid
+        AND is_archived = false
+      ORDER BY updated_at DESC NULLS LAST
+      LIMIT 1`,
+    [input.userId, input.jobId],
+  )
+  const existing = rows[0]
+  const timeline = timelineWithAutoApplyEntry(existing?.timeline, now)
+
+  if (existing) {
+    await pool.query(
+      `UPDATE job_applications
+          SET status = 'applied',
+              company_name = $3,
+              job_title = $4,
+              apply_url = COALESCE($5, apply_url),
+              applied_at = COALESCE(applied_at, $6::timestamptz),
+              match_score = COALESCE($7::integer, match_score),
+              resume_id = COALESCE(resume_id, $8::uuid),
+              timeline = $9::jsonb,
+              source = CASE
+                WHEN source IS NULL OR source IN ('manual', 'saved') THEN 'auto_apply'
+                ELSE source
+              END,
+              updated_at = $6::timestamptz
+        WHERE id = $1::uuid AND user_id = $2::uuid`,
+      [
+        existing.id,
+        input.userId,
+        input.companyName,
+        input.jobTitle,
+        input.applyUrl,
+        now,
+        matchScore,
+        input.resumeId,
+        JSON.stringify(timeline),
+      ],
+    )
+    return
+  }
+
+  await pool.query(
+    `INSERT INTO job_applications (
+      user_id,
+      job_id,
+      resume_id,
+      status,
+      company_name,
+      company_logo_url,
+      job_title,
+      apply_url,
+      applied_at,
+      match_score,
+      notes,
+      timeline,
+      interviews,
+      is_archived,
+      source
+    ) VALUES (
+      $1::uuid, $2::uuid, $3::uuid, 'applied', $4, NULL, $5, $6, $7::timestamptz,
+      $8::integer, NULL, $9::jsonb, '[]'::jsonb, false, 'auto_apply'
+    )`,
+    [
+      input.userId,
+      input.jobId,
+      input.resumeId,
+      input.companyName,
+      input.jobTitle,
+      input.applyUrl,
+      now,
+      matchScore,
+      JSON.stringify(timeline),
+    ],
+  )
 }
 
 export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> {
   const runId = randomUUID()
   const result: RunResult = {
-    runId, attempted: 0, submittable: 0, blocked: 0, failed: 0,
-    costUsd: 0, skippedReason: null,
+    runId, attempted: 0, submittable: 0, submitted: 0, blocked: 0, failed: 0,
+    outreachPrepared: 0, costUsd: 0, skippedReason: null,
   }
 
   const allowance = await getRemainingAllowance(opts.userId, opts.plan, opts.timezone ?? "UTC")
@@ -75,23 +225,23 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
     return result
   }
 
-  const { rows: resumeRows } = await pool.query(
-    `SELECT summary, primary_role, top_skills, work_experience, education,
+  const { rows: resumeRows } = await pool.query<ResumeRow>(
+    `SELECT id, summary, primary_role, top_skills, work_experience, education,
             projects, years_of_experience, raw_text
        FROM resumes WHERE user_id = $1
       ORDER BY is_primary DESC, updated_at DESC LIMIT 1`,
     [opts.userId],
-  ).catch(() => ({ rows: [] as unknown[] }))
-  const resumeRow = resumeRows[0] as Record<string, unknown> | undefined
+  ).catch(() => ({ rows: [] as ResumeRow[] }))
+  const resumeRow = resumeRows[0]
   const prose = resumeRow ? formatResumeContext(resumeRow as never) : ""
   // Facts first, prose second. Forms ask "4+ years?" and "what city?", which the
   // résumé settles but only as date ranges and paragraphs — stating the answers
   // up front stops the model reporting that it cannot find them.
   const facts = resumeRow
     ? buildDerivedFacts({
-        yearsOfExperience: resumeRow.years_of_experience as number | null,
-        primaryRole: resumeRow.primary_role as string | null,
-        topSkills: resumeRow.top_skills as string[] | null,
+        yearsOfExperience: resumeRow.years_of_experience,
+        primaryRole: resumeRow.primary_role,
+        topSkills: resumeRow.top_skills,
         workExperience: resumeRow.work_experience as never,
         city: profile.city, state: profile.state, country: profile.country,
         highestDegree: profile.highest_degree, fieldOfStudy: profile.field_of_study,
@@ -100,10 +250,10 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
     : ""
   // Same figure the derived-facts block states, reused for level-based rate
   // defaults so the two can never disagree.
-  const years = (resumeRow?.years_of_experience as number | null) ||
+  const years = resumeRow?.years_of_experience ||
     computeYearsOfExperience((resumeRow?.work_experience as never) ?? [])
   const resumeContext = [facts, prose].filter(Boolean).join("\n\n")
-  if (!prose) {
+  if (!resumeRow || !prose) {
     result.skippedReason = "no_resume"
     return result
   }
@@ -134,7 +284,8 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
     for (const job of candidates) {
       // Stop once the allowance is genuinely filled, not once it has been
       // attempted. Counting attempts is what let failures eat the night.
-      if (result.submittable >= allowance.allowed) break
+      const successes = opts.allowSubmit === true ? result.submitted : result.submittable
+      if (successes >= allowance.allowed) break
       if (result.attempted >= MAX_ATTEMPTS_PER_RUN) {
         result.skippedReason = "attempt_limit"
         break
@@ -166,22 +317,39 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
       })
       result.costUsd += attempt.costUsd
 
-      let status: string
+      let status: "applied" | "dry_run" | "failed"
+      let error: string | null = null
       if (attempt.disqualified) {
         // Not a failure of ours — the form asks something we must not or cannot
         // answer. Recorded distinctly so "needs you" stays meaningful.
         status = "failed"
         result.failed++
+        error = attempt.error ?? "disqualified"
       }
-      else if (attempt.blocked) { status = "failed"; result.blocked++ }
-      else if (attempt.error || !attempt.formReached) { status = "failed"; result.failed++ }
+      else if (attempt.blocked) { status = "failed"; result.blocked++; error = attempt.error ?? "bot_wall" }
+      else if (attempt.error || !attempt.formReached) {
+        status = "failed"
+        result.failed++
+        error = attempt.error ?? "no_form"
+      }
       else if (!attempt.ok) {
         // Reached the form but could not complete every required field. Not a
         // failure of the pipeline — a form we must not leave half-filled.
-        status = "failed"; result.failed++
+        status = "failed"; result.failed++; error = attempt.error ?? "incomplete_required_fields"
       } else {
         result.submittable++
-        status = opts.allowSubmit && attempt.submitted ? "applied" : "dry_run"
+        if (opts.allowSubmit === true) {
+          if (attempt.submitted) {
+            status = "applied"
+            result.submitted++
+          } else {
+            status = "failed"
+            result.failed++
+            error = attempt.error ?? "submit_not_confirmed"
+          }
+        } else {
+          status = "dry_run"
+        }
       }
 
       await pool.query(
@@ -194,11 +362,39 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
           opts.userId, job.jobId, job.title, job.companyName, job.matchScore,
           JSON.stringify({ minMatchScore: allowance.limits.minMatchScore, ats: job.ats }),
           status,
-          attempt.error ?? (attempt.blocked ? "bot_wall" : attempt.formReached ? null : "no_form"),
+          error,
           runId, job.applyUrl, job.ats,
           attempt.requiredTotal, attempt.requiredFilled,
         ],
       ).catch(() => {})
+
+      if (status === "applied") {
+        await recordSubmittedApplication(pool, {
+          userId: opts.userId,
+          jobId: job.jobId,
+          resumeId: resumeRow.id,
+          companyName: job.companyName ?? "Unknown company",
+          jobTitle: job.title,
+          applyUrl: job.applyUrl,
+          matchScore: job.matchScore,
+        }).catch((err) => {
+          console.error("[auto-apply] application tracker update failed:", err)
+        })
+
+        if (opts.prepareOutreach === true) {
+          const prepared = await preparePostSubmitOutreach({
+            userId: opts.userId,
+            jobId: job.jobId,
+            companyName: job.companyName ?? "the company",
+            jobTitle: job.title,
+            pool,
+          }).catch((err) => {
+            console.error("[auto-apply] post-submit outreach prepare failed:", err)
+            return null
+          })
+          result.outreachPrepared += prepared?.created ?? 0
+        }
+      }
     }
   } finally {
     await browser.close().catch(() => {})

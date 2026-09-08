@@ -6,9 +6,9 @@
  * that fails closed on its own, so this route is scheduling and bookkeeping.
  *
  * DRY BY DEFAULT. Nothing is submitted unless AUTO_APPLY_ALLOW_SUBMIT=true is
- * set in the environment AND the plan's row in auto_apply_limits is enabled.
- * Two switches in different places on purpose: neither a stray env var nor a
- * single DB flag can start sending applications on its own.
+ * set in the environment and the plan's row in auto_apply_limits is enabled.
+ * AUTO_APPLY_SUBMIT_ALLOWLIST is an optional brake for beta rollouts; when it
+ * is empty, every opted-in eligible Pro Max account can submit.
  *
  * "Overnight" is per user, not per server. The window is evaluated in each
  * user's own timezone, so a run does not fire mid-afternoon for someone in
@@ -28,6 +28,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireCronAuth } from "@/lib/env"
 import { getPostgresPool } from "@/lib/postgres/server"
+import {
+  isAutoApplyLiveSubmitAllowed,
+  isAutoApplyPostSubmitOutreachAllowed,
+} from "@/lib/apex/auto-apply/live-submit"
 import { runAutoApplyForUser } from "@/lib/apex/auto-apply/worker"
 import type { Plan } from "@/lib/gates"
 
@@ -51,7 +55,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const allowSubmit = process.env.AUTO_APPLY_ALLOW_SUBMIT === "true"
+  const liveSubmitGloballyArmed = process.env.AUTO_APPLY_ALLOW_SUBMIT === "true"
   const pool = getPostgresPool()
 
   // Candidates: an enabled plan, the user opted in, inside their own night
@@ -59,7 +63,7 @@ export async function GET(request: NextRequest) {
   // hourly schedule safe — a user is picked up once per night, not once
   // per hour.
   const { rows: users } = await pool.query<{
-    user_id: string; plan: string; timezone: string | null
+    user_id: string; email: string | null; plan: string; timezone: string | null
   }>(
     // Two things this query has to get right, both of which it got wrong first
     // time and both of which failed SILENTLY — the sweep selected nobody while
@@ -80,11 +84,14 @@ export async function GET(request: NextRequest) {
         WHERE s.status IN ('active', 'trialing', 'past_due', 'unpaid')
         ORDER BY s.user_id, s.created_at DESC
      )
-     SELECT p.id AS user_id, l.plan, COALESCE(p.timezone, 'UTC') AS timezone
+     SELECT p.id AS user_id, p.email, l.plan, COALESCE(p.timezone, 'UTC') AS timezone
        FROM profiles p
        JOIN live ON live.user_id = p.id
        JOIN auto_apply_limits l ON l.plan = live.plan
       WHERE l.enabled
+        -- A suspended account is not just locked out of the UI: nothing may
+        -- keep applying to jobs in its name behind the scenes either.
+        AND p.suspended_at IS NULL
         AND COALESCE((p.auto_apply_prefs->>'enabled')::boolean, false)
         AND EXTRACT(HOUR FROM (now() AT TIME ZONE COALESCE(p.timezone, 'UTC')))
             BETWEEN $1 AND $2
@@ -102,21 +109,33 @@ export async function GET(request: NextRequest) {
     // plan-name mismatch went unnoticed: the sweep reported success every hour
     // while selecting nobody.
     console.error("[cron/auto-apply] user selection failed:", err)
-    return { rows: [] as { user_id: string; plan: string; timezone: string | null }[] }
+    return { rows: [] as { user_id: string; email: string | null; plan: string; timezone: string | null }[] }
   })
 
   const results: Record<string, unknown>[] = []
   for (const u of users) {
     try {
+      const liveSubmit = isAutoApplyLiveSubmitAllowed({
+        userId: u.user_id,
+        email: u.email,
+      })
+      const prepareOutreach = liveSubmit && isAutoApplyPostSubmitOutreachAllowed({
+        userId: u.user_id,
+        email: u.email,
+      })
       const r = await runAutoApplyForUser({
         userId: u.user_id,
         plan: u.plan as Plan,
         timezone: u.timezone ?? "UTC",
-        allowSubmit,
+        allowSubmit: liveSubmit,
+        prepareOutreach,
       })
       results.push({
         userId: u.user_id, runId: r.runId, attempted: r.attempted,
-        submittable: r.submittable, blocked: r.blocked, failed: r.failed,
+        submittable: r.submittable, submitted: r.submitted,
+        blocked: r.blocked, failed: r.failed,
+        liveSubmit, postSubmitOutreach: prepareOutreach,
+        outreachPrepared: r.outreachPrepared,
         costUsd: Number(r.costUsd.toFixed(5)), stopped: r.skippedReason,
       })
     } catch (err) {
@@ -130,7 +149,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    mode: allowSubmit ? "live" : "dry_run",
+    mode: liveSubmitGloballyArmed ? "allowlisted_live_or_dry_run" : "dry_run",
     usersConsidered: users.length,
     results,
   })
