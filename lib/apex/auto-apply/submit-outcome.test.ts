@@ -37,10 +37,11 @@ test("a fragment-only URL change does not confirm anything", () => {
   assert.equal(outcome({ urlBefore: "https://x.applytojob.com/apply/Role", urlAfter: "https://x.applytojob.com/apply/Role#" }), "unconfirmed")
 })
 
-test("a click with no receipt and no navigation is unconfirmed, not failed", () => {
+test("a click that leaves no trace at all is unconfirmed, not failed", () => {
   // The distinction this whole change exists for: four real applications were
-  // filed as plain failures because this case had no separate verdict.
-  assert.equal(outcome({ pageText: "Please correct the errors below" }), "unconfirmed")
+  // filed as plain failures because this case had no separate verdict. A page
+  // that says nothing either way is the only case that stays genuinely unknown.
+  assert.equal(outcome({ pageText: "Careers at Acme. Engineering. Sales." }), "unconfirmed")
 })
 
 test("job-description boilerplate does not pass for a receipt", () => {
@@ -68,4 +69,32 @@ test("evidence records a real navigation as such", () => {
     label: "Submit", urlBefore: AT, urlAfter: `${AT}/done`, pageText: null,
   })
   assert.match(desc, /navigated=yes/)
+})
+
+test("a validation message is a definite 'nothing was sent'", () => {
+  // The exact text BambooHR showed while the run recorded four applications as
+  // merely unverifiable.
+  for (const text of [
+    "State * –Select– Please make a selection. ZIP * Country *",
+    "Website, Blog or Portfolio Invalid website URL.",
+    "This field is required",
+    "Please correct the errors below",
+    "Enter a valid email address",
+  ]) {
+    assert.equal(outcome({ pageText: text }), "rejected", text)
+  }
+})
+
+test("a receipt still wins over stray validation wording", () => {
+  assert.equal(
+    outcome({ pageText: "Thank you for applying. Some fields are required for future roles." }),
+    "confirmed",
+  )
+})
+
+test("a job description mentioning requirements is not a rejection", () => {
+  assert.equal(
+    outcome({ pageText: "About the role. 3-5 years of production experience with Flutter." }),
+    "unconfirmed",
+  )
 })

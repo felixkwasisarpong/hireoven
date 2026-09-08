@@ -366,6 +366,13 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
           if (attempt.submitted) {
             status = "applied"
             result.submitted++
+          } else if (attempt.submit.clicked && attempt.submit.rejected) {
+            // The page named the problem. Nothing reached the employer.
+            status = "failed"
+            result.failed++
+            error = describeUnconfirmedSubmit(attempt.submit).replace(
+              /^submit_unconfirmed/, "submit_rejected",
+            )
           } else if (attempt.submit.clicked) {
             // Clicked, no receipt. This is NOT the same as "nothing was sent",
             // and the first live run proved why the distinction matters: four
@@ -382,6 +389,12 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
           }
         } else {
           status = "dry_run"
+          // A dry run reporting 100% coverage is what convinced us these four
+          // were ready to send. Record the form's own verdict here too, so a
+          // rehearsal that would have been rejected says so.
+          if (attempt.formInvalid.length > 0) {
+            error = `form_invalid: ${attempt.formInvalid.map((f) => f.label || "?").join(", ").slice(0, 180)}`
+          }
         }
       }
 
