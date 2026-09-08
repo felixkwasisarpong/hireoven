@@ -14,10 +14,36 @@
  * name; that should take deliberate effort every single time.
  */
 
+import { existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
 import { runAutoApplyForUser } from "../lib/apex/auto-apply/worker"
 import { getRemainingAllowance } from "../lib/apex/auto-apply/limits"
 import { getPostgresPool } from "../lib/postgres/server"
 import type { Plan } from "../lib/gates"
+
+/**
+ * Load .env.local when the environment does not already carry the connection.
+ *
+ * Without this the script prints a confident allowance of "0 (disabled)" —
+ * the failure default — and only then dies on a missing DATABASE_URL, which
+ * reads as "auto-apply is switched off" rather than "you forgot the env".
+ *
+ * Deliberately tolerant: lines that are not a bare KEY=VALUE are skipped rather
+ * than guessed at, so a multi-line value elsewhere in the file cannot bleed into
+ * the wrong key. Anything already set in the real environment wins.
+ */
+function loadEnvLocal(): void {
+  if (process.env.DATABASE_URL || process.env.TARGET_POSTGRES_URL) return
+  const path = join(process.cwd(), ".env.local")
+  if (!existsSync(path)) return
+  for (const line of readFileSync(path, "utf8").split("\n")) {
+    const m = /^([A-Z0-9_]+)=(.*)$/.exec(line.trim())
+    if (!m) continue
+    const [, key, raw] = m
+    if (process.env[key] !== undefined) continue
+    process.env[key] = raw.replace(/^["']|["']$/g, "")
+  }
+}
 
 function arg(name: string, fallback = ""): string {
   const i = process.argv.indexOf(`--${name}`)
@@ -25,6 +51,7 @@ function arg(name: string, fallback = ""): string {
 }
 
 async function main() {
+  loadEnvLocal()
   const userId = arg("user")
   if (!userId) throw new Error("--user <uuid> is required")
   const timezone = arg("tz", "UTC")

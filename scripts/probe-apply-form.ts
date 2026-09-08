@@ -185,8 +185,60 @@ async function main() {
       await page.waitForTimeout(400)
     }
 
+    // --pick="<label>=<option>" drives the widget the way the runner now does
+    // and reports what the page ends up believing: the native mirror's value,
+    // the browser's verdict, and what a person sees. Those three can disagree.
+    for (const raw of process.argv.slice(3).filter((a) => a.startsWith("--pick="))) {
+      const [label, want] = raw.slice("--pick=".length).split("=")
+      const sel = await page.evaluate(`(() => {
+        const labelOf = (el) => {
+          let t = "";
+          if (el.id) { const l = document.querySelector('label[for="' + CSS.escape(el.id) + '"]'); if (l) t = l.textContent || ""; }
+          if (!t) { const b = el.closest('[class*="field" i],[class*="form" i]'); const h = b && b.querySelector("label"); if (h) t = h.textContent || ""; }
+          return (t || "").replace(/\s+/g, " ").trim().toLowerCase();
+        };
+        const el = Array.from(document.querySelectorAll("select, input"))
+          .find((c) => labelOf(c).indexOf(${JSON.stringify(label.toLowerCase())}) !== -1);
+        if (!el) return null;
+        const nm = el.getAttribute("name");
+        return nm ? el.tagName.toLowerCase() + '[name="' + nm + '"]' : (el.id ? "#" + el.id : null);
+      })()`) as string | null
+      if (!sel) { console.log(`[pick] ${label}: not found`); continue }
+      console.log(`[pick] using selector ${sel}`)
+
+      const native = page.locator(sel).first()
+      const nativeVisible = await native.isVisible().catch(() => false)
+      const control = nativeVisible ? native : native.locator(
+        'xpath=ancestor::*[contains(@class,"FormControl") or contains(@class,"field")][1]',
+      ).locator('button, [role="combobox"], [class*="Toggle"]').first()
+      await control.click({ timeout: 5_000 }).catch(() => {})
+      await page.waitForTimeout(900)
+
+      // Locate the option instead of walking the list. A state menu is long
+      // enough that any enumeration cap stops around "Arizona", and the list may
+      // be virtualised, so the wanted node might not exist until it is asked for.
+      const exact = new RegExp(`^\\s*${want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i")
+      const match = page.locator('[role="option"], [class*="option" i]').filter({ hasText: exact }).first()
+      let picked = false
+      if (await match.count().catch(() => 0)) {
+        await match.scrollIntoViewIfNeeded({ timeout: 3_000 }).catch(() => {})
+        await match.click({ timeout: 5_000 }).catch(() => {})
+        picked = true
+      }
+      await page.waitForTimeout(900)
+
+      const after = await page.evaluate("(() => {" +
+        "const el = document.querySelector(" + JSON.stringify(sel) + ");" +
+        "if (!el) return null;" +
+        "const wrap = el.closest('[class*=\"FormControl\" i],[class*=\"field\" i]');" +
+        "return { nativeValue: el.value || '', checkValidity: el.checkValidity ? el.checkValidity() : null," +
+        " rendered: wrap ? (wrap.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 80) : null };" +
+        "})()").catch((e) => ({ error: String(e).slice(0, 120) }))
+      console.log(`[pick] ${label}=${want} picked=${picked} ->`, JSON.stringify(after))
+    }
+
     const fields = await page.evaluate(FIELD_DUMP)
-    if (!sets.length && !process.argv.some((a) => a.startsWith("--listbox="))) {
+    if (!sets.length && !process.argv.some((a) => a.startsWith("--listbox=") || a.startsWith("--pick="))) {
       console.log(JSON.stringify(fields, null, 1))
     }
   } finally {
