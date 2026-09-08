@@ -31,8 +31,14 @@ export type AutoApplyRecord = {
   qualifiedBy: Partial<AutoApplyCriteria>
   coverLetterId: string | null
   tailoredResumeId: string | null
-  /** dry_run = the full pipeline ran but deliberately stopped before submitting. */
-  status: "applied" | "failed" | "skipped_cap" | "dry_run"
+  /**
+   * dry_run              = the full pipeline ran but deliberately stopped before submitting.
+   * submitted_unconfirmed = the submit button was clicked and the page never
+   *                         produced a receipt. The application may or may not
+   *                         exist; recording it as 'failed' claimed knowledge
+   *                         we did not have.
+   */
+  status: "applied" | "submitted_unconfirmed" | "failed" | "skipped_cap" | "dry_run"
   error: string | null
   applyUrl?: string | null
   ats?: string | null

@@ -101,10 +101,10 @@ export async function getRemainingAllowance(
     }>(
       `SELECT
          (SELECT count(*) FROM apex_auto_apply_log
-           WHERE user_id = $1 AND status = 'applied'
+           WHERE user_id = $1 AND status IN ('applied', 'submitted_unconfirmed')
              AND applied_at >= date_trunc('week', now() AT TIME ZONE $2))::text AS week,
          (SELECT count(*) FROM apex_auto_apply_log
-           WHERE user_id = $1 AND status = 'applied'
+           WHERE user_id = $1 AND status IN ('applied', 'submitted_unconfirmed')
              AND applied_at >= date_trunc('day', now() AT TIME ZONE $2))::text AS night,
          (SELECT COALESCE(SUM(cost_usd), 0) FROM api_usage
            WHERE user_id = $1

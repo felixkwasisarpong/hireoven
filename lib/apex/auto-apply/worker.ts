@@ -46,6 +46,8 @@ export type RunResult = {
   attempted: number
   submittable: number
   submitted: number
+  /** clicked submit, never saw a receipt — may or may not have reached the employer */
+  submittedUnconfirmed: number
   blocked: number
   failed: number
   outreachPrepared: number
@@ -198,11 +200,33 @@ async function recordSubmittedApplication(
   )
 }
 
+/**
+ * Pack the submit evidence into the ledger's error column, so an unconfirmed
+ * application can be adjudicated later without re-running anything.
+ */
+export function describeUnconfirmedSubmit(submit: {
+  label: string | null
+  urlBefore: string | null
+  urlAfter: string | null
+  pageText: string | null
+}): string {
+  const moved =
+    submit.urlBefore && submit.urlAfter &&
+    submit.urlBefore.split("#")[0] !== submit.urlAfter.split("#")[0]
+  return [
+    "submit_unconfirmed",
+    `clicked=${JSON.stringify(submit.label ?? "?")}`,
+    `navigated=${moved ? "yes" : "no"}`,
+    `url=${submit.urlAfter ?? "?"}`,
+    `page=${JSON.stringify((submit.pageText ?? "").slice(0, 400))}`,
+  ].join(" ")
+}
+
 export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> {
   const runId = randomUUID()
   const result: RunResult = {
     runId, attempted: 0, submittable: 0, submitted: 0, blocked: 0, failed: 0,
-    outreachPrepared: 0, costUsd: 0, skippedReason: null,
+    submittedUnconfirmed: 0, outreachPrepared: 0, costUsd: 0, skippedReason: null,
   }
 
   const allowance = await getRemainingAllowance(opts.userId, opts.plan, opts.timezone ?? "UTC")
@@ -317,7 +341,7 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
       })
       result.costUsd += attempt.costUsd
 
-      let status: "applied" | "dry_run" | "failed"
+      let status: "applied" | "submitted_unconfirmed" | "dry_run" | "failed"
       let error: string | null = null
       if (attempt.disqualified) {
         // Not a failure of ours — the form asks something we must not or cannot
@@ -342,10 +366,19 @@ export async function runAutoApplyForUser(opts: RunOptions): Promise<RunResult> 
           if (attempt.submitted) {
             status = "applied"
             result.submitted++
+          } else if (attempt.submit.clicked) {
+            // Clicked, no receipt. This is NOT the same as "nothing was sent",
+            // and the first live run proved why the distinction matters: four
+            // completed applications were filed as plain failures with no way
+            // to tell afterwards whether they had reached the employer. Record
+            // the uncertainty, and the evidence for it, instead of guessing.
+            status = "submitted_unconfirmed"
+            result.submittedUnconfirmed++
+            error = describeUnconfirmedSubmit(attempt.submit)
           } else {
             status = "failed"
             result.failed++
-            error = attempt.error ?? "submit_not_confirmed"
+            error = attempt.error ?? "submit_control_not_found"
           }
         } else {
           status = "dry_run"

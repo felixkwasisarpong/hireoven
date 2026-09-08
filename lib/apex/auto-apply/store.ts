@@ -119,7 +119,8 @@ export async function getTodayAutoApplyCount(userId: string): Promise<number> {
     startOfDay.setHours(0, 0, 0, 0)
     const { rows } = await pool.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count FROM apex_auto_apply_log
-       WHERE user_id = $1 AND status = 'applied' AND applied_at >= $2`,
+       WHERE user_id = $1 AND status IN ('applied', 'submitted_unconfirmed')
+         AND applied_at >= $2`,
       [userId, startOfDay.toISOString()],
     )
     return parseInt(rows[0]?.count ?? "0", 10)
