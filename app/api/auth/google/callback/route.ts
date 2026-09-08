@@ -135,7 +135,7 @@ export async function GET(request: NextRequest) {
     [userId!]
   )
   if (flags.rows[0]?.suspended_at) {
-    return NextResponse.redirect(new URL("/login?reason=suspended", origin))
+    return NextResponse.redirect(new URL("/login?error=suspended", origin))
   }
 
   await pool.query(

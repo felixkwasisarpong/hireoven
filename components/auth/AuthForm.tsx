@@ -27,6 +27,7 @@ const OAUTH_ERRORS: Record<string, string> = {
   missing_code:         "Google did not return an authorisation code.",
   access_denied:        "You declined Google sign-in.",
   waitlist:             "We're invite-only right now. Join the waitlist below and we'll send you an invite when there's room.",
+  suspended:            "This account has been suspended. Contact support@hireoven.com if you think that's a mistake.",
 }
 
 function sanitizeNext(next: string | null): string | null {

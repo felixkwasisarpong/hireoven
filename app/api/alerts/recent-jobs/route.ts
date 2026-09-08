@@ -321,6 +321,7 @@ export async function GET(request: NextRequest) {
        FROM profiles
        WHERE email_alerts = true
          AND email IS NOT NULL
+         AND suspended_at IS NULL
          AND COALESCE(alert_frequency, 'instant') <> 'instant'`
     )
     const users = usersResult.rows
