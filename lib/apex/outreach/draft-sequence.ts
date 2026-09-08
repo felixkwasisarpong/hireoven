@@ -42,6 +42,7 @@ Rules:
 - The initial message under 130 words; follow-ups under 70 words.
 - For email channel, start each with a "Subject:" line; for linkedin, no subject.
 - Use [Name] / [Company] placeholders only when the real value is unknown.
+- GROUND EVERY CLAIM. Use only facts present in the candidate context below. Never invent or round up a metric, employer, job title, team, date, technology, or achievement, and never restate a number more impressively than it appears. If the context gives you no specific proof point, write a general one rather than inventing a specific one. These messages go to real people under the candidate's name, and a number they cannot back up in an interview is worse than no number at all.
 - NEVER: "I hope this finds you well", "I'm reaching out because", "Would love to connect", desperation, or guarantees about sponsorship/referrals you can't make.
 - NO em dashes or en dashes anywhere. Use commas, periods, or "to" for ranges.
 

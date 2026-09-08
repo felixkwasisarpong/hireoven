@@ -97,6 +97,31 @@ export function selectPostSubmitOutreachTargets(contacts: NetworkingContact[]): 
   return targets.slice(0, 2)
 }
 
+/**
+ * Cut a résumé summary down to a headline without slicing mid-sentence.
+ *
+ * A raw slice(0, 200) put "Owned a platform sustaining over 1 million
+ * transactions per day at approximately." into a real recruiter draft — the
+ * fragment reads as a mistake the candidate made, in a message sent under
+ * their name.
+ */
+export function trimToSentence(text: string, max: number): string {
+  const clean = text.replace(/\s+/g, " ").trim()
+  if (!clean) return ""
+  if (clean.length <= max) return clean
+
+  const window = clean.slice(0, max)
+  const lastStop = Math.max(
+    window.lastIndexOf(". "), window.lastIndexOf("! "), window.lastIndexOf("? "),
+  )
+  // A sentence boundary is the clean cut. Failing that, fall back to the last
+  // whole word — never a half word, and never a dangling preposition's worth of
+  // a clause we can avoid by stopping earlier.
+  if (lastStop > 0) return window.slice(0, lastStop + 1)
+  const lastSpace = window.lastIndexOf(" ")
+  return lastSpace > 0 ? window.slice(0, lastSpace) : window
+}
+
 async function sequenceExists(
   pool: Queryable,
   input: {
@@ -167,7 +192,7 @@ async function createSequence(
 
   const candidateName = profileRes.rows[0]?.full_name?.trim() || "the candidate"
   const candidateHeadline =
-    (resumeRes.rows[0]?.summary ?? "").slice(0, 200) ||
+    trimToSentence(resumeRes.rows[0]?.summary ?? "", 200) ||
     "a strong candidate for this role"
   const topStrengths = resumeRes.rows[0]?.top_skills ?? []
   const now = new Date().toISOString()
