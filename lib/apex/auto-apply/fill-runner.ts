@@ -97,8 +97,10 @@ export type FillAttempt = {
   submitAttemptsBlocked: number
   /** the résumé PDF was attached to the form's file input */
   resumeAttached: boolean
-  /** true only when allowSubmit was set AND the form was actually submitted */
+  /** true only when allowSubmit was set AND the submission was confirmed */
   submitted: boolean
+  /** what the submit attempt did, and the evidence for that verdict */
+  submit: SubmitOutcome
   error: string | null
 }
 
@@ -682,6 +684,62 @@ const SUBMIT_LABEL = /^(submit|submit application|submit my application|send app
 const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add another|apply now/i
 
 /**
+ * Wording ATS confirmation pages actually use. Kept narrow enough that a job
+ * description mentioning "thank you for your interest" cannot pass for a
+ * receipt, since a false confirmation writes 'applied' for an application that
+ * does not exist.
+ */
+const SUBMIT_CONFIRMED =
+  /thank you for applying|thanks for applying|application (has been |was )?(received|submitted|sent)|we(?: have|'ve) received your application|received your application|successfully (applied|submitted)|application complete|submission (received|complete)/i
+
+/** How long to keep looking for a receipt before giving up on one. */
+const CONFIRM_TIMEOUT_MS = 20_000
+const CONFIRM_POLL_MS = 500
+
+export type SubmitOutcome = {
+  /** a submit control was found, enabled, and clicked */
+  clicked: boolean
+  /** the page then proved the submission landed */
+  confirmed: boolean
+  /** label of the control clicked, for diagnosing a wrong-button click */
+  label: string | null
+  urlBefore: string | null
+  urlAfter: string | null
+  /** trimmed page text after the click — the evidence behind the verdict */
+  pageText: string | null
+}
+
+export const EMPTY_SUBMIT_OUTCOME: SubmitOutcome = {
+  clicked: false, confirmed: false, label: null,
+  urlBefore: null, urlAfter: null, pageText: null,
+}
+
+/**
+ * Decide what a click actually achieved.
+ *
+ * Split out from the browser work so the verdict is testable: the first live
+ * run recorded four completed applications as plain failures, and there was no
+ * way to tell afterwards whether they had been sent.
+ */
+export function classifySubmitOutcome(input: {
+  clicked: boolean
+  urlBefore: string | null
+  urlAfter: string | null
+  pageText: string | null
+}): "not_clicked" | "confirmed" | "unconfirmed" {
+  if (!input.clicked) return "not_clicked"
+  if (input.pageText && SUBMIT_CONFIRMED.test(input.pageText)) return "confirmed"
+  // Those anchor submits carry href="#", so a click that merely failed
+  // validation still moves the URL from ".../Role" to ".../Role#". Comparing
+  // without the fragment keeps that from reading as a successful navigation.
+  const doc = (u: string | null) => (u ?? "").split("#")[0]
+  if (input.urlBefore && input.urlAfter && doc(input.urlAfter) !== doc(input.urlBefore)) {
+    return "confirmed"
+  }
+  return "unconfirmed"
+}
+
+/**
  * Click submit, then confirm from the PAGE that it went through.
  *
  * Reached only when the caller passed allowSubmit AND every required field is
@@ -690,13 +748,14 @@ const NOT_SUBMIT = /save|draft|cancel|back|previous|preview|upload|attach|add an
  * recorded as "applied", corrupting the ledger the caps are computed from and
  * telling the user an application exists when it does not.
  */
-async function submitForm(page: Page): Promise<boolean> {
+async function submitForm(page: Page): Promise<SubmitOutcome> {
   // Anchors count. JazzHR's submit is <a href="#" id="resumator-submit-resume">
   // inside the form, so a button-only query found nothing, returned false, and
   // every completed application was recorded as a dry run — the form was filled
   // perfectly and then simply abandoned.
-  const before = page.url()
-  let clicked = false
+  const urlBefore = page.url()
+  const out: SubmitOutcome = { ...EMPTY_SUBMIT_OUTCOME, urlBefore }
+
   for (const el of await page.$$("button, input[type=submit], a, [role=button]")) {
     const label = (
       ((await el.textContent().catch(() => "")) ?? "") ||
@@ -708,22 +767,36 @@ async function submitForm(page: Page): Promise<boolean> {
     if (!(await el.isVisible().catch(() => false))) continue
     if (!(await el.isEnabled().catch(() => false))) continue
     await el.click({ timeout: 10_000 }).catch(() => {})
-    clicked = true
+    out.clicked = true
+    out.label = label
     break
   }
-  if (!clicked) return false
+  if (!out.clicked) return out
 
-  await page.waitForTimeout(5_000).catch(() => {})
-  const confirmed = await page.evaluate(`(() => {
-    const t = (document.body && document.body.innerText ? document.body.innerText : "").toLowerCase();
-    return /thank you|application (has been )?(received|submitted|sent)|we have received|successfully applied|thanks for applying/.test(t);
-  })()`).catch(() => false)
-  // Compare without the fragment. Those anchor submits carry href="#", so a
-  // click that failed validation still moves the URL from ".../Role" to
-  // ".../Role#" — which a raw comparison reads as a successful navigation and
-  // records as 'applied'. That is precisely the lie this gate exists to stop.
-  const sameDoc = (u: string) => u.split("#")[0]
-  return Boolean(confirmed) || sameDoc(page.url()) !== sameDoc(before)
+  // Poll rather than sleeping a fixed five seconds. The old wait returned a
+  // verdict on whatever the page happened to be showing at 5.0s, which is
+  // before some ATS have finished posting the application — a slow receipt was
+  // indistinguishable from no receipt at all.
+  const deadline = Date.now() + CONFIRM_TIMEOUT_MS
+  for (;;) {
+    out.urlAfter = page.url()
+    out.pageText = await readPageText(page)
+    if (classifySubmitOutcome(out) === "confirmed") break
+    if (Date.now() >= deadline) break
+    await page.waitForTimeout(CONFIRM_POLL_MS).catch(() => {})
+  }
+
+  out.confirmed = classifySubmitOutcome(out) === "confirmed"
+  return out
+}
+
+/** Body text after a submit click, trimmed to what fits in the ledger. */
+async function readPageText(page: Page): Promise<string | null> {
+  const text = await page.evaluate(
+    `(document.body && document.body.innerText) ? document.body.innerText : ""`,
+  ).catch(() => "")
+  const trimmed = String(text ?? "").replace(/\s+/g, " ").trim()
+  return trimmed ? trimmed.slice(0, 1000) : null
 }
 
 
@@ -851,7 +924,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     requiredTotal: 0, requiredFilled: 0, requiredRate: 0,
     aiQuestions: 0, aiWrittenBack: 0, eeoDeclined: 0,
     groundedAnswers: 0, refusalsRejected: 0, leftForHuman: 0, screeningAnswers: 0, disqualified: null, residual: [],
-    costUsd: 0, submitAttemptsBlocked: 0, resumeAttached: false, submitted: false, error: null,
+    costUsd: 0, submitAttemptsBlocked: 0, resumeAttached: false, submitted: false,
+    submit: { ...EMPTY_SUBMIT_OUTCOME }, error: null,
   }
 
   const ownBrowser = !opts.browser
@@ -1180,7 +1254,8 @@ export async function runFillAttempt(opts: FillOptions): Promise<FillAttempt> {
     // is worse than not applying at all: it reaches a real employer under the
     // user's name and cannot be withdrawn.
     if (opts.allowSubmit === true && r.ok) {
-      r.submitted = await submitForm(page)
+      r.submit = await submitForm(page)
+      r.submitted = r.submit.confirmed
     }
   } catch (err) {
     r.error = err instanceof Error ? err.message.slice(0, 200) : String(err)

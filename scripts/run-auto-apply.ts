@@ -3,6 +3,7 @@
  *
  *   npx tsx scripts/run-auto-apply.ts --user <uuid>
  *   npx tsx scripts/run-auto-apply.ts --user <uuid> --tz America/Chicago --unproven
+ *   npx tsx scripts/run-auto-apply.ts --user <uuid> --submit --outreach
  *
  * Requires the prod DB tunnel: ./scripts/db-tunnel.sh --daemon
  *
@@ -30,6 +31,9 @@ async function main() {
   const plan = (arg("plan", "pro_max")) as Plan
 
   const wantsSubmit = process.argv.includes("--submit")
+  // Outreach drafts are only ever prepared after a confirmed submit, so this
+  // rides on the same confirmation rather than adding a second one.
+  const wantsOutreach = process.argv.includes("--outreach")
   const confirmed = process.env.AUTO_APPLY_I_UNDERSTAND === "yes"
   const allowSubmit = wantsSubmit && confirmed
   if (wantsSubmit && !confirmed) {
@@ -42,11 +46,13 @@ async function main() {
   console.log(`caps      ${allowance.limits.weeklyCap}/wk  ${allowance.limits.nightlyCap}/night  $${allowance.limits.monthlyUsdCap}/mo  match>=${allowance.limits.minMatchScore}`)
   console.log(`used      ${allowance.usedThisWeek} this week, ${allowance.usedTonight} tonight, $${allowance.spentThisMonthUsd} this month`)
   console.log(`allowance ${allowance.allowed} (${allowance.reason})`)
-  console.log(`mode      ${allowSubmit ? "*** LIVE SUBMIT ***" : "dry run (nothing is sent)"}\n`)
+  const prepareOutreach = allowSubmit && wantsOutreach
+  console.log(`mode      ${allowSubmit ? "*** LIVE SUBMIT ***" : "dry run (nothing is sent)"}`)
+  console.log(`outreach  ${prepareOutreach ? "prepare drafts (never sent — you send them yourself)" : "off"}\n`)
 
   const t = Date.now()
   const res = await runAutoApplyForUser({
-    userId, plan, timezone, allowSubmit,
+    userId, plan, timezone, allowSubmit, prepareOutreach,
     includeUnproven: process.argv.includes("--unproven"),
   })
 
@@ -55,6 +61,9 @@ async function main() {
   console.log(`submittable   ${res.submittable}   (all required fields filled)`)
   console.log(`bot-walled    ${res.blocked}`)
   console.log(`failed        ${res.failed}`)
+  console.log(`submitted     ${res.submitted}   (confirmed by the employer's page)`)
+  console.log(`unconfirmed   ${res.submittedUnconfirmed}   (clicked submit, no receipt seen — check your email)`)
+  console.log(`outreach      ${res.outreachPrepared} draft sequence(s) queued for your review`)
   console.log(`AI cost       $${res.costUsd.toFixed(5)}`)
   console.log(`stopped       ${res.skippedReason ?? "completed"}`)
   console.log(`elapsed       ${((Date.now() - t) / 1000).toFixed(1)}s`)
