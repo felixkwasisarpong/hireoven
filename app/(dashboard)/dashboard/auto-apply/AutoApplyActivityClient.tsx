@@ -20,6 +20,8 @@ type Props = {
   allowance: Allowance
   questions: PendingQuestion[]
   enabled: boolean
+  liveSubmitEnabled: boolean
+  postSubmitOutreachEnabled: boolean
 }
 
 /** Only outcomes the user can act on. 'skipped_cap' is bookkeeping, not an event. */
@@ -58,7 +60,27 @@ function timeAgo(iso: string): string {
   return `${Math.round(hrs / 24)}d ago`
 }
 
-export default function AutoApplyActivityClient({ log, allowance, questions, enabled }: Props) {
+function failureMessage(record: AutoApplyRecord): string {
+  if (record.error === "submit_not_confirmed") {
+    return "Filled and clicked submit, but could not confirm the application was received."
+  }
+  if (record.error === "bot_wall") {
+    return "The application page blocked automated browser access."
+  }
+  if (record.error === "disqualified") {
+    return "The form asked for an answer Hireoven should not choose for you."
+  }
+  return "Could not complete this one. The form needs something only you can answer."
+}
+
+export default function AutoApplyActivityClient({
+  log,
+  allowance,
+  questions,
+  enabled,
+  liveSubmitEnabled,
+  postSubmitOutreachEnabled,
+}: Props) {
   const [filter, setFilter] = useState<Filter>("all")
   const [limit, setLimit] = useState(PAGE)
 
@@ -102,12 +124,18 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
         {/* The heading follows the data. Claiming "sent for you" over a list
             where nothing was sent is the same lie as the green checkmark. */}
         <h1 className="mt-1 text-2xl font-semibold text-slate-900">
-          {applied.length > 0 ? "Applications sent for you" : "Your overnight runs"}
+          {applied.length > 0
+            ? "Applications sent for you"
+            : liveSubmitEnabled
+              ? "Your overnight auto-apply"
+              : "Your overnight prep runs"}
         </h1>
         <p className="mt-1 text-sm text-slate-600">
           {applied.length > 0
             ? "Hireoven applies to your strongest matches while you sleep. Everything it sent is here."
-            : "Hireoven fills applications for your strongest matches while you sleep. Nothing has been submitted yet."}
+            : liveSubmitEnabled
+              ? "Hireoven will submit your strongest matches while you sleep once the next run finds eligible roles."
+              : "Hireoven fills applications for your strongest matches while you sleep. Live submission is not enabled for this account yet."}
         </p>
       </header>
 
@@ -131,6 +159,8 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
         initialEnabled={enabled}
         weeklyCap={allowance?.weeklyCap ?? 25}
         planEnabled={allowance?.enabled ?? false}
+        liveSubmitEnabled={liveSubmitEnabled}
+        postSubmitOutreachEnabled={postSubmitOutreachEnabled}
       />
 
       <div className="mb-4 flex gap-1">
@@ -185,7 +215,7 @@ export default function AutoApplyActivityClient({ log, allowance, questions, ena
                 )}
                 {r.status === "failed" && (
                         <p className="mt-1 text-xs text-amber-700">
-                          Couldn&apos;t complete this one — the form needs something only you can answer.
+                          {failureMessage(r)}
                         </p>
                       )}
                     </div>

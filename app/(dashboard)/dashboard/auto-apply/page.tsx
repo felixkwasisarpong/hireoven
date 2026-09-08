@@ -3,6 +3,10 @@ import { getAutoApplyLog } from "@/lib/apex/auto-apply/store"
 import { getRemainingAllowance } from "@/lib/apex/auto-apply/limits"
 import { getPendingQuestions } from "@/lib/autofill/screening-answers"
 import { getAutoApplyPrefs } from "@/lib/apex/auto-apply/store"
+import {
+  isAutoApplyLiveSubmitAllowed,
+  isAutoApplyPostSubmitOutreachAllowed,
+} from "@/lib/apex/auto-apply/live-submit"
 import { getPlanForUserId } from "@/lib/gates/server-gate"
 import type { AutoApplyRecord } from "@/lib/apex/auto-apply/types"
 import AutoApplyActivityClient from "./AutoApplyActivityClient"
@@ -14,7 +18,16 @@ export const metadata = { title: "Auto-apply activity" }
 export default async function AutoApplyPage() {
   const session = await getSessionUser()
   if (!session?.sub) {
-    return <AutoApplyActivityClient log={[]} allowance={null} questions={[]} enabled={false} />
+    return (
+      <AutoApplyActivityClient
+        log={[]}
+        allowance={null}
+        questions={[]}
+        enabled={false}
+        liveSubmitEnabled={false}
+        postSubmitOutreachEnabled={false}
+      />
+    )
   }
 
   const plan = await getPlanForUserId(session.sub)
@@ -26,12 +39,23 @@ export default async function AutoApplyPage() {
     getPendingQuestions(session.sub, 25),
     getAutoApplyPrefs(session.sub),
   ])
+  const liveSubmitEnabled = allowance?.limits.enabled === true &&
+    isAutoApplyLiveSubmitAllowed({
+      userId: session.sub,
+      email: session.email,
+    })
+  const postSubmitOutreachEnabled = liveSubmitEnabled && isAutoApplyPostSubmitOutreachAllowed({
+    userId: session.sub,
+    email: session.email,
+  })
 
   return (
     <AutoApplyActivityClient
       log={log as AutoApplyRecord[]}
       questions={questions}
       enabled={prefs.enabled === true}
+      liveSubmitEnabled={liveSubmitEnabled}
+      postSubmitOutreachEnabled={postSubmitOutreachEnabled}
       allowance={
         allowance
           ? {

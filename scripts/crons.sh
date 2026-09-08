@@ -78,6 +78,9 @@ run_many() {
 #   their night window and who have not already run tonight, so an hourly sweep
 #   reaches every timezone while still touching each user once per night.
 #   Dry-run unless AUTO_APPLY_ALLOW_SUBMIT=true is set on the app-worker.
+#   With AUTO_APPLY_SUBMIT_ALLOWLIST empty, all opted-in Pro Max accounts submit.
+#   Post-submit outreach drafts require AUTO_APPLY_POST_SUBMIT_OUTREACH=true and
+#   AUTO_APPLY_POST_SUBMIT_OUTREACH_ALLOWLIST.
 #   Drives a headless browser — keep it on the app-worker, never the web box.
 # timing-refresh     0 */6 * * *       run api/cron/timing-refresh
 # cohort-refresh     10 */6 * * *      run cohort detect -> match -> aggregate
