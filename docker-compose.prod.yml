@@ -78,7 +78,11 @@ services:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
 
   minio:
-    image: minio/minio:latest
+    # quay.io, not Docker Hub: MinIO withdrew minio/minio and minio/mc from
+    # Docker Hub, and a deploy on 2026-09-18 tore down Postgres and MinIO and
+    # then failed pulling minio/mc:latest, leaving the site 500ing on a
+    # database host that no longer resolved. quay.io is MinIO's own registry.
+    image: quay.io/minio/minio:latest
     container_name: hireoven-minio
     restart: unless-stopped
     command: server /data --console-address ":9001"
@@ -104,7 +108,7 @@ services:
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
 
   minio-init:
-    image: minio/mc:latest
+    image: quay.io/minio/mc:latest
     container_name: hireoven-minio-init
     restart: "no"
     depends_on:
