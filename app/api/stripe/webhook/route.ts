@@ -5,7 +5,9 @@ import {
   fulfillCheckoutSession,
   normalizePlanForPricing,
   normalizeStripeSubscriptionStatus,
+  resolveSubscriptionUserId,
   revokeForRefundedPaymentIntent,
+  subscriptionIdFromInvoice,
   upsertSubscriptionRow,
 } from "@/lib/billing/fulfillment"
 
@@ -16,6 +18,68 @@ function getSubscriptionPeriod(sub: any) {
   return {
     start: sub.current_period_start ?? firstItem?.current_period_start ?? sub.start_date ?? sub.created,
     end: sub.current_period_end ?? firstItem?.current_period_end ?? sub.trial_end ?? sub.cancel_at ?? sub.ended_at ?? sub.created,
+  }
+}
+
+/**
+ * The plan a price sells, for a subscription that carries no metadata of ours
+ * — one created in the Stripe dashboard, say. Without this such a subscription
+ * would be filed as "free" and quietly strip a paying customer of their plan.
+ */
+function planFromPriceId(priceId: string | null | undefined): string | null {
+  if (!priceId) return null
+  if (priceId === process.env.STRIPE_PRICE_PRO_MONTHLY || priceId === process.env.STRIPE_PRICE_PRO_YEARLY) return "pro"
+  if (priceId === process.env.STRIPE_PRICE_PRO_MAX_MONTHLY || priceId === process.env.STRIPE_PRICE_PRO_MAX_YEARLY) return "pro_max"
+  return null
+}
+
+/**
+ * Write what Stripe now says about a subscription into our own ledger.
+ *
+ * Reached from the subscription events and from the invoice ones, because a
+ * renewal that only ever announced itself through a single event type is a
+ * renewal that goes missing the day that event isn't delivered.
+ */
+async function recordSubscription(pool: ReturnType<typeof getPostgresPool>, sub: any): Promise<void> {
+  const userId = await resolveSubscriptionUserId(pool, sub)
+  if (!userId) return
+
+  const plan = normalizePlanForPricing(sub.metadata?.plan ?? planFromPriceId(sub.items?.data?.[0]?.price?.id) ?? "free")
+  const recurringInterval = sub.items?.data?.[0]?.price?.recurring?.interval
+  const interval: BillingInterval =
+    sub.metadata?.interval === "yearly" || recurringInterval === "year" ? "yearly" : "monthly"
+  const amountCents =
+    typeof sub.items?.data?.[0]?.price?.unit_amount === "number"
+      ? sub.items.data[0].price.unit_amount
+      : plan === "free"
+        ? 0
+        : getPlanAmountCents(plan, interval)
+  const period = getSubscriptionPeriod(sub)
+
+  await upsertSubscriptionRow(pool, {
+    userId,
+    plan,
+    status: normalizeStripeSubscriptionStatus(sub.status),
+    stripeSubscriptionId: sub.id,
+    stripeCustomerId: typeof sub.customer === "string" ? sub.customer : sub.customer?.id,
+    interval,
+    amountCents,
+    currentPeriodStart: new Date(period.start * 1000),
+    currentPeriodEnd: new Date(period.end * 1000),
+    trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
+    cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
+  })
+
+  // The free monthly interview credit is a Pro Max perk. If this event leaves
+  // the user without an active Pro Max plan (cancel/downgrade), claw back this
+  // period's UNUSED grant — otherwise a 10-minute test subscription walks away
+  // with a free live session. Purchased credits are untouched; already-spent
+  // grants are left alone.
+  const { getPlanForUserId } = await import("@/lib/gates/server-gate")
+  const planAfter = await getPlanForUserId(userId)
+  if (planAfter !== "pro_max") {
+    const { clawbackUnusedMonthlyGrant } = await import("@/lib/apex/interview/credits")
+    await clawbackUnusedMonthlyGrant(userId)
   }
 }
 
@@ -49,49 +113,22 @@ export async function POST(request: NextRequest) {
 
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
-      const sub = event.data.object as any
-      const userId = sub.metadata?.userId
-      if (!userId) break
+      await recordSubscription(pool, event.data.object as any)
+      break
+    }
 
-      const plan = normalizePlanForPricing(sub.metadata?.plan ?? "free")
-      const recurringInterval = sub.items?.data?.[0]?.price?.recurring?.interval
-      const interval: BillingInterval =
-        sub.metadata?.interval === "yearly" || recurringInterval === "year"
-          ? "yearly"
-          : "monthly"
-      const amountCents =
-        typeof sub.items?.data?.[0]?.price?.unit_amount === "number"
-          ? sub.items.data[0].price.unit_amount
-          : plan === "free"
-            ? 0
-            : getPlanAmountCents(plan, interval)
-      const period = getSubscriptionPeriod(sub)
-
-      await upsertSubscriptionRow(pool, {
-        userId,
-        plan,
-        status: normalizeStripeSubscriptionStatus(sub.status),
-        stripeSubscriptionId: sub.id,
-        stripeCustomerId: sub.customer as string,
-        interval,
-        amountCents,
-        currentPeriodStart: new Date(period.start * 1000),
-        currentPeriodEnd: new Date(period.end * 1000),
-        trialEnd: sub.trial_end ? new Date(sub.trial_end * 1000) : null,
-        cancelAtPeriodEnd: Boolean(sub.cancel_at_period_end),
-      })
-
-      // The free monthly interview credit is a Pro Max perk. If this event
-      // leaves the user without an active Pro Max plan (cancel/downgrade),
-      // claw back this period's UNUSED grant — otherwise a 10-minute test
-      // subscription walks away with a free live session. Purchased credits
-      // are untouched; already-spent grants are left alone.
-      const { getPlanForUserId } = await import("@/lib/gates/server-gate")
-      const planAfter = await getPlanForUserId(userId)
-      if (planAfter !== "pro_max") {
-        const { clawbackUnusedMonthlyGrant } = await import("@/lib/apex/interview/credits")
-        await clawbackUnusedMonthlyGrant(userId)
-      }
+    // A renewal is money moving, and until now it reached the ledger only by
+    // way of customer.subscription.updated. If that one event is missed — not
+    // enabled on the endpoint, or dropped — the charge succeeds and the app
+    // never hears, so the paid invoice records the new period as well. Both
+    // paths write the same row, so either alone is enough.
+    case "invoice.paid":
+    case "invoice.payment_succeeded":
+    case "invoice.payment_failed": {
+      const subscriptionId = subscriptionIdFromInvoice(event.data.object as any)
+      if (!subscriptionId) break
+      const sub = await stripe.subscriptions.retrieve(subscriptionId)
+      await recordSubscription(pool, sub as any)
       break
     }
 

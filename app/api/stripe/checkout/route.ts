@@ -168,7 +168,11 @@ export async function POST(request: Request) {
   const sessionParams: import("stripe").default.Checkout.SessionCreateParams = {
     customer: customerId,
     mode: "subscription",
-    payment_method_collection: "if_required",
+    // "if_required" skips card collection whenever the first invoice comes to
+    // zero — a 100%-off code, a free first month — and the subscription then
+    // renews into an invoice with nothing to charge. Always take the card: the
+    // first month is not the one that pays.
+    payment_method_collection: "always",
     payment_method_types: ["card"],
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: {
