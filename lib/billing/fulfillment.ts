@@ -108,6 +108,54 @@ export async function upsertSubscriptionRow(
   )
 }
 
+/**
+ * Which subscription an invoice belongs to.
+ *
+ * Stripe moved this off the invoice in API version 2025-03-31: `subscription`
+ * is gone and the id now hangs off `parent.subscription_details`. We pin
+ * 2026-03-25.dahlia, so only the new shape arrives — but a webhook replayed
+ * from an older event still carries the old one, and reading both costs a line.
+ */
+export function subscriptionIdFromInvoice(invoice: any): string | null {
+  const direct = invoice?.subscription
+  if (typeof direct === "string") return direct
+  if (direct?.id) return direct.id
+  const viaParent = invoice?.parent?.subscription_details?.subscription
+  if (typeof viaParent === "string") return viaParent
+  if (viaParent?.id) return viaParent.id
+  const viaLine = invoice?.lines?.data?.[0]?.parent?.subscription_item_details?.subscription
+  return typeof viaLine === "string" ? viaLine : null
+}
+
+/**
+ * The HireOven user behind a Stripe subscription.
+ *
+ * Checkout stamps `subscription_data.metadata.userId`, so the ordinary path
+ * reads it straight off the event. A subscription created in the Stripe
+ * dashboard has no metadata at all, and dropping those silently is how a
+ * renewal goes unrecorded while the money moves — so fall back to the ids we
+ * already stored.
+ */
+export async function resolveSubscriptionUserId(
+  pool: Pool,
+  sub: { id?: string | null; customer?: string | { id?: string } | null; metadata?: Record<string, string> | null },
+): Promise<string | null> {
+  const fromMetadata = sub?.metadata?.userId
+  if (fromMetadata) return fromMetadata
+
+  const customerId = typeof sub?.customer === "string" ? sub.customer : (sub?.customer?.id ?? null)
+  const found = await pool.query<{ user_id: string }>(
+    `SELECT user_id
+       FROM subscriptions
+      WHERE ($1::text IS NOT NULL AND stripe_subscription_id = $1)
+         OR ($2::text IS NOT NULL AND stripe_customer_id = $2)
+      ORDER BY (stripe_subscription_id = $1) DESC, updated_at DESC NULLS LAST
+      LIMIT 1`,
+    [sub?.id ?? null, customerId],
+  )
+  return found.rows[0]?.user_id ?? null
+}
+
 export type FulfillmentResult =
   | { kind: "immigration_service"; requestId: string }
   | { kind: "live_interview_credits"; credits: number; granted: boolean }
